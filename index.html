@@ -2050,7 +2050,7 @@ async function openPlayerStats(playerId, playerName, matchType){
   panel._playerId=playerId;
   panel._playerName=playerName;
   panel.scrollIntoView({behavior:'smooth',block:'nearest'});
-  await loadPlayerStats(playerId, playerName, 'club');
+  await loadPlayerStats(playerId, playerName, matchType||'club');
 }
 
 async function loadPlayerStats(playerId, playerName, matchType){
