@@ -23,7 +23,7 @@ exports.handler = async (event) => {
     const data = await res.json();
     const lineup = data?.content?.lineup;
 
-    if (!lineup) throw new Error('No lineup data available');
+    if (!lineup) throw new Error('No lineup data available yet');
 
     const parseTeam = (team) => {
       if (!team) return null;
@@ -49,23 +49,25 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         ok: true,
         matchId,
-        confirmed: lineup.confirmed || false,
+        confirmed: lineup.lineupType === 'confirmed',
         home: {
-          id:     lineup.homeTeam?.teamId,
-          name:   lineup.homeTeam?.teamName,
+          id:     lineup.homeTeam?.id,
+          name:   lineup.homeTeam?.name,
           lineup: parseTeam(lineup.homeTeam),
         },
         away: {
-          id:     lineup.awayTeam?.teamId,
-          name:   lineup.awayTeam?.teamName,
+          id:     lineup.awayTeam?.id,
+          name:   lineup.awayTeam?.name,
           lineup: parseTeam(lineup.awayTeam),
         },
-        // Debug — remove once working
-        homeTeamKeys: lineup.homeTeam ? Object.keys(lineup.homeTeam) : []
       })
     };
 
   } catch (err) {
-    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: err.message }) };
+    return {
+      statusCode: 200,
+      headers: CORS,
+      body: JSON.stringify({ ok: false, error: err.message })
+    };
   }
 };
