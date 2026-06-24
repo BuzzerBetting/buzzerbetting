@@ -8,28 +8,40 @@ const LEAGUE_IDS = new Set([
   53,   // Ligue 1
   42,   // UEFA Champions League
   73,   // UEFA Europa League
+  40,   // FA Cup
 ]);
 
-exports.handler = async (event) => {
-  const CORS = {
-    'Access-Control-Allow-Origin': '*',
-    'Content-Type': 'application/json'
-  };
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Content-Type': 'application/json'
+};
 
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 204, headers: CORS, body: '' };
-  }
+exports.handler = async (event) => {
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
 
   const date = event.queryStringParameters?.date || todayStr();
 
   try {
-    const { default: Fotmob } = await import('@max-xoo/fotmob');
-    const fotmob = new Fotmob();
-    const raw = await fotmob.getMatchesByDate(date);
+    const url = `https://www.fotmob.com/api/data/matches?date=${date}&timezone=Europe%2FLondon&ccode3=GBR&includeNextDayLateNight=true`;
+
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'en-GB,en;q=0.9',
+        'Referer': 'https://www.fotmob.com/',
+        'Origin': 'https://www.fotmob.com'
+      }
+    });
+
+    if (!res.ok) throw new Error(`FotMob returned HTTP ${res.status}`);
+
+    const raw = await res.json();
     const allLeagues = raw.leagues || [];
 
+    // Filter to predefined leagues (or return all if LEAGUE_IDS is empty)
     const filtered = allLeagues
-      .filter(l => LEAGUE_IDS.has(Number(l.id)))
+      .filter(l => LEAGUE_IDS.size === 0 || LEAGUE_IDS.has(Number(l.id)))
       .map(l => ({
         id: l.id,
         name: l.name,
@@ -37,7 +49,9 @@ exports.handler = async (event) => {
         matches: (l.matches || []).map(m => ({
           id: m.id,
           home: m.home?.name || 'TBC',
+          homeId: m.home?.id,
           away: m.away?.name || 'TBC',
+          awayId: m.away?.id,
           utcTime: m.status?.utcTime || null,
           started: m.status?.started || false,
           finished: m.status?.finished || false,
@@ -50,8 +64,14 @@ exports.handler = async (event) => {
     return {
       statusCode: 200,
       headers: CORS,
-      body: JSON.stringify({ ok: true, date, total: filtered.reduce((n, l) => n + l.matches.length, 0), leagues: filtered })
+      body: JSON.stringify({
+        ok: true,
+        date,
+        total: filtered.reduce((n, l) => n + l.matches.length, 0),
+        leagues: filtered
+      })
     };
+
   } catch (err) {
     return {
       statusCode: 200,
