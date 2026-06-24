@@ -2045,32 +2045,45 @@ function renderLineups(data){
 // ── PLAYER STATS ──
 async function openPlayerStats(playerId, playerName, matchType){
   const panel=document.getElementById('player-panel');
-  const content=document.getElementById('player-stats-content');
   document.getElementById('player-panel-name').textContent=playerName;
   panel.style.display='';
-  content.innerHTML=`<div style="text-align:center;padding:20px;color:var(--text3)"><i class="ti ti-loader" style="font-size:24px"></i><div style="margin-top:8px;font-size:13px">Loading stats...</div></div>`;
+  panel._playerId=playerId;
+  panel._playerName=playerName;
   panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+  await loadPlayerStats(playerId, playerName, 'club');
+}
+
+async function loadPlayerStats(playerId, playerName, matchType){
+  const content=document.getElementById('player-stats-content');
+  content.innerHTML=`<div style="text-align:center;padding:20px;color:var(--text3)"><i class="ti ti-loader" style="font-size:24px"></i><div style="margin-top:8px;font-size:13px">Loading stats...</div></div>`;
   try{
     const r=await fetch(`/.netlify/functions/player-stats?playerId=${playerId}&matchType=${matchType}`);
     const data=await r.json();
     if(!data.ok)throw new Error(data.error);
-    renderPlayerStats(data, playerName);
+    renderPlayerStats(data, playerName, matchType);
   }catch(err){
     content.innerHTML=`<div style="color:var(--text3);font-size:13px;padding:8px">Could not load stats: ${err.message}</div>`;
   }
 }
 
-function renderPlayerStats(data, playerName){
+function renderPlayerStats(data, playerName, matchType){
   autoGSMData=data;
   autoGSMPenTaker=false;
   autoGSMTimeframe='currentSeason';
   const content=document.getElementById('player-stats-content');
+  const panel=document.getElementById('player-panel');
   const frames=[
     {key:'currentTeam',   label:'Current Team'},
     {key:'currentSeason', label:'This Season'},
     {key:'lastSeason',    label:'+Last Season'},
     {key:'last2Seasons',  label:'+2 Seasons'},
   ];
+
+  // Club / International toggle
+  const toggleHtml=`<div style="display:flex;gap:6px;margin-bottom:16px">
+    <button onclick="loadPlayerStats('${panel._playerId}','${panel._playerName}','club')" style="padding:5px 12px;border-radius:var(--radius);border:.5px solid ${matchType==='club'?'var(--brand)':'var(--border)'};background:${matchType==='club'?'var(--brand)':'var(--surface)'};color:${matchType==='club'?'#fff':'var(--text2)'};cursor:pointer;font-size:12px;font-family:inherit">Club</button>
+    <button onclick="loadPlayerStats('${panel._playerId}','${panel._playerName}','international')" style="padding:5px 12px;border-radius:var(--radius);border:.5px solid ${matchType==='international'?'var(--brand)':'var(--border)'};background:${matchType==='international'?'var(--brand)':'var(--surface)'};color:${matchType==='international'?'#fff':'var(--text2)'};cursor:pointer;font-size:12px;font-family:inherit">International</button>
+  </div>`;
   const groups=[
     {title:'Overview',rows:[
       {key:'matches',       label:'Games'},
@@ -2140,7 +2153,7 @@ function renderPlayerStats(data, playerName){
       <div id="auto-gsm-output"><div style="font-size:12px;color:var(--text3)">Enter fair odds above to calculate</div></div>
     </div>`;
 
-  let html=calcHtml+`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+  let html=toggleHtml+calcHtml+`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
     <thead><tr>
       <th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:500;border-bottom:.5px solid var(--border)">Stat</th>
       ${frames.map(f=>`<th style="text-align:right;padding:6px 8px;color:var(--text3);font-weight:500;border-bottom:.5px solid var(--border);white-space:nowrap">${f.label}</th>`).join('')}
@@ -2248,9 +2261,8 @@ function calcAutoGSM(s,ags,so,sotV,pen){
   const xSOT=hasSOT?-Math.log(1-(1/sotV))-penAdj:null;
   const p=(s.penaltyShots||0),fk=(s.freeKickShots||0);
   const pSot=(s.penaltySot||0),fkSot=(s.freeKickSot||0);
-  // Use raw totals (including corners/set pieces) as denominators — matches manual calculator behaviour
-  const nspS=(s.rawShots||s.shots||0)-p-fk;
-  const nspT=(s.rawSot||s.sot||0)-pSot-fkSot;
+  const nspS=(s.shots||0)-p-fk;
+  const nspT=(s.sot||0)-pSot-fkSot;
   return{
     headerGoal,otbGoal,lfGoal,rfGoal,
     headedShots:xS&&nspS>0&&s.headers>0?shotP((s.headers/nspS)*xS):null,
