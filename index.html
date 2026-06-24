@@ -2187,32 +2187,39 @@ function calcAutoGSMOutput(){
   const ags=parseFloat(document.getElementById('auto-ags')?.value);
   const so=parseFloat(document.getElementById('auto-shot')?.value);
   const sotV=parseFloat(document.getElementById('auto-sot')?.value);
+  const hasAny=(!isNaN(ags)&&ags>1)||(!isNaN(so)&&so>1)||(!isNaN(sotV)&&sotV>1);
+  if(!hasAny){out.innerHTML=`<div style="font-size:12px;color:var(--text3)">Enter fair odds above to calculate</div>`;return;}
   const stats=autoGSMData.timeframes?.[autoGSMTimeframe];
-  if(!stats){out.innerHTML='';return;}
+  if(!stats){out.innerHTML=`<div style="font-size:12px;color:var(--amber)">No data for this timeframe — try switching to Current Team or +Last Season</div>`;return;}
   const r=calcAutoGSM(stats,ags,so,sotV,autoGSMPenTaker);
-  if(!r){out.innerHTML=`<div style="font-size:12px;color:var(--text3)">Enter fair odds above to calculate</div>`;return;}
-  const fmt=(v)=>v&&v>0&&isFinite(v)?`<span style="color:var(--green);font-weight:600">${v.toFixed(2)}</span>`:`<span style="color:var(--text3)">—</span>`;
-  const fmt3=(arr)=>arr?arr.map(v=>fmt(v)).join(' / '):`<span style="color:var(--text3)">— / — / —</span>`;
-  out.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-    <div class="card" style="padding:14px 16px">
-      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:10px">Goal Methods</div>
-      <table style="width:100%;font-size:13px;border-collapse:collapse">
-        <tr><td style="padding:5px 0;color:var(--text2)">Header goal</td><td style="text-align:right">${fmt(r.headerGoal)}</td></tr>
-        <tr><td style="padding:5px 0;color:var(--text2)">OTB goal</td><td style="text-align:right">${fmt(r.otbGoal)}</td></tr>
-        <tr><td style="padding:5px 0;color:var(--text2)">Left foot</td><td style="text-align:right">${fmt(r.lfGoal)}</td></tr>
-        <tr><td style="padding:5px 0;color:var(--text2)">Right foot</td><td style="text-align:right">${fmt(r.rfGoal)}</td></tr>
-      </table>
+  const fmt=(v)=>v&&v>0&&isFinite(v)?`<span style="color:var(--green);font-weight:700;font-size:14px">${v.toFixed(2)}</span>`:`<span style="color:var(--text3)">—</span>`;
+  const fmt3=(arr)=>arr?arr.map(v=>fmt(v)).join(' <span style="color:var(--border);">/</span> '):`<span style="color:var(--text3)">— / — / —</span>`;
+  // Check if any values computed
+  const hasGoals=r&&(r.headerGoal||r.otbGoal||r.lfGoal||r.rfGoal);
+  const hasShots=r&&(r.headedShots||r.headedSOTs||r.otbShotsP||r.otbSOTP);
+  const noData=!hasGoals&&!hasShots;
+  out.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="card" style="padding:14px 16px">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:10px">Goal Methods</div>
+        ${!isNaN(ags)&&ags>1?`<table style="width:100%;font-size:13px;border-collapse:collapse">
+          <tr style="border-bottom:.5px solid var(--border)"><td style="padding:6px 0;color:var(--text2)">Header goal</td><td style="text-align:right;padding:6px 0">${fmt(r?.headerGoal)}</td></tr>
+          <tr style="border-bottom:.5px solid var(--border)"><td style="padding:6px 0;color:var(--text2)">OTB goal</td><td style="text-align:right;padding:6px 0">${fmt(r?.otbGoal)}</td></tr>
+          <tr style="border-bottom:.5px solid var(--border)"><td style="padding:6px 0;color:var(--text2)">Left foot</td><td style="text-align:right;padding:6px 0">${fmt(r?.lfGoal)}</td></tr>
+          <tr><td style="padding:6px 0;color:var(--text2)">Right foot</td><td style="text-align:right;padding:6px 0">${fmt(r?.rfGoal)}</td></tr>
+        </table>`:`<div style="font-size:12px;color:var(--text3)">Enter AGS fair odds</div>`}
+      </div>
+      <div class="card" style="padding:14px 16px">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:10px">Shot Methods — 1+ / 2+ / 3+</div>
+        ${(!isNaN(so)&&so>1)||(!isNaN(sotV)&&sotV>1)?`<table style="width:100%;font-size:13px;border-collapse:collapse">
+          <tr style="border-bottom:.5px solid var(--border)"><td style="padding:6px 0;color:var(--text2)">Headed shots</td><td style="text-align:right;padding:6px 0;white-space:nowrap">${fmt3(r?.headedShots)}</td></tr>
+          <tr style="border-bottom:.5px solid var(--border)"><td style="padding:6px 0;color:var(--text2)">Headed SOTs</td><td style="text-align:right;padding:6px 0;white-space:nowrap">${fmt3(r?.headedSOTs)}</td></tr>
+          <tr style="border-bottom:.5px solid var(--border)"><td style="padding:6px 0;color:var(--text2)">OTB shots</td><td style="text-align:right;padding:6px 0;white-space:nowrap">${fmt3(r?.otbShotsP)}</td></tr>
+          <tr><td style="padding:6px 0;color:var(--text2)">OTB SOT</td><td style="text-align:right;padding:6px 0;white-space:nowrap">${fmt3(r?.otbSOTP)}</td></tr>
+        </table>`:`<div style="font-size:12px;color:var(--text3)">Enter Shot / SOT fair odds</div>`}
+      </div>
     </div>
-    <div class="card" style="padding:14px 16px">
-      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:10px">Shot Methods — 1+ / 2+ / 3+</div>
-      <table style="width:100%;font-size:13px;border-collapse:collapse">
-        <tr><td style="padding:5px 0;color:var(--text2)">Headed shots</td><td style="text-align:right;white-space:nowrap">${fmt3(r.headedShots)}</td></tr>
-        <tr><td style="padding:5px 0;color:var(--text2)">Headed SOTs</td><td style="text-align:right;white-space:nowrap">${fmt3(r.headedSOTs)}</td></tr>
-        <tr><td style="padding:5px 0;color:var(--text2)">OTB shots</td><td style="text-align:right;white-space:nowrap">${fmt3(r.otbShotsP)}</td></tr>
-        <tr><td style="padding:5px 0;color:var(--text2)">OTB SOT</td><td style="text-align:right;white-space:nowrap">${fmt3(r.otbSOTP)}</td></tr>
-      </table>
-    </div>
-  </div>`;
+    ${noData?`<div style="margin-top:10px;font-size:12px;color:var(--amber)">⚠ No open play shot data in this timeframe — try switching to Current Team or +Last Season</div>`:''}`;
 }
 
 function calcAutoGSM(s,ags,so,sotV,pen){
