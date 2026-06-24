@@ -1882,7 +1882,7 @@ function renderFixtures(leagues){
       tr.title='Click to view lineups';
       tr.onmouseenter=()=>tr.style.background='var(--surface2)';
       tr.onmouseleave=()=>tr.style.background='';
-      tr.onclick=()=>openMatch(m.id, m.home, m.away, league.name, isIntl);
+      tr.onclick=()=>openMatch(m.id, m.home, m.away, league.name, isIntl, m.started, m.finished);
       const timeStr=m.utcTime?fmtKickoff(m.utcTime):'TBC';
       const isLive=m.started&&!m.finished;
       const statusDot=isLive?`<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);margin-right:4px;vertical-align:middle"></span>`:'';
@@ -1915,8 +1915,9 @@ function fmtKickoff(utcStr){
 }
 
 // ── MATCH DETAIL ──
-async function openMatch(matchId, home, away, leagueName, isIntl){
+async function openMatch(matchId, home, away, leagueName, isIntl, started, finished){
   currentMatchType = isIntl ? 'international' : 'club';
+  const isLive = started && !finished;
   document.getElementById('matches-content').style.display='none';
   document.getElementById('date-btns').style.display='none';
   document.getElementById('matches-count').style.display='none';
@@ -1926,10 +1927,15 @@ async function openMatch(matchId, home, away, leagueName, isIntl){
   document.getElementById('match-header').innerHTML=`
     <div class="card" style="padding:16px 20px">
       <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">${leagueName}</div>
-      <div style="display:flex;align-items:center;justify-content:center;gap:16px">
+      <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:12px">
         <span style="font-size:18px;font-weight:700;text-align:right;flex:1">${home}</span>
         <span style="font-size:13px;color:var(--text3);padding:4px 12px;border:.5px solid var(--border);border-radius:var(--radius)">vs</span>
         <span style="font-size:18px;font-weight:700;text-align:left;flex:1">${away}</span>
+      </div>
+      <div style="text-align:center" id="match-status-badge">
+        ${isLive
+          ? `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--green-bg);color:var(--green);padding:5px 14px;border-radius:var(--radius);font-size:12px;font-weight:600"><span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block"></span> Game Live</span>`
+          : ''}
       </div>
     </div>`;
   document.getElementById('match-status').innerHTML=`<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t">Loading lineups</div></div></div>`;
@@ -1955,15 +1961,15 @@ function renderLineups(data){
   const wrap=document.getElementById('lineups-wrap');
   wrap.innerHTML='';
 
-  // Confirmed/predicted badge
-  const badge=document.createElement('div');
-  badge.style.cssText='grid-column:1/-1;margin-bottom:4px;display:flex;align-items:center;gap:8px';
-  if(data.confirmed){
-    badge.innerHTML=`<span style="display:inline-flex;align-items:center;gap:5px;background:var(--green-bg);color:var(--green);padding:5px 12px;border-radius:var(--radius);font-size:12px;font-weight:600"><i class="ti ti-circle-check"></i> Confirmed Lineups</span>`;
-  }else{
-    badge.innerHTML=`<span style="display:inline-flex;align-items:center;gap:5px;background:var(--amber-bg);color:var(--amber);padding:5px 12px;border-radius:var(--radius);font-size:12px;font-weight:600"><i class="ti ti-alert-triangle"></i> Predicted Lineups</span><span style="font-size:12px;color:var(--text3)">Not yet confirmed</span>`;
+  // Update badge only if game is not live
+  const badgeEl=document.getElementById('match-status-badge');
+  if(badgeEl&&!badgeEl.innerHTML.trim()){
+    if(data.confirmed){
+      badgeEl.innerHTML=`<span style="display:inline-flex;align-items:center;gap:5px;background:var(--green-bg);color:var(--green);padding:5px 14px;border-radius:var(--radius);font-size:12px;font-weight:600"><i class="ti ti-circle-check"></i> Confirmed Lineups</span>`;
+    }else{
+      badgeEl.innerHTML=`<span style="display:inline-flex;align-items:center;gap:5px;background:var(--amber-bg);color:var(--amber);padding:5px 14px;border-radius:var(--radius);font-size:12px;font-weight:600"><i class="ti ti-alert-triangle"></i> Predicted Lineups</span>`;
+    }
   }
-  wrap.appendChild(badge);
   [
     {team: data.home, label: 'Home'},
     {team: data.away, label: 'Away'}
