@@ -72,7 +72,13 @@ exports.handler = async (event) => {
           lastSeason:    agg(allDatasets.filter(d => d.season <= 1)),
           last2Seasons:  agg(allDatasets.filter(d => d.season <= 2)),
         },
-        competitionsFound: allDatasets.map(d => ({ seasonId: d.seasonId, shots: d.shots.length }))
+        competitionsFound: allDatasets.map(d => ({ seasonId: d.seasonId, shots: d.shots.length })),
+        debug: (() => {
+          const s0shots = allDatasets.filter(d => d.season === 0).flatMap(d => d.shots).filter(s => String(s.teamId) === String(currentTeamId));
+          const counts = {};
+          s0shots.forEach(s => { counts[s.eventType] = (counts[s.eventType]||0)+1; });
+          return { totalShots: s0shots.length, eventTypes: counts };
+        })()
       })
     };
 
