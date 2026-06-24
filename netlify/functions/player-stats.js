@@ -9,8 +9,6 @@ const FOTMOB_HEADERS = {
   'Referer': 'https://www.fotmob.com/'
 };
 
-const INTL_SEASONS = new Set([0]);
-
 const SEASON_IDS = [];
 for (let s = 0; s <= 3; s++) {
   for (let c = 0; c <= 6; c++) {
@@ -36,28 +34,25 @@ exports.handler = async (event) => {
         const data = await res.json();
         const shots = data?.shotmap;
         if (!shots || !shots.length) return null;
-        return { seasonId, season, shots, isIntl: INTL_SEASONS.has(season) };
+        return { seasonId, season, shots };
       })
     );
 
     const allDatasets = results.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
     if (!allDatasets.length) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'No shot data found for this player' }) };
 
-    const relevant = isInternational ? allDatasets : allDatasets.filter(d => !d.isIntl);
-    const allShots = relevant.flatMap(d => d.shots);
+    // Detect current club by most recent shot teamId
+    const allShots = allDatasets.flatMap(d => d.shots);
     const sorted = [...allShots].sort((a, b) => new Date(b.matchDate) - new Date(a.matchDate));
     const currentTeamId = sorted[0]?.teamId;
 
-    // For club matchType, exclude shots where teamId !== currentTeamId (international duty)
-    const clubShots = isInternational ? allShots : allShots.filter(s => s.teamId === currentTeamId);
-    const currentTeamShots = allShots.filter(s => s.teamId === currentTeamId);
+    // Club shots = shots where teamId matches current club
+    // International shots = shots where teamId does NOT match current club
+    const filterShots = (shots) => isInternational
+      ? shots.filter(s => s.teamId !== currentTeamId)
+      : shots.filter(s => s.teamId === currentTeamId);
 
-    const agg = (datasets) => {
-      const shots = isInternational
-        ? datasets.flatMap(d => d.shots)
-        : datasets.flatMap(d => d.shots).filter(s => s.teamId === currentTeamId);
-      return calcStats(shots);
-    };
+    const agg = (datasets) => calcStats(filterShots(datasets.flatMap(d => d.shots)));
 
     return {
       statusCode: 200,
@@ -68,10 +63,10 @@ exports.handler = async (event) => {
         matchType: matchType || 'club',
         currentTeamId,
         timeframes: {
-          currentTeam:   calcStats(currentTeamShots),
-          currentSeason: agg(relevant.filter(d => d.season <= 1)),
-          lastSeason:    agg(relevant.filter(d => d.season <= 2)),
-          last2Seasons:  agg(relevant.filter(d => d.season <= 3)),
+          currentTeam:   agg(allDatasets.filter(d => d.season === 0)),
+          currentSeason: agg(allDatasets.filter(d => d.season === 0)),
+          lastSeason:    agg(allDatasets.filter(d => d.season <= 1)),
+          last2Seasons:  agg(allDatasets.filter(d => d.season <= 2)),
         },
         competitionsFound: allDatasets.map(d => ({ seasonId: d.seasonId, shots: d.shots.length, isIntl: d.isIntl }))
       })
