@@ -112,12 +112,14 @@ function calcStats(shots) {
   // Penalty shots
   const penShotsArr  = s.filter(sh => sh.situation === 'Penalty');
   const penaltyShots = penShotsArr.length;
+  const penaltySot   = penShotsArr.filter(sh => sh.isOnTarget).length;
   const penaltyXG    = sum(penShotsArr);
   const penaltyGoals = penShotsArr.filter(sh => sh.eventType === 'Goal').length;
 
-  // Direct free kick shots only (not headers/shots from free kick deliveries)
+  // Direct free kick shots only
   const fkShotsArr   = s.filter(sh => sh.situation === 'FreeKick');
   const freeKickShots= fkShotsArr.length;
+  const freeKickSot  = fkShotsArr.filter(sh => sh.isOnTarget).length;
   const freeKickXG   = sum(fkShotsArr);
   const freeKickGoals= fkShotsArr.filter(sh => sh.eventType === 'Goal').length;
 
@@ -132,8 +134,8 @@ function calcStats(shots) {
     leftFoot, leftFootSot, leftFootGoals, leftFootXG: r(leftFootXG),
     rightFoot, rightFootSot, rightFootGoals, rightFootXG: r(rightFootXG),
     otbShots, otbSot, otbGoals, otbXG: r(otbXG),
-    penaltyShots, penaltyGoals, penaltyXG: r(penaltyXG),
-    freeKickShots, freeKickGoals, freeKickXG: r(freeKickXG),
+    penaltyShots, penaltyGoals, penaltySot, penaltyXG: r(penaltyXG),
+    freeKickShots, freeKickGoals, freeKickSot, freeKickXG: r(freeKickXG),
     insideBox, outsideBox,
     shotsPerGame: pg(totalShots), sotPerGame: pg(sot),
     goalsPerGame: pg(goals), xGPerGame: pg(totalXG),
