@@ -109,7 +109,7 @@ function calcStats(shots) {
   const isHdr  = sh => sh.shotType === 'Header';
   const isLF   = sh => sh.shotType === 'LeftFoot';
   const isRF   = sh => sh.shotType === 'RightFoot';
-  const isOTB  = sh => sh.box === 'OutsideBox';
+  const isOTB  = sh => sh.isFromInsideBox === false;
   const isPen  = sh => sh.situation === 'Penalty';
   const isFK   = sh => sh.situation === 'FreeKick';
 
@@ -145,8 +145,8 @@ function calcStats(shots) {
   const freeKickGoals= fkArr.filter(sh => sh.eventType === 'Goal').length;
   const freeKickXG   = sum(fkArr);
 
-  const insideBox  = s.filter(sh => sh.box === 'InsideBox').length;
-  const outsideBox = s.filter(sh => sh.box === 'OutsideBox').length;
+  const insideBox  = s.filter(sh => sh.isFromInsideBox === true).length;
+  const outsideBox = s.filter(sh => sh.isFromInsideBox === false).length;
   const totalXG    = sum(s);
   const pg = n => matches > 0 ? r(n / matches) : 0;
 
