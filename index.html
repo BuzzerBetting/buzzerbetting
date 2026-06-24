@@ -1807,7 +1807,7 @@ function initMatches(){
   wrap.innerHTML='';
   closeMatch();
   const now=new Date();
-  for(let i=0;i<5;i++){
+  for(let i=-1;i<5;i++){
     const d=new Date(now);
     d.setDate(now.getDate()+i);
     const param=fmtDateParam(d);
@@ -1819,10 +1819,11 @@ function initMatches(){
     btn.onclick=()=>loadFixtures(param,btn);
     wrap.appendChild(btn);
   }
-  wrap.querySelector('button').click();
+  wrap.querySelectorAll('button')[1].click();
 }
 
 function fmtDateLabel(d,i){
+  if(i===-1)return'Yesterday';
   if(i===0)return'Today';
   if(i===1)return'Tomorrow';
   return d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
