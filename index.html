@@ -2246,7 +2246,8 @@ function calcAutoGSM(s,ags,so,sotV,pen){
   const xS=hasSO?-Math.log(1-(1/so))-penAdj:null;
   const xSOT=hasSOT?-Math.log(1-(1/sotV))-penAdj:null;
   const p=(s.penaltyShots||0),fk=(s.freeKickShots||0);
-  const nspS=(s.shots||0)-p-fk,nspT=(s.sot||0)-p-fk;
+  const pSot=(s.penaltySot||0),fkSot=(s.freeKickSot||0);
+  const nspS=(s.shots||0)-p-fk,nspT=(s.sot||0)-pSot-fkSot;
   return{
     headerGoal,otbGoal,lfGoal,rfGoal,
     headedShots:xS&&nspS>0&&s.headers>0?shotP((s.headers/nspS)*xS):null,
