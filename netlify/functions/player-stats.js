@@ -97,7 +97,7 @@ function calcStats(shots) {
   const rawSot   = shots.filter(onTgt).length;
 
   // Exclude FromCorner and SetPiece from all calculations
-  const VALID = new Set(['RegularPlay','FastBreak','Penalty','FreeKick']);
+  const VALID = new Set(['RegularPlay','FastBreak','Penalty','FreeKick','IndividualPlay']);
   const s = shots.filter(sh => VALID.has(sh.situation));
   if (!s.length) return null;
 
@@ -109,7 +109,7 @@ function calcStats(shots) {
   const isHdr  = sh => sh.shotType === 'Header';
   const isLF   = sh => sh.shotType === 'LeftFoot';
   const isRF   = sh => sh.shotType === 'RightFoot';
-  const isOTB  = sh => sh.situation === 'RegularPlay' || sh.situation === 'FastBreak';
+  const isOTB  = sh => sh.box === 'OutsideBox';
   const isPen  = sh => sh.situation === 'Penalty';
   const isFK   = sh => sh.situation === 'FreeKick';
 
