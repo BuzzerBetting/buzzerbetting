@@ -161,4 +161,4 @@ function calcStats(shots) {
 }
 
 function sum(shots) { return shots.reduce((t, s) => t + (s.expectedGoals || 0), 0); }
-function r(n) { return Math.round(n * 100) / 100; }
+function r(n) { return Math.round((n + 1e-9) * 100) / 100; }
