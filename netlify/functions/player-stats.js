@@ -41,10 +41,14 @@ exports.handler = async (event) => {
     const allDatasets = results.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
     if (!allDatasets.length) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'No shot data found for this player' }) };
 
-    // Detect current club by most recent shot teamId
-    const allShots = allDatasets.flatMap(d => d.shots);
-    const sorted = [...allShots].sort((a, b) => new Date(b.matchDate) - new Date(a.matchDate));
-    const currentTeamId = sorted[0]?.teamId;
+    // Detect current club = most frequent teamId in season 0 shots
+    // (more shots = club, fewer = international duty like WC/AFCON)
+    const season0Shots = allDatasets.filter(d => d.season === 0).flatMap(d => d.shots);
+    const teamCounts = {};
+    season0Shots.forEach(s => { teamCounts[s.teamId] = (teamCounts[s.teamId] || 0) + 1; });
+    const currentTeamId = Object.entries(teamCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+
+    if (!currentTeamId) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'Could not detect current team' }) };
 
     // Club shots = shots where teamId matches current club
     // International shots = shots where teamId does NOT match current club
