@@ -21,25 +21,20 @@ exports.handler = async (event) => {
     if (!res.ok) throw new Error(`FotMob returned HTTP ${res.status}`);
 
     const data = await res.json();
-
-    // Extract lineup from match details
     const lineup = data?.content?.lineup;
-    const general = data?.general;
-    const header = data?.header;
 
-    if (!lineup) throw new Error('No lineup data available yet');
+    if (!lineup) throw new Error('No lineup data available');
 
-    // Parse home and away lineups
     const parseTeam = (team) => {
       if (!team) return null;
-      const starters = (team.starters || []).map(p => ({
-        id:       p.id,
-        name:     p.name?.fullName || p.name,
-        shirt:    p.shirt,
-        position: p.pos || p.role,
+      const starters = (team.starters || team.players || []).map(p => ({
+        id:        p.id,
+        name:      p.name?.fullName || p.name,
+        shirt:     p.shirt,
+        position:  p.pos || p.role,
         isCaptain: p.captain || false,
       }));
-      const bench = (team.bench || []).map(p => ({
+      const bench = (team.bench || team.subs || []).map(p => ({
         id:       p.id,
         name:     p.name?.fullName || p.name,
         shirt:    p.shirt,
@@ -48,27 +43,27 @@ exports.handler = async (event) => {
       return { starters, bench };
     };
 
-    const home = header?.teams?.[0];
-    const away = header?.teams?.[1];
-
-    const result = {
-      ok: true,
-      matchId,
-      confirmed: !!lineup.confirmed,
-      home: {
-        id:     home?.id,
-        name:   home?.name,
-        lineup: parseTeam(lineup.lineup?.[0]),
-      },
-      away: {
-        id:     away?.id,
-        name:   away?.name,
-        lineup: parseTeam(lineup.lineup?.[1]),
-      },
-      rawLineupKeys: Object.keys(lineup)
+    return {
+      statusCode: 200,
+      headers: CORS,
+      body: JSON.stringify({
+        ok: true,
+        matchId,
+        confirmed: lineup.confirmed || false,
+        home: {
+          id:     lineup.homeTeam?.teamId,
+          name:   lineup.homeTeam?.teamName,
+          lineup: parseTeam(lineup.homeTeam),
+        },
+        away: {
+          id:     lineup.awayTeam?.teamId,
+          name:   lineup.awayTeam?.teamName,
+          lineup: parseTeam(lineup.awayTeam),
+        },
+        // Debug — remove once working
+        homeTeamKeys: lineup.homeTeam ? Object.keys(lineup.homeTeam) : []
+      })
     };
-
-    return { statusCode: 200, headers: CORS, body: JSON.stringify(result) };
 
   } catch (err) {
     return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: err.message }) };
