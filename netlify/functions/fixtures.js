@@ -16,15 +16,13 @@ exports.handler = async (event) => {
 
   const raw = await res.json();
 
-  // Return raw response so we can see the full structure
   return {
     statusCode: 200,
     headers: CORS,
     body: JSON.stringify({
       status: res.status,
-      leagueCount: (raw.leagues || []).length,
-      leagueIds: (raw.leagues || []).map(l => ({ id: l.id, name: l.name, matchCount: (l.matches||[]).length })),
-      rawSample: JSON.stringify(raw).slice(0, 500)
+      topLevelKeys: Object.keys(raw),
+      rawSample: JSON.stringify(raw).slice(0, 1000)
     })
   };
 };
