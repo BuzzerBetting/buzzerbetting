@@ -76,45 +76,54 @@ exports.handler = async (event) => {
 
 function calcStats(shots) {
   if (!shots || !shots.length) return null;
-  const matches   = new Set(shots.map(s => s.matchId)).size;
-  const goals     = shots.filter(s => s.eventType === 'Goal').length;
-  const totalShots= shots.length;
-  const sot       = shots.filter(s => s.isOnTarget).length;
 
-  const headers      = shots.filter(s => s.shotType === 'Header').length;
-  const headedSot    = shots.filter(s => s.shotType === 'Header' && s.isOnTarget).length;
-  const headedGoals  = shots.filter(s => s.shotType === 'Header' && s.eventType === 'Goal').length;
-  const headedXG     = sum(shots.filter(s => s.shotType === 'Header'));
+  // Exclude FromCorner and SetPiece (set piece deliveries) from all calculations
+  // Only count: RegularPlay, FastBreak, Penalty, FreeKick
+  const VALID = new Set(['RegularPlay','FastBreak','Penalty','FreeKick']);
+  const s = shots.filter(sh => VALID.has(sh.situation));
 
-  const leftFoot     = shots.filter(s => s.shotType === 'LeftFoot').length;
-  const leftFootSot  = shots.filter(s => s.shotType === 'LeftFoot' && s.isOnTarget).length;
-  const leftFootGoals= shots.filter(s => s.shotType === 'LeftFoot' && s.eventType === 'Goal').length;
-  const leftFootXG   = sum(shots.filter(s => s.shotType === 'LeftFoot'));
+  if (!s.length) return null;
+  const matches   = new Set(s.map(sh => sh.matchId)).size;
+  const goals     = s.filter(sh => sh.eventType === 'Goal').length;
+  const totalShots= s.length;
+  const sot       = s.filter(sh => sh.isOnTarget).length;
 
-  const rightFoot    = shots.filter(s => s.shotType === 'RightFoot').length;
-  const rightFootSot = shots.filter(s => s.shotType === 'RightFoot' && s.isOnTarget).length;
-  const rightFootGoals=shots.filter(s => s.shotType === 'RightFoot' && s.eventType === 'Goal').length;
-  const rightFootXG  = sum(shots.filter(s => s.shotType === 'RightFoot'));
+  const headers      = s.filter(sh => sh.shotType === 'Header').length;
+  const headedSot    = s.filter(sh => sh.shotType === 'Header' && sh.isOnTarget).length;
+  const headedGoals  = s.filter(sh => sh.shotType === 'Header' && sh.eventType === 'Goal').length;
+  const headedXG     = sum(s.filter(sh => sh.shotType === 'Header'));
 
-  const otb          = s => s.situation === 'RegularPlay' || s.situation === 'FastBreak';
-  const otbShots     = shots.filter(otb).length;
-  const otbSot       = shots.filter(s => otb(s) && s.isOnTarget).length;
-  const otbGoals     = shots.filter(s => otb(s) && s.eventType === 'Goal').length;
-  const otbXG        = sum(shots.filter(otb));
+  const leftFoot     = s.filter(sh => sh.shotType === 'LeftFoot').length;
+  const leftFootSot  = s.filter(sh => sh.shotType === 'LeftFoot' && sh.isOnTarget).length;
+  const leftFootGoals= s.filter(sh => sh.shotType === 'LeftFoot' && sh.eventType === 'Goal').length;
+  const leftFootXG   = sum(s.filter(sh => sh.shotType === 'LeftFoot'));
 
-  // Penalty shots and free kick shots (count of attempts, not just goals)
-  const penShotsArr  = shots.filter(s => s.situation === 'Penalty');
-  const fkShotsArr   = shots.filter(s => s.situation === 'SetPiece');
+  const rightFoot    = s.filter(sh => sh.shotType === 'RightFoot').length;
+  const rightFootSot = s.filter(sh => sh.shotType === 'RightFoot' && sh.isOnTarget).length;
+  const rightFootGoals=s.filter(sh => sh.shotType === 'RightFoot' && sh.eventType === 'Goal').length;
+  const rightFootXG  = sum(s.filter(sh => sh.shotType === 'RightFoot'));
+
+  const otb          = sh => sh.situation === 'RegularPlay' || sh.situation === 'FastBreak';
+  const otbShots     = s.filter(otb).length;
+  const otbSot       = s.filter(sh => otb(sh) && sh.isOnTarget).length;
+  const otbGoals     = s.filter(sh => otb(sh) && sh.eventType === 'Goal').length;
+  const otbXG        = sum(s.filter(otb));
+
+  // Penalty shots
+  const penShotsArr  = s.filter(sh => sh.situation === 'Penalty');
   const penaltyShots = penShotsArr.length;
-  const freeKickShots= fkShotsArr.length;
   const penaltyXG    = sum(penShotsArr);
-  const freeKickXG   = sum(fkShotsArr);
-  const penaltyGoals = penShotsArr.filter(s => s.eventType === 'Goal').length;
-  const freeKickGoals= fkShotsArr.filter(s => s.eventType === 'Goal').length;
+  const penaltyGoals = penShotsArr.filter(sh => sh.eventType === 'Goal').length;
 
-  const insideBox    = shots.filter(s => s.box === 'InsideBox').length;
-  const outsideBox   = shots.filter(s => s.box === 'OutsideBox').length;
-  const totalXG      = sum(shots);
+  // Direct free kick shots only (not headers/shots from free kick deliveries)
+  const fkShotsArr   = s.filter(sh => sh.situation === 'FreeKick');
+  const freeKickShots= fkShotsArr.length;
+  const freeKickXG   = sum(fkShotsArr);
+  const freeKickGoals= fkShotsArr.filter(sh => sh.eventType === 'Goal').length;
+
+  const insideBox    = s.filter(sh => sh.box === 'InsideBox').length;
+  const outsideBox   = s.filter(sh => sh.box === 'OutsideBox').length;
+  const totalXG      = sum(s);
   const pg = (n) => matches > 0 ? r(n / matches) : 0;
 
   return {
