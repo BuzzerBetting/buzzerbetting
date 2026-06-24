@@ -1,7 +1,0 @@
-{
-  "name": "buzzerbetting",
-  "version": "1.0.0",
-  "dependencies": {
-    "@max-xoo/fotmob": "latest"
-  }
-}
