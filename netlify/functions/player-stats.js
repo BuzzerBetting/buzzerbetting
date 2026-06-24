@@ -72,7 +72,7 @@ exports.handler = async (event) => {
           lastSeason:    agg(allDatasets.filter(d => d.season <= 1)),
           last2Seasons:  agg(allDatasets.filter(d => d.season <= 2)),
         },
-        competitionsFound: allDatasets.map(d => ({ seasonId: d.seasonId, shots: d.shots.length, isIntl: d.isIntl }))
+        competitionsFound: allDatasets.map(d => ({ seasonId: d.seasonId, shots: d.shots.length }))
       })
     };
 
@@ -84,60 +84,65 @@ exports.handler = async (event) => {
 function calcStats(shots) {
   if (!shots || !shots.length) return null;
 
-  // Raw totals (all situations) — used as denominators to preserve proportions
+  const onTgt = sh => sh.eventType === 'Goal' || sh.eventType === 'AttemptSaved';
+
+  // Raw totals including all situations — used as denominators
   const rawShots = shots.length;
-  const rawSot   = shots.filter(sh => sh.eventType === 'Goal' || sh.eventType === 'AttemptSaved').length;
+  const rawSot   = shots.filter(onTgt).length;
 
   // Exclude FromCorner and SetPiece from all calculations
   const VALID = new Set(['RegularPlay','FastBreak','Penalty','FreeKick']);
   const s = shots.filter(sh => VALID.has(sh.situation));
-
   if (!s.length) return null;
-  const matches   = new Set(s.map(sh => sh.matchId)).size;
-  const goals     = s.filter(sh => sh.eventType === 'Goal').length;
-  const totalShots= s.length;
-  // SOT = goals + keeper saves only (not blocked shots) — matches FotMob's official definition
-  const sot       = s.filter(sh => sh.eventType === 'Goal' || sh.eventType === 'AttemptSaved').length;
 
-  const headers      = s.filter(sh => sh.shotType === 'Header').length;
-  const headedSot    = s.filter(sh => sh.shotType === 'Header' && sh.eventType === 'Goal' || sh.eventType === 'AttemptSaved').length;
-  const headedGoals  = s.filter(sh => sh.shotType === 'Header' && sh.eventType === 'Goal').length;
-  const headedXG     = sum(s.filter(sh => sh.shotType === 'Header'));
+  const matches    = new Set(s.map(sh => sh.matchId)).size;
+  const goals      = s.filter(sh => sh.eventType === 'Goal').length;
+  const totalShots = s.length;
+  const sot        = s.filter(onTgt).length;
 
-  const leftFoot     = s.filter(sh => sh.shotType === 'LeftFoot').length;
-  const leftFootSot  = s.filter(sh => sh.shotType === 'LeftFoot' && sh.eventType === 'Goal' || sh.eventType === 'AttemptSaved').length;
-  const leftFootGoals= s.filter(sh => sh.shotType === 'LeftFoot' && sh.eventType === 'Goal').length;
-  const leftFootXG   = sum(s.filter(sh => sh.shotType === 'LeftFoot'));
+  const isHdr  = sh => sh.shotType === 'Header';
+  const isLF   = sh => sh.shotType === 'LeftFoot';
+  const isRF   = sh => sh.shotType === 'RightFoot';
+  const isOTB  = sh => sh.situation === 'RegularPlay' || sh.situation === 'FastBreak';
+  const isPen  = sh => sh.situation === 'Penalty';
+  const isFK   = sh => sh.situation === 'FreeKick';
 
-  const rightFoot    = s.filter(sh => sh.shotType === 'RightFoot').length;
-  const rightFootSot = s.filter(sh => sh.shotType === 'RightFoot' && sh.eventType === 'Goal' || sh.eventType === 'AttemptSaved').length;
-  const rightFootGoals=s.filter(sh => sh.shotType === 'RightFoot' && sh.eventType === 'Goal').length;
-  const rightFootXG  = sum(s.filter(sh => sh.shotType === 'RightFoot'));
+  const headers      = s.filter(isHdr).length;
+  const headedSot    = s.filter(sh => isHdr(sh) && onTgt(sh)).length;
+  const headedGoals  = s.filter(sh => isHdr(sh) && sh.eventType === 'Goal').length;
+  const headedXG     = sum(s.filter(isHdr));
 
-  const otb          = sh => sh.situation === 'RegularPlay' || sh.situation === 'FastBreak';
-  const otbShots     = s.filter(otb).length;
-  const otbSot       = s.filter(sh => otb(sh) && sh.eventType === 'Goal' || sh.eventType === 'AttemptSaved').length;
-  const otbGoals     = s.filter(sh => otb(sh) && sh.eventType === 'Goal').length;
-  const otbXG        = sum(s.filter(otb));
+  const leftFoot     = s.filter(isLF).length;
+  const leftFootSot  = s.filter(sh => isLF(sh) && onTgt(sh)).length;
+  const leftFootGoals= s.filter(sh => isLF(sh) && sh.eventType === 'Goal').length;
+  const leftFootXG   = sum(s.filter(isLF));
 
-  // Penalty shots
-  const penShotsArr  = s.filter(sh => sh.situation === 'Penalty');
-  const penaltyShots = penShotsArr.length;
-  const penaltySot   = penShotsArr.filter(sh => sh.eventType === 'Goal' || sh.eventType === 'AttemptSaved').length;
-  const penaltyXG    = sum(penShotsArr);
-  const penaltyGoals = penShotsArr.filter(sh => sh.eventType === 'Goal').length;
+  const rightFoot     = s.filter(isRF).length;
+  const rightFootSot  = s.filter(sh => isRF(sh) && onTgt(sh)).length;
+  const rightFootGoals= s.filter(sh => isRF(sh) && sh.eventType === 'Goal').length;
+  const rightFootXG   = sum(s.filter(isRF));
 
-  // Direct free kick shots only
-  const fkShotsArr   = s.filter(sh => sh.situation === 'FreeKick');
-  const freeKickShots= fkShotsArr.length;
-  const freeKickSot  = fkShotsArr.filter(sh => sh.eventType === 'Goal' || sh.eventType === 'AttemptSaved').length;
-  const freeKickXG   = sum(fkShotsArr);
-  const freeKickGoals= fkShotsArr.filter(sh => sh.eventType === 'Goal').length;
+  const otbShots = s.filter(isOTB).length;
+  const otbSot   = s.filter(sh => isOTB(sh) && onTgt(sh)).length;
+  const otbGoals = s.filter(sh => isOTB(sh) && sh.eventType === 'Goal').length;
+  const otbXG    = sum(s.filter(isOTB));
 
-  const insideBox    = s.filter(sh => sh.box === 'InsideBox').length;
-  const outsideBox   = s.filter(sh => sh.box === 'OutsideBox').length;
-  const totalXG      = sum(s);
-  const pg = (n) => matches > 0 ? r(n / matches) : 0;
+  const penArr       = s.filter(isPen);
+  const penaltyShots = penArr.length;
+  const penaltySot   = penArr.filter(onTgt).length;
+  const penaltyGoals = penArr.filter(sh => sh.eventType === 'Goal').length;
+  const penaltyXG    = sum(penArr);
+
+  const fkArr        = s.filter(isFK);
+  const freeKickShots= fkArr.length;
+  const freeKickSot  = fkArr.filter(onTgt).length;
+  const freeKickGoals= fkArr.filter(sh => sh.eventType === 'Goal').length;
+  const freeKickXG   = sum(fkArr);
+
+  const insideBox  = s.filter(sh => sh.box === 'InsideBox').length;
+  const outsideBox = s.filter(sh => sh.box === 'OutsideBox').length;
+  const totalXG    = sum(s);
+  const pg = n => matches > 0 ? r(n / matches) : 0;
 
   return {
     matches, goals, shots: totalShots, sot, xG: r(totalXG),
