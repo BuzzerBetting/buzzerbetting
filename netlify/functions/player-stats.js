@@ -50,10 +50,10 @@ exports.handler = async (event) => {
 
     if (!currentTeamId) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'Could not detect current team' }) };
 
-    // Club shots = shots where teamId matches current club
-    // International shots = shots where teamId does NOT match current club
+    // Club = shots for current club only
+    // International = all shots (club + international combined)
     const filterShots = (shots) => isInternational
-      ? shots.filter(s => String(s.teamId) !== String(currentTeamId))
+      ? shots
       : shots.filter(s => String(s.teamId) === String(currentTeamId));
 
     const agg = (datasets) => calcStats(filterShots(datasets.flatMap(d => d.shots)));
