@@ -2060,6 +2060,9 @@ async function openPlayerStats(playerId, playerName, matchType){
 }
 
 function renderPlayerStats(data, playerName){
+  autoGSMData=data;
+  autoGSMPenTaker=false;
+  autoGSMTimeframe='currentSeason';
   const content=document.getElementById('player-stats-content');
   const frames=[
     {key:'currentTeam',   label:'Current Team'},
