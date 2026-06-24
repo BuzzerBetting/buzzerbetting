@@ -1954,6 +1954,16 @@ function closeMatch(){
 function renderLineups(data){
   const wrap=document.getElementById('lineups-wrap');
   wrap.innerHTML='';
+
+  // Confirmed/predicted badge
+  const badge=document.createElement('div');
+  badge.style.cssText='grid-column:1/-1;margin-bottom:4px;display:flex;align-items:center;gap:8px';
+  if(data.confirmed){
+    badge.innerHTML=`<span style="display:inline-flex;align-items:center;gap:5px;background:var(--green-bg);color:var(--green);padding:5px 12px;border-radius:var(--radius);font-size:12px;font-weight:600"><i class="ti ti-circle-check"></i> Confirmed Lineups</span>`;
+  }else{
+    badge.innerHTML=`<span style="display:inline-flex;align-items:center;gap:5px;background:var(--amber-bg);color:var(--amber);padding:5px 12px;border-radius:var(--radius);font-size:12px;font-weight:600"><i class="ti ti-alert-triangle"></i> Predicted Lineups</span><span style="font-size:12px;color:var(--text3)">Not yet confirmed</span>`;
+  }
+  wrap.appendChild(badge);
   [
     {team: data.home, label: 'Home'},
     {team: data.away, label: 'Away'}
