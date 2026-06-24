@@ -2067,45 +2067,78 @@ function renderPlayerStats(data, playerName){
     {key:'lastSeason',    label:'+Last Season'},
     {key:'last2Seasons',  label:'+2 Seasons'},
   ];
-  const rows=[
-    {key:'matches',      label:'Games'},
-    {key:'shots',        label:'Shots'},
-    {key:'sot',          label:'SOT'},
-    {key:'goals',        label:'Goals'},
-    {key:'headers',      label:'Headers'},
-    {key:'headedSot',    label:'Head SOT'},
-    {key:'headedGoals',  label:'Head Goals'},
-    {key:'leftFoot',     label:'Left Foot'},
-    {key:'rightFoot',    label:'Right Foot'},
-    {key:'otbShots',     label:'OTB Shots'},
-    {key:'otbSot',       label:'OTB SOT'},
-    {key:'insideBox',    label:'Inside Box'},
-    {key:'xG',           label:'xG'},
-    {key:'shotsPerGame', label:'Shots/Game'},
-    {key:'sotPerGame',   label:'SOT/Game'},
+  const groups=[
+    {title:'Overview',rows:[
+      {key:'matches',       label:'Games'},
+      {key:'goals',         label:'Goals'},
+      {key:'shots',         label:'Shots'},
+      {key:'sot',           label:'SOT'},
+      {key:'xG',            label:'xG'},
+      {key:'shotsPerGame',  label:'Shots/Game'},
+      {key:'sotPerGame',    label:'SOT/Game'},
+      {key:'xGPerGame',     label:'xG/Game'},
+    ]},
+    {title:'Headers',rows:[
+      {key:'headers',       label:'Header shots'},
+      {key:'headedSot',     label:'Header SOT'},
+      {key:'headedGoals',   label:'Header goals'},
+      {key:'headedXG',      label:'Header xG'},
+      {key:'headersPerGame',label:'Headers/Game'},
+    ]},
+    {title:'Open Play (OTB)',rows:[
+      {key:'otbShots',      label:'OTB shots'},
+      {key:'otbSot',        label:'OTB SOT'},
+      {key:'otbGoals',      label:'OTB goals'},
+      {key:'otbXG',         label:'OTB xG'},
+      {key:'otbPerGame',    label:'OTB shots/Game'},
+    ]},
+    {title:'Left Foot',rows:[
+      {key:'leftFoot',      label:'Shots'},
+      {key:'leftFootSot',   label:'SOT'},
+      {key:'leftFootGoals', label:'Goals'},
+      {key:'leftFootXG',    label:'xG'},
+    ]},
+    {title:'Right Foot',rows:[
+      {key:'rightFoot',     label:'Shots'},
+      {key:'rightFootSot',  label:'SOT'},
+      {key:'rightFootGoals',label:'Goals'},
+      {key:'rightFootXG',   label:'xG'},
+    ]},
+    {title:'Set Pieces',rows:[
+      {key:'penaltyGoals',  label:'Penalty goals'},
+      {key:'penaltyXG',     label:'Penalty xG'},
+      {key:'freeKickGoals', label:'Free kick goals'},
+      {key:'freeKickXG',    label:'Free kick xG'},
+    ]},
+    {title:'Location',rows:[
+      {key:'insideBox',     label:'Inside box shots'},
+      {key:'outsideBox',    label:'Outside box shots'},
+    ]},
   ];
-
   let html=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
     <thead><tr>
       <th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:500;border-bottom:.5px solid var(--border)">Stat</th>
       ${frames.map(f=>`<th style="text-align:right;padding:6px 8px;color:var(--text3);font-weight:500;border-bottom:.5px solid var(--border);white-space:nowrap">${f.label}</th>`).join('')}
     </tr></thead><tbody>`;
-
-  rows.forEach((row,i)=>{
-    const bg=i%2===0?'':'background:var(--surface2)';
-    html+=`<tr style="${bg}"><td style="padding:6px 8px;color:var(--text2);font-weight:500">${row.label}</td>`;
-    frames.forEach(f=>{
-      const tf=data.timeframes?.[f.key];
-      const val=tf?.[row.key];
-      const display=val===undefined||val===null?'—':val;
-      html+=`<td style="text-align:right;padding:6px 8px;font-weight:500">${display}</td>`;
+  groups.forEach(group=>{
+    html+=`<tr><td colspan="${frames.length+1}" style="padding:8px 8px 4px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;background:var(--surface2);border-top:.5px solid var(--border)">${group.title}</td></tr>`;
+    group.rows.forEach((row,i)=>{
+      const bg=i%2===0?'':'background:var(--surface2)';
+      html+=`<tr style="${bg}"><td style="padding:6px 8px;color:var(--text2)">${row.label}</td>`;
+      frames.forEach(f=>{
+        const tf=data.timeframes?.[f.key];
+        const val=tf?.[row.key];
+        const display=val===undefined||val===null?'—':val;
+        html+=`<td style="text-align:right;padding:6px 8px;font-weight:500">${display}</td>`;
+      });
+      html+=`</tr>`;
     });
-    html+='</tr>';
   });
-
   html+=`</tbody></table></div>
-    <div style="margin-top:12px;font-size:11px;color:var(--text3)">
-      Match type: ${data.matchType} · ${data.competitionsFound?.length||0} competitions found
+    <div style="margin-top:10px;font-size:11px;color:var(--text3);display:flex;gap:12px;flex-wrap:wrap">
+      <span>Match type: ${data.matchType}</span>
+      <span>${data.competitionsFound?.length||0} competitions with shot data</span>
+      <span style="color:var(--amber)">⚠ 6yd box via Understat — coming soon</span>
     </div>`;
   content.innerHTML=html;
 }
