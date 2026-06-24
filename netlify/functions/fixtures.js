@@ -1,4 +1,5 @@
 const LEAGUE_IDS = new Set([
+  77,   // FIFA World Cup 2026
   47,   // Premier League
   48,   // Championship
   87,   // La Liga
