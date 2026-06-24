@@ -77,8 +77,11 @@ exports.handler = async (event) => {
 function calcStats(shots) {
   if (!shots || !shots.length) return null;
 
-  // Exclude FromCorner and SetPiece (set piece deliveries) from all calculations
-  // Only count: RegularPlay, FastBreak, Penalty, FreeKick
+  // Raw totals (all situations) — used as denominators to preserve proportions
+  const rawShots = shots.length;
+  const rawSot   = shots.filter(sh => sh.isOnTarget).length;
+
+  // Exclude FromCorner and SetPiece from all calculations
   const VALID = new Set(['RegularPlay','FastBreak','Penalty','FreeKick']);
   const s = shots.filter(sh => VALID.has(sh.situation));
 
@@ -130,6 +133,7 @@ function calcStats(shots) {
 
   return {
     matches, goals, shots: totalShots, sot, xG: r(totalXG),
+    rawShots, rawSot,
     headers, headedSot, headedGoals, headedXG: r(headedXG),
     leftFoot, leftFootSot, leftFootGoals, leftFootXG: r(leftFootXG),
     rightFoot, rightFootSot, rightFootGoals, rightFootXG: r(rightFootXG),
