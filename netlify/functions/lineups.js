@@ -49,7 +49,8 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         ok: true,
         matchId,
-        confirmed: lineup.lineupType === 'confirmed',
+        confirmed: lineup.lineupType !== 'predicted',
+        lineupType: lineup.lineupType,
         home: {
           id:     lineup.homeTeam?.id,
           name:   lineup.homeTeam?.name,
