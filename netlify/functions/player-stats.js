@@ -92,14 +92,9 @@ function calcStats(shots) {
 
   const onTgt = sh => (sh.eventType === 'Goal' || sh.eventType === 'AttemptSaved') && !sh.isBlocked;
 
-  // Raw totals including all situations — used as denominators
-  const rawShots = shots.length;
-  const rawSot   = shots.filter(onTgt).length;
-
-  // Exclude FromCorner and SetPiece from all calculations
-  const VALID = new Set(['RegularPlay','FastBreak','Penalty','FreeKick','IndividualPlay']);
-  const s = shots.filter(sh => VALID.has(sh.situation));
-  if (!s.length) return null;
+  // Use all shots — corners and set pieces are included in totals
+  // We just don't create separate metrics for them
+  const s = shots;
 
   const matches    = new Set(s.map(sh => sh.matchId)).size;
   const goals      = s.filter(sh => sh.eventType === 'Goal').length;
@@ -152,7 +147,6 @@ function calcStats(shots) {
 
   return {
     matches, goals, shots: totalShots, sot, xG: r(totalXG),
-    rawShots, rawSot,
     headers, headedSot, headedGoals, headedXG: r(headedXG),
     leftFoot, leftFootSot, leftFootGoals, leftFootXG: r(leftFootXG),
     rightFoot, rightFootSot, rightFootGoals, rightFootXG: r(rightFootXG),
