@@ -90,7 +90,7 @@ exports.handler = async (event) => {
 function calcStats(shots) {
   if (!shots || !shots.length) return null;
 
-  const onTgt = sh => sh.eventType === 'Goal' || sh.eventType === 'AttemptSaved';
+  const onTgt = sh => (sh.eventType === 'Goal' || sh.eventType === 'AttemptSaved') && !sh.isBlocked;
 
   // Raw totals including all situations — used as denominators
   const rawShots = shots.length;
