@@ -2236,18 +2236,21 @@ function calcAutoGSM(s,ags,so,sotV,pen){
   let headerGoal=null,otbGoal=null,lfGoal=null,rfGoal=null;
   if(hasAGS&&gameXG){
     const G28=gameXG-penAdj;
-    const G29=(s.xG||0)-(s.penaltyXG||0)-(s.freeKickXG||0);
+    const rawXG=s.xG||0; // total xG includes all situations
+    const G29=rawXG-(s.penaltyXG||0)-(s.freeKickXG||0);
     if(G29>0&&s.headedXG>0)headerGoal=1/(1-Math.exp(-Math.max(0,G28*(s.headedXG/G29))));
-    const M29=(s.xG||0)-(s.penaltyXG||0)-(s.headedXG||0);
+    const M29=rawXG-(s.penaltyXG||0)-(s.headedXG||0);
     if(M29>0&&s.otbXG>0)otbGoal=1/(1-Math.exp(-Math.max(0,G28*(s.otbXG/M29))));
-    if(s.xG>0&&s.leftFootXG>0)lfGoal=1/(1-Math.exp(-Math.max(0,gameXG*(s.leftFootXG/s.xG))));
-    if(s.xG>0&&s.rightFootXG>0)rfGoal=1/(1-Math.exp(-Math.max(0,gameXG*(s.rightFootXG/s.xG))));
+    if(rawXG>0&&s.leftFootXG>0)lfGoal=1/(1-Math.exp(-Math.max(0,gameXG*(s.leftFootXG/rawXG))));
+    if(rawXG>0&&s.rightFootXG>0)rfGoal=1/(1-Math.exp(-Math.max(0,gameXG*(s.rightFootXG/rawXG))));
   }
   const xS=hasSO?-Math.log(1-(1/so))-penAdj:null;
   const xSOT=hasSOT?-Math.log(1-(1/sotV))-penAdj:null;
   const p=(s.penaltyShots||0),fk=(s.freeKickShots||0);
   const pSot=(s.penaltySot||0),fkSot=(s.freeKickSot||0);
-  const nspS=(s.shots||0)-p-fk,nspT=(s.sot||0)-pSot-fkSot;
+  // Use raw totals (including corners/set pieces) as denominators — matches manual calculator behaviour
+  const nspS=(s.rawShots||s.shots||0)-p-fk;
+  const nspT=(s.rawSot||s.sot||0)-pSot-fkSot;
   return{
     headerGoal,otbGoal,lfGoal,rfGoal,
     headedShots:xS&&nspS>0&&s.headers>0?shotP((s.headers/nspS)*xS):null,
