@@ -1863,18 +1863,23 @@ function renderFixtures(leagues){
 
     league.matches.forEach(m=>{
       const tr=document.createElement('tr');
-      const time=m.utcTime?fmtKickoff(m.utcTime):'TBC';
-      const score=m.score&&m.score!=='-'?`<span style="font-weight:700;color:var(--text1);font-size:14px;padding:0 8px">${m.score}</span>`:null;
-      const statusDot=m.started&&!m.finished?`<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);margin-right:4px;animation:pulse 1.5s infinite"></span>`:'';
-
+      const timeStr = m.utcTime ? fmtKickoff(m.utcTime) : 'TBC';
+      const isLive = m.started && !m.finished;
+      const statusDot = isLive ? `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);margin-right:4px;vertical-align:middle"></span>` : '';
+      let scoreHtml;
+      if (m.score && m.score !== '-' && (m.started || m.finished)) {
+        const parts = m.score.split(' - ');
+        const c = m.finished ? 'var(--text1)' : 'var(--green)';
+        scoreHtml = `<span style="font-weight:700;color:${c};white-space:nowrap;font-size:14px">${parts[0] || 0} - ${parts[1] || 0}</span>`;
+      } else {
+        scoreHtml = `<span style="color:var(--text3);font-size:12px;white-space:nowrap">vs</span>`;
+      }
       tr.innerHTML=`
-        <td style="width:60px;font-size:12px;color:var(--text3);white-space:nowrap">${statusDot}${time}</td>
-        <td style="text-align:right;font-weight:500;font-size:13px;padding-right:8px">${m.home}</td>
-        <td style="text-align:center;width:50px">${score||`<span style="color:var(--text3);font-size:12px">vs</span>`}</td>
-        <td style="font-weight:500;font-size:13px;padding-left:8px">${m.away}</td>
-        <td style="width:40px;text-align:right">
-          <a href="${m.link}" target="_blank" style="color:var(--text3);text-decoration:none;font-size:16px" title="Open in FotMob"><i class="ti ti-external-link"></i></a>
-        </td>`;
+        <td style="width:55px;font-size:12px;color:var(--text3);white-space:nowrap">${statusDot}${timeStr}</td>
+        <td style="text-align:right;font-weight:500;font-size:13px;padding-right:10px">${m.home}</td>
+        <td style="text-align:center;width:70px;white-space:nowrap">${scoreHtml}</td>
+        <td style="font-weight:500;font-size:13px;padding-left:10px">${m.away}</td>
+        <td style="width:36px;text-align:right"><a href="${m.link}" target="_blank" style="color:var(--text3);text-decoration:none;font-size:16px"><i class="ti ti-external-link"></i></a></td>`;
       tbl.appendChild(tr);
     });
     card.appendChild(tbl);
