@@ -53,8 +53,8 @@ exports.handler = async (event) => {
     // Club shots = shots where teamId matches current club
     // International shots = shots where teamId does NOT match current club
     const filterShots = (shots) => isInternational
-      ? shots.filter(s => s.teamId !== currentTeamId)
-      : shots.filter(s => s.teamId === currentTeamId);
+      ? shots.filter(s => String(s.teamId) !== String(currentTeamId))
+      : shots.filter(s => String(s.teamId) === String(currentTeamId));
 
     const agg = (datasets) => calcStats(filterShots(datasets.flatMap(d => d.shots)));
 
