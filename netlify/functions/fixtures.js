@@ -20,6 +20,7 @@ exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
 
   const date = event.queryStringParameters?.date || todayStr();
+  const dateFormatted = `${date.slice(0,4)}-${date.slice(4,6)}-${date.slice(6,8)}`;
 
   try {
     const url = `https://www.fotmob.com/api/data/matches?date=${date}&timezone=Europe%2FLondon&ccode3=GBR&includeNextDayLateNight=true`;
@@ -36,26 +37,30 @@ exports.handler = async (event) => {
     const raw = await res.json();
     const allLeagues = raw.leagues || [];
 
-    // Filter by primaryId (parent competition) not id (group/round)
     const filtered = allLeagues
       .filter(l => PRIMARY_IDS.size === 0 || PRIMARY_IDS.has(Number(l.primaryId || l.id)))
       .map(l => ({
         id: l.primaryId || l.id,
         name: l.parentLeagueName || l.name,
-        groupName: l.groupName || null,
         ccode: l.ccode || '',
-        matches: (l.matches || []).map(m => ({
-          id: m.id,
-          home: m.home?.name || 'TBC',
-          homeId: m.home?.id,
-          away: m.away?.name || 'TBC',
-          awayId: m.away?.id,
-          utcTime: m.status?.utcTime || null,
-          started: m.status?.started || false,
-          finished: m.status?.finished || false,
-          score: m.status?.scoreStr || null,
-          link: `https://www.fotmob.com/matches/${m.id}`
-        }))
+        matches: (l.matches || [])
+          // Only include matches whose UTC kickoff is on the selected date
+          .filter(m => {
+            const t = m.status?.utcTime || '';
+            return t.startsWith(dateFormatted);
+          })
+          .map(m => ({
+            id: m.id,
+            home: m.home?.name || 'TBC',
+            homeId: m.home?.id,
+            away: m.away?.name || 'TBC',
+            awayId: m.away?.id,
+            utcTime: m.status?.utcTime || null,
+            started: m.status?.started || false,
+            finished: m.status?.finished || false,
+            score: m.status?.scoreStr || null,
+            link: `https://www.fotmob.com/matches/${m.id}`
+          }))
       }))
       .filter(l => l.matches.length > 0);
 
@@ -69,6 +74,11 @@ exports.handler = async (event) => {
         grouped.push(seen.get(key));
       }
       seen.get(key).matches.push(...l.matches);
+    });
+
+    // Sort matches within each league by kickoff time
+    grouped.forEach(l => {
+      l.matches.sort((a, b) => new Date(a.utcTime) - new Date(b.utcTime));
     });
 
     return {
