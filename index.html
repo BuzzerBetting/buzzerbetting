@@ -1882,7 +1882,7 @@ function renderFixtures(leagues){
       tr.title='Click to view lineups';
       tr.onmouseenter=()=>tr.style.background='var(--surface2)';
       tr.onmouseleave=()=>tr.style.background='';
-      tr.onclick=()=>openMatch(m.id, m.home, m.away, league.name, isIntl, m.started, m.finished);
+      tr.onclick=()=>openMatch(m.id, m.home, m.away, league.name, isIntl, m.started, m.finished, m.homeId, m.awayId);
       const timeStr=m.utcTime?fmtKickoff(m.utcTime):'TBC';
       const isLive=m.started&&!m.finished;
       const statusDot=isLive?`<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);margin-right:4px;vertical-align:middle"></span>`:'';
@@ -1896,9 +1896,19 @@ function renderFixtures(leagues){
       }
       tr.innerHTML=`
         <td style="width:55px;font-size:12px;color:var(--text3);white-space:nowrap">${statusDot}${timeStr}</td>
-        <td style="text-align:right;font-weight:500;font-size:13px;padding-right:10px">${m.home}</td>
+        <td style="text-align:right;font-weight:500;font-size:13px;padding-right:10px">
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px">
+            <span>${m.home}</span>
+            <img src="https://images.fotmob.com/image_resources/logo/teamlogo/${m.homeId}.png" style="width:18px;height:18px;object-fit:contain" onerror="this.style.display='none'">
+          </div>
+        </td>
         <td style="text-align:center;width:70px;white-space:nowrap">${scoreHtml}</td>
-        <td style="font-weight:500;font-size:13px;padding-left:10px">${m.away}</td>
+        <td style="font-weight:500;font-size:13px;padding-left:10px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <img src="https://images.fotmob.com/image_resources/logo/teamlogo/${m.awayId}.png" style="width:18px;height:18px;object-fit:contain" onerror="this.style.display='none'">
+            <span>${m.away}</span>
+          </div>
+        </td>
         <td style="width:36px;text-align:right;color:var(--text3);font-size:12px"><i class="ti ti-chevron-right"></i></td>`;
       tbl.appendChild(tr);
     });
@@ -1915,7 +1925,7 @@ function fmtKickoff(utcStr){
 }
 
 // ── MATCH DETAIL ──
-async function openMatch(matchId, home, away, leagueName, isIntl, started, finished){
+async function openMatch(matchId, home, away, leagueName, isIntl, started, finished, homeId, awayId){
   currentMatchType = isIntl ? 'international' : 'club';
   const isLive = started && !finished;
   document.getElementById('matches-content').style.display='none';
@@ -1928,9 +1938,15 @@ async function openMatch(matchId, home, away, leagueName, isIntl, started, finis
     <div class="card" style="padding:16px 20px">
       <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">${leagueName}</div>
       <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:12px">
-        <span style="font-size:18px;font-weight:700;text-align:right;flex:1">${home}</span>
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;flex:1">
+          <span style="font-size:18px;font-weight:700;text-align:right">${home}</span>
+          <img src="https://images.fotmob.com/image_resources/logo/teamlogo/${homeId}.png" style="width:32px;height:32px;object-fit:contain" onerror="this.style.display='none'">
+        </div>
         <span style="font-size:13px;color:var(--text3);padding:4px 12px;border:.5px solid var(--border);border-radius:var(--radius)">vs</span>
-        <span style="font-size:18px;font-weight:700;text-align:left;flex:1">${away}</span>
+        <div style="display:flex;align-items:center;gap:8px;flex:1">
+          <img src="https://images.fotmob.com/image_resources/logo/teamlogo/${awayId}.png" style="width:32px;height:32px;object-fit:contain" onerror="this.style.display='none'">
+          <span style="font-size:18px;font-weight:700">${away}</span>
+        </div>
       </div>
       <div style="text-align:center" id="match-status-badge">
         ${isLive
@@ -1979,9 +1995,9 @@ function renderLineups(data){
     const starters=team.lineup?.starters||[];
     const bench=team.lineup?.bench||[];
     col.innerHTML=`
-      <div style="padding:10px 16px;border-bottom:.5px solid var(--border)">
-        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em">${label}</div>
-        <div style="font-size:15px;font-weight:700;margin-top:2px">${team.name||'TBC'}</div>
+      <div style="padding:10px 16px;border-bottom:.5px solid var(--border);display:flex;align-items:center;gap:10px">
+        <img src="https://images.fotmob.com/image_resources/logo/teamlogo/${team.id}.png" style="width:28px;height:28px;object-fit:contain" onerror="this.style.display='none'">
+        <div style="font-size:15px;font-weight:700">${team.name||''}</div>
       </div>`;
     if(!starters.length){
       col.innerHTML+=`<div style="padding:16px;color:var(--text3);font-size:13px">No lineup confirmed yet</div>`;
