@@ -2088,10 +2088,9 @@ function renderPlayerStats(data, playerName){
       {key:'headedXG',      label:'Header xG'},
       {key:'headersPerGame',label:'Headers/Game'},
     ]},
-    {title:'Open Play (OTB)',rows:[
+    {title:'Outside Box (OTB)',rows:[
       {key:'otbShots',      label:'OTB shots'},
       {key:'otbSot',        label:'OTB SOT'},
-      {key:'otbGoals',      label:'OTB goals'},
       {key:'otbXG',         label:'OTB xG'},
       {key:'otbPerGame',    label:'OTB shots/Game'},
     ]},
@@ -2207,7 +2206,7 @@ function calcAutoGSMOutput(){
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:10px">Goal Methods</div>
         ${!isNaN(ags)&&ags>1?`<table style="width:100%;font-size:13px;border-collapse:collapse">
           <tr style="border-bottom:.5px solid var(--border)"><td style="padding:6px 0;color:var(--text2)">Header goal</td><td style="text-align:right;padding:6px 0">${fmt(r?.headerGoal)}</td></tr>
-          <tr style="border-bottom:.5px solid var(--border)"><td style="padding:6px 0;color:var(--text2)">OTB goal</td><td style="text-align:right;padding:6px 0">${fmt(r?.otbGoal)}</td></tr>
+          <tr style="border-bottom:.5px solid var(--border)"><td style="padding:6px 0;color:var(--text2)">Outside the box</td><td style="text-align:right;padding:6px 0">${fmt(r?.otbGoal)}</td></tr>
           <tr style="border-bottom:.5px solid var(--border)"><td style="padding:6px 0;color:var(--text2)">Left foot</td><td style="text-align:right;padding:6px 0">${fmt(r?.lfGoal)}</td></tr>
           <tr><td style="padding:6px 0;color:var(--text2)">Right foot</td><td style="text-align:right;padding:6px 0">${fmt(r?.rfGoal)}</td></tr>
         </table>`:`<div style="font-size:12px;color:var(--text3)">Enter AGS fair odds</div>`}
