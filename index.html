@@ -2128,19 +2128,119 @@ function renderPlayerStats(data, playerName){
       frames.forEach(f=>{
         const tf=data.timeframes?.[f.key];
         const val=tf?.[row.key];
-        const display=val===undefined||val===null?'—':val;
-        html+=`<td style="text-align:right;padding:6px 8px;font-weight:500">${display}</td>`;
+        html+=`<td style="text-align:right;padding:6px 8px;font-weight:500">${val===undefined||val===null?'—':val}</td>`;
       });
       html+=`</tr>`;
     });
   });
   html+=`</tbody></table></div>
-    <div style="margin-top:10px;font-size:11px;color:var(--text3);display:flex;gap:12px;flex-wrap:wrap">
-      <span>Match type: ${data.matchType}</span>
-      <span>${data.competitionsFound?.length||0} competitions with shot data</span>
-      <span style="color:var(--amber)">⚠ 6yd box via Understat — coming soon</span>
+    <div style="margin-top:10px;font-size:11px;color:var(--text3)">Match type: ${data.matchType} · ${data.competitionsFound?.length||0} competitions · <span style="color:var(--amber)">⚠ 6yd box via Understat coming soon</span></div>
+
+    <div style="margin-top:20px;padding-top:16px;border-top:.5px solid var(--border)">
+      <div style="font-size:13px;font-weight:700;margin-bottom:12px">Fair Odds Calculator</div>
+      <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Data timeframe</div>
+      <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
+        ${frames.map(f=>`<button id="auto-tf-${f.key}" onclick="setAutoTF('${f.key}')" style="padding:5px 11px;border-radius:var(--radius);border:.5px solid ${f.key==='currentSeason'?'var(--brand)':'var(--border)'};background:${f.key==='currentSeason'?'var(--brand)':'var(--surface)'};color:${f.key==='currentSeason'?'#fff':'var(--text2)'};cursor:pointer;font-size:12px;font-family:inherit;transition:all .15s">${f.label}</button>`).join('')}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+        <div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">AGS Fair Odds</div><input id="auto-ags" type="number" placeholder="e.g. 3.50" step="0.01" min="1.01" oninput="calcAutoGSMOutput()" style="width:100%;padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit;box-sizing:border-box"></div>
+        <div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Shot Fair Odds</div><input id="auto-shot" type="number" placeholder="e.g. 1.40" step="0.01" min="1.01" oninput="calcAutoGSMOutput()" style="width:100%;padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit;box-sizing:border-box"></div>
+        <div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">SOT Fair Odds</div><input id="auto-sot" type="number" placeholder="e.g. 1.80" step="0.01" min="1.01" oninput="calcAutoGSMOutput()" style="width:100%;padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit;box-sizing:border-box"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+        <span style="font-size:12px;color:var(--text2)">Penalty taker?</span>
+        <button id="auto-pen-yes" onclick="setAutoPen(true)" style="padding:5px 12px;border-radius:var(--radius);border:.5px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;font-size:12px;font-family:inherit">Yes</button>
+        <button id="auto-pen-no"  onclick="setAutoPen(false)" style="padding:5px 12px;border-radius:var(--radius);border:.5px solid var(--brand);background:var(--brand);color:#fff;cursor:pointer;font-size:12px;font-family:inherit">No</button>
+      </div>
+      <div id="auto-gsm-output"><div style="font-size:12px;color:var(--text3)">Enter fair odds above to calculate</div></div>
     </div>`;
   content.innerHTML=html;
+}
+
+let autoGSMData=null,autoGSMPenTaker=false,autoGSMTimeframe='currentSeason';
+
+function setAutoTF(key){
+  autoGSMTimeframe=key;
+  document.querySelectorAll('[id^="auto-tf-"]').forEach(b=>{
+    const a=b.id===`auto-tf-${key}`;
+    b.style.background=a?'var(--brand)':'var(--surface)';
+    b.style.color=a?'#fff':'var(--text2)';
+    b.style.borderColor=a?'var(--brand)':'var(--border)';
+  });
+  calcAutoGSMOutput();
+}
+
+function setAutoPen(v){
+  autoGSMPenTaker=v;
+  const y=document.getElementById('auto-pen-yes'),n=document.getElementById('auto-pen-no');
+  y.style.background=v?'var(--brand)':'var(--surface)';y.style.color=v?'#fff':'var(--text2)';y.style.borderColor=v?'var(--brand)':'var(--border)';
+  n.style.background=v?'var(--surface)':'var(--brand)';n.style.color=v?'var(--text2)':'#fff';n.style.borderColor=v?'var(--border)':'var(--brand)';
+  calcAutoGSMOutput();
+}
+
+function calcAutoGSMOutput(){
+  const out=document.getElementById('auto-gsm-output');
+  if(!out||!autoGSMData)return;
+  const ags=parseFloat(document.getElementById('auto-ags')?.value);
+  const so=parseFloat(document.getElementById('auto-shot')?.value);
+  const sotV=parseFloat(document.getElementById('auto-sot')?.value);
+  const stats=autoGSMData.timeframes?.[autoGSMTimeframe];
+  if(!stats){out.innerHTML='';return;}
+  const r=calcAutoGSM(stats,ags,so,sotV,autoGSMPenTaker);
+  if(!r){out.innerHTML=`<div style="font-size:12px;color:var(--text3)">Enter fair odds above to calculate</div>`;return;}
+  const fmt=(v)=>v&&v>0&&isFinite(v)?`<span style="color:var(--green);font-weight:600">${v.toFixed(2)}</span>`:`<span style="color:var(--text3)">—</span>`;
+  const fmt3=(arr)=>arr?arr.map(v=>fmt(v)).join(' / '):`<span style="color:var(--text3)">— / — / —</span>`;
+  out.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div class="card" style="padding:14px 16px">
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:10px">Goal Methods</div>
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <tr><td style="padding:5px 0;color:var(--text2)">Header goal</td><td style="text-align:right">${fmt(r.headerGoal)}</td></tr>
+        <tr><td style="padding:5px 0;color:var(--text2)">OTB goal</td><td style="text-align:right">${fmt(r.otbGoal)}</td></tr>
+        <tr><td style="padding:5px 0;color:var(--text2)">Left foot</td><td style="text-align:right">${fmt(r.lfGoal)}</td></tr>
+        <tr><td style="padding:5px 0;color:var(--text2)">Right foot</td><td style="text-align:right">${fmt(r.rfGoal)}</td></tr>
+      </table>
+    </div>
+    <div class="card" style="padding:14px 16px">
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:10px">Shot Methods — 1+ / 2+ / 3+</div>
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <tr><td style="padding:5px 0;color:var(--text2)">Headed shots</td><td style="text-align:right;white-space:nowrap">${fmt3(r.headedShots)}</td></tr>
+        <tr><td style="padding:5px 0;color:var(--text2)">Headed SOTs</td><td style="text-align:right;white-space:nowrap">${fmt3(r.headedSOTs)}</td></tr>
+        <tr><td style="padding:5px 0;color:var(--text2)">OTB shots</td><td style="text-align:right;white-space:nowrap">${fmt3(r.otbShotsP)}</td></tr>
+        <tr><td style="padding:5px 0;color:var(--text2)">OTB SOT</td><td style="text-align:right;white-space:nowrap">${fmt3(r.otbSOTP)}</td></tr>
+      </table>
+    </div>
+  </div>`;
+}
+
+function calcAutoGSM(s,ags,so,sotV,pen){
+  if(!s)return null;
+  const hasAGS=!isNaN(ags)&&ags>1,hasSO=!isNaN(so)&&so>1,hasSOT=!isNaN(sotV)&&sotV>1;
+  if(!hasAGS&&!hasSO&&!hasSOT)return null;
+  const gameXG=hasAGS?-Math.log(1-(1/ags)):null;
+  const penAdj=pen?0.125:0;
+  const pCDF=(k,lam)=>{let s=0,t=Math.exp(-lam);s=t;for(let i=1;i<=k;i++){t*=lam/i;s+=t;}return s;};
+  const shotP=(lam)=>{if(!lam||lam<=0)return null;const p1=1-Math.exp(-lam);if(p1<=0)return null;const o1=1/p1,m=-Math.log(1-(1/o1));return[o1,1/(1-pCDF(1,m)),1/(1-pCDF(2,m))];};
+  let headerGoal=null,otbGoal=null,lfGoal=null,rfGoal=null;
+  if(hasAGS&&gameXG){
+    const G28=gameXG-penAdj;
+    const G29=(s.xG||0)-(s.penaltyXG||0)-(s.freeKickXG||0);
+    if(G29>0&&s.headedXG>0)headerGoal=1/(1-Math.exp(-Math.max(0,G28*(s.headedXG/G29))));
+    const M29=(s.xG||0)-(s.penaltyXG||0)-(s.headedXG||0);
+    if(M29>0&&s.otbXG>0)otbGoal=1/(1-Math.exp(-Math.max(0,G28*(s.otbXG/M29))));
+    if(s.xG>0&&s.leftFootXG>0)lfGoal=1/(1-Math.exp(-Math.max(0,gameXG*(s.leftFootXG/s.xG))));
+    if(s.xG>0&&s.rightFootXG>0)rfGoal=1/(1-Math.exp(-Math.max(0,gameXG*(s.rightFootXG/s.xG))));
+  }
+  const xS=hasSO?-Math.log(1-(1/so))-penAdj:null;
+  const xSOT=hasSOT?-Math.log(1-(1/sotV))-penAdj:null;
+  const p=(s.penaltyShots||0),fk=(s.freeKickShots||0);
+  const nspS=(s.shots||0)-p-fk,nspT=(s.sot||0)-p-fk;
+  return{
+    headerGoal,otbGoal,lfGoal,rfGoal,
+    headedShots:xS&&nspS>0&&s.headers>0?shotP((s.headers/nspS)*xS):null,
+    headedSOTs:xSOT&&nspT>0&&s.headedSot>0?shotP((s.headedSot/nspT)*xSOT):null,
+    otbShotsP:xS&&nspS>0&&s.otbShots>0?shotP((s.otbShots/nspS)*xS):null,
+    otbSOTP:xSOT&&nspT>0&&s.otbSot>0?shotP((s.otbSot/nspT)*xSOT):null,
+  };
 }
 </script>
 
