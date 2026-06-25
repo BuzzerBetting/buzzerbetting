@@ -7,17 +7,11 @@ export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
 
   const { matchId } = event.queryStringParameters || {};
-  if (!matchId) return {
-    statusCode: 200, headers: CORS,
-    body: JSON.stringify({ ok: false, error: 'matchId required' })
-  };
+  if (!matchId) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'matchId required' }) };
 
   const email    = process.env.BB_EMAIL;
   const password = process.env.BB_PASSWORD;
-  if (!email || !password) return {
-    statusCode: 200, headers: CORS,
-    body: JSON.stringify({ ok: false, error: 'BB credentials not configured in Netlify env vars' })
-  };
+  if (!email || !password) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'BB credentials not set in Netlify env vars' }) };
 
   const BB_NODE = 'https://www.bookiebashing.net/node';
   const BB_WP   = 'https://www.bookiebashing.net';
@@ -29,27 +23,31 @@ export const handler = async (event) => {
     if (!raw) return [];
     return raw.split(/,(?=\s*\w+=)/);
   }
-
   function parseCookieJar(lines) {
     const jar = {};
     for (const line of lines) {
       const part = line.split(';')[0].trim();
       const eq = part.indexOf('=');
-      if (eq === -1) continue;
+      if (eq < 1) continue;
       jar[part.substring(0, eq).trim()] = part.substring(eq + 1).trim();
     }
     return jar;
   }
-
   function jarToHeader(jar) {
     return Object.entries(jar).map(([k, v]) => `${k}=${v}`).join('; ');
+  }
+  async function safeFetch(url, opts) {
+    const res = await fetch(url, opts);
+    const text = await res.text();
+    const isHTML = text.trim().startsWith('<');
+    return { res, text, isHTML, status: res.status };
   }
 
   try {
     const jar = {};
 
-    // Step 1: WordPress login
-    const loginRes = await fetch(`${BB_WP}/wp-login.php`, {
+    // ── Step 1: WordPress login ──────────────────────────────────────────────
+    const { res: loginRes } = await safeFetch(`${BB_WP}/wp-login.php`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -67,49 +65,51 @@ export const handler = async (event) => {
     Object.assign(jar, parseCookieJar(extractCookies(loginRes)));
 
     const wpLoggedIn = Object.keys(jar).some(k => k.startsWith('wordpress_logged_in'));
-    if (!wpLoggedIn) return {
-      statusCode: 200, headers: CORS,
-      body: JSON.stringify({ ok: false, error: 'WordPress login failed — check BB_EMAIL / BB_PASSWORD', cookies_received: Object.keys(jar) })
-    };
+    if (!wpLoggedIn) return { statusCode: 200, headers: CORS, body: JSON.stringify({
+      ok: false, error: 'WordPress login failed — check BB_EMAIL / BB_PASSWORD env vars',
+      cookies_received: Object.keys(jar)
+    })};
 
-    // Step 2: BB node authenticate
-    const authRes = await fetch(`${BB_NODE}/authenticate`, {
+    // ── Step 2: BB node authenticate ─────────────────────────────────────────
+    const { res: authRes, text: authText, isHTML: authHTML } = await safeFetch(`${BB_NODE}/authenticate`, {
       headers: { 'User-Agent': UA, 'Cookie': jarToHeader(jar) }
     });
-    const authBody = await authRes.json();
     Object.assign(jar, parseCookieJar(extractCookies(authRes)));
+    if (authHTML) return { statusCode: 200, headers: CORS, body: JSON.stringify({
+      ok: false, error: 'authenticate returned HTML', preview: authText.substring(0, 300)
+    })};
+    const authBody = JSON.parse(authText);
+    if (!authBody.authenticated) return { statusCode: 200, headers: CORS, body: JSON.stringify({
+      ok: false, error: 'BB node auth returned authenticated:false', authBody
+    })};
 
-    if (!authBody.authenticated) return {
-      statusCode: 200, headers: CORS,
-      body: JSON.stringify({ ok: false, error: 'BB node auth failed', authBody })
-    };
-
-    // Step 3: Get session hash from auth.php
-    const authPhpRes = await fetch(`${BB_WP}/node/rest/auth.php`, {
+    // ── Step 3: auth.php — get session hash ──────────────────────────────────
+    const { res: authPhpRes, text: authPhpText, isHTML: authPhpHTML } = await safeFetch(`${BB_WP}/node/rest/auth.php`, {
       headers: { 'User-Agent': UA, 'Cookie': jarToHeader(jar) }
     });
-    const authPhpData = await authPhpRes.json();
     Object.assign(jar, parseCookieJar(extractCookies(authPhpRes)));
+    if (authPhpHTML) return { statusCode: 200, headers: CORS, body: JSON.stringify({
+      ok: false, error: 'auth.php returned HTML — session not carried over',
+      preview: authPhpText.substring(0, 300), cookies: Object.keys(jar)
+    })};
+    const authPhpData = JSON.parse(authPhpText);
 
     const rawSessions = authPhpData?.user_data?.sessions;
-    if (!rawSessions) return {
-      statusCode: 200, headers: CORS,
-      body: JSON.stringify({ ok: false, error: 'No sessions in auth.php', authPhpData })
-    };
+    if (!rawSessions) return { statusCode: 200, headers: CORS, body: JSON.stringify({
+      ok: false, error: 'No sessions found in auth.php response',
+      keys: authPhpData ? Object.keys(authPhpData) : []
+    })};
 
     const sessions = typeof rawSessions === 'string' ? JSON.parse(rawSessions) : rawSessions;
     const sessionList = Object.values(sessions).sort((a, b) => (b.changed || 0) - (a.changed || 0));
-    if (!sessionList.length) return {
-      statusCode: 200, headers: CORS,
-      body: JSON.stringify({ ok: false, error: 'No active sessions' })
-    };
+    if (!sessionList.length) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'sessions object empty' })};
 
-    const bbHash = sessionList[0].hash;
+    const bbHash   = sessionList[0].hash;
     const bbUserId = authPhpData?.user_data?.wp_user_id || 11815;
 
-    // Step 4: Fetch list endpoint
+    // ── Step 4: Fetch goals/list ─────────────────────────────────────────────
     const ts = Math.floor(Date.now() / 1000);
-    const listRes = await fetch(`${BB_NODE}/rest/goals/list?t=${ts}`, {
+    const { res: listRes, text: listText, isHTML: listHTML } = await safeFetch(`${BB_NODE}/rest/goals/list?t=${ts}`, {
       headers: {
         'User-Agent': UA,
         'Cookie': jarToHeader(jar),
@@ -122,38 +122,31 @@ export const handler = async (event) => {
       }
     });
 
-    if (!listRes.ok) return {
-      statusCode: 200, headers: CORS,
-      body: JSON.stringify({ ok: false, error: `List endpoint returned ${listRes.status}` })
-    };
+    if (listHTML || !listRes.ok) return { statusCode: 200, headers: CORS, body: JSON.stringify({
+      ok: false, error: `List endpoint returned ${listRes.status} — auth header may be wrong`,
+      hash_used: bbHash,
+      response_preview: listText.substring(0, 300)
+    })};
 
-    const listData = await listRes.json();
+    const listData = JSON.parse(listText);
     const matches = Array.isArray(listData) ? listData : [listData];
     const match = matches.find(m =>
       String(m.eventId) === String(matchId) ||
-      String(m._id) === String(matchId)
+      String(m._id)     === String(matchId)
     );
 
-    if (!match) return {
-      statusCode: 200, headers: CORS,
-      body: JSON.stringify({
-        ok: false,
-        error: `Match ${matchId} not found`,
-        total_matches: matches.length,
-        sample_keys: matches[0] ? Object.keys(matches[0]) : [],
-        sample_events: matches.slice(0, 5).map(m => ({ id: m._id, eventId: m.eventId, event: m.event }))
-      })
-    };
+    if (!match) return { statusCode: 200, headers: CORS, body: JSON.stringify({
+      ok: false, error: `Match ${matchId} not found in BB list`,
+      total_matches: matches.length,
+      sample_keys: matches[0] ? Object.keys(matches[0]) : [],
+      sample_events: matches.slice(0, 5).map(m => ({ id: m._id, eventId: m.eventId, event: m.event }))
+    })};
 
-    return {
-      statusCode: 200, headers: CORS,
-      body: JSON.stringify({ ok: true, matchId, event: match.event, raw: match })
-    };
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({
+      ok: true, matchId, event: match.event, raw: match
+    })};
 
   } catch (err) {
-    return {
-      statusCode: 200, headers: CORS,
-      body: JSON.stringify({ ok: false, error: err.message, stack: err.stack })
-    };
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: err.message, stack: err.stack })};
   }
 };
