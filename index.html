@@ -1968,7 +1968,7 @@ async function openMatch(matchId, home, away, leagueName, isIntl, started, finis
   const _s2=document.getElementById('mkt-step2-btns');
   if(_s2){_s2.style.display='none';_s2.innerHTML='';}
   document.querySelectorAll('#mkt-step1-btns .mkt-btn').forEach(b=>b.classList.remove('active'));
-  fetchBBOdds(matchId);
+  fetchBBOdds(matchId, home, away);
   document.getElementById('match-header').innerHTML=`
     <div class="card" style="padding:16px 20px">
       <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">${leagueName}</div>
@@ -2346,9 +2346,12 @@ function calcAutoGSM(s,ags,so,sotV,pen){
 let bbMatchOdds=null,lineupMarketType=null,lineupMethodKey=null;
 let lineupStatsCache={},lineupPlayersAll=[],currentMatchEventId=null;
 
-async function fetchBBOdds(eventId){
+async function fetchBBOdds(eventId, home, away){
   try{
-    const r=await fetch(`/.netlify/functions/bb-odds?eventId=${eventId}`);
+    const params = new URLSearchParams({eventId});
+    if(home) params.set('home', home);
+    if(away) params.set('away', away);
+    const r=await fetch(`/.netlify/functions/bb-odds?${params}`);
     const d=await r.json();
     if(d.ok)bbMatchOdds=d.players;
   }catch(e){}
