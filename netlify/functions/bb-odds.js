@@ -102,22 +102,35 @@ export const handler = async (event) => {
     const ts = Math.floor(Date.now() / 1000);
 
     // Build the auth.php POST payload — same format we saw in the Network tab
-    const authPayload = {
-      auth: {
-        user_key: userKey,
-        session_token: sessionToken || '',
-        hash: '' // empty hash on first call — server may still respond
-      },
-      requests: [{
-        data_name: 'user_request_add',
-        method: 'restCreate',
-        tab: 'user_requests',
-        data: JSON.stringify({ user_id: parseInt(userId), software: 'player-stats', created: String(ts) }),
-        system: 'user'
-      }]
-    };
+    // auth.php expects application/x-www-form-urlencoded with JSON-stringified fields
+    const authBody = new URLSearchParams();
+    authBody.append('auth', JSON.stringify({
+      user_key: userKey,
+      session_token: sessionToken,
+      hash: ''
+    }));
+    authBody.append('requests', JSON.stringify([{
+      data_name: 'user_request_add',
+      method: 'restCreate',
+      tab: 'user_requests',
+      data: JSON.stringify({ user_id: parseInt(userId), software: 'player-stats', created: String(ts) }),
+      system: 'user'
+    }]));
 
-    const authPhp = await post(`${BB}/app/auth.php`, jar, authPayload, true);
+    const authPhpRes2 = await fetch(`${BB}/app/auth.php`, {
+      method: 'POST',
+      headers: {
+        'User-Agent': UA,
+        'Cookie': cookieHeader(jar),
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'Referer': BB + '/tools/daily/',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: authBody
+    });
+    mergeCookies(jar, authPhpRes2);
+    const authPhpText2 = await authPhpRes2.text();
+    const authPhp = { text: authPhpText2, isHTML: authPhpText2.trim().startsWith('<'), json: () => JSON.parse(authPhpText2) };
     if (authPhp.isHTML) return { statusCode: 200, headers: CORS, body: JSON.stringify({
       ok: false, error: 'auth.php returned HTML', cookies: Object.keys(jar), preview: authPhp.text.substring(0,200)
     })};
