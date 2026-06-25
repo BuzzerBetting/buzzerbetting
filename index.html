@@ -497,8 +497,32 @@ input::placeholder{color:var(--text3)}
 <!-- CALCULATED EV -->
 <div id="view-calculated" class="sec">
   <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
-  <div class="sec-title">Calculated +EV</div>
-  <div class="card"><div class="ph"><div class="ph-ico"><i class="ti ti-trending-up"></i></div><div class="ph-t">Model output will appear here</div><div class="ph-d">Once the Fotmob + BFex pipeline is live, this section will show value bets from your custom models — header scorer, set piece markets, and more.</div></div></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+    <div class="sec-title" style="margin-bottom:0">Calculated +EV</div>
+    <button onclick="initCalcEV()" style="display:flex;align-items:center;gap:6px;background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Load today's matches</button>
+  </div>
+
+  <div id="cev-status"></div>
+  <div id="cev-fixtures"></div>
+
+  <div id="cev-results" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <span style="font-size:13px;font-weight:600" id="cev-results-title"></span>
+      <button onclick="document.getElementById('cev-results').style.display='none'" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="card" style="overflow-x:auto">
+      <table class="dt" style="min-width:600px">
+        <thead>
+          <tr>
+            <th>Player</th>
+            <th>Market</th>
+            <th class="r">OC Best Price</th>
+          </tr>
+        </thead>
+        <tbody id="cev-tbody"></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <!-- MANUAL CALCULATORS -->
@@ -2342,7 +2366,136 @@ function calcAutoGSM(s,ags,so,sotV,pen){
   };
 }
 
-// ── BB ODDS + LINEUP FAIR ODDS ──────────────────────────────────────────────
+
+// ── CALCULATED +EV ─────────────────────────────────────────────────────────
+let cevFixtures = [];
+
+async function initCalcEV() {
+  const statusEl = document.getElementById('cev-status');
+  const fixturesEl = document.getElementById('cev-fixtures');
+  document.getElementById('cev-results').style.display = 'none';
+  fixturesEl.innerHTML = '';
+  statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t">Loading today's matches...</div></div></div>`;
+
+  try {
+    const now = new Date();
+    const date = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+    const r = await fetch(`/.netlify/functions/fixtures?date=${date}`);
+    const data = await r.json();
+    statusEl.innerHTML = '';
+    if (!data.ok || !data.leagues?.length) {
+      statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-calendar-off"></i></div><div class="ph-t">No fixtures today</div></div></div>`;
+      return;
+    }
+    cevFixtures = [];
+    data.leagues.forEach(league => {
+      league.matches.forEach(m => {
+        cevFixtures.push({ ...m, leagueName: league.name });
+      });
+    });
+    renderCEVFixtures(data.leagues);
+  } catch(err) {
+    statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-wifi-off"></i></div><div class="ph-t">Failed to load fixtures</div><div class="ph-d">${err.message}</div></div></div>`;
+  }
+}
+
+function renderCEVFixtures(leagues) {
+  const wrap = document.getElementById('cev-fixtures');
+  wrap.innerHTML = '';
+  leagues.forEach(league => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.marginBottom = '12px';
+    let html = `<div class="card-h">${league.name}</div>`;
+    league.matches.forEach(m => {
+      const timeStr = m.utcTime ? fmtKickoff(m.utcTime) : 'TBC';
+      html += `<div style="padding:10px 16px;border-bottom:.5px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+          <span style="font-size:12px;color:var(--text3);white-space:nowrap">${timeStr}</span>
+          <span style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.home} v ${m.away}</span>
+        </div>
+        <button onclick="scanOC('${m.id}','${m.home.replace(/'/g,"\\'")}','${m.away.replace(/'/g,"\\'")}','${league.name.replace(/'/g,"\\'")}',this)"
+          style="background:var(--surface2);border:.5px solid var(--border);border-radius:var(--radius);padding:6px 14px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--text2);white-space:nowrap;flex-shrink:0;transition:all .15s"
+          onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'"
+          onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">
+          <i class="ti ti-search"></i> Scan OC
+        </button>
+      </div>`;
+    });
+    card.innerHTML = html;
+    wrap.appendChild(card);
+  });
+}
+
+async function scanOC(matchId, home, away, competition, btn) {
+  const origHtml = btn.innerHTML;
+  btn.innerHTML = '<i class="ti ti-loader"></i> Scanning...';
+  btn.disabled = true;
+
+  try {
+    const params = new URLSearchParams({ home, away, competition });
+    const r = await fetch(`/.netlify/functions/oddschecker?${params}`);
+    const data = await r.json();
+
+    if (!data.ok) throw new Error(data.error || 'Unknown error');
+
+    renderCEVResults(home, away, data);
+  } catch(err) {
+    alert(`OC scan failed: ${err.message}`);
+  } finally {
+    btn.innerHTML = origHtml;
+    btn.disabled = false;
+  }
+}
+
+function renderCEVResults(home, away, data) {
+  const resultsEl = document.getElementById('cev-results');
+  const tbody = document.getElementById('cev-tbody');
+  document.getElementById('cev-results-title').textContent = `${home} v ${away} — Oddschecker prices`;
+  tbody.innerHTML = '';
+
+  let hasData = false;
+  data.markets.forEach(market => {
+    if (market.error) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td colspan="3" style="color:var(--text3);font-size:12px;font-style:italic">${market.label}: ${market.error}</td>`;
+      tbody.appendChild(tr);
+      return;
+    }
+    if (!market.players?.length) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td colspan="3" style="color:var(--text3);font-size:12px;font-style:italic">${market.label}: No data found</td>`;
+      tbody.appendChild(tr);
+      return;
+    }
+    hasData = true;
+    // Header row for market
+    const hdr = document.createElement('tr');
+    hdr.innerHTML = `<td colspan="3" style="background:var(--surface2);font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;padding:8px 16px;border-top:.5px solid var(--border)">${market.label}</td>`;
+    tbody.appendChild(hdr);
+
+    // Sort by price ascending (lowest = most likely)
+    market.players.sort((a,b) => a.best - b.best).forEach(p => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="font-weight:500">${p.name}</td>
+        <td style="font-size:12px;color:var(--text3)">${market.label}</td>
+        <td class="r tn" style="font-weight:600;color:var(--green)">${p.best.toFixed(2)}</td>`;
+      tbody.appendChild(tr);
+    });
+  });
+
+  if (!hasData) {
+    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">
+      No prices found. OC URL tried: <a href="${data.baseUrl}" target="_blank" style="color:var(--blue);font-size:11px">${data.baseUrl}</a>
+    </td></tr>`;
+  }
+
+  resultsEl.style.display = '';
+  resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+
 let bbMatchOdds=null,lineupMarketType=null,lineupMethodKey=null;
 let lineupStatsCache={},lineupPlayersAll=[],currentMatchEventId=null;
 
