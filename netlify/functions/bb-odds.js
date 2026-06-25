@@ -30,7 +30,13 @@ export const handler = async (event) => {
     if (na === nb) return true;
     const wa = na.split(' '), wb = nb.split(' ');
     const [shorter, longer] = wa.length <= wb.length ? [wa, nb] : [wb, na];
-    return shorter.filter(w => w.length > 1).every(w => longer.includes(w));
+    if (shorter.filter(w => w.length > 1).every(w => longer.includes(w))) return true;
+    // Near-match: catches Willian/William, Moseis/Moises etc (1 char difference)
+    const pairMatch = (a, b) => a.length >= 4 && b.length >= 4 &&
+      Math.abs(a.length - b.length) <= 1 &&
+      [...a].filter((c, i) => c !== (b[i] || '')).length <= 1;
+    return wa.some(a => wb.some(b => pairMatch(a, b))) &&
+      wa.filter(w => w.length > 3).some(a => wb.some(b => pairMatch(a, b)));
   }
 
   // ── Match a BB event string against home/away team names ───────────────────
