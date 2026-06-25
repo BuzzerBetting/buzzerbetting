@@ -11,7 +11,7 @@ const FOTMOB_HEADERS = {
 
 const SEASON_IDS = [];
 for (let s = 0; s <= 3; s++) {
-  for (let c = 0; c <= 6; c++) {
+  for (let c = 0; c <= 10; c++) {
     SEASON_IDS.push(`${s}-${c}`);
   }
 }
@@ -32,9 +32,12 @@ exports.handler = async (event) => {
         const res = await fetch(url, { headers: FOTMOB_HEADERS });
         if (!res.ok) return null;
         const data = await res.json();
-        const shots = data?.shotmap;
-        if (!shots || !shots.length) return null;
-        return { seasonId, season, shots };
+        const shots = data?.shotmap || [];
+        // Get matches played from topStatCard
+        const matchesItem = data?.topStatCard?.items?.find(i => i.localizedTitleId === 'matches_uppercase');
+        const matchesPlayed = matchesItem ? parseInt(matchesItem.statValue) || 0 : 0;
+        if (!shots.length && !matchesPlayed) return null;
+        return { seasonId, season, shots, matchesPlayed };
       })
     );
 
@@ -56,7 +59,17 @@ exports.handler = async (event) => {
       ? shots
       : shots.filter(s => String(s.teamId) === String(currentTeamId));
 
-    const agg = (datasets) => calcStats(filterShots(datasets.flatMap(d => d.shots)));
+    const agg = (datasets) => {
+      const shots = filterShots(datasets.flatMap(d => d.shots));
+      const matches = datasets.reduce((t, d) => {
+        if (!isInternational) {
+          const hasClubShots = d.shots.some(s => String(s.teamId) === String(currentTeamId));
+          return t + (hasClubShots ? d.matchesPlayed : 0);
+        }
+        return t + d.matchesPlayed;
+      }, 0);
+      return calcStats(shots, matches || null);
+    };
 
     return {
       statusCode: 200,
@@ -87,16 +100,13 @@ exports.handler = async (event) => {
   }
 };
 
-function calcStats(shots) {
+function calcStats(shots, matchesPlayed) {
   if (!shots || !shots.length) return null;
 
   const onTgt = sh => (sh.eventType === 'Goal' || sh.eventType === 'AttemptSaved') && !sh.isBlocked;
 
-  // Use all shots — corners and set pieces are included in totals
-  // We just don't create separate metrics for them
   const s = shots;
-
-  const matches    = new Set(s.map(sh => sh.matchId)).size;
+  const matches = matchesPlayed || new Set(s.map(sh => sh.matchId)).size;
   const goals      = s.filter(sh => sh.eventType === 'Goal').length;
   const totalShots = s.length;
   const sot        = s.filter(onTgt).length;
