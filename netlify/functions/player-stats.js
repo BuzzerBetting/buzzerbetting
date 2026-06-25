@@ -33,7 +33,6 @@ exports.handler = async (event) => {
         if (!res.ok) return null;
         const data = await res.json();
         const shots = data?.shotmap || [];
-        // Get matches played from topStatCard
         const matchesItem = data?.topStatCard?.items?.find(i => i.localizedTitleId === 'matches_uppercase');
         const matchesPlayed = matchesItem ? parseInt(matchesItem.statValue) || 0 : 0;
         if (!shots.length && !matchesPlayed) return null;
@@ -44,17 +43,22 @@ exports.handler = async (event) => {
     const allDatasets = results.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
     if (!allDatasets.length) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'No shot data found for this player' }) };
 
-    // Detect current club = most frequent teamId in season 0 shots
-    // (more shots = club, fewer = international duty like WC/AFCON)
-    const season0Shots = allDatasets.filter(d => d.season === 0).flatMap(d => d.shots);
-    const teamCounts = {};
-    season0Shots.forEach(s => { teamCounts[s.teamId] = (teamCounts[s.teamId] || 0) + 1; });
-    const currentTeamId = Object.entries(teamCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+    // For international, skip current team detection — use all shots regardless of club
+    // For club, detect from most frequent teamId in season 0 shots
+    let currentTeamId = null;
 
-    if (!currentTeamId) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'Could not detect current team' }) };
+    if (!isInternational) {
+      const season0Shots = allDatasets.filter(d => d.season === 0).flatMap(d => d.shots);
+      const teamCounts = {};
+      season0Shots.forEach(s => { teamCounts[s.teamId] = (teamCounts[s.teamId] || 0) + 1; });
+      currentTeamId = Object.entries(teamCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
 
-    // Club = shots for current club only
-    // International = all shots (club + international combined)
+      if (!currentTeamId) return {
+        statusCode: 200, headers: CORS,
+        body: JSON.stringify({ ok: false, error: 'Could not detect current team' })
+      };
+    }
+
     const filterShots = (shots) => isInternational
       ? shots
       : shots.filter(s => String(s.teamId) === String(currentTeamId));
@@ -87,7 +91,8 @@ exports.handler = async (event) => {
         },
         competitionsFound: allDatasets.map(d => ({ seasonId: d.seasonId, shots: d.shots.length })),
         debug: (() => {
-          const s0shots = allDatasets.filter(d => d.season === 0).flatMap(d => d.shots).filter(s => String(s.teamId) === String(currentTeamId));
+          const s0shots = allDatasets.filter(d => d.season === 0).flatMap(d => d.shots)
+            .filter(s => !currentTeamId || String(s.teamId) === String(currentTeamId));
           const counts = {};
           s0shots.forEach(s => { counts[s.eventType] = (counts[s.eventType]||0)+1; });
           return { totalShots: s0shots.length, eventTypes: counts };
