@@ -6,7 +6,7 @@ export const handler = async (event) => {
 
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
 
-  const { eventId } = event.queryStringParameters || {};
+  const { eventId, home, away } = event.queryStringParameters || {};
   if (!eventId) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'eventId required' }) };
 
   const hash    = process.env.BB_HASH;
@@ -15,26 +15,37 @@ export const handler = async (event) => {
 
   const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
-  // ── Name normalisation for fuzzy matching ──────────────────────────────────
-  // Strips accents, lowercases, removes punctuation so "Hincapié" matches "Hincapie"
-  function normName(n) {
+  // ── Name normalisation ─────────────────────────────────────────────────────
+  function norm(n) {
     return (n || '')
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strip accents
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
-      .replace(/[^a-z0-9 ]/g, '') // remove punctuation
+      .replace(/[^a-z0-9 ]/g, '')
+      .replace(/\s+/g, ' ')
       .trim();
   }
 
-  // Returns true if every word in nameA appears in nameB or vice versa
   function fuzzyMatch(a, b) {
-    const na = normName(a);
-    const nb = normName(b);
+    const na = norm(a), nb = norm(b);
     if (na === nb) return true;
-    const wa = na.split(' ');
-    const wb = nb.split(' ');
-    // All words of shorter name must appear in longer name
+    const wa = na.split(' '), wb = nb.split(' ');
     const [shorter, longer] = wa.length <= wb.length ? [wa, nb] : [wb, na];
-    return shorter.every(w => w.length > 1 && longer.includes(w));
+    return shorter.filter(w => w.length > 1).every(w => longer.includes(w));
+  }
+
+  // ── Match a BB event string against home/away team names ───────────────────
+  // BB event strings look like: "Ecuador v Germany", "Man City vs Liverpool"
+  function matchByTeams(bbEvent, homeTeam, awayTeam) {
+    if (!bbEvent || !homeTeam || !awayTeam) return false;
+    const e = norm(bbEvent);
+    // Try both "home v away" and "away v home" orderings
+    return (fuzzyMatch(homeTeam, e.split(' v ')[0]) && fuzzyMatch(awayTeam, e.split(' v ')[1])) ||
+           (fuzzyMatch(awayTeam, e.split(' v ')[0]) && fuzzyMatch(homeTeam, e.split(' v ')[1])) ||
+           // Also handle "vs" separator
+           (fuzzyMatch(homeTeam, e.split(' vs ')[0]) && fuzzyMatch(awayTeam, e.split(' vs ')[1])) ||
+           (fuzzyMatch(awayTeam, e.split(' vs ')[0]) && fuzzyMatch(homeTeam, e.split(' vs ')[1])) ||
+           // Fallback: both team names appear somewhere in the event string
+           (e.includes(norm(homeTeam).split(' ').pop()) && e.includes(norm(awayTeam).split(' ').pop()));
   }
 
   try {
@@ -58,22 +69,29 @@ export const handler = async (event) => {
     })};
 
     const list = JSON.parse(text);
-    const match = list.find(m =>
+
+    // ── Find the match ─────────────────────────────────────────────────────
+    // 1. Try exact eventId match (in case BB ever uses FotMob IDs)
+    let match = list.find(m =>
       String(m.eventId) === String(eventId) ||
       String(m.id)      === String(eventId) ||
       String(m._id)     === String(eventId)
     );
 
+    // 2. Try team name matching if we have home/away
+    if (!match && home && away) {
+      match = list.find(m => matchByTeams(m.event || m.name || m.eventName, home, away));
+    }
+
     if (!match) return { statusCode: 200, headers: CORS, body: JSON.stringify({
       ok: false,
-      error: `Match ${eventId} not found in BB list`,
-      available: list.slice(0, 10).map(m => ({ eventId: m.eventId, event: m.event }))
+      error: `Match not found in BB list (tried eventId ${eventId}${home ? ` and teams "${home}" vs "${away}"` : ''})`,
+      available: list.slice(0, 15).map(m => ({ id: m.id || m._id, eventId: m.eventId, event: m.event || m.name || m.eventName }))
     })};
 
     // ── Build player odds map ──────────────────────────────────────────────
     const playerOdds = {};
 
-    // AGS + FGS from playerXg
     const playerXg = match.playerXg || {};
     for (const [name, data] of Object.entries(playerXg)) {
       if (name === 'No Goalscorer') continue;
@@ -82,37 +100,30 @@ export const handler = async (event) => {
         fgs: data.firstBbp    || null,
         ags: data.anytimeBbp  || null,
         bfexAgs: data.anytimeExchange?.back || null,
-        sot: null  // filled below
+        sot: null
       };
     }
 
-    // SOT from sots array — pick the best (lowest) back price per player
     const sots = match.sots || [];
     for (const entry of sots) {
       const sotName = entry.selection?.name;
       const sotBack = entry.back;
       if (!sotName || !sotBack) continue;
-
-      // Find matching player in our map using fuzzy match
       const matchedKey = Object.keys(playerOdds).find(k => fuzzyMatch(k, sotName));
       if (matchedKey) {
-        // Keep lowest (best) SOT price if player appears multiple times
-        if (!playerOdds[matchedKey].sot || sotBack < playerOdds[matchedKey].sot) {
+        if (!playerOdds[matchedKey].sot || sotBack < playerOdds[matchedKey].sot)
           playerOdds[matchedKey].sot = sotBack;
-        }
       } else {
-        // Player exists in SOT but not in playerXg — add them
         playerOdds[sotName] = playerOdds[sotName] || { name: sotName, fgs: null, ags: null, bfexAgs: null, sot: sotBack };
-        if (!playerOdds[sotName].sot || sotBack < playerOdds[sotName].sot) {
+        if (!playerOdds[sotName].sot || sotBack < playerOdds[sotName].sot)
           playerOdds[sotName].sot = sotBack;
-        }
       }
     }
 
     return { statusCode: 200, headers: CORS, body: JSON.stringify({
       ok: true,
       eventId,
-      event: match.event,
+      event: match.event || match.name || match.eventName,
       players: Object.values(playerOdds)
     })};
 
