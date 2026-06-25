@@ -93,11 +93,11 @@ export const handler = async (event) => {
       : null;
 
     // ── 4. Get hash from sessions via auth.php POST ────────────────────────
-    // We use the user_key from env (stored as BB_USER_KEY) or fall back to
-    // getting it from auth.php with minimal payload first
-    const userKey = process.env.BB_USER_KEY || '12158b6f24adf0866c6a979c196985694f538983cca9f656455479a46215d90d';
-    const userId  = process.env.BB_USER_ID  || '3020';
-    const wpUserId = process.env.BB_WP_USER_ID || '11815';
+
+
+    const userKey = process.env.BB_USER_KEY;
+    const userId  = process.env.BB_USER_ID;
+    const wpUserId = process.env.BB_WP_USER_ID;
     const ts = Math.floor(Date.now() / 1000);
 
     // Build the auth.php POST payload — same format we saw in the Network tab
