@@ -2364,9 +2364,16 @@ function getBBPlayerOdds(playerName){
   return bbMatchOdds.find(p=>{
     const nb=norm(p.name);
     if(na===nb)return true;
+    // Word-by-word match
     const wa=na.split(' '),wb=nb.split(' ');
     const[shorter,longer]=wa.length<=wb.length?[wa,nb]:[wb,na];
-    return shorter.filter(w=>w.length>1).every(w=>longer.includes(w));
+    if(shorter.filter(w=>w.length>1).every(w=>longer.includes(w)))return true;
+    // Near-match: same length words that differ by only 1 character (catches Willian/William etc)
+    const allWords=[...wa,...wb];
+    const pairMatch=(a,b)=>a.length>=4&&b.length>=4&&Math.abs(a.length-b.length)<=1&&
+      [...a].filter((c,i)=>c!==b[i]).length<=1;
+    return wa.some(a=>wb.some(b=>pairMatch(a,b)))&&
+      wa.filter(w=>w.length>3).some(a=>wb.some(b=>pairMatch(a,b)));
   })||null;
 }
 
