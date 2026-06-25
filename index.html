@@ -127,6 +127,20 @@ input::placeholder{color:var(--text3)}
 .clear-btn:hover{border-color:var(--red);color:var(--red)}
 .out-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:700px){.out-grid{grid-template-columns:1fr}}
+.mkt-btn{background:var(--surface2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit;color:var(--text2);transition:all .15s}
+.mkt-btn:hover{border-color:var(--brand);color:var(--brand)}
+.mkt-btn.active{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:500}
+.sub-btn2{background:var(--surface2);border:.5px solid var(--border);border-radius:20px;padding:6px 14px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--text2);transition:all .15s}
+.sub-btn2.active{background:var(--green-bg);border-color:var(--green-bd);color:var(--green);font-weight:500}
+.bb-strip{background:var(--surface2);border-radius:var(--radius);padding:12px 16px;margin-bottom:14px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.bb-odds-item{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:8px 16px;border-radius:var(--radius);transition:all .15s;border:.5px solid transparent}
+.bb-odds-item:hover{border-color:var(--brand);background:var(--green-bg)}
+.bb-odds-lbl{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em}
+.bb-odds-val{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--green)}
+.odds-tf{font-size:11px;font-variant-numeric:tabular-nums;color:var(--green);font-weight:600;min-width:44px;text-align:right;padding-right:2px;white-space:nowrap}
+.odds-tf.loading{color:var(--text3);font-weight:400}
+.odds-tf.empty{color:var(--text3);font-weight:400}
+.odds-tf-hdr{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;min-width:44px;text-align:right;padding-right:2px}
 </style>
 </head>
 <body>
@@ -1784,6 +1798,18 @@ function renderDogsTable(rows,summary){
     <button onclick="closeMatch()" style="display:flex;align-items:center;gap:6px;background:none;border:none;color:var(--text2);cursor:pointer;font-size:13px;font-family:inherit;padding:0;margin-bottom:20px"><i class="ti ti-arrow-left"></i> Back to fixtures</button>
     <div id="match-header" style="margin-bottom:20px"></div>
     <div id="match-status"></div>
+    <!-- Lineup fair odds market selector -->
+    <div id="lineup-mkt-selector" style="display:none;margin-bottom:16px">
+      <div class="card" style="padding:14px 20px">
+        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;font-weight:600">Show fair odds by method</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap" id="mkt-step1-btns">
+          <button class="mkt-btn" onclick="selectLineupMarket('goal')">Goal</button>
+          <button class="mkt-btn" onclick="selectLineupMarket('shot')">Shot</button>
+          <button class="mkt-btn" onclick="selectLineupMarket('sot')">Shot On Target</button>
+        </div>
+        <div style="display:none;margin-top:10px;flex-wrap:wrap;gap:6px" id="mkt-step2-btns"></div>
+      </div>
+    </div>
     <div id="lineups-wrap" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px"></div>
     <!-- Player stats panel -->
     <div id="player-panel" style="display:none">
@@ -1935,6 +1961,14 @@ async function openMatch(matchId, home, away, leagueName, isIntl, started, finis
   document.getElementById('match-detail').style.display='';
   document.getElementById('player-panel').style.display='none';
   document.getElementById('lineups-wrap').innerHTML='';
+  bbMatchOdds=null;lineupMarketType=null;lineupMethodKey=null;
+  lineupStatsCache={};lineupPlayersAll=[];currentMatchEventId=matchId;
+  const _lms=document.getElementById('lineup-mkt-selector');
+  if(_lms)_lms.style.display='none';
+  const _s2=document.getElementById('mkt-step2-btns');
+  if(_s2){_s2.style.display='none';_s2.innerHTML='';}
+  document.querySelectorAll('#mkt-step1-btns .mkt-btn').forEach(b=>b.classList.remove('active'));
+  fetchBBOdds(matchId);
   document.getElementById('match-header').innerHTML=`
     <div class="card" style="padding:16px 20px">
       <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">${leagueName}</div>
@@ -1962,6 +1996,8 @@ async function openMatch(matchId, home, away, leagueName, isIntl, started, finis
     document.getElementById('match-status').innerHTML='';
     if(!data.ok)throw new Error(data.error);
     renderLineups(data);
+    const _lmsEl=document.getElementById('lineup-mkt-selector');
+    if(_lmsEl)_lmsEl.style.display='';
   }catch(err){
     document.getElementById('match-status').innerHTML=`<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-shirt-off"></i></div><div class="ph-t">Lineups not available yet</div><div class="ph-d">${err.message}</div></div></div>`;
   }
@@ -2005,18 +2041,28 @@ function renderLineups(data){
     }else{
       // Starters
       const starterDiv=document.createElement('div');
-      starterDiv.innerHTML=`<div style="padding:8px 16px 4px;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;font-weight:600">Starting XI</div>`;
+      starterDiv.innerHTML=`<div style="padding:8px 16px 4px;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;font-weight:600">Starting XI</div>
+        <div class="lineup-odds-header" style="display:none;padding:2px 16px 2px;display:flex;justify-content:flex-end;gap:0;border-bottom:.5px solid var(--border)">
+          <span class="odds-tf-hdr">Curr</span><span class="odds-tf-hdr">Season</span><span class="odds-tf-hdr">+Last</span><span class="odds-tf-hdr">+2yr</span>
+          <span style="min-width:22px"></span>
+        </div>`;
       starters.forEach(p=>{
         const row=document.createElement('div');
         row.style.cssText='padding:8px 16px;border-bottom:.5px solid var(--border);cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .1s';
         row.onmouseenter=()=>row.style.background='var(--surface2)';
         row.onmouseleave=()=>row.style.background='';
         row.onclick=()=>openPlayerStats(p.id, p.name, currentMatchType);
+        row.id=`odds-row-${p.id}`;
         row.innerHTML=`
           <span style="font-size:11px;color:var(--text3);width:20px;text-align:center">${p.shirt||''}</span>
           <span style="font-size:13px;font-weight:500;flex:1">${p.name}</span>
-          <i class="ti ti-chart-bar" style="color:var(--text3);font-size:14px"></i>`;
+          <span class="odds-tf empty" data-tf="currentTeam" style="display:none">—</span>
+          <span class="odds-tf empty" data-tf="currentSeason" style="display:none">—</span>
+          <span class="odds-tf empty" data-tf="lastSeason" style="display:none">—</span>
+          <span class="odds-tf empty" data-tf="last2Seasons" style="display:none">—</span>
+          <i class="ti ti-chart-bar" style="color:var(--text3);font-size:14px;margin-left:4px"></i>`;
         starterDiv.appendChild(row);
+        lineupPlayersAll.push({id:p.id,name:p.name});
       });
       col.appendChild(starterDiv);
       // Bench
@@ -2029,11 +2075,17 @@ function renderLineups(data){
           row.onmouseenter=()=>{row.style.background='var(--surface2)';row.style.opacity='1';};
           row.onmouseleave=()=>{row.style.background='';row.style.opacity='0.7';};
           row.onclick=()=>openPlayerStats(p.id, p.name, currentMatchType);
+          row.id=`odds-row-${p.id}`;
           row.innerHTML=`
             <span style="font-size:11px;color:var(--text3);width:20px;text-align:center">${p.shirt||''}</span>
             <span style="font-size:13px;flex:1">${p.name}</span>
-            <i class="ti ti-chart-bar" style="color:var(--text3);font-size:14px"></i>`;
+            <span class="odds-tf empty" data-tf="currentTeam" style="display:none">—</span>
+            <span class="odds-tf empty" data-tf="currentSeason" style="display:none">—</span>
+            <span class="odds-tf empty" data-tf="lastSeason" style="display:none">—</span>
+            <span class="odds-tf empty" data-tf="last2Seasons" style="display:none">—</span>
+            <i class="ti ti-chart-bar" style="color:var(--text3);font-size:14px;margin-left:4px"></i>`;
           benchDiv.appendChild(row);
+          lineupPlayersAll.push({id:p.id,name:p.name});
         });
         col.appendChild(benchDiv);
       }
@@ -2079,6 +2131,24 @@ function renderPlayerStats(data, playerName, matchType){
     {key:'last2Seasons',  label:'+2 Seasons'},
   ];
 
+  // BB fair odds strip
+  const _bbO=getBBPlayerOdds(playerName);
+  const bbStripHtml=`<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:.5px solid var(--border)">
+    <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:600;margin-bottom:8px">BookieBashing Fair Odds</div>
+    <div class="bb-strip">
+      ${_bbO?`
+        <div class="bb-odds-item" onclick="fillBBOdds('fgs',${_bbO.fgs||0})" title="FGS">
+          <span class="bb-odds-lbl">FGS</span><span class="bb-odds-val">${_bbO.fgs||'—'}</span>
+        </div>
+        <div class="bb-odds-item" onclick="fillBBOdds('ags',${_bbO.ags||0})" title="AGS — click to fill calculator">
+          <span class="bb-odds-lbl">AGS</span><span class="bb-odds-val">${_bbO.ags||'—'}</span>
+        </div>
+        <div class="bb-odds-item" onclick="fillBBOdds('sot',${_bbO.sot||0})" title="SOT — click to fill calculator">
+          <span class="bb-odds-lbl">SOT</span><span class="bb-odds-val">${_bbO.sot||'—'}</span>
+        </div>
+      `:`<span style="font-size:12px;color:var(--text3)">No BB odds found</span>`}
+    </div>
+  </div>`;
   // Club / International toggle
   const toggleHtml=`<div style="display:flex;gap:6px;margin-bottom:16px">
     <button onclick="loadPlayerStats('${panel._playerId}','${panel._playerName}','club')" style="padding:5px 12px;border-radius:var(--radius);border:.5px solid ${matchType==='club'?'var(--brand)':'var(--border)'};background:${matchType==='club'?'var(--brand)':'var(--surface)'};color:${matchType==='club'?'#fff':'var(--text2)'};cursor:pointer;font-size:12px;font-family:inherit">Club</button>
@@ -2153,7 +2223,7 @@ function renderPlayerStats(data, playerName, matchType){
       <div id="auto-gsm-output"><div style="font-size:12px;color:var(--text3)">Enter fair odds above to calculate</div></div>
     </div>`;
 
-  let html=toggleHtml+calcHtml+`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+    let html=bbStripHtml+toggleHtml+calcHtml+`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
     <thead><tr>
       <th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:500;border-bottom:.5px solid var(--border)">Stat</th>
       ${frames.map(f=>`<th style="text-align:right;padding:6px 8px;color:var(--text3);font-weight:500;border-bottom:.5px solid var(--border);white-space:nowrap">${f.label}</th>`).join('')}
@@ -2270,6 +2340,127 @@ function calcAutoGSM(s,ags,so,sotV,pen){
     otbShotsP:xS&&nspS>0&&s.otbShots>0?shotP((s.otbShots/nspS)*xS):null,
     otbSOTP:xSOT&&nspT>0&&s.otbSot>0?shotP((s.otbSot/nspT)*xSOT):null,
   };
+}
+
+// ── BB ODDS + LINEUP FAIR ODDS ──────────────────────────────────────────────
+let bbMatchOdds=null,lineupMarketType=null,lineupMethodKey=null;
+let lineupStatsCache={},lineupPlayersAll=[],currentMatchEventId=null;
+
+async function fetchBBOdds(eventId){
+  try{
+    const r=await fetch(`/.netlify/functions/bb-odds?eventId=${eventId}`);
+    const d=await r.json();
+    if(d.ok)bbMatchOdds=d.players;
+  }catch(e){}
+}
+
+function getBBPlayerOdds(playerName){
+  if(!bbMatchOdds)return null;
+  const norm=n=>(n||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+  const na=norm(playerName);
+  return bbMatchOdds.find(p=>{
+    const nb=norm(p.name);
+    if(na===nb)return true;
+    const wa=na.split(' '),wb=nb.split(' ');
+    const[shorter,longer]=wa.length<=wb.length?[wa,nb]:[wb,na];
+    return shorter.filter(w=>w.length>1).every(w=>longer.includes(w));
+  })||null;
+}
+
+function fillBBOdds(field,value){
+  if(!value||value<=0)return;
+  if(field==='ags'||field==='fgs'){
+    const el=document.getElementById('auto-ags');
+    if(el){el.value=value;calcAutoGSMOutput();}
+  }else if(field==='sot'){
+    const el=document.getElementById('auto-sot');
+    if(el){el.value=value;calcAutoGSMOutput();}
+  }
+}
+
+const LINEUP_METHODS={
+  goal:[{key:'hdr-goal',label:'Header'},{key:'otb-goal',label:'OTB'},{key:'lf-goal',label:'Left Foot'},{key:'rf-goal',label:'Right Foot'}],
+  shot:[{key:'hdr-shots',label:'Header'},{key:'otb-shots',label:'OTB'}],
+  sot:[{key:'hdr-sot',label:'Header'},{key:'otb-sot',label:'OTB'}]
+};
+
+function selectLineupMarket(type){
+  lineupMarketType=type;lineupMethodKey=null;
+  document.querySelectorAll('#mkt-step1-btns .mkt-btn').forEach(b=>{
+    b.classList.toggle('active',
+      (type==='goal'&&b.textContent==='Goal')||
+      (type==='shot'&&b.textContent==='Shot')||
+      (type==='sot'&&b.textContent==='Shot On Target'));
+  });
+  const step2=document.getElementById('mkt-step2-btns');
+  step2.innerHTML=(LINEUP_METHODS[type]||[]).map(m=>`<button class="sub-btn2" onclick="selectLineupMethod('${m.key}')">${m.label}</button>`).join('');
+  step2.style.display='flex';
+  document.querySelectorAll('.lineup-odds-header').forEach(el=>el.style.display='none');
+  document.querySelectorAll('[id^="odds-row-"] .odds-tf').forEach(el=>el.style.display='none');
+}
+
+function selectLineupMethod(key){
+  lineupMethodKey=key;
+  document.querySelectorAll('#mkt-step2-btns .sub-btn2').forEach(b=>{
+    b.classList.toggle('active',b.getAttribute('onclick').includes(`'${key}'`));
+  });
+  document.querySelectorAll('.lineup-odds-header').forEach(el=>el.style.display='flex');
+  document.querySelectorAll('[id^="odds-row-"]').forEach(row=>{
+    row.querySelectorAll('.odds-tf').forEach(c=>{c.style.display='';c.textContent='…';c.className='odds-tf loading';});
+  });
+  loadAndShowLineupOdds();
+}
+
+async function loadAndShowLineupOdds(){
+  const method=lineupMethodKey;
+  await Promise.allSettled(lineupPlayersAll.map(async p=>{
+    if(!lineupStatsCache[p.id]){
+      try{
+        const r=await fetch(`/.netlify/functions/player-stats?playerId=${p.id}&matchType=${currentMatchType}`);
+        const d=await r.json();
+        if(d.ok)lineupStatsCache[p.id]=d;
+      }catch(e){}
+    }
+    if(lineupMethodKey===method)updatePlayerOddsRow(p,method);
+  }));
+}
+
+function calcMethodOdds(stats,method,bbOdds){
+  if(!stats)return null;
+  const ags=bbOdds?.ags||null,sotV=bbOdds?.sot||null,pen=false;
+  if(method.includes('goal')&&ags){
+    const r=calcAutoGSM(stats,ags,null,null,pen);
+    if(method==='hdr-goal')return r?.headerGoal;
+    if(method==='otb-goal')return r?.otbGoal;
+    if(method==='lf-goal')return r?.lfGoal;
+    if(method==='rf-goal')return r?.rfGoal;
+  }
+  if(method.includes('sot')&&sotV){
+    const r=calcAutoGSM(stats,null,null,sotV,pen);
+    if(method==='hdr-sot')return r?.headedSOTs?.[0];
+    if(method==='otb-sot')return r?.otbSOTP?.[0];
+  }
+  if(method.includes('shots')&&ags){
+    const r=calcAutoGSM(stats,ags,null,null,pen);
+    if(method==='hdr-shots')return r?.headedShots?.[0];
+    if(method==='otb-shots')return r?.otbShotsP?.[0];
+  }
+  return null;
+}
+
+function updatePlayerOddsRow(player,method){
+  const rowEl=document.getElementById(`odds-row-${player.id}`);
+  if(!rowEl)return;
+  const statsData=lineupStatsCache[player.id],bbOdds=getBBPlayerOdds(player.name);
+  ['currentTeam','currentSeason','lastSeason','last2Seasons'].forEach(tf=>{
+    const cell=rowEl.querySelector(`[data-tf="${tf}"]`);
+    if(!cell)return;
+    if(!statsData){cell.textContent='—';cell.className='odds-tf empty';return;}
+    const tfStats=statsData.timeframes?.[tf];
+    const odds=tfStats?calcMethodOdds(tfStats,method,bbOdds):null;
+    if(odds&&odds>1&&isFinite(odds)){cell.textContent=odds.toFixed(2);cell.className='odds-tf';}
+    else{cell.textContent='—';cell.className='odds-tf empty';}
+  });
 }
 </script>
 
