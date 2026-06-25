@@ -74,23 +74,24 @@ export const handler = async (event) => {
       ok: false, error: 'WordPress login failed', cookies: Object.keys(jar)
     })};
 
-    // ── 2. First authenticate (gets basic session) ─────────────────────────
+    // ── 2. Authenticate with BB node (sets connect.sid) ─────────────────────
     const auth1 = await get(`${NODE}/authenticate`, jar);
     if (auth1.isHTML) return { statusCode: 200, headers: CORS, body: JSON.stringify({
-      ok: false, error: 'authenticate(1) returned HTML', preview: auth1.text.substring(0, 200)
+      ok: false, error: 'authenticate returned HTML', preview: auth1.text.substring(0, 200)
     })};
 
-    // ── 3. Second authenticate (gets session token UUID) ───────────────────
-    const auth2 = await get(`${NODE}/authenticate`, jar);
-    if (auth2.isHTML) return { statusCode: 200, headers: CORS, body: JSON.stringify({
-      ok: false, error: 'authenticate(2) returned HTML'
-    })};
-
-    const auth2Data = auth2.json();
-    // authenticated field is either true or a UUID session token
-    const sessionToken = typeof auth2Data.authenticated === 'string'
-      ? auth2Data.authenticated
+    // ── 3. Extract session token from connect.sid cookie ──────────────────
+    // connect.sid format: s:TOKEN.SIGNATURE — we need the TOKEN part
+    const sidRaw = jar['connect.sid'] || '';
+    const sidDecoded = decodeURIComponent(sidRaw);
+    // sidDecoded looks like: s:E3HDtkEzHOJhuZFGFzsJajqn3JK0W1TL.gtXMgr...
+    const sessionToken = sidDecoded.startsWith('s:')
+      ? sidDecoded.substring(2).split('.')[0]
       : null;
+
+    if (!sessionToken) return { statusCode: 200, headers: CORS, body: JSON.stringify({
+      ok: false, error: 'Could not extract session token from connect.sid', sid: sidRaw
+    })};
 
     // ── 4. Get hash from sessions via auth.php POST ────────────────────────
 
