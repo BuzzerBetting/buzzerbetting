@@ -84,7 +84,7 @@ export const handler = async (event) => {
     })};
 
     // ── Step 3: auth.php — get session hash ──────────────────────────────────
-    const { res: authPhpRes, text: authPhpText, isHTML: authPhpHTML } = await safeFetch(`${BB_WP}/node/rest/auth.php`, {
+    const { res: authPhpRes, text: authPhpText, isHTML: authPhpHTML } = await safeFetch(`${BB_WP}/app/auth.php`, {
       headers: { 'User-Agent': UA, 'Cookie': jarToHeader(jar) }
     });
     Object.assign(jar, parseCookieJar(extractCookies(authPhpRes)));
