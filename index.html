@@ -2460,9 +2460,13 @@ function updatePlayerOddsRow(player,method){
     if(!cell)return;
     if(!statsData){cell.textContent='—';cell.className='odds-tf empty';return;}
     const tfStats=statsData.timeframes?.[tf];
-    const odds=tfStats?calcMethodOdds(tfStats,method,bbOdds):null;
-    if(odds&&odds>1&&isFinite(odds)){cell.textContent=odds.toFixed(2);cell.className='odds-tf';}
-    else{cell.textContent='—';cell.className='odds-tf empty';}
+    if(!tfStats){cell.textContent='—';cell.className='odds-tf empty';return;}
+    const odds=calcMethodOdds(tfStats,method,bbOdds);
+    if(odds&&odds>1&&isFinite(odds)){
+      cell.textContent=odds.toFixed(2);cell.className='odds-tf';
+    }else{
+      cell.textContent='0';cell.className='odds-tf empty';
+    }
   });
 }
 </script>
