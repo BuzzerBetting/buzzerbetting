@@ -1,6 +1,6 @@
 // netlify/functions/oddschecker.js
-// Uses OC's internal bet-builder API (not HTML scraping).
-// Flow: fetch match page → extract subeventId → hit markets API.
+// Uses OC's internal bet-builder API.
+// Event ID lookup: tries OC events API first (no 403), falls back to slug-based guess.
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -10,13 +10,6 @@ const CORS = {
 const OC_API_KEY = 'd6f0f240-dbe4-40eb-a133-63a6d81191e6';
 const OC_BOOKIE_CODES = 'SK,PP,SX,B3,KN,UN,WH,LD,CE,WA';
 
-const PAGE_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,*/*;q=0.9',
-  'Accept-Language': 'en-GB,en;q=0.9',
-  'Cache-Control': 'no-cache'
-};
-
 const API_HEADERS = {
   'x-api-key': OC_API_KEY,
   'Accept': 'application/json',
@@ -24,7 +17,6 @@ const API_HEADERS = {
   'Referer': 'https://www.oddschecker.com/'
 };
 
-// FotMob competition name → OC URL path segment
 const COMP_MAP = {
   'premier league':       'english/premier-league',
   'championship':         'english/championship',
@@ -48,15 +40,12 @@ const COMP_MAP = {
   'mls':                  'usa/major-league-soccer',
 };
 
-// The four markets we care about
 const TARGET_MARKETS = [
-  { key: 'header',     label: 'To Score a Header',                   match: /to score a header/i },
-  { key: 'otb',        label: 'To Score From Outside Penalty Box',   match: /outside penalty box/i },
-  { key: 'headed_sot', label: 'Player Headed Shots On Target',       match: /headed shots on target/i },
-  { key: 'sot_otb',   label: 'Player Shots On Target Outside Box',  match: /shots on target outside/i },
+  { key: 'header',     label: 'To Score a Header',                 match: /to score a header/i },
+  { key: 'otb',        label: 'To Score From Outside Penalty Box', match: /outside penalty box/i },
+  { key: 'headed_sot', label: 'Player Headed Shots On Target',     match: /headed shots on target/i },
+  { key: 'sot_otb',    label: 'Player Shots On Target Outside Box',match: /shots on target outside/i },
 ];
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function slugify(str) {
   return (str || '')
@@ -74,22 +63,6 @@ function getCompSlug(competition) {
   return slugify(competition);
 }
 
-// Extract subeventId from OC page HTML.
-// OC embeds server-rendered JSON near the bottom, e.g.:
-//   "subeventConfig":{"subeventId":"101540856",...}
-function extractEventId(html) {
-  const patterns = [
-    /"subeventId"\s*:\s*"?(\d{7,12})"?/,
-    /"subevent[Ii]d"\s*:\s*"?(\d{7,12})"?/,
-    /subevents\/(\d{7,12})/,
-  ];
-  for (const re of patterns) {
-    const m = html.match(re);
-    if (m) return m[1];
-  }
-  return null;
-}
-
 function fractionalToDecimal(str) {
   if (!str) return null;
   if (typeof str === 'number') return str > 1 ? str : null;
@@ -102,7 +75,6 @@ function fractionalToDecimal(str) {
   return isNaN(n) || n <= 1 ? null : n;
 }
 
-// Parse the markets API response into our shape
 function parseMarkets(data) {
   const result = Object.fromEntries(TARGET_MARKETS.map(m => [m.key, []]));
 
@@ -165,7 +137,30 @@ function parseMarkets(data) {
   return result;
 }
 
-// ── Handler ───────────────────────────────────────────────────────────────────
+// Try OC's events API to find the subeventId from a URL slug
+async function lookupEventId(ocSlug) {
+  // Try the OC events API with the url param
+  const attempts = [
+    `https://api.oddschecker.com/api/v2/events?url=/${ocSlug}`,
+    `https://api.oddschecker.com/api/v1/events?url=/${ocSlug}`,
+    `https://api.oddschecker.com/v1/events?sportUrl=/football&url=/${ocSlug}`,
+  ];
+
+  for (const url of attempts) {
+    try {
+      const res = await fetch(url, { headers: API_HEADERS });
+      if (!res.ok) continue;
+      const json = await res.json();
+      // Look for subeventId anywhere in the response
+      const str = JSON.stringify(json);
+      const m = str.match(/"subeventId"\s*:\s*"?(\d{7,12})"?/) ||
+                str.match(/"id"\s*:\s*"?(\d{7,12})"?/) ||
+                str.match(/"eventId"\s*:\s*"?(\d{7,12})"?/);
+      if (m) return m[1];
+    } catch (e) {}
+  }
+  return null;
+}
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
@@ -173,10 +168,6 @@ exports.handler = async (event) => {
   const p = event.queryStringParameters || {};
   const debug = p.debug === '1';
 
-  // Accept either:
-  //   ?home=Ecuador&away=Germany&competition=World Cup
-  //   ?slug=football/world-cup/ecuador-v-germany
-  //   ?eventId=101540856
   let ocSlug    = p.slug ?? null;
   let eventId   = p.eventId ?? null;
   const home        = p.home;
@@ -197,28 +188,18 @@ exports.handler = async (event) => {
   }
 
   try {
-    // ── Step 1: resolve eventId if not supplied ──
+    // ── Step 1: resolve eventId via OC API ──
     if (!eventId) {
-      const pageUrl = `https://www.oddschecker.com/${ocSlug}/winner`;
-      const pageRes = await fetch(pageUrl, { headers: PAGE_HEADERS, redirect: 'follow' });
-
-      if (!pageRes.ok) {
-        return {
-          statusCode: 502, headers: CORS,
-          body: JSON.stringify({ ok: false, error: `OC page ${pageRes.status}`, url: pageUrl })
-        };
-      }
-
-      const html = await pageRes.text();
-      eventId = extractEventId(html);
+      eventId = await lookupEventId(ocSlug);
 
       if (!eventId) {
         return {
           statusCode: 404, headers: CORS,
           body: JSON.stringify({
             ok: false,
-            error: 'Could not find subeventId in OC page — try ?eventId=XXXXXXXX directly',
-            hint: debug ? html.slice(html.indexOf('subeventId'), html.indexOf('subeventId') + 300) : undefined
+            error: 'Could not find event ID via OC API — pass ?eventId=XXXXXXXX directly',
+            slug: ocSlug,
+            hint: 'Open OC in browser, find the match, check Network tab for subeventId'
           })
         };
       }
