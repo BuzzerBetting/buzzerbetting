@@ -2438,6 +2438,33 @@ function renderCEVFixtures(leagues) {
     wrap.appendChild(card);
   });
 }
+  const BOOKIE_NAMES = {
+  'CE':  'Coral',
+  'AKB': 'AK Bets',
+  'LD':  'Ladbrokes',
+  'UN':  'Unibet',
+  'VE':  'Virgin Bet',
+  'B3':  'Bet365',
+  'PP':  'Paddy Power',
+  'QN':  'QuinnBet',
+  'BAH': 'Bet Ahoy',
+  'BTT': 'Bet Tom',
+  'SX':  'Spreadex',
+  'WH':  'William Hill',
+  'G5':  'Bet Goodwin',
+  'KN':  'BetMGM',
+  'FR':  'Betfred',
+  'SI':  'Sporting Index',
+  'SK':  'Sky Bet',
+  'PUP': 'PricedUp',
+  'S6':  'Star Sports',
+  'OE':  '10Bet',
+  'WA':  'Betway',
+  'BRS': 'BresBet',
+  'VC':  'Bet Victor',
+  'EE':  '888 Sport',
+  'BY':  'Boylesports',
+};
 function slugifyOC(str) {
   return (str||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 }
@@ -2737,33 +2764,7 @@ function renderCEVResults(home, away, data) {
   const tbody = document.getElementById('cev-tbody');
   document.getElementById('cev-results-title').textContent = `${home} v ${away} — OC prices`;
   tbody.innerHTML = '';
-const BOOKIE_NAMES = {
-  'CE':  'Coral',
-  'AKB': 'AK Bets',
-  'LD':  'Ladbrokes',
-  'UN':  'Unibet',
-  'VE':  'Virgin Bet',
-  'B3':  'Bet365',
-  'PP':  'Paddy Power',
-  'QN':  'QuinnBet',
-  'BAH': 'Bet Ahoy',
-  'BTT': 'Bet Tom',
-  'SX':  'Spreadex',
-  'WH':  'William Hill',
-  'G5':  'Bet Goodwin',
-  'KN':  'BetMGM',
-  'FR':  'Betfred',
-  'SI':  'Sporting Index',
-  'SK':  'Sky Bet',
-  'PUP': 'PricedUp',
-  'S6':  'Star Sports',
-  'OE':  '10Bet',
-  'WA':  'Betway',
-  'BRS': 'BresBet',
-  'VC':  'Bet Victor',
-  'EE':  '888 Sport',
-  'BY':  'Boylesports',
-};
+
   const MARKET_META = [
     { key: 'header',     label: 'To Score a Header' },
     { key: 'otb',        label: 'Score Outside Box' },
