@@ -2456,10 +2456,11 @@ async function scanOC(matchId, home, away, competition, btn) {
 
   try {
     const key = `${slugifyOC(home)}-v-${slugifyOC(away)}`;
-    const ids = OC_MARKET_IDS[key];
+    const inputs = [0,1,2,3].map(i => document.getElementById(`mid-${key}-${i}`)?.value.trim());
+    const ids = inputs.filter(Boolean).join(',');
 
-    if (!ids) {
-      alert(`No market IDs configured for ${home} v ${away} — add them to OC_MARKET_IDS`);
+    if (inputs.filter(Boolean).length !== 4) {
+      alert('Please fill in all 4 market IDs');
       return;
     }
 
@@ -2467,46 +2468,41 @@ async function scanOC(matchId, home, away, competition, btn) {
     if (!r.ok) throw new Error(`OC API ${r.status}`);
     const raw = await r.json();
 
-    // raw is an array of 4 market objects
     const MARKET_KEYS = ['header', 'otb', 'headed_sot', 'sot_otb'];
-const markets = {};
+    const markets = {};
+    const idList = ids.split(',');
 
-const idList = ids.split(',');
-for (const mkt of (Array.isArray(raw) ? raw : [])) {
-  const idx = idList.indexOf(String(mkt.marketId));
-  if (idx === -1) continue;
-  const key2 = MARKET_KEYS[idx];
-  if (!markets[key2]) markets[key2] = [];
-
-  // Group odds by betId (each betId = one player)
-  const byBet = {};
-  for (const bet of (mkt.odds ?? [])) {
-    if (bet.status !== 'ACTIVE') continue;
-    const id = bet.betId;
-    if (!byBet[id]) byBet[id] = { name: '', odds: {} };
-    const code = bet.bookmakerCode ?? '';
-    const dec = parseFloat(bet.oddsDecimal ?? 0);
-    if (code && dec > 1) byBet[id].odds[code] = dec;
-    // Extract player name from WH selectionId format: "Name*Market*..."
-    if (!byBet[id].name && bet.bookmakerSelectionId) {
-      const whMatch = bet.bookmakerSelectionId.match(/\*([^*]+)\*To\+Score|^([^*]+)\*|([A-Z][a-z]+\+[A-Z][a-z]+)/);
-      // Try the format: "...Erling+Haaland*To+Score..."
-      const selId = bet.bookmakerSelectionId;
-      const nameMatch = selId.match(/([A-Za-z+]+\+[A-Za-z+]+)\*/);
-      if (nameMatch) byBet[id].name = nameMatch[1].replace(/\+/g, ' ');
+    for (const mkt of (Array.isArray(raw) ? raw : [])) {
+      const idx = idList.indexOf(String(mkt.marketId));
+      if (idx === -1) continue;
+      const key2 = MARKET_KEYS[idx];
+      if (!markets[key2]) markets[key2] = [];
+      const byBet = {};
+      for (const bet of (mkt.odds ?? [])) {
+        if (bet.status !== 'ACTIVE') continue;
+        const id = bet.betId;
+        if (!byBet[id]) byBet[id] = { name: '', odds: {} };
+        const code = bet.bookmakerCode ?? '';
+        const dec = parseFloat(bet.oddsDecimal ?? 0);
+        if (code && dec > 1) byBet[id].odds[code] = dec;
+        if (!byBet[id].name && bet.bookmakerSelectionId) {
+          const nameMatch = bet.bookmakerSelectionId.match(/([A-Za-z+]+\+[A-Za-z+]+)\*/);
+          if (nameMatch) byBet[id].name = nameMatch[1].replace(/\+/g, ' ');
+        }
+      }
+      for (const { name, odds } of Object.values(byBet)) {
+        if (!name || !Object.keys(odds).length) continue;
+        const best = Math.max(...Object.values(odds));
+        markets[key2].push({ name, odds, best, bestBook: Object.entries(odds).find(([,v]) => v === best)?.[0] ?? '' });
+      }
     }
-  }
 
-  for (const { name, odds } of Object.values(byBet)) {
-    if (!name || !Object.keys(odds).length) continue;
-    const best = Math.max(...Object.values(odds));
-    markets[key2].push({
-      name, odds, best,
-      bestBook: Object.entries(odds).find(([,v]) => v === best)?.[0] ?? ''
-    });
-  }
-}
-renderCEVResults(home, away, { ok: true, markets });
+    for (const key of MARKET_KEYS) {
+      if (!markets[key]) markets[key] = [];
+      markets[key].sort((a, b) => a.best - b.best);
+    }
+
+    renderCEVResults(home, away, { ok: true, markets });
   } catch(err) {
     alert(`OC scan failed: ${err.message}`);
   } finally {
