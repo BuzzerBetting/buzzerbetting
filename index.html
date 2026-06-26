@@ -2448,7 +2448,51 @@ const OC_MARKET_IDS = {
   'senegal-v-iraq':  '3584926835,3584926838,3585094430,3585077705',
 };
 
+async function fetchWHSotOtb(home, away) {
+  try {
+    const q = encodeURIComponent(`${home} ${away} shot on target from outside the penalty area`);
+    const url = `https://search.williamhill.com/v2/?locale=en-gb&q=${q}&type=selection`;
+    const r = await fetch(url);
+    const data = await r.json();
+    const hits = data?.data?.hits ?? [];
 
+    const players = {};
+    for (const hit of hits) {
+      const v = hit.value;
+      if (!v.active) continue;
+      // Check it's the right match
+      const eventName = (v.event?.name ?? '').toLowerCase();
+      const h = slugifyOC(home).replace(/-/g,' ');
+      const a = slugifyOC(away).replace(/-/g,' ');
+      if (!eventName.includes(h) && !eventName.includes(a)) continue;
+      // Check it's the right market
+      const marketName = (v.market?.name ?? '').toLowerCase();
+      if (!marketName.includes('outside')) continue;
+
+      const name = v.name ?? '';
+      if (!name) continue;
+      const num = parseFloat(v.currentPriceNum ?? 0);
+      const den = parseFloat(v.currentPriceDen ?? 1);
+      if (!num || !den) continue;
+      const dec = parseFloat((num / den + 1).toFixed(3));
+      if (dec <= 1) continue;
+
+      if (!players[name] || dec > players[name].best) {
+        players[name] = {
+          name,
+          odds: { 'WH': dec },
+          best: dec,
+          bestBook: 'William Hill'
+        };
+      }
+    }
+
+    return Object.values(players).sort((a, b) => a.best - b.best);
+  } catch(e) {
+    console.warn('WH SOT OTB fetch failed:', e.message);
+    return [];
+  }
+}
 async function scanOC(matchId, home, away, competition, btn) {
   const origHtml = btn.innerHTML;
   btn.disabled = true;
@@ -2502,7 +2546,9 @@ async function scanOC(matchId, home, away, competition, btn) {
       markets[key].sort((a, b) => a.best - b.best);
     }
 
-    renderCEVResults(home, away, { ok: true, markets });
+    const whPlayers = await fetchWHSotOtb(home, away);
+markets['sot_otb'] = whPlayers;
+renderCEVResults(home, away, { ok: true, markets });
   } catch(err) {
     alert(`OC scan failed: ${err.message}`);
   } finally {
