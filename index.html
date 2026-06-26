@@ -499,7 +499,10 @@ input::placeholder{color:var(--text3)}
   <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
     <div class="sec-title" style="margin-bottom:0">Calculated +EV</div>
-    <button onclick="initCalcEV()" style="display:flex;align-items:center;gap:6px;background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Load today's matches</button>
+    <div style="display:flex;gap:8px">
+      <button onclick="initCalcEV(0)" style="display:flex;align-items:center;gap:6px;background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Today</button>
+      <button onclick="initCalcEV(1)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit" id="cev-tomorrow-btn">Tomorrow</button>
+    </div>
   </div>
 
   <div id="cev-status"></div>
@@ -2377,7 +2380,7 @@ function calcAutoGSM(s,ags,so,sotV,pen){
 // ── CALCULATED +EV ─────────────────────────────────────────────────────────
 let cevFixtures = [];
 
-async function initCalcEV() {
+async function initCalcEV(dayOffset = 0) {
   const statusEl = document.getElementById('cev-status');
   const fixturesEl = document.getElementById('cev-fixtures');
   document.getElementById('cev-results').style.display = 'none';
@@ -2386,6 +2389,7 @@ async function initCalcEV() {
 
   try {
     const now = new Date();
+    now.setDate(now.getDate() + dayOffset);
     const date = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
     const r = await fetch(`/.netlify/functions/fixtures?date=${date}`);
     const data = await r.json();
@@ -2607,9 +2611,10 @@ async function scanOC(matchId, home, away, competition, btn) {
 
     const allPlayers = [];
     for (const team of [lineupData.home, lineupData.away]) {
-  const starters = team.lineup?.starters ?? [];
-  for (const p of starters) allPlayers.push({ id: p.id, name: p.name });
-}
+      const starters = team.lineup?.starters ?? [];
+      const bench = team.lineup?.bench ?? [];
+      for (const p of [...starters, ...bench]) allPlayers.push({ id: p.id, name: p.name });
+    }
 
     // Step 5: Fetch player stats for all players in parallel
     btn.innerHTML = `<i class="ti ti-loader"></i> Fetching stats (0/${allPlayers.length})...`;
