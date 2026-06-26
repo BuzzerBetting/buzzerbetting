@@ -511,13 +511,15 @@ input::placeholder{color:var(--text3)}
       <button onclick="document.getElementById('cev-results').style.display='none'" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px"><i class="ti ti-x"></i></button>
     </div>
     <div class="card" style="overflow-x:auto">
-      <table class="dt" style="min-width:600px">
+      <table class="dt" style="min-width:800px">
         <thead>
           <tr>
             <th>Player</th>
             <th>Market</th>
-            <th>Timeframe</th>
-            <th class="r">Fair Odds</th>
+            <th class="r">Curr Team</th>
+            <th class="r">This Season</th>
+            <th class="r">+Last Season</th>
+            <th class="r">+2 Seasons</th>
             <th class="r">OC Odds</th>
             <th>Bookie</th>
             <th class="r">EV%</th>
@@ -2438,33 +2440,6 @@ function renderCEVFixtures(leagues) {
     wrap.appendChild(card);
   });
 }
-  const BOOKIE_NAMES = {
-  'CE':  'Coral',
-  'AKB': 'AK Bets',
-  'LD':  'Ladbrokes',
-  'UN':  'Unibet',
-  'VE':  'Virgin Bet',
-  'B3':  'Bet365',
-  'PP':  'Paddy Power',
-  'QN':  'QuinnBet',
-  'BAH': 'Bet Ahoy',
-  'BTT': 'Bet Tom',
-  'SX':  'Spreadex',
-  'WH':  'William Hill',
-  'G5':  'Bet Goodwin',
-  'KN':  'BetMGM',
-  'FR':  'Betfred',
-  'SI':  'Sporting Index',
-  'SK':  'Sky Bet',
-  'PUP': 'PricedUp',
-  'S6':  'Star Sports',
-  'OE':  '10Bet',
-  'WA':  'Betway',
-  'BRS': 'BresBet',
-  'VC':  'Bet Victor',
-  'EE':  '888 Sport',
-  'BY':  'Boylesports',
-};
 function slugifyOC(str) {
   return (str||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 }
@@ -2524,6 +2499,14 @@ async function fetchWHSotOtb(home, away) {
     return [];
   }
 }
+// Data thresholds for fair odds calculations
+const MIN_XG    = 2.0;   // minimum xG to include in goal methods
+const MIN_SHOTS = 10;    // minimum shots to include in shot methods
+const MIN_SOT   = 5;     // minimum SOT to include in SOT methods
+const CONF_XG   = 10.0;  // confident xG threshold (green vs yellow)
+const CONF_SHOTS= 50;    // confident shots threshold
+const CONF_SOT  = 20;    // confident SOT threshold
+
 async function scanOC(matchId, home, away, competition, btn) {
   const origHtml = btn.innerHTML;
   btn.disabled = true;
@@ -2619,7 +2602,7 @@ async function scanOC(matchId, home, away, competition, btn) {
     btn.innerHTML = '<i class="ti ti-loader"></i> Calculating EV...';
 
     const TIMEFRAMES = [
-      { key: 'currentTeam',   label: 'Current Team' },
+      { key: 'currentTeam',   label: 'Curr Team' },
       { key: 'currentSeason', label: 'This Season' },
       { key: 'lastSeason',    label: '+Last Season' },
       { key: 'last2Seasons',  label: '+2 Seasons' },
@@ -2644,7 +2627,27 @@ async function scanOC(matchId, home, away, competition, btn) {
              wb.filter(w=>w.length>2).every(w=>na.includes(w));
     }
 
-    const evBets = [];
+    // Returns data quality signal for a timeframe's stats
+    function dataQuality(tfStats, market) {
+      if (!tfStats) return 'none';
+      if (market.needsAGS) {
+        const xg = tfStats.xG || 0;
+        if (xg < MIN_XG) return 'none';
+        return xg >= CONF_XG ? 'high' : 'low';
+      } else {
+        if (market.calcKey === 'headedSOTs' || market.calcKey === 'otbSOTP') {
+          const sot = tfStats.sot || 0;
+          if (sot < MIN_SOT) return 'none';
+          return sot >= CONF_SOT ? 'high' : 'low';
+        } else {
+          const shots = tfStats.shots || 0;
+          if (shots < MIN_SHOTS) return 'none';
+          return shots >= CONF_SHOTS ? 'high' : 'low';
+        }
+      }
+    }
+
+    const evBets = []; // { player, market, ocOdds, bookie, tfs: [{label, fairOdds, ev, quality}], bestEv, isConfident }
 
     for (const player of allPlayers) {
       const statsData = statsMap[player.id];
@@ -2675,10 +2678,12 @@ async function scanOC(matchId, home, away, competition, btn) {
 
         if (!ocPrice) continue;
 
-        // Run calculator for each timeframe
+        // Calculate fair odds for each timeframe
+        const tfs = [];
         for (const tf of TIMEFRAMES) {
           const tfStats = statsData.timeframes?.[tf.key];
-          if (!tfStats) continue;
+          const quality = dataQuality(tfStats, market);
+          if (quality === 'none') { tfs.push({ label: tf.label, fairOdds: null, ev: null, quality }); continue; }
 
           const result = calcAutoGSM(
             tfStats,
@@ -2687,35 +2692,46 @@ async function scanOC(matchId, home, away, competition, btn) {
             !market.needsAGS ? sotV : null,
             false
           );
-          if (!result) continue;
 
           let fairOdds = null;
-          if (market.isShot) {
-            const arr = result[market.calcKey];
-            fairOdds = Array.isArray(arr) ? arr[0] : null;
-          } else {
-            fairOdds = result[market.calcKey];
+          if (result) {
+            if (market.isShot) {
+              const arr = result[market.calcKey];
+              fairOdds = Array.isArray(arr) ? arr[0] : null;
+            } else {
+              fairOdds = result[market.calcKey];
+            }
           }
 
-          if (!fairOdds || !isFinite(fairOdds) || fairOdds <= 1) continue;
+          if (!fairOdds || !isFinite(fairOdds) || fairOdds <= 1) {
+            tfs.push({ label: tf.label, fairOdds: null, ev: null, quality });
+            continue;
+          }
 
           const ev = ((ocPrice / fairOdds) - 1) * 100;
-          if (ev <= 0) continue;
-
-          evBets.push({
-            player: player.name,
-            market: market.label,
-            timeframe: tf.label,
-            fairOdds: fairOdds.toFixed(2),
-            ocOdds: ocPrice.toFixed(2),
-            bookie: ocBook,
-            ev: ev.toFixed(1)
-          });
+          tfs.push({ label: tf.label, fairOdds: fairOdds.toFixed(2), ev: ev.toFixed(1), quality });
         }
+
+        // Only include if at least one timeframe is +EV
+        const evTfs = tfs.filter(t => t.ev !== null && parseFloat(t.ev) > 0);
+        if (!evTfs.length) continue;
+
+        const bestEv = Math.max(...evTfs.map(t => parseFloat(t.ev)));
+        const isConfident = evTfs.some(t => t.quality === 'high' && parseFloat(t.ev) > 0);
+
+        evBets.push({
+          player: player.name,
+          market: market.label,
+          ocOdds: ocPrice.toFixed(2),
+          bookie: ocBook,
+          tfs,
+          bestEv,
+          isConfident
+        });
       }
     }
 
-    evBets.sort((a, b) => parseFloat(b.ev) - parseFloat(a.ev));
+    evBets.sort((a, b) => b.bestEv - a.bestEv);
     renderEVResults(home, away, evBets);
 
   } catch(err) {
@@ -2734,27 +2750,50 @@ function renderEVResults(home, away, bets) {
   tbody.innerHTML = '';
 
   if (!bets.length) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:32px;font-size:13px">No +EV bets found</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:32px;font-size:13px">No +EV bets found</td></tr>`;
     resultsEl.style.display = '';
     resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
     return;
   }
 
   for (const bet of bets) {
-    const ev = parseFloat(bet.ev);
+    const ev = bet.bestEv;
     const evCol = ev >= 20 ? 'var(--green)' : ev >= 10 ? 'var(--amber)' : 'var(--blue)';
     const evBg  = ev >= 20 ? 'var(--green-bg)' : ev >= 10 ? 'var(--amber-bg)' : 'var(--blue-bg)';
+    // Row colour: green = confident, amber = low data
+    const rowStyle = bet.isConfident
+      ? ''
+      : 'background:var(--amber-bg)';
+
+    // Build 4 timeframe cells
+    const tfCells = bet.tfs.map(tf => {
+      if (tf.fairOdds === null) return `<td class="r tn" style="color:var(--text3)">—</td>`;
+      const tfEv = parseFloat(tf.ev);
+      const col = tfEv > 0 ? 'var(--green)' : 'var(--text2)';
+      const conf = tf.quality === 'high' ? '' : 'opacity:0.6;';
+      return `<td class="r tn" style="color:${col};${conf}">${tf.fairOdds}</td>`;
+    }).join('');
+
     const tr = document.createElement('tr');
+    tr.style.cssText = rowStyle;
     tr.innerHTML = `
       <td style="font-weight:500">${bet.player}</td>
       <td style="font-size:12px;color:var(--text2)">${bet.market}</td>
-      <td style="font-size:11px;color:var(--text3)">${bet.timeframe}</td>
-      <td class="r tn" style="color:var(--text2)">${bet.fairOdds}</td>
+      ${tfCells}
       <td class="r tn" style="font-weight:600;color:var(--green)">${bet.ocOdds}</td>
       <td style="font-size:12px;color:var(--text2)">${bet.bookie}</td>
-      <td class="r"><span class="badge" style="background:${evBg};color:${evCol}">+${bet.ev}%</span></td>`;
+      <td class="r"><span class="badge" style="background:${evBg};color:${evCol}">+${ev.toFixed(1)}%</span></td>`;
     tbody.appendChild(tr);
   }
+
+  // Legend
+  const legend = document.createElement('tr');
+  legend.innerHTML = `<td colspan="9" style="padding:10px 16px;font-size:11px;color:var(--text2);border-top:.5px solid var(--border)">
+    <span style="display:inline-block;width:10px;height:10px;background:var(--surface);border:.5px solid var(--border);border-radius:2px;margin-right:4px"></span>High data confidence &nbsp;·&nbsp;
+    <span style="display:inline-block;width:10px;height:10px;background:var(--amber-bg);border:.5px solid var(--amber-bd);border-radius:2px;margin-right:4px"></span>Low data (xG &lt;10 / shots &lt;50 / SOT &lt;20) &nbsp;·&nbsp;
+    Faded fair odds = below minimum threshold
+  </td>`;
+  tbody.appendChild(legend);
 
   resultsEl.style.display = '';
   resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -2764,7 +2803,33 @@ function renderCEVResults(home, away, data) {
   const tbody = document.getElementById('cev-tbody');
   document.getElementById('cev-results-title').textContent = `${home} v ${away} — OC prices`;
   tbody.innerHTML = '';
-
+const BOOKIE_NAMES = {
+  'CE':  'Coral',
+  'AKB': 'AK Bets',
+  'LD':  'Ladbrokes',
+  'UN':  'Unibet',
+  'VE':  'Virgin Bet',
+  'B3':  'Bet365',
+  'PP':  'Paddy Power',
+  'QN':  'QuinnBet',
+  'BAH': 'Bet Ahoy',
+  'BTT': 'Bet Tom',
+  'SX':  'Spreadex',
+  'WH':  'William Hill',
+  'G5':  'Bet Goodwin',
+  'KN':  'BetMGM',
+  'FR':  'Betfred',
+  'SI':  'Sporting Index',
+  'SK':  'Sky Bet',
+  'PUP': 'PricedUp',
+  'S6':  'Star Sports',
+  'OE':  '10Bet',
+  'WA':  'Betway',
+  'BRS': 'BresBet',
+  'VC':  'Bet Victor',
+  'EE':  '888 Sport',
+  'BY':  'Boylesports',
+};
   const MARKET_META = [
     { key: 'header',     label: 'To Score a Header' },
     { key: 'otb',        label: 'Score Outside Box' },
