@@ -516,11 +516,12 @@ input::placeholder{color:var(--text3)}
           <tr>
             <th>Player</th>
             <th>Market</th>
+            <th class="r">BB Fair</th>
             <th class="r">Curr Team</th>
             <th class="r">This Season</th>
             <th class="r">+Last Season</th>
             <th class="r">+2 Seasons</th>
-            <th class="r">OC Odds</th>
+            <th class="r">Odds</th>
             <th>Bookie</th>
             <th class="r">EV%</th>
           </tr>
@@ -2754,6 +2755,7 @@ async function scanOC(matchId, home, away, competition, btn) {
         evBets.push({
           player: player.name,
           market: market.label,
+          bbFair: market.needsAGS ? ags : sotV,
           ocOdds: ocPrice.toFixed(2),
           bookie: ocBook,
           tfs,
@@ -2782,7 +2784,7 @@ function renderEVResults(home, away, bets) {
   tbody.innerHTML = '';
 
   if (!bets.length) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:32px;font-size:13px">No +EV bets found</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:32px;font-size:13px">No +EV bets found</td></tr>`;
     resultsEl.style.display = '';
     resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
     return;
@@ -2811,6 +2813,7 @@ function renderEVResults(home, away, bets) {
     tr.innerHTML = `
       <td style="font-weight:500">${bet.player}</td>
       <td style="font-size:12px;color:var(--text2)">${bet.market}</td>
+      <td class="r tn" style="color:var(--blue);font-weight:500">${bet.bbFair ? bet.bbFair.toFixed(2) : '—'}</td>
       ${tfCells}
       <td class="r tn" style="font-weight:600;color:var(--green)">${bet.ocOdds}</td>
       <td style="font-size:12px;color:var(--text2)">${bet.bookie}</td>
@@ -2820,7 +2823,7 @@ function renderEVResults(home, away, bets) {
 
   // Legend
   const legend = document.createElement('tr');
-  legend.innerHTML = `<td colspan="9" style="padding:10px 16px;font-size:11px;color:var(--text2);border-top:.5px solid var(--border)">
+  legend.innerHTML = `<td colspan="10" style="padding:10px 16px;font-size:11px;color:var(--text2);border-top:.5px solid var(--border)">
     <span style="display:inline-block;width:10px;height:10px;background:var(--surface);border:.5px solid var(--border);border-radius:2px;margin-right:4px"></span>High data confidence &nbsp;·&nbsp;
     <span style="display:inline-block;width:10px;height:10px;background:var(--amber-bg);border:.5px solid var(--amber-bd);border-radius:2px;margin-right:4px"></span>Low data (xG &lt;10 / shots &lt;50 / SOT &lt;20) &nbsp;·&nbsp;
     Faded fair odds = below minimum threshold
