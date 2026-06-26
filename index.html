@@ -2512,12 +2512,29 @@ function renderCEVResults(home, away, data) {
   document.getElementById('cev-results-title').textContent = `${home} v ${away} — OC prices`;
   tbody.innerHTML = '';
 const BOOKIE_NAMES = {
-  'SK': 'Sky Bet', 'PP': 'Paddy Power', 'SX': 'Spreadex',
-  'B3': 'Bet365', 'KN': 'BetMGM', 'WH': 'William Hill',
-  'LD': 'Ladbrokes', 'CE': 'Coral', 'WA': 'Betway',
-  'EE': 'Betfair', 'QN': 'Quinnbet', 'VE': 'Virgin Bet',
-  'AKB': 'Acca Kings', 'BF': 'Betfair Exchange',
-  'OE': 'Bet Victor', 'UN': 'Unibet'
+  const BOOKIE_NAMES = {
+  'SK': 'Sky Bet',
+  'PP': 'Paddy Power',
+  'SX': 'Spreadex',
+  'B3': 'Bet365',
+  'KN': 'BetMGM',
+  'WH': 'William Hill',
+  'LD': 'Ladbrokes',
+  'CE': 'Coral',
+  'WA': 'Betway',
+  'EE': '888 Sport',
+  'QN': 'QuinnBet',
+  'VE': 'Virgin Bet',
+  'AKB': 'AK Bets',
+  'BF': 'Betfair Exchange',
+  'OE': 'BetVictor',
+  'UN': 'Unibet',
+  'SI': 'Sporting Index',
+  'PD': 'PricedUp',
+  'SS': 'Star Sports',
+  'BB': 'BresBet',
+  'SE': 'Betfair Sportsbook',
+};
 };
   const MARKET_META = [
     { key: 'header',     label: 'To Score a Header' },
