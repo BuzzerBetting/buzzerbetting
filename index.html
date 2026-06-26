@@ -2498,7 +2498,14 @@ for (const mkt of (Array.isArray(raw) ? raw : [])) {
     });
   }
 }
-
+renderCEVResults(home, away, { ok: true, markets });
+  } catch(err) {
+    alert(`OC scan failed: ${err.message}`);
+  } finally {
+    btn.innerHTML = origHtml;
+    btn.disabled = false;
+  }
+}
 function renderCEVResults(home, away, data) {
   const resultsEl = document.getElementById('cev-results');
   const tbody = document.getElementById('cev-tbody');
