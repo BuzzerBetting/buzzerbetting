@@ -2440,6 +2440,7 @@ const OC_MARKET_IDS = {
   'senegal-v-iraq':  '3584926835,3584926838,3585094430,3585077705',
 };
 
+
 async function scanOC(matchId, home, away, competition, btn) {
   const origHtml = btn.innerHTML;
   btn.disabled = true;
@@ -2492,43 +2493,6 @@ async function scanOC(matchId, home, away, competition, btn) {
   }
 }
 
-  try {
-    // Step 1: Browser fetches OC page directly — no 403 here
-    btn.innerHTML = '<i class="ti ti-loader"></i> Finding event...';
-    const compSlug = getOCCompSlug(competition);
-    const matchSlug = `${slugifyOC(home)}-v-${slugifyOC(away)}`;
-    const ocUrl = `https://www.oddschecker.com/football/${compSlug}/${matchSlug}/winner`;
-
-    let eventId = null;
-    try {
-      const pageRes = await fetch(ocUrl, { headers: { 'Accept': 'text/html,*/*', 'Accept-Language': 'en-GB,en;q=0.9' } });
-      if (pageRes.ok) {
-        const html = await pageRes.text();
-        const m = html.match(/"subeventId"\s*:\s*"?(\d{7,12})"?/);
-        if (m) eventId = m[1];
-      }
-    } catch(e) {
-      console.warn('Browser OC page fetch failed:', e.message);
-    }
-
-    // Step 2: Call Netlify function — with eventId if we got one, else home/away fallback
-    btn.innerHTML = '<i class="ti ti-loader"></i> Fetching odds...';
-    const params = eventId
-      ? new URLSearchParams({ eventId })
-      : new URLSearchParams({ home, away, competition });
-
-    const r = await fetch(`/.netlify/functions/oddschecker?${params}`);
-    const data = await r.json();
-
-    if (!data.ok) throw new Error(data.error || 'Unknown error');
-    renderCEVResults(home, away, data);
-  } catch(err) {
-    alert(`OC scan failed: ${err.message}`);
-  } finally {
-    btn.innerHTML = origHtml;
-    btn.disabled = false;
-  }
-}
 function renderCEVResults(home, away, data) {
   const resultsEl = document.getElementById('cev-results');
   const tbody = document.getElementById('cev-tbody');
