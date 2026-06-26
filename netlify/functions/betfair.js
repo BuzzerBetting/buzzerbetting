@@ -6,7 +6,7 @@ const CORS = {
   'Content-Type': 'application/json'
 };
 
-const BFEX_ENDPOINT = 'https://api.betfair.com/exchange/betting/json-rpc/v1';
+const BFEX_ENDPOINT = 'https://api.betfair.com/exchange/betting/json-rpc/v1/';
 
 const TARGET_MARKETS = [
   'PLAYER_TO_SCORE_OUTSIDE_BOX',
