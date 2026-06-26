@@ -2484,7 +2484,7 @@ for (const mkt of (Array.isArray(raw) ? raw : [])) {
       const whMatch = bet.bookmakerSelectionId.match(/\*([^*]+)\*To\+Score|^([^*]+)\*|([A-Z][a-z]+\+[A-Z][a-z]+)/);
       // Try the format: "...Erling+Haaland*To+Score..."
       const selId = bet.bookmakerSelectionId;
-      const nameMatch = selId.match(/([A-Za-z+]+\+[A-Za-z+]+)\*(?:To|Player|Score)/);
+      const nameMatch = selId.match(/([A-Za-z+]+\+[A-Za-z+]+)\*/);
       if (nameMatch) byBet[id].name = nameMatch[1].replace(/\+/g, ' ');
     }
   }
