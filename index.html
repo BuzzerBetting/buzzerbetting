@@ -2470,38 +2470,32 @@ for (const mkt of (Array.isArray(raw) ? raw : [])) {
   const key2 = MARKET_KEYS[idx];
   if (!markets[key2]) markets[key2] = [];
 
-  // Each item in raw is a selection (player), not a market
-  // Player name is in mkt.marketName after the # character
-  const name = (mkt.marketName ?? '').split('#').pop().trim();
-  if (!name) continue;
-
-  const odds = {};
+  // Group odds by betId (each betId = one player)
+  const byBet = {};
   for (const bet of (mkt.odds ?? [])) {
     if (bet.status !== 'ACTIVE') continue;
+    const id = bet.betId;
+    if (!byBet[id]) byBet[id] = { name: '', odds: {} };
     const code = bet.bookmakerCode ?? '';
     const dec = parseFloat(bet.oddsDecimal ?? 0);
-    if (!code || dec <= 1) continue;
-    odds[code] = dec;
+    if (code && dec > 1) byBet[id].odds[code] = dec;
+    // Extract player name from WH selectionId format: "Name*Market*..."
+    if (!byBet[id].name && bet.bookmakerSelectionId) {
+      const whMatch = bet.bookmakerSelectionId.match(/\*([^*]+)\*To\+Score|^([^*]+)\*|([A-Z][a-z]+\+[A-Z][a-z]+)/);
+      // Try the format: "...Erling+Haaland*To+Score..."
+      const selId = bet.bookmakerSelectionId;
+      const nameMatch = selId.match(/([A-Za-z+]+\+[A-Za-z+]+)\*(?:To|Player|Score)/);
+      if (nameMatch) byBet[id].name = nameMatch[1].replace(/\+/g, ' ');
+    }
   }
-  if (!Object.keys(odds).length) continue;
-  const best = Math.max(...Object.values(odds));
-  markets[key2].push({
-    name, odds, best,
-    bestBook: Object.entries(odds).find(([,v]) => v === best)?.[0] ?? ''
-  });
-}
 
-for (const key of MARKET_KEYS) {
-  if (!markets[key]) markets[key] = [];
-  markets[key].sort((a, b) => a.best - b.best);
-}
-    renderCEVResults(home, away, { ok: true, markets });
-
-  } catch(err) {
-    alert(`OC scan failed: ${err.message}`);
-  } finally {
-    btn.innerHTML = origHtml;
-    btn.disabled = false;
+  for (const { name, odds } of Object.values(byBet)) {
+    if (!name || !Object.keys(odds).length) continue;
+    const best = Math.max(...Object.values(odds));
+    markets[key2].push({
+      name, odds, best,
+      bestBook: Object.entries(odds).find(([,v]) => v === best)?.[0] ?? ''
+    });
   }
 }
 
