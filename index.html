@@ -2705,6 +2705,12 @@ async function scanOC(matchId, home, away, competition, btn) {
 
         if (!ocPrice) continue;
 
+        // Check minimum threshold against last2Seasons (cumulative data)
+        const cumulativeStats = statsData.timeframes?.['last2Seasons'];
+        const cumulativeQuality = dataQuality(cumulativeStats, market);
+        if (cumulativeQuality === 'none') continue; // not enough data overall — skip
+        const isConfident = cumulativeQuality === 'high';
+
         // Calculate fair odds for each timeframe
         const tfs = [];
         for (const tf of TIMEFRAMES) {
@@ -2744,7 +2750,6 @@ async function scanOC(matchId, home, away, competition, btn) {
         if (!evTfs.length) continue;
 
         const bestEv = Math.max(...evTfs.map(t => parseFloat(t.ev)));
-        const isConfident = evTfs.some(t => t.quality === 'high' && parseFloat(t.ev) > 0);
 
         evBets.push({
           player: player.name,
