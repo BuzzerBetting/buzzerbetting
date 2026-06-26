@@ -2461,28 +2461,40 @@ async function scanOC(matchId, home, away, competition, btn) {
 
     // raw is an array of 4 market objects
     const MARKET_KEYS = ['header', 'otb', 'headed_sot', 'sot_otb'];
-    const markets = {};
+const markets = {};
 
-    for (const mkt of (Array.isArray(raw) ? raw : [])) {
-      const idx = ids.split(',').indexOf(String(mkt.marketId));
-      if (idx === -1) continue;
-      const key2 = MARKET_KEYS[idx];
-      const byName = {};
-      for (const bet of (mkt.bets ?? mkt.odds ?? [])) {
-        if (bet.status !== 'ACTIVE') continue;
-        const name = bet.name ?? '';
-        const code = bet.bookmakerCode ?? '';
-        const dec = parseFloat(bet.oddsDecimal ?? 0);
-        if (!name || !code || dec <= 1) continue;
-        if (!byName[name]) byName[name] = {};
-        byName[name][code] = dec;
-      }
-      markets[key2] = Object.entries(byName).map(([name, odds]) => {
-        const best = Math.max(...Object.values(odds));
-        return { name, odds, best, bestBook: Object.entries(odds).find(([,v]) => v === best)?.[0] ?? '' };
-      }).sort((a, b) => a.best - b.best);
-    }
+const idList = ids.split(',');
+for (const mkt of (Array.isArray(raw) ? raw : [])) {
+  const idx = idList.indexOf(String(mkt.marketId));
+  if (idx === -1) continue;
+  const key2 = MARKET_KEYS[idx];
+  if (!markets[key2]) markets[key2] = [];
 
+  // Each item in raw is a selection (player), not a market
+  // Player name is in mkt.marketName after the # character
+  const name = (mkt.marketName ?? '').split('#').pop().trim();
+  if (!name) continue;
+
+  const odds = {};
+  for (const bet of (mkt.odds ?? [])) {
+    if (bet.status !== 'ACTIVE') continue;
+    const code = bet.bookmakerCode ?? '';
+    const dec = parseFloat(bet.oddsDecimal ?? 0);
+    if (!code || dec <= 1) continue;
+    odds[code] = dec;
+  }
+  if (!Object.keys(odds).length) continue;
+  const best = Math.max(...Object.values(odds));
+  markets[key2].push({
+    name, odds, best,
+    bestBook: Object.entries(odds).find(([,v]) => v === best)?.[0] ?? ''
+  });
+}
+
+for (const key of MARKET_KEYS) {
+  if (!markets[key]) markets[key] = [];
+  markets[key].sort((a, b) => a.best - b.best);
+}
     renderCEVResults(home, away, { ok: true, markets });
 
   } catch(err) {
