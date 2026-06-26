@@ -2426,19 +2426,48 @@ function renderCEVFixtures(leagues) {
     wrap.appendChild(card);
   });
 }
-
+function slugifyOC(str) {
+  return (str||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+}
+function getOCCompSlug(c) {
+  const s=(c||'').toLowerCase().trim();
+  const map={'world cup':'world-cup','premier league':'english/premier-league','championship':'english/championship','champions league':'champions-league','europa league':'europa-league','nations league':'nations-league','euros':'european-championship','euro':'european-championship','la liga':'spanish/la-liga','bundesliga':'german/bundesliga','serie a':'italian/serie-a','ligue 1':'french/ligue-1','mls':'usa/major-league-soccer','scottish premiership':'scottish/premiership'};
+  for(const[k,v]of Object.entries(map))if(s.includes(k))return v;
+  return slugifyOC(c);
+}
 async function scanOC(matchId, home, away, competition, btn) {
   const origHtml = btn.innerHTML;
-  btn.innerHTML = '<i class="ti ti-loader"></i> Scanning...';
   btn.disabled = true;
 
   try {
-    const params = new URLSearchParams({ home, away, competition });
+    // Step 1: Browser fetches OC page directly — no 403 here
+    btn.innerHTML = '<i class="ti ti-loader"></i> Finding event...';
+    const compSlug = getOCCompSlug(competition);
+    const matchSlug = `${slugifyOC(home)}-v-${slugifyOC(away)}`;
+    const ocUrl = `https://www.oddschecker.com/football/${compSlug}/${matchSlug}/winner`;
+
+    let eventId = null;
+    try {
+      const pageRes = await fetch(ocUrl, { headers: { 'Accept': 'text/html,*/*', 'Accept-Language': 'en-GB,en;q=0.9' } });
+      if (pageRes.ok) {
+        const html = await pageRes.text();
+        const m = html.match(/"subeventId"\s*:\s*"?(\d{7,12})"?/);
+        if (m) eventId = m[1];
+      }
+    } catch(e) {
+      console.warn('Browser OC page fetch failed:', e.message);
+    }
+
+    // Step 2: Call Netlify function — with eventId if we got one, else home/away fallback
+    btn.innerHTML = '<i class="ti ti-loader"></i> Fetching odds...';
+    const params = eventId
+      ? new URLSearchParams({ eventId })
+      : new URLSearchParams({ home, away, competition });
+
     const r = await fetch(`/.netlify/functions/oddschecker?${params}`);
     const data = await r.json();
 
     if (!data.ok) throw new Error(data.error || 'Unknown error');
-
     renderCEVResults(home, away, data);
   } catch(err) {
     alert(`OC scan failed: ${err.message}`);
@@ -2447,54 +2476,45 @@ async function scanOC(matchId, home, away, competition, btn) {
     btn.disabled = false;
   }
 }
-
 function renderCEVResults(home, away, data) {
   const resultsEl = document.getElementById('cev-results');
   const tbody = document.getElementById('cev-tbody');
-  document.getElementById('cev-results-title').textContent = `${home} v ${away} — Oddschecker prices`;
+  document.getElementById('cev-results-title').textContent = `${home} v ${away} — OC prices`;
   tbody.innerHTML = '';
 
+  const MARKET_META = [
+    { key: 'header',     label: 'To Score a Header' },
+    { key: 'otb',        label: 'Score Outside Box' },
+    { key: 'headed_sot', label: 'Headed Shots On Target' },
+    { key: 'sot_otb',    label: 'SOT Outside Box' },
+  ];
+
   let hasData = false;
-  data.markets.forEach(market => {
-    if (market.error) {
+  MARKET_META.forEach(({ key, label }) => {
+    const players = data.markets?.[key] ?? [];
+    if (!players.length) {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td colspan="3" style="color:var(--text3);font-size:12px;font-style:italic">${market.label}: ${market.error}</td>`;
-      tbody.appendChild(tr);
-      return;
-    }
-    if (!market.players?.length) {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td colspan="3" style="color:var(--text3);font-size:12px;font-style:italic">${market.label}: No data found</td>`;
+      tr.innerHTML = `<td colspan="3" style="color:var(--text3);font-size:12px;font-style:italic;padding:8px 16px">${label}: No data</td>`;
       tbody.appendChild(tr);
       return;
     }
     hasData = true;
-    // Header row for market
     const hdr = document.createElement('tr');
-    hdr.innerHTML = `<td colspan="3" style="background:var(--surface2);font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;padding:8px 16px;border-top:.5px solid var(--border)">${market.label}</td>`;
+    hdr.innerHTML = `<td colspan="3" style="background:var(--surface2);font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;padding:8px 16px;border-top:.5px solid var(--border)">${label}</td>`;
     tbody.appendChild(hdr);
-
-    // Sort by price ascending (lowest = most likely)
-    market.players.sort((a,b) => a.best - b.best).forEach(p => {
+    [...players].sort((a,b) => a.best - b.best).forEach(p => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td style="font-weight:500">${p.name}</td>
-        <td style="font-size:12px;color:var(--text3)">${market.label}</td>
-        <td class="r tn" style="font-weight:600;color:var(--green)">${p.best.toFixed(2)}</td>`;
+      tr.innerHTML = `<td style="font-weight:500">${p.name}</td><td style="font-size:12px;color:var(--text3)">${p.bestBook||''}</td><td class="r tn" style="font-weight:600;color:var(--green)">${p.best.toFixed(2)}</td>`;
       tbody.appendChild(tr);
     });
   });
 
   if (!hasData) {
-    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">
-      No prices found. OC URL tried: <a href="${data.baseUrl}" target="_blank" style="color:var(--blue);font-size:11px">${data.baseUrl}</a>
-    </td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No prices found${data.eventId ? ` — event ID: ${data.eventId}` : ''}</td></tr>`;
   }
-
   resultsEl.style.display = '';
   resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
-
 
 let bbMatchOdds=null,lineupMarketType=null,lineupMethodKey=null;
 let lineupStatsCache={},lineupPlayersAll=[],currentMatchEventId=null;
