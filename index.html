@@ -2607,10 +2607,9 @@ async function scanOC(matchId, home, away, competition, btn) {
 
     const allPlayers = [];
     for (const team of [lineupData.home, lineupData.away]) {
-      const starters = team.lineup?.starters ?? [];
-      const bench = team.lineup?.bench ?? [];
-      for (const p of [...starters, ...bench]) allPlayers.push({ id: p.id, name: p.name });
-    }
+  const starters = team.lineup?.starters ?? [];
+  for (const p of starters) allPlayers.push({ id: p.id, name: p.name });
+}
 
     // Step 5: Fetch player stats for all players in parallel
     btn.innerHTML = `<i class="ti ti-loader"></i> Fetching stats (0/${allPlayers.length})...`;
