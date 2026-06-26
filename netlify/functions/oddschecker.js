@@ -11,10 +11,15 @@ const OC_API_KEY = 'd6f0f240-dbe4-40eb-a133-63a6d81191e6';
 const OC_BOOKIE_CODES = 'SK,PP,SX,B3,KN,UN,WH,LD,CE,WA';
 
 const API_HEADERS = {
-  'x-api-key': OC_API_KEY,
-  'Accept': 'application/json',
-  'Origin': 'https://www.oddschecker.com',
-  'Referer': 'https://www.oddschecker.com/'
+  'api-key': OC_API_KEY,
+  'accept': 'application/json',
+  'accept-language': 'en-GB,en-US;q=0.9,en;q=0.8',
+  'country-code': 'GB',
+  'subdivision-code': 'NIR',
+  'repub': 'OC',
+  'origin': 'https://www.oddschecker.com',
+  'referer': 'https://www.oddschecker.com/',
+  'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36'
 };
 
 const COMP_MAP = {
