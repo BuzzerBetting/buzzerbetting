@@ -1,38 +1,29 @@
 // netlify/functions/betfair.js
-// Fetches player market odds from Betfair Exchange
+// Fetches player market odds from Betfair Exchange REST API
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Content-Type': 'application/json'
 };
 
-const BFEX_ENDPOINT = 'https://api.betfair.com/exchange/betting/json-rpc/v1/';
-
-const TARGET_MARKETS = [
-  'PLAYER_TO_SCORE_OUTSIDE_BOX',
-  'SHOT_ON_TARGET_OUTSIDE_BOX',
-  'HEADER_SCORER',
-  'HEADED_SHOT_ON_TARGET',
-];
+const BFEX_BASE = 'https://api.betfair.com/exchange/betting/rest/v1.0';
 
 async function bfCall(method, params, appKey, session) {
-  const res = await fetch(BFEX_ENDPOINT, {
+  const res = await fetch(`${BFEX_BASE}/${method}/`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-Application': appKey,
       'X-Authentication': session,
+      'Accept': 'application/json',
     },
-    body: JSON.stringify([{
-      jsonrpc: '2.0',
-      method: `SportsAPING/v1.0/${method}`,
-      params,
-      id: 1
-    }])
+    body: JSON.stringify(params)
   });
-  const data = await res.json();
-  if (data[0]?.error) throw new Error(JSON.stringify(data[0].error));
-  return data[0]?.result;
+  const text = await res.text();
+  if (text.trim().startsWith('<')) throw new Error(`Betfair returned HTML — check app key and session token`);
+  const data = JSON.parse(text);
+  if (data.faultcode) throw new Error(data.faultstring || JSON.stringify(data));
+  return data;
 }
 
 exports.handler = async (event) => {
@@ -56,7 +47,7 @@ exports.handler = async (event) => {
     // Step 1: Find the event
     const events = await bfCall('listEvents', {
       filter: {
-        eventTypeIds: ['1'], // Football
+        eventTypeIds: ['1'],
         textQuery: `${home} v ${away}`,
       }
     }, appKey, session);
@@ -68,31 +59,29 @@ exports.handler = async (event) => {
 
     const eventId = events[0].event.id;
 
-    // Step 2: Find player markets for this event
+    // Step 2: Find TO_SCORE and SHOTS_ON_TARGET_P1 markets
     const catalogue = await bfCall('listMarketCatalogue', {
       filter: {
         eventIds: [eventId],
-        marketTypeCodes: TARGET_MARKETS,
+        marketTypeCodes: ['TO_SCORE', 'SHOTS_ON_TARGET_P1'],
       },
       marketProjection: ['RUNNER_DESCRIPTION', 'MARKET_NAME'],
-      maxResults: 50
+      maxResults: 10
     }, appKey, session);
 
     if (!catalogue?.length) return {
       statusCode: 200, headers: CORS,
-      body: JSON.stringify({ ok: false, error: 'No player markets found', eventId })
+      body: JSON.stringify({ ok: false, error: 'No markets found', eventId })
     };
 
-    // Step 3: Get market books (live prices)
+    // Step 3: Get market books
     const marketIds = catalogue.map(m => m.marketId);
     const books = await bfCall('listMarketBook', {
       marketIds,
       priceProjection: { priceData: ['EX_BEST_OFFERS'] },
-      orderProjection: 'EXECUTABLE',
-      currencyCode: 'GBP'
     }, appKey, session);
 
-    // Step 4: Combine catalogue + book data
+    // Step 4: Build response
     const marketMap = {};
     for (const m of catalogue) marketMap[m.marketId] = m;
 
@@ -100,32 +89,24 @@ exports.handler = async (event) => {
     for (const book of (books || [])) {
       const meta = marketMap[book.marketId];
       if (!meta) continue;
-      const marketType = meta.marketType || meta.description?.marketType || '';
-      const key = marketType.toLowerCase();
 
       const players = [];
       for (const runner of (book.runners || [])) {
         if (runner.status !== 'ACTIVE') continue;
-        // Find runner name from catalogue
         const runnerMeta = meta.runners?.find(r => r.selectionId === runner.selectionId);
         const name = runnerMeta?.runnerName ?? `Runner ${runner.selectionId}`;
         const bestBack = runner.ex?.availableToBack?.[0]?.price ?? null;
-        if (!bestBack) continue;
-        players.push({ name, price: bestBack, selectionId: runner.selectionId });
+        const lastTraded = runner.lastPriceTraded ?? null;
+        players.push({ name, back: bestBack, lastTraded });
       }
 
-      players.sort((a, b) => a.price - b.price);
-      markets[key] = { marketId: book.marketId, marketName: meta.marketName, players };
+      players.sort((a, b) => (a.back||999) - (b.back||999));
+      markets[meta.marketName] = { marketId: book.marketId, players };
     }
 
     return {
       statusCode: 200, headers: CORS,
-      body: JSON.stringify({
-        ok: true,
-        eventId,
-        match: `${home} v ${away}`,
-        markets
-      })
+      body: JSON.stringify({ ok: true, eventId, markets })
     };
 
   } catch (err) {
