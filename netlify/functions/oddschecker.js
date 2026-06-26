@@ -205,15 +205,23 @@ exports.handler = async (event) => {
       }
     }
 
-    // ── Step 2: hit the markets API ──
-    const apiUrl = `https://api.oddschecker.com/bet-builder/v1/subevents/${eventId}/markets?bookieCodes=${OC_BOOKIE_CODES}`;
-    const apiRes = await fetch(apiUrl, { headers: API_HEADERS });
+    // ── Step 2: hit the markets API (try both endpoints) ──
+    const endpoints = [
+      `https://api.oddschecker.com/bet-builder/v1/subevents/${eventId}/prepopulated-bets?bookieCodes=${OC_BOOKIE_CODES}`,
+      `https://api.oddschecker.com/bet-builder/v1/subevents/${eventId}/markets?bookieCodes=${OC_BOOKIE_CODES}`,
+    ];
 
-    if (!apiRes.ok) {
-      const body = await apiRes.text();
+    let apiRes = null;
+    let endpointUsed = '';
+    for (const url of endpoints) {
+      const r = await fetch(url, { headers: API_HEADERS });
+      if (r.ok) { apiRes = r; endpointUsed = url; break; }
+    }
+
+    if (!apiRes) {
       return {
         statusCode: 502, headers: CORS,
-        body: JSON.stringify({ ok: false, error: `Markets API ${apiRes.status}`, detail: body })
+        body: JSON.stringify({ ok: false, error: 'Markets API 404 on all endpoints', eventId })
       };
     }
 
