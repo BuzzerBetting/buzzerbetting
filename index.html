@@ -2435,9 +2435,62 @@ function getOCCompSlug(c) {
   for(const[k,v]of Object.entries(map))if(s.includes(k))return v;
   return slugifyOC(c);
 }
+const OC_MARKET_IDS = {
+  'norway-v-france': '3584916118,3584916120,3585092326,3585077698',
+  'senegal-v-iraq':  '3584926835,3584926838,3585094430,3585077705',
+};
+
 async function scanOC(matchId, home, away, competition, btn) {
   const origHtml = btn.innerHTML;
   btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader"></i> Scanning...';
+
+  try {
+    const key = `${slugifyOC(home)}-v-${slugifyOC(away)}`;
+    const ids = OC_MARKET_IDS[key];
+
+    if (!ids) {
+      alert(`No market IDs configured for ${home} v ${away} — add them to OC_MARKET_IDS`);
+      return;
+    }
+
+    const r = await fetch(`https://www.oddschecker.com/api/markets/v2/all-odds?market-ids=${ids}&repub=OC`);
+    if (!r.ok) throw new Error(`OC API ${r.status}`);
+    const raw = await r.json();
+
+    // raw is an array of 4 market objects
+    const MARKET_KEYS = ['header', 'otb', 'headed_sot', 'sot_otb'];
+    const markets = {};
+
+    for (const mkt of (Array.isArray(raw) ? raw : [])) {
+      const idx = ids.split(',').indexOf(String(mkt.marketId));
+      if (idx === -1) continue;
+      const key2 = MARKET_KEYS[idx];
+      const byName = {};
+      for (const bet of (mkt.bets ?? mkt.odds ?? [])) {
+        if (bet.status !== 'ACTIVE') continue;
+        const name = bet.name ?? '';
+        const code = bet.bookmakerCode ?? '';
+        const dec = parseFloat(bet.oddsDecimal ?? 0);
+        if (!name || !code || dec <= 1) continue;
+        if (!byName[name]) byName[name] = {};
+        byName[name][code] = dec;
+      }
+      markets[key2] = Object.entries(byName).map(([name, odds]) => {
+        const best = Math.max(...Object.values(odds));
+        return { name, odds, best, bestBook: Object.entries(odds).find(([,v]) => v === best)?.[0] ?? '' };
+      }).sort((a, b) => a.best - b.best);
+    }
+
+    renderCEVResults(home, away, { ok: true, markets });
+
+  } catch(err) {
+    alert(`OC scan failed: ${err.message}`);
+  } finally {
+    btn.innerHTML = origHtml;
+    btn.disabled = false;
+  }
+}
 
   try {
     // Step 1: Browser fetches OC page directly — no 403 here
