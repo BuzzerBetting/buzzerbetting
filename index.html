@@ -516,7 +516,11 @@ input::placeholder{color:var(--text3)}
           <tr>
             <th>Player</th>
             <th>Market</th>
-            <th class="r">OC Best Price</th>
+            <th>Timeframe</th>
+            <th class="r">Fair Odds</th>
+            <th class="r">OC Odds</th>
+            <th>Bookie</th>
+            <th class="r">EV%</th>
           </tr>
         </thead>
         <tbody id="cev-tbody"></tbody>
@@ -2496,7 +2500,6 @@ async function fetchWHSotOtb(home, away) {
 async function scanOC(matchId, home, away, competition, btn) {
   const origHtml = btn.innerHTML;
   btn.disabled = true;
-  btn.innerHTML = '<i class="ti ti-loader"></i> Scanning...';
 
   try {
     const key = `${slugifyOC(home)}-v-${slugifyOC(away)}`;
@@ -2508,19 +2511,27 @@ async function scanOC(matchId, home, away, competition, btn) {
       return;
     }
 
-    const r = await fetch(`https://www.oddschecker.com/api/markets/v2/all-odds?market-ids=${ids}&repub=OC`);
-    if (!r.ok) throw new Error(`OC API ${r.status}`);
-    const raw = await r.json();
+    btn.innerHTML = '<i class="ti ti-loader"></i> Fetching odds...';
 
+    // Step 1: Fetch OC odds, lineups, and BB odds in parallel
+    const [ocRaw, lineupData] = await Promise.all([
+      fetch(`https://www.oddschecker.com/api/markets/v2/all-odds?market-ids=${ids}&repub=OC`)
+        .then(r => r.json()).catch(() => []),
+      fetch(`/.netlify/functions/lineups?matchId=${matchId}`)
+        .then(r => r.json()).catch(() => ({ ok: false })),
+      fetchBBOdds(matchId, home, away)
+    ]);
+
+    // Step 2: Parse OC odds into lookup by market → player name
     const MARKET_KEYS = ['header', 'otb', 'headed_sot', 'sot_otb'];
-    const markets = {};
+    const ocMarkets = {};
     const idList = ids.split(',');
 
-    for (const mkt of (Array.isArray(raw) ? raw : [])) {
+    for (const mkt of (Array.isArray(ocRaw) ? ocRaw : [])) {
       const idx = idList.indexOf(String(mkt.marketId));
       if (idx === -1) continue;
-      const key2 = MARKET_KEYS[idx];
-      if (!markets[key2]) markets[key2] = [];
+      const mkey = MARKET_KEYS[idx];
+      if (!ocMarkets[mkey]) ocMarkets[mkey] = {};
       const byBet = {};
       for (const bet of (mkt.odds ?? [])) {
         if (bet.status !== 'ACTIVE') continue;
@@ -2530,31 +2541,196 @@ async function scanOC(matchId, home, away, competition, btn) {
         const dec = parseFloat(bet.oddsDecimal ?? 0);
         if (code && dec > 1) byBet[id].odds[code] = dec;
         if (!byBet[id].name && bet.bookmakerSelectionId) {
-          const nameMatch = bet.bookmakerSelectionId.match(/([A-Za-z+]+\+[A-Za-z+]+)\*/);
-          if (nameMatch) byBet[id].name = nameMatch[1].replace(/\+/g, ' ');
+          const nm = bet.bookmakerSelectionId.match(/([A-Za-z+]+\+[A-Za-z+]+)\*/);
+          if (nm) byBet[id].name = nm[1].replace(/\+/g, ' ');
         }
       }
       for (const { name, odds } of Object.values(byBet)) {
         if (!name || !Object.keys(odds).length) continue;
         const best = Math.max(...Object.values(odds));
-        markets[key2].push({ name, odds, best, bestBook: Object.entries(odds).find(([,v]) => v === best)?.[0] ?? '' });
+        ocMarkets[mkey][name.toLowerCase()] = {
+          name, odds, best,
+          bestBook: Object.entries(odds).find(([,v]) => v === best)?.[0] ?? ''
+        };
       }
     }
 
-    for (const key of MARKET_KEYS) {
-      if (!markets[key]) markets[key] = [];
-      markets[key].sort((a, b) => a.best - b.best);
+    // Step 3: Fetch WH SOT OTB
+    btn.innerHTML = '<i class="ti ti-loader"></i> Fetching WH odds...';
+    const whPlayers = await fetchWHSotOtb(home, away);
+    const whByName = {};
+    for (const p of whPlayers) whByName[p.name.toLowerCase()] = p;
+
+    // Step 4: Check lineups loaded
+    if (!lineupData.ok) {
+      alert('Could not fetch lineups — lineups may not be available yet');
+      return;
     }
 
-    const whPlayers = await fetchWHSotOtb(home, away);
-markets['sot_otb'] = whPlayers;
-renderCEVResults(home, away, { ok: true, markets });
+    const allPlayers = [];
+    for (const team of [lineupData.home, lineupData.away]) {
+      const starters = team.lineup?.starters ?? [];
+      const bench = team.lineup?.bench ?? [];
+      for (const p of [...starters, ...bench]) allPlayers.push({ id: p.id, name: p.name });
+    }
+
+    // Step 5: Fetch player stats for all players in parallel
+    btn.innerHTML = `<i class="ti ti-loader"></i> Fetching stats (0/${allPlayers.length})...`;
+    let fetched = 0;
+    const statsMap = {};
+    await Promise.allSettled(allPlayers.map(async p => {
+      try {
+        const r = await fetch(`/.netlify/functions/player-stats?playerId=${p.id}&matchType=${currentMatchType}`);
+        const d = await r.json();
+        if (d.ok) statsMap[p.id] = d;
+      } catch(e) {}
+      fetched++;
+      btn.innerHTML = `<i class="ti ti-loader"></i> Fetching stats (${fetched}/${allPlayers.length})...`;
+    }));
+
+    // Step 6: Calculate EV for each player × market × timeframe
+    btn.innerHTML = '<i class="ti ti-loader"></i> Calculating EV...';
+
+    const TIMEFRAMES = [
+      { key: 'currentTeam',   label: 'Current Team' },
+      { key: 'currentSeason', label: 'This Season' },
+      { key: 'lastSeason',    label: '+Last Season' },
+      { key: 'last2Seasons',  label: '+2 Seasons' },
+    ];
+
+    const MARKET_CONFIG = [
+      { key: 'header',     label: 'Header Scorer',   calcKey: 'headerGoal', needsAGS: true,  isShot: false, useWH: false },
+      { key: 'otb',        label: 'Score OTB',       calcKey: 'otbGoal',    needsAGS: true,  isShot: false, useWH: false },
+      { key: 'headed_sot', label: 'Headed SOT 1+',   calcKey: 'headedSOTs', needsAGS: false, isShot: true,  useWH: false },
+      { key: 'sot_otb',    label: 'SOT Outside Box', calcKey: 'otbSOTP',    needsAGS: false, isShot: true,  useWH: true  },
+    ];
+
+    function normName(n) {
+      return (n||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+        .toLowerCase().replace(/[^a-z ]/g,' ').replace(/\s+/g,' ').trim();
+    }
+    function fuzzyMatch(a, b) {
+      const na = normName(a), nb = normName(b);
+      if (na === nb) return true;
+      const wa = na.split(' '), wb = nb.split(' ');
+      return wa.filter(w=>w.length>2).every(w=>nb.includes(w)) ||
+             wb.filter(w=>w.length>2).every(w=>na.includes(w));
+    }
+
+    const evBets = [];
+
+    for (const player of allPlayers) {
+      const statsData = statsMap[player.id];
+      if (!statsData) continue;
+      const bbOdds = getBBPlayerOdds(player.name);
+      if (!bbOdds) continue;
+
+      const ags = bbOdds.ags || null;
+      const sotV = bbOdds.sot || null;
+
+      for (const market of MARKET_CONFIG) {
+        if (market.needsAGS && !ags) continue;
+        if (!market.needsAGS && !sotV) continue;
+
+        // Get OC/WH price for this player
+        let ocPrice = null, ocBook = null;
+        if (market.useWH) {
+          const entry = Object.entries(whByName).find(([k]) => fuzzyMatch(k, player.name));
+          if (entry) { ocPrice = entry[1].best; ocBook = 'William Hill'; }
+        } else {
+          const mktPlayers = ocMarkets[market.key] ?? {};
+          const entry = Object.entries(mktPlayers).find(([k]) => fuzzyMatch(k, player.name));
+          if (entry) {
+            ocPrice = entry[1].best;
+            ocBook = BOOKIE_NAMES[entry[1].bestBook] || entry[1].bestBook;
+          }
+        }
+
+        if (!ocPrice) continue;
+
+        // Run calculator for each timeframe
+        for (const tf of TIMEFRAMES) {
+          const tfStats = statsData.timeframes?.[tf.key];
+          if (!tfStats) continue;
+
+          const result = calcAutoGSM(
+            tfStats,
+            market.needsAGS ? ags : null,
+            null,
+            !market.needsAGS ? sotV : null,
+            false
+          );
+          if (!result) continue;
+
+          let fairOdds = null;
+          if (market.isShot) {
+            const arr = result[market.calcKey];
+            fairOdds = Array.isArray(arr) ? arr[0] : null;
+          } else {
+            fairOdds = result[market.calcKey];
+          }
+
+          if (!fairOdds || !isFinite(fairOdds) || fairOdds <= 1) continue;
+
+          const ev = ((ocPrice / fairOdds) - 1) * 100;
+          if (ev <= 0) continue;
+
+          evBets.push({
+            player: player.name,
+            market: market.label,
+            timeframe: tf.label,
+            fairOdds: fairOdds.toFixed(2),
+            ocOdds: ocPrice.toFixed(2),
+            bookie: ocBook,
+            ev: ev.toFixed(1)
+          });
+        }
+      }
+    }
+
+    evBets.sort((a, b) => parseFloat(b.ev) - parseFloat(a.ev));
+    renderEVResults(home, away, evBets);
+
   } catch(err) {
-    alert(`OC scan failed: ${err.message}`);
+    console.error('scanOC error:', err);
+    alert(`Scan failed: ${err.message}`);
   } finally {
     btn.innerHTML = origHtml;
     btn.disabled = false;
   }
+}
+
+function renderEVResults(home, away, bets) {
+  const resultsEl = document.getElementById('cev-results');
+  const tbody = document.getElementById('cev-tbody');
+  document.getElementById('cev-results-title').textContent = `${home} v ${away} — +EV bets`;
+  tbody.innerHTML = '';
+
+  if (!bets.length) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:32px;font-size:13px">No +EV bets found</td></tr>`;
+    resultsEl.style.display = '';
+    resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+
+  for (const bet of bets) {
+    const ev = parseFloat(bet.ev);
+    const evCol = ev >= 20 ? 'var(--green)' : ev >= 10 ? 'var(--amber)' : 'var(--blue)';
+    const evBg  = ev >= 20 ? 'var(--green-bg)' : ev >= 10 ? 'var(--amber-bg)' : 'var(--blue-bg)';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight:500">${bet.player}</td>
+      <td style="font-size:12px;color:var(--text2)">${bet.market}</td>
+      <td style="font-size:11px;color:var(--text3)">${bet.timeframe}</td>
+      <td class="r tn" style="color:var(--text2)">${bet.fairOdds}</td>
+      <td class="r tn" style="font-weight:600;color:var(--green)">${bet.ocOdds}</td>
+      <td style="font-size:12px;color:var(--text2)">${bet.bookie}</td>
+      <td class="r"><span class="badge" style="background:${evBg};color:${evCol}">+${bet.ev}%</span></td>`;
+    tbody.appendChild(tr);
+  }
+
+  resultsEl.style.display = '';
+  resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function renderCEVResults(home, away, data) {
   const resultsEl = document.getElementById('cev-results');
