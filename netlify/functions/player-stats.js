@@ -43,8 +43,8 @@ exports.handler = async (event) => {
     const allDatasets = results.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
     if (!allDatasets.length) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'No shot data found for this player' }) };
 
-    // For international, skip current team detection — use all shots regardless of club
-    // For club, detect from most frequent teamId in season 0 shots
+    // For international, use all shots regardless of club
+    // For club, detect current team from season 0 shots — but only filter currentTeam timeframe
     let currentTeamId = null;
 
     if (!isInternational) {
@@ -59,19 +59,17 @@ exports.handler = async (event) => {
       };
     }
 
-    const filterShots = (shots) => isInternational
+    // Filter for current team only (used for currentTeam timeframe)
+    const filterCurrentTeam = (shots) => isInternational
       ? shots
       : shots.filter(s => String(s.teamId) === String(currentTeamId));
 
-    const agg = (datasets) => {
-      const shots = filterShots(datasets.flatMap(d => d.shots));
-      const matches = datasets.reduce((t, d) => {
-        if (!isInternational) {
-          const hasClubShots = d.shots.some(s => String(s.teamId) === String(currentTeamId));
-          return t + (hasClubShots ? d.matchesPlayed : 0);
-        }
-        return t + d.matchesPlayed;
-      }, 0);
+    // For historical timeframes (lastSeason, last2Seasons) — include ALL clubs
+    const filterAll = (shots) => shots;
+
+    const agg = (datasets, filterFn) => {
+      const shots = filterFn(datasets.flatMap(d => d.shots));
+      const matches = datasets.reduce((t, d) => t + d.matchesPlayed, 0);
       return calcStats(shots, matches || null);
     };
 
@@ -84,10 +82,10 @@ exports.handler = async (event) => {
         matchType: matchType || 'club',
         currentTeamId,
         timeframes: {
-          currentTeam:   agg(allDatasets.filter(d => d.season === 0)),
-          currentSeason: agg(allDatasets.filter(d => d.season === 0)),
-          lastSeason:    agg(allDatasets.filter(d => d.season <= 1)),
-          last2Seasons:  agg(allDatasets.filter(d => d.season <= 2)),
+          currentTeam:   agg(allDatasets.filter(d => d.season === 0), filterCurrentTeam),
+          currentSeason: agg(allDatasets.filter(d => d.season === 0), filterCurrentTeam),
+          lastSeason:    agg(allDatasets.filter(d => d.season <= 1), filterAll),
+          last2Seasons:  agg(allDatasets.filter(d => d.season <= 2), filterAll),
         },
         competitionsFound: allDatasets.map(d => ({ seasonId: d.seasonId, shots: d.shots.length })),
         debug: (() => {
