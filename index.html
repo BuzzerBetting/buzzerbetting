@@ -2629,10 +2629,10 @@ async function scanOC(matchId, home, away, competition, btn) {
     btn.innerHTML = '<i class="ti ti-loader"></i> Calculating EV...';
 
     const TIMEFRAMES = [
-      { key: 'Current Team',   label: 'Curr Team' },
-      { key: 'This Season',    label: 'This Season' },
-      { key: '+Last Season',   label: '+Last Season' },
-      { key: '+2 Seasons',     label: '+2 Seasons' },
+      { key: 'currentTeam',   label: 'Curr Team' },
+      { key: 'currentSeason', label: 'This Season' },
+      { key: 'lastSeason',    label: '+Last Season' },
+      { key: 'last2Seasons',  label: '+2 Seasons' },
     ];
 
     const MARKET_CONFIG = [
@@ -2706,7 +2706,7 @@ async function scanOC(matchId, home, away, competition, btn) {
         if (!ocPrice) continue;
 
         // Check minimum threshold against last2Seasons (cumulative data)
-        const cumulativeStats = statsData.timeframes?.['+2 Seasons'];
+        const cumulativeStats = statsData.timeframes?.['last2Seasons'];
         const cumulativeQuality = dataQuality(cumulativeStats, market);
         if (cumulativeQuality === 'none') continue; // not enough data overall — skip
         const isConfident = cumulativeQuality === 'high';
