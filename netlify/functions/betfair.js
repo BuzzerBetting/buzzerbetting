@@ -1,12 +1,25 @@
-// netlify/functions/betfair.js
-// Fetches player market odds from Betfair Exchange REST API
-
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Content-Type': 'application/json'
 };
-
 const BFEX_BASE = 'https://api.betfair.com/exchange/betting/rest/v1.0';
+
+async function getSessionToken(appKey) {
+  const username = process.env.BFEX_USERNAME;
+  const password = process.env.BFEX_PASSWORD;
+  const res = await fetch('https://identitysso.betfair.com/api/login', {
+    method: 'POST',
+    headers: {
+      'X-Application': appKey,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': 'application/json'
+    },
+    body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+  });
+  const data = await res.json();
+  if (data.status !== 'SUCCESS') throw new Error(`Login failed: ${data.error}`);
+  return data.token;
+}
 
 async function bfCall(method, params, appKey, session) {
   const res = await fetch(`${BFEX_BASE}/${method}/`, {
@@ -28,68 +41,44 @@ async function bfCall(method, params, appKey, session) {
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
-
   const appKey = process.env.BFEX_APP_KEY;
-  const session = process.env.BFEX_SESSION;
-
-  if (!appKey || !session) return {
-    statusCode: 200, headers: CORS,
-    body: JSON.stringify({ ok: false, error: 'BFEX_APP_KEY or BFEX_SESSION not set' })
-  };
+  if (!appKey) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'BFEX_APP_KEY not set' }) };
 
   const { home, away } = event.queryStringParameters || {};
-  if (!home || !away) return {
-    statusCode: 400, headers: CORS,
-    body: JSON.stringify({ ok: false, error: 'home and away required' })
-  };
+  if (!home || !away) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'home and away required' }) };
 
   try {
-    // Step 1: Find the event
+    // Always get a fresh session token
+    const session = await getSessionToken(appKey);
+
     const events = await bfCall('listEvents', {
-      filter: {
-        eventTypeIds: ['1'],
-        textQuery: `${home} v ${away}`,
-      }
+      filter: { eventTypeIds: ['1'], textQuery: `${home} v ${away}` }
     }, appKey, session);
 
-    if (!events?.length) return {
-      statusCode: 200, headers: CORS,
-      body: JSON.stringify({ ok: false, error: `Event not found: ${home} v ${away}` })
-    };
+    if (!events?.length) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: `Event not found: ${home} v ${away}` }) };
 
     const eventId = events[0].event.id;
 
-    // Step 2: Find TO_SCORE and SHOTS_ON_TARGET_P1 markets
     const catalogue = await bfCall('listMarketCatalogue', {
-      filter: {
-        eventIds: [eventId],
-        marketTypeCodes: ['TO_SCORE', 'SHOTS_ON_TARGET_P1'],
-      },
+      filter: { eventIds: [eventId], marketTypeCodes: ['TO_SCORE', 'SHOTS_ON_TARGET_P1'] },
       marketProjection: ['RUNNER_DESCRIPTION', 'MARKET_NAME'],
       maxResults: 10
     }, appKey, session);
 
-    if (!catalogue?.length) return {
-      statusCode: 200, headers: CORS,
-      body: JSON.stringify({ ok: false, error: 'No markets found', eventId })
-    };
+    if (!catalogue?.length) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'No markets found', eventId }) };
 
-    // Step 3: Get market books
     const marketIds = catalogue.map(m => m.marketId);
     const books = await bfCall('listMarketBook', {
       marketIds,
       priceProjection: { priceData: ['EX_BEST_OFFERS'] },
     }, appKey, session);
 
-    // Step 4: Build response
     const marketMap = {};
     for (const m of catalogue) marketMap[m.marketId] = m;
-
     const markets = {};
     for (const book of (books || [])) {
       const meta = marketMap[book.marketId];
       if (!meta) continue;
-
       const players = [];
       for (const runner of (book.runners || [])) {
         if (runner.status !== 'ACTIVE') continue;
@@ -99,20 +88,13 @@ exports.handler = async (event) => {
         const lastTraded = runner.lastPriceTraded ?? null;
         players.push({ name, back: bestBack, lastTraded });
       }
-
       players.sort((a, b) => (a.back||999) - (b.back||999));
       markets[meta.marketName] = { marketId: book.marketId, players };
     }
 
-    return {
-      statusCode: 200, headers: CORS,
-      body: JSON.stringify({ ok: true, eventId, markets })
-    };
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, eventId, markets }) };
 
   } catch (err) {
-    return {
-      statusCode: 500, headers: CORS,
-      body: JSON.stringify({ ok: false, error: err.message })
-    };
+    return { statusCode: 500, headers: CORS, body: JSON.stringify({ ok: false, error: err.message }) };
   }
 };
