@@ -25,9 +25,10 @@ exports.handler = async (event) => {
       body: JSON.stringify({ ok: false, error: `Sheet returned HTTP ${res.status}` })
     };
     const text = await res.text();
+    console.log('Sheets response (first 500 chars):', text.substring(0, 500));
     let data;
     try { data = JSON.parse(text); }
-    catch(e) { return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'Sheet response was not valid JSON — check your Apps Script is deployed correctly' }) }; }
+    catch(e) { return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'Non-JSON response: ' + text.substring(0, 200) }) }; }
     return { statusCode: 200, headers: CORS, body: JSON.stringify(data) };
   } catch (err) {
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ ok: false, error: err.message }) };
