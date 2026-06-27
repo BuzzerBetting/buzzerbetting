@@ -303,7 +303,6 @@ input::placeholder{color:var(--text3)}
     <button class="back" onclick="backToTrackerHub()"><i class="ti ti-arrow-left"></i> Bet tracker</button>
     <div class="sec-title">Personal bets</div>
     <div class="grid">
-      <div class="cat" onclick="showTrackerSection('personal','overall')"><div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-chart-pie"></i></div><div><div class="cat-title">Overall</div><div class="cat-desc">Combined personal performance and P&amp;L</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('personal','value')"><div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-trending-up"></i></div><div><div class="cat-title">Value</div><div class="cat-desc">Value betting results and ROI</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('personal','keithbot')"><div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-robot"></i></div><div><div class="cat-title">KeithBot</div><div class="cat-desc">KeithBot bet history and stats</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('personal','dogs')"><div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-activity"></i></div><div><div class="cat-title">Dogs + Horses DogBot</div><div class="cat-desc">Greyhound and horse racing results</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
@@ -332,7 +331,6 @@ input::placeholder{color:var(--text3)}
   </div>
 
   <!-- Personal section views -->
-  <div id="ts-personal-overall" class="tracker-section" style="display:none"><button class="back" onclick="backToTrackerSection('personal')"><i class="ti ti-arrow-left"></i> Personal bets</button><div class="sec-title">Overall</div><div class="card"><div class="ph"><div class="ph-ico"><i class="ti ti-chart-pie"></i></div><div class="ph-t">Not connected yet</div><div class="ph-d">Connect your tracking sheet to see overall personal performance.</div></div></div></div>
   <div id="ts-personal-value" class="tracker-section" style="display:none">
     <button class="back" onclick="backToTrackerSection('personal')"><i class="ti ti-arrow-left"></i> Personal bets</button>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
