@@ -481,8 +481,53 @@ input::placeholder{color:var(--text3)}
 <!-- TODAY -->
 <div id="view-today" class="sec">
   <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
-  <div class="sec-title">Today's stats</div>
-  <div class="card"><div class="ph"><div class="ph-ico"><i class="ti ti-calendar"></i></div><div class="ph-t">Live data not connected yet</div><div class="ph-d">Once your Google Sheet is connected, today's P&amp;L, active bets and settled results will appear here automatically.</div></div></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+    <div class="sec-title" style="margin-bottom:0">Today's stats</div>
+    <button onclick="initToday()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'"><i class="ti ti-refresh"></i> Refresh</button>
+  </div>
+  <div id="today-status" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="today-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="today-status-title">Loading...</div><div class="ph-d" id="today-status-msg"></div></div></div></div>
+  <div id="today-content" style="display:none">
+    <!-- KPI row -->
+    <div class="kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px" id="today-kpis"></div>
+    <!-- Profit probability card -->
+    <div class="card" style="margin-bottom:16px" id="today-prob-card">
+      <div class="card-h">Profit probability — today's bets</div>
+      <div style="padding:20px">
+        <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <span style="font-size:13px;color:var(--text2)">Chance of being up today</span>
+              <span style="font-size:24px;font-weight:700;font-variant-numeric:tabular-nums" id="today-prob-pct">—</span>
+            </div>
+            <div style="background:var(--surface2);border-radius:6px;height:10px;overflow:hidden">
+              <div id="today-prob-bar" style="height:100%;background:var(--green);border-radius:6px;transition:width .6s ease;width:0%"></div>
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-top:6px" id="today-prob-sub">Based on Monte Carlo simulation across today's bets</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;min-width:160px">
+            <div style="display:flex;justify-content:space-between;gap:16px"><span style="font-size:12px;color:var(--text2)">Expected value</span><span style="font-size:12px;font-weight:600;font-variant-numeric:tabular-nums" id="today-prob-ev">—</span></div>
+            <div style="display:flex;justify-content:space-between;gap:16px"><span style="font-size:12px;color:var(--text2)">Unsettled bets</span><span style="font-size:12px;font-weight:600" id="today-prob-open">—</span></div>
+            <div style="display:flex;justify-content:space-between;gap:16px"><span style="font-size:12px;color:var(--text2)">Settled P/L so far</span><span style="font-size:12px;font-weight:600;font-variant-numeric:tabular-nums" id="today-prob-settled">—</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Today's bets table -->
+    <div class="card">
+      <div style="padding:12px 20px;border-bottom:.5px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500" id="today-table-hdr">Today's bets</span>
+        <span style="font-size:11px;color:var(--text3)" id="today-source-tag"></span>
+      </div>
+      <div style="overflow-x:auto;max-height:520px;overflow-y:auto">
+        <table class="dt" style="min-width:640px">
+          <thead style="position:sticky;top:0;z-index:2;background:var(--surface)">
+            <tr><th>Date</th><th>Result</th><th style="min-width:200px">Bet</th><th class="r">Odds</th><th class="r">Stake</th><th class="r">EV</th><th class="r">P/L</th><th>Source</th></tr>
+          </thead>
+          <tbody id="today-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ODDSCHECKER -->
@@ -905,7 +950,7 @@ function checkPin(){
 
 // ── NAVIGATION ──
 function goHome(){document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
-function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();}
+function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();}
 function showCalc(name){document.getElementById('calc-hub').style.display='none';document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='dutch')initDutch();if(name==='arb')initArb();if(name==='gsm')initGSM();}
 function backToCalcHub(){document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
 function showTracker(name){document.getElementById('tracker-hub').style.display='none';document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.getElementById('tracker-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});}
@@ -1375,7 +1420,7 @@ async function openValueSection(){
   if(!url){showValStatus('ti-plug-connected-x','No data connection set up','Go to Bet Tracker and paste your Main Tracking Sheet URL in the Data connections card.');return;}
   showValStatus('ti-loader','Loading...','Fetching Value data from your sheet.');
   try{
-    const r=await fetch(url+'?tab='+encodeURIComponent('Value'));
+    const r=await fetch(`/.netlify/functions/sheets?url=${encodeURIComponent(url)}&tab=${encodeURIComponent('Value')}`);
     const data=await r.json();
     document.getElementById('val-status-card').style.display='none';
     if(!data.ok){showValStatus('ti-alert-circle','Error loading data',data.error||'Unknown error');return;}
@@ -1449,7 +1494,7 @@ async function openAmericanSection(){
   if(!url){showAmStatus('ti-plug-connected-x','No data connection set up','Go to Bet Tracker and paste your Main Tracking Sheet URL in the Data connections card.');return;}
   showAmStatus('ti-loader','Loading...','Fetching American Props data from your sheet.');
   try{
-    const r=await fetch(url+'?tab='+encodeURIComponent('American Props'));
+    const r=await fetch(`/.netlify/functions/sheets?url=${encodeURIComponent(url)}&tab=${encodeURIComponent('American Props')}`);
     const data=await r.json();
     document.getElementById('am-status-card').style.display='none';
     if(!data.ok){showAmStatus('ti-alert-circle','Error loading data',data.error||'Unknown error');return;}
@@ -1522,7 +1567,7 @@ async function openTrkSection(cfg){
   if(!url){showTrkStatus(p,'ti-plug-connected-x','No data connection set up','Go to Bet Tracker and paste your sheet URL in Data connections.');return;}
   showTrkStatus(p,'ti-loader','Loading...','Fetching data from your sheet.');
   try{
-    const r=await fetch(url+'?tab='+encodeURIComponent(cfg.tab));
+    const r=await fetch(`/.netlify/functions/sheets?url=${encodeURIComponent(url)}&tab=${encodeURIComponent(cfg.tab)}`);
     const data=await r.json();
     document.getElementById(p+'-status-card').style.display='none';
     if(!data.ok){showTrkStatus(p,'ti-alert-circle','Error loading data',data.error||'Unknown error');return;}
@@ -1573,8 +1618,162 @@ function trkFinish(p,tbody,rows,summary,recentPL,wins,losses,colspan){
   document.getElementById(p+'-table-wrap').style.display='';
 }
 
-// ── KEITHBOT ──
-function openKeithbotSection(){openTrkSection({prefix:'kbt',tab:'Keithbot',render:renderKeithbotTable});}
+// ── TODAY'S STATS ──
+function todayDateStr(){
+  const d=new Date();
+  return`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+}
+function parseRowDate(raw){
+  if(!raw)return null;
+  const s=String(raw).trim();
+  // DD/MM/YYYY
+  let m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(m)return`${m[1].padStart(2,'0')}/${m[2].padStart(2,'0')}/${m[3]}`;
+  // YYYY-MM-DD
+  m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m)return`${m[3]}/${m[2]}/${m[1]}`;
+  // D/M/YYYY
+  m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if(m){const yr=m[3].length===2?'20'+m[3]:m[3];return`${m[1].padStart(2,'0')}/${m[2].padStart(2,'0')}/${yr}`;}
+  return s;
+}
+
+async function initToday(){
+  const mainUrl=localStorage.getItem('bb_main_url');
+  const vaUrl=localStorage.getItem('bb_va_url');
+  document.getElementById('today-status').style.display='';
+  document.getElementById('today-content').style.display='none';
+  if(!mainUrl&&!vaUrl){
+    showTodayStatus('ti-plug-connected-x','No data connection set up','Go to Bet Tracker and paste your sheet URLs in the Data connections card.');
+    return;
+  }
+  showTodayStatus('ti-loader','Loading...','Fetching today\'s bets from your sheets.');
+  const today=todayDateStr();
+  let allBets=[];
+  // Tabs to check on main sheet (those with Date + Odds + Stake + EV columns)
+  const mainTabs=['Value','American Props','Keithbot','BB Horse','BB Golf','Freeze','Corners'];
+  const fetches=mainTabs.map(async tab=>{
+    if(!mainUrl)return;
+    try{
+      const r=await fetch(`/.netlify/functions/sheets?url=${encodeURIComponent(mainUrl)}&tab=${encodeURIComponent(tab)}`);
+      const d=await r.json();
+      if(d.ok&&d.rows){
+        d.rows.forEach(row=>{
+          const dt=parseRowDate(row['Date']);
+          if(dt===today){
+            allBets.push({
+              source:tab,
+              date:row['Date']||'',
+              bet:row['Bet']||row['Player']||row['Horse']||row['Horse/Trap']||'',
+              result:String(row['Result']||row['Win?']||row['Win/Loss']||'').trim().toLowerCase(),
+              odds:parseFloat(row['Odds']||row['Acca Odds'])||0,
+              stake:parseFloat(row['Stake']||row['Total Stake'])||0,
+              ev:parseFloat(row['EV']||row['EV £']||row['EV£'])||0,
+              pl:parseFloat(row['P/L']||row['Profit/Loss']||row['Actual P/L'])||0,
+            });
+          }
+        });
+      }
+    }catch(e){}
+  });
+  await Promise.allSettled(fetches);
+  document.getElementById('today-status').style.display='none';
+  if(!allBets.length){
+    showTodayStatus('ti-calendar-off','No bets found today','No bets with today\'s date ('+today+') were found across your connected sheets.');
+    document.getElementById('today-status').style.display='';
+    return;
+  }
+  renderToday(allBets,today);
+}
+
+function showTodayStatus(icon,title,msg){
+  document.getElementById('today-status-ico').innerHTML=`<i class="ti ${icon}"></i>`;
+  document.getElementById('today-status-title').textContent=title;
+  document.getElementById('today-status-msg').textContent=msg;
+  document.getElementById('today-status').style.display='';
+}
+
+function renderToday(bets,today){
+  // KPIs
+  const totalBets=bets.length;
+  const totalStaked=bets.reduce((s,b)=>s+b.stake,0);
+  const totalEV=bets.reduce((s,b)=>s+b.ev,0);
+  const avgEV=totalBets?totalEV/totalBets:0;
+  const settledBets=bets.filter(b=>b.result==='w'||b.result==='l'||b.result==='v');
+  const settledPL=settledBets.reduce((s,b)=>s+b.pl,0);
+  const openBets=bets.filter(b=>!b.result||b.result==='');
+
+  const evCol=totalEV>0?'var(--green)':totalEV<0?'var(--red)':'var(--text2)';
+  const plCol=settledPL>0?'var(--green)':settledPL<0?'var(--red)':'var(--text2)';
+  document.getElementById('today-kpis').innerHTML=`
+    <div class="kpi"><div class="kpi-l">Bets today</div><div class="kpi-v">${totalBets}</div><div class="kpi-s">${settledBets.length} settled · ${openBets.length} open</div></div>
+    <div class="kpi"><div class="kpi-l">Total staked</div><div class="kpi-v">£${totalStaked.toFixed(2)}</div></div>
+    <div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:${evCol}">${totalEV>=0?'+':''}£${Math.abs(totalEV).toFixed(2)}</div></div>
+    <div class="kpi"><div class="kpi-l">Avg EV / bet</div><div class="kpi-v" style="color:${evCol}">${avgEV>=0?'+':''}£${Math.abs(avgEV).toFixed(2)}</div></div>
+    <div class="kpi"><div class="kpi-l">Settled P/L</div><div class="kpi-v" style="color:${plCol}">${settledPL>=0?'+':''}£${Math.abs(settledPL).toFixed(2)}</div><div class="kpi-s">${settledBets.length} bets</div></div>`;
+
+  // Monte Carlo profit probability
+  const prob=monteCarloProfitProb(bets,settledPL);
+  const probPct=Math.round(prob*100);
+  const probCol=probPct>=60?'var(--green)':probPct>=40?'var(--amber)':'var(--red)';
+  document.getElementById('today-prob-pct').textContent=probPct+'%';
+  document.getElementById('today-prob-pct').style.color=probCol;
+  document.getElementById('today-prob-bar').style.width=probPct+'%';
+  document.getElementById('today-prob-bar').style.background=probCol;
+  document.getElementById('today-prob-ev').textContent=`${totalEV>=0?'+':''}£${Math.abs(totalEV).toFixed(2)}`;
+  document.getElementById('today-prob-ev').style.color=evCol;
+  document.getElementById('today-prob-open').textContent=openBets.length+' bets';
+  document.getElementById('today-prob-settled').textContent=`${settledPL>=0?'+':''}£${Math.abs(settledPL).toFixed(2)}`;
+  document.getElementById('today-prob-settled').style.color=plCol;
+  document.getElementById('today-prob-sub').textContent=
+    `10,000 simulations · ${openBets.length} open bet${openBets.length!==1?'s':''} · settled P/L locked in`;
+
+  // Table
+  const tbody=document.getElementById('today-tbody');
+  tbody.innerHTML='';
+  bets.forEach(b=>{
+    const res=b.result;
+    let badge='<span style="color:var(--text3)">Open</span>';
+    if(res==='w')badge=`<span class="badge" style="background:var(--green-bg);color:var(--green);font-weight:600">W</span>`;
+    else if(res==='l')badge=`<span class="badge" style="background:var(--red-bg);color:var(--red)">L</span>`;
+    else if(res==='v')badge=`<span class="badge" style="background:var(--amber-bg);color:var(--amber)">V</span>`;
+    const plStr=b.pl===0&&!res?'—':`${b.pl>=0?'+':''}£${Math.abs(b.pl).toFixed(2)}`;
+    const plC=b.pl>0?'var(--green)':b.pl<0?'var(--red)':'var(--text2)';
+    const evStr=b.ev===0?'—':`${b.ev>=0?'+':''}£${Math.abs(b.ev).toFixed(2)}`;
+    const evC=b.ev>0?'var(--green)':b.ev<0?'var(--red)':'var(--text2)';
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td style="font-size:12px;white-space:nowrap">${b.date}</td><td>${badge}</td><td style="font-weight:500;font-size:13px">${b.bet}</td><td class="r tn">${b.odds>0?b.odds.toFixed(2):'—'}</td><td class="r tn">£${b.stake.toFixed(2)}</td><td class="r tn" style="color:${evC}">${evStr}</td><td class="r tn" style="color:${plC};font-weight:500">${plStr}</td><td style="font-size:11px;color:var(--text3)">${b.source}</td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('today-table-hdr').textContent=`${totalBets} bet${totalBets!==1?'s':''} — ${today}`;
+  document.getElementById('today-content').style.display='';
+}
+
+function monteCarloProfitProb(bets,settledPL){
+  // Only simulate open bets; settled P/L is fixed
+  const open=bets.filter(b=>!b.result||b.result==='');
+  if(!open.length){
+    // All settled — just check if total PL > 0
+    return settledPL>0?1:settledPL===0?0.5:0;
+  }
+  const SIMS=10000;
+  let profitable=0;
+  for(let i=0;i<SIMS;i++){
+    let simPL=settledPL;
+    open.forEach(b=>{
+      const winProb=b.odds>1?1/b.odds:0.5;
+      if(Math.random()<winProb){
+        simPL+=b.stake*(b.odds-1);
+      }else{
+        simPL-=b.stake;
+      }
+    });
+    if(simPL>0)profitable++;
+  }
+  return profitable/SIMS;
+}
+
+
 function renderKeithbotTable(rows,summary){
   const tbody=document.getElementById('kbt-tbody');tbody.innerHTML='';
   let wins=0,losses=0,pl=0;
@@ -1742,7 +1941,7 @@ async function openDogsSection(){
   if(!url){showDogsStatus('ti-plug-connected-x','No data connection set up','Go back to Bet Tracker and paste your Main Tracking Sheet URL in the Data connections card.');return;}
   showDogsStatus('ti-loader','Loading...','Fetching Dogs + Horses data from your sheet.');
   try{
-    const r=await fetch(url+'?tab='+encodeURIComponent('Dogs + Horses'));
+    const r=await fetch(`/.netlify/functions/sheets?url=${encodeURIComponent(url)}&tab=${encodeURIComponent('Dogs + Horses')}`);
     const data=await r.json();
     document.getElementById('dogs-status-card').style.display='none';
     if(!data.ok){showDogsStatus('ti-alert-circle','Error loading data',data.error||'Unknown error');return;}
