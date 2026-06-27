@@ -279,8 +279,23 @@ input::placeholder{color:var(--text3)}
   <!-- Overall Bets -->
   <div id="tracker-overall" class="tracker-view" style="display:none">
     <button class="back" onclick="backToTrackerHub()"><i class="ti ti-arrow-left"></i> Bet tracker</button>
-    <div class="sec-title">Overall bets</div>
-    <div class="card"><div class="ph"><div class="ph-ico"><i class="ti ti-chart-pie"></i></div><div class="ph-t">Not connected yet</div><div class="ph-d">Combined view of all personal and VA bet activity, P&amp;L and performance across every tab.</div></div></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+      <div class="sec-title" style="margin-bottom:0">Overall bets</div>
+      <button onclick="openOverallSection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor=&apos;var(--brand)&apos;;this.style.color=&apos;var(--brand)&apos;" onmouseout="this.style.borderColor=&apos;var(--border)&apos;;this.style.color=&apos;var(--text2)&apos;"><i class="ti ti-refresh"></i> Refresh</button>
+    </div>
+    <div id="ov-status" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="ov-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="ov-status-title">Loading...</div><div class="ph-d" id="ov-status-msg"></div></div></div></div>
+    <div id="ov-content" style="display:none">
+      <div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px" id="ov-kpis"></div>
+      <div class="card">
+        <div class="card-h">Breakdown by tab</div>
+        <div style="overflow-x:auto">
+          <table class="dt" style="min-width:640px">
+            <thead><tr><th>Tab</th><th class="r">Bets</th><th class="r">Wins</th><th class="r">Losses</th><th class="r">Win Rate</th><th class="r">Total Staked</th><th class="r">Total EV</th><th class="r">Total P/L</th></tr></thead>
+            <tbody id="ov-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Personal Bets hub -->
@@ -953,7 +968,7 @@ function goHome(){document.getElementById('view-home').style.display='';document
 function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();}
 function showCalc(name){document.getElementById('calc-hub').style.display='none';document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='dutch')initDutch();if(name==='arb')initArb();if(name==='gsm')initGSM();}
 function backToCalcHub(){document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
-function showTracker(name){document.getElementById('tracker-hub').style.display='none';document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.getElementById('tracker-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});}
+function showTracker(name){document.getElementById('tracker-hub').style.display='none';document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.getElementById('tracker-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='overall')openOverallSection();}
 function backToTrackerHub(){document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('tracker-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
 function showTrackerSection(parent,name){document.getElementById('tracker-'+parent).style.display='none';document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('ts-'+parent+'-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(parent==='personal'&&name==='dogs')openDogsSection();if(parent==='personal'&&name==='american')openAmericanSection();if(parent==='personal'&&name==='value')openValueSection();if(parent==='personal'&&name==='keithbot')openKeithbotSection();if(parent==='personal'&&name==='bbhorses')openBBHorseSection();if(parent==='personal'&&name==='bbgolf')openBBGolfSection();if(parent==='personal'&&name==='freeze')openFreezeSection();if(parent==='personal'&&name==='ninja')openNinjaSection();if(parent==='personal'&&name==='corners')openCornersSection();if(parent==='personal'&&name==='other')openOtherSection();}
 function backToTrackerSection(parent){document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('tracker-'+parent).style.display='block';window.scrollTo({top:0,behavior:'smooth'});}
@@ -1778,6 +1793,100 @@ function monteCarloProfitProb(bets,settledPL){
   return profitable/SIMS;
 }
 
+
+// ── OVERALL ──
+const OVERALL_TABS = [
+  {tab:'Value', label:'Value', hasEV:true},
+  {tab:'Keithbot', label:'KeithBot', hasEV:true},
+  {tab:'Dogs + Horses', label:'Dogs + Horses', hasEV:false},
+  {tab:'BB Horse', label:'BB Horses', hasEV:true},
+  {tab:'BB Golf', label:'BB Golf', hasEV:true},
+  {tab:'American Props', label:'American Props', hasEV:true},
+  {tab:'Freeze', label:'Freeze', hasEV:true},
+  {tab:'Ninja Golf BFEX', label:'Ninja Golf BFEX', hasEV:false},
+  {tab:'Corners', label:'Corners', hasEV:false},
+];
+
+async function openOverallSection(){
+  const url = localStorage.getItem('bb_main_url');
+  document.getElementById('ov-status').style.display='';
+  document.getElementById('ov-content').style.display='none';
+  if(!url){
+    document.getElementById('ov-status-ico').innerHTML='<i class="ti ti-plug-connected-x"></i>';
+    document.getElementById('ov-status-title').textContent='No data connection set up';
+    document.getElementById('ov-status-msg').textContent='Go to Bet Tracker and paste your Main Tracking Sheet URL in the Data connections card.';
+    return;
+  }
+  document.getElementById('ov-status-ico').innerHTML='<i class="ti ti-loader"></i>';
+  document.getElementById('ov-status-title').textContent='Loading...';
+  document.getElementById('ov-status-msg').textContent='Fetching stats from all tabs — this may take a moment.';
+
+  const results = await Promise.allSettled(OVERALL_TABS.map(async t => {
+    const r = await fetch('/.netlify/functions/sheets?url='+encodeURIComponent(url)+'&tab='+encodeURIComponent(t.tab));
+    const d = await r.json();
+    return {...t, summary: d.ok ? d.summary : null};
+  }));
+
+  document.getElementById('ov-status').style.display='none';
+
+  let grandBets=0, grandStake=0, grandEV=0, grandPL=0, grandWins=0, grandLosses=0;
+  const tbody = document.getElementById('ov-tbody');
+  tbody.innerHTML='';
+  const fmt = n => Math.abs(n).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+
+  results.forEach(r => {
+    if(r.status !== 'fulfilled') return;
+    const {label, hasEV, summary} = r.value;
+    if(!summary) {
+      const tr = document.createElement('tr');
+      tr.innerHTML='<td style="font-weight:500">'+label+'</td><td class="r tn" colspan="7" style="color:var(--text3)">Could not load</td>';
+      tbody.appendChild(tr); return;
+    }
+    const bets=summary.totalBets||0, wins=summary.wins||0, losses=summary.losses||0;
+    const stake=summary.totalStake||0, ev=summary.totalEV||0, pl=summary.totalPL||0;
+    const wr = bets>0?((wins/bets)*100).toFixed(1)+'%':'--';
+    const plCol = pl>0?'var(--green)':pl<0?'var(--red)':'var(--text2)';
+    const evCol = ev>0?'var(--green)':ev<0?'var(--red)':'var(--text2)';
+    grandBets+=bets; grandStake+=stake; grandEV+=ev; grandPL+=pl; grandWins+=wins; grandLosses+=losses;
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td style="font-weight:500">'+label+'</td>'+
+      '<td class="r tn">'+bets.toLocaleString()+'</td>'+
+      '<td class="r tn" style="color:var(--green)">'+wins.toLocaleString()+'</td>'+
+      '<td class="r tn" style="color:var(--red)">'+losses.toLocaleString()+'</td>'+
+      '<td class="r tn">'+wr+'</td>'+
+      '<td class="r tn">£'+fmt(stake)+'</td>'+
+      '<td class="r tn" style="color:'+evCol+'">'+(hasEV?(ev>=0?'+':'')+'£'+fmt(ev):'--')+'</td>'+
+      '<td class="r tn" style="color:'+plCol+';font-weight:500">'+(pl>=0?'+':'')+'£'+fmt(pl)+'</td>';
+    tbody.appendChild(tr);
+  });
+
+  const tPlCol = grandPL>0?'var(--green)':grandPL<0?'var(--red)':'var(--text2)';
+  const tEvCol = grandEV>0?'var(--green)':grandEV<0?'var(--red)':'var(--text2)';
+  const tWr = grandBets>0?((grandWins/grandBets)*100).toFixed(1)+'%':'--';
+  const ft = document.createElement('tr');
+  ft.style.cssText='background:var(--surface2);border-top:1px solid var(--border)';
+  ft.innerHTML =
+    '<td style="font-weight:700">Total</td>'+
+    '<td class="r tn" style="font-weight:600">'+grandBets.toLocaleString()+'</td>'+
+    '<td class="r tn" style="color:var(--green);font-weight:600">'+grandWins.toLocaleString()+'</td>'+
+    '<td class="r tn" style="color:var(--red);font-weight:600">'+grandLosses.toLocaleString()+'</td>'+
+    '<td class="r tn" style="font-weight:600">'+tWr+'</td>'+
+    '<td class="r tn" style="font-weight:600">£'+fmt(grandStake)+'</td>'+
+    '<td class="r tn" style="color:'+tEvCol+';font-weight:600">'+(grandEV>=0?'+':'')+'£'+fmt(grandEV)+'</td>'+
+    '<td class="r tn" style="color:'+tPlCol+';font-weight:700">'+(grandPL>=0?'+':'')+'£'+fmt(grandPL)+'</td>';
+  tbody.appendChild(ft);
+
+  const plCol = grandPL>0?'var(--green)':grandPL<0?'var(--red)':'var(--text2)';
+  const evCol = grandEV>0?'var(--green)':grandEV<0?'var(--red)':'var(--text2)';
+  document.getElementById('ov-kpis').innerHTML =
+    '<div class="kpi"><div class="kpi-l">Total bets</div><div class="kpi-v">'+grandBets.toLocaleString()+'</div><div class="kpi-s">Win rate '+tWr+'</div></div>'+
+    '<div class="kpi"><div class="kpi-l">Total staked</div><div class="kpi-v">£'+fmt(grandStake)+'</div></div>'+
+    '<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:'+evCol+'">'+(grandEV>=0?'+':'')+'£'+fmt(grandEV)+'</div></div>'+
+    '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+(grandPL>=0?'+':'')+'£'+fmt(grandPL)+'</div></div>';
+
+  document.getElementById('ov-content').style.display='';
+}
 
 // ── KEITHBOT ──
 function openKeithbotSection(){openTrkSection({prefix:'kbt',tab:'Keithbot',render:renderKeithbotTable});}
