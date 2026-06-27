@@ -1482,10 +1482,10 @@ function renderValueTable(rows,summary){
   const displayPL=allTimePL!=null?allTimePL:recentPL;
   document.getElementById('val-kpis').innerHTML=`
     <div class="kpi"><div class="kpi-l">Total bets</div><div class="kpi-v">${total.toLocaleString()}</div><div class="kpi-s">Win rate ${allWR}</div></div>
-    <div class="kpi"><div class="kpi-l">Wins</div><div class="kpi-v" style="color:var(--green)">${tW.toLocaleString()}</div><div class="kpi-s">Last 50: ${l50w}</div></div>
-    <div class="kpi"><div class="kpi-l">Losses</div><div class="kpi-v" style="color:var(--red)">${tL.toLocaleString()}</div><div class="kpi-s">Last 50: ${l50l}</div></div>
+    <div class="kpi"><div class="kpi-l">Wins</div><div class="kpi-v" style="color:var(--green)">${tW.toLocaleString()}</div><div class="kpi-s">Last 100: ${l50w}</div></div>
+    <div class="kpi"><div class="kpi-l">Losses</div><div class="kpi-v" style="color:var(--red)">${tL.toLocaleString()}</div><div class="kpi-s">Last 100: ${l50l}</div></div>
     <div class="kpi"><div class="kpi-l">All-time P/L</div><div class="kpi-v" style="color:${plCol}">${displayPL>=0?'+':''}£${Math.abs(displayPL).toFixed(2)}</div></div>
-    <div class="kpi"><div class="kpi-l">Recent P/L</div><div class="kpi-v" style="color:${recentPL>0?'var(--green)':recentPL<0?'var(--red)':'var(--text2)'}">${recentPL>=0?'+':''}£${Math.abs(recentPL).toFixed(2)}</div><div class="kpi-s">Last 50 bets</div></div>`;
+    <div class="kpi"><div class="kpi-l">Recent P/L</div><div class="kpi-v" style="color:${recentPL>0?'var(--green)':recentPL<0?'var(--red)':'var(--text2)'}">${recentPL>=0?'+':''}£${Math.abs(recentPL).toFixed(2)}</div><div class="kpi-s">Last 100 bets</div></div>`;
   document.getElementById('val-table-hdr').textContent=`Most recent ${rows.length} bets`;
   document.getElementById('val-kpi-wrap').style.display='';
   document.getElementById('val-table-wrap').style.display='';
@@ -1545,17 +1545,18 @@ function renderAmericanTable(rows,summary){
   }
   const totalWinsAm=summary.wins!=null?summary.wins:wins;
   const totalLossesAm=summary.losses!=null?summary.losses:losses;
+  const l100wAm=summary.last50wins!=null?summary.last50wins:wins;
+  const l100lAm=summary.last50losses!=null?summary.last50losses:losses;
   const allTimeWRAm=total>0?(totalWinsAm/total*100).toFixed(1)+'%':'—';
-  const wr=rows.length>0?(wins/rows.length*100).toFixed(1)+'%':'—';
   const plCol=allTimePL!=null?(allTimePL>0?'var(--green)':allTimePL<0?'var(--red)':'var(--text2)'):(recentPL>0?'var(--green)':recentPL<0?'var(--red)':'var(--text2)');
   const displayPL=allTimePL!=null?allTimePL:recentPL;
   const evCol=recentEV>0?'var(--green)':recentEV<0?'var(--red)':'var(--text2)';
   document.getElementById('am-kpis').innerHTML=`
     <div class="kpi"><div class="kpi-l">Total bets</div><div class="kpi-v">${total.toLocaleString()}</div><div class="kpi-s">Win rate ${allTimeWRAm}</div></div>
-    <div class="kpi"><div class="kpi-l">Wins</div><div class="kpi-v" style="color:var(--green)">${totalWinsAm.toLocaleString()}</div><div class="kpi-s">Last 50: ${wins}</div></div>
-    <div class="kpi"><div class="kpi-l">Losses</div><div class="kpi-v" style="color:var(--red)">${totalLossesAm.toLocaleString()}</div><div class="kpi-s">Last 50: ${losses}</div></div>
+    <div class="kpi"><div class="kpi-l">Wins</div><div class="kpi-v" style="color:var(--green)">${totalWinsAm.toLocaleString()}</div><div class="kpi-s">Last 100: ${l100wAm}</div></div>
+    <div class="kpi"><div class="kpi-l">Losses</div><div class="kpi-v" style="color:var(--red)">${totalLossesAm.toLocaleString()}</div><div class="kpi-s">Last 100: ${l100lAm}</div></div>
     <div class="kpi"><div class="kpi-l">All-time P/L</div><div class="kpi-v" style="color:${plCol}">${displayPL>=0?'+':''}£${Math.abs(displayPL).toFixed(2)}</div></div>
-    <div class="kpi"><div class="kpi-l">Recent EV £</div><div class="kpi-v" style="color:${evCol}">${recentEV>=0?'+':''}£${Math.abs(recentEV).toFixed(2)}</div><div class="kpi-s">Last 50 bets</div></div>`;
+    <div class="kpi"><div class="kpi-l">Recent EV £</div><div class="kpi-v" style="color:${evCol}">${recentEV>=0?'+':''}£${Math.abs(recentEV).toFixed(2)}</div><div class="kpi-s">Last 100 bets</div></div>`;
   document.getElementById('am-table-hdr').textContent=`Most recent ${rows.length} bets`;
   document.getElementById('am-kpi-wrap').style.display='';
   document.getElementById('am-table-wrap').style.display='';
@@ -1607,14 +1608,16 @@ function trkFinish(p,tbody,rows,summary,recentPL,wins,losses,colspan){
     tbody.appendChild(ft);
   }
   const allWR=total>0?(tW/total*100).toFixed(1)+'%':'—';
+  const l100w=summary.last50wins!=null?summary.last50wins:wins;
+  const l100l=summary.last50losses!=null?summary.last50losses:losses;
   const plCol=allTimePL!=null?(allTimePL>0?'var(--green)':allTimePL<0?'var(--red)':'var(--text2)'):(recentPL>0?'var(--green)':recentPL<0?'var(--red)':'var(--text2)');
   const displayPL=allTimePL!=null?allTimePL:recentPL;
   document.getElementById(p+'-kpis').innerHTML=`
     <div class="kpi"><div class="kpi-l">Total bets</div><div class="kpi-v">${total.toLocaleString()}</div><div class="kpi-s">Win rate ${allWR}</div></div>
-    <div class="kpi"><div class="kpi-l">Wins</div><div class="kpi-v" style="color:var(--green)">${tW.toLocaleString()}</div><div class="kpi-s">Last 50: ${wins}</div></div>
-    <div class="kpi"><div class="kpi-l">Losses</div><div class="kpi-v" style="color:var(--red)">${tL.toLocaleString()}</div><div class="kpi-s">Last 50: ${losses}</div></div>
+    <div class="kpi"><div class="kpi-l">Wins</div><div class="kpi-v" style="color:var(--green)">${tW.toLocaleString()}</div><div class="kpi-s">Last 100: ${l100w}</div></div>
+    <div class="kpi"><div class="kpi-l">Losses</div><div class="kpi-v" style="color:var(--red)">${tL.toLocaleString()}</div><div class="kpi-s">Last 100: ${l100l}</div></div>
     <div class="kpi"><div class="kpi-l">All-time P/L</div><div class="kpi-v" style="color:${plCol}">${displayPL>=0?'+':''}£${Math.abs(displayPL).toFixed(2)}</div></div>
-    <div class="kpi"><div class="kpi-l">Recent P/L</div><div class="kpi-v" style="color:${recentPL>0?'var(--green)':recentPL<0?'var(--red)':'var(--text2)'}">${recentPL>=0?'+':''}£${Math.abs(recentPL).toFixed(2)}</div><div class="kpi-s">Last 50 bets</div></div>`;
+    <div class="kpi"><div class="kpi-l">Recent P/L</div><div class="kpi-v" style="color:${recentPL>0?'var(--green)':recentPL<0?'var(--red)':'var(--text2)'}">${recentPL>=0?'+':''}£${Math.abs(recentPL).toFixed(2)}</div><div class="kpi-s">Last 100 bets</div></div>`;
   document.getElementById(p+'-table-hdr').textContent=`Most recent ${rows.length} bets`;
   document.getElementById(p+'-kpi-wrap').style.display='';
   document.getElementById(p+'-table-wrap').style.display='';
@@ -2002,10 +2005,10 @@ function renderDogsTable(rows,summary){
   const displayPL=allTimePL!=null?allTimePL:recentPL;
   document.getElementById('dogs-kpis').innerHTML=`
     <div class="kpi"><div class="kpi-l">Total bets</div><div class="kpi-v">${total.toLocaleString()}</div><div class="kpi-s">Win rate ${allTimeWR}</div></div>
-    <div class="kpi"><div class="kpi-l">Wins</div><div class="kpi-v" style="color:var(--green)">${totalWins.toLocaleString()}</div><div class="kpi-s">Last 50: ${wins}</div></div>
-    <div class="kpi"><div class="kpi-l">Losses</div><div class="kpi-v" style="color:var(--red)">${totalLosses.toLocaleString()}</div><div class="kpi-s">Last 50: ${losses}${totalVoids?` · ${totalVoids} void`:''}</div></div>
+    <div class="kpi"><div class="kpi-l">Wins</div><div class="kpi-v" style="color:var(--green)">${totalWins.toLocaleString()}</div><div class="kpi-s">Last 100: ${wins}</div></div>
+    <div class="kpi"><div class="kpi-l">Losses</div><div class="kpi-v" style="color:var(--red)">${totalLosses.toLocaleString()}</div><div class="kpi-s">Last 100: ${losses}${totalVoids?` · ${totalVoids} void`:''}</div></div>
     <div class="kpi"><div class="kpi-l">All-time P/L</div><div class="kpi-v" style="color:${plCol}">${displayPL>=0?'+':''}£${Math.abs(displayPL).toFixed(2)}</div></div>
-    <div class="kpi"><div class="kpi-l">Recent P/L</div><div class="kpi-v" style="color:${recentPL>0?'var(--green)':recentPL<0?'var(--red)':'var(--text2)'}">${recentPL>=0?'+':''}£${Math.abs(recentPL).toFixed(2)}</div><div class="kpi-s">Last 50 bets</div></div>`;
+    <div class="kpi"><div class="kpi-l">Recent P/L</div><div class="kpi-v" style="color:${recentPL>0?'var(--green)':recentPL<0?'var(--red)':'var(--text2)'}">${recentPL>=0?'+':''}£${Math.abs(recentPL).toFixed(2)}</div><div class="kpi-s">Last 100 bets</div></div>`;
   document.getElementById('dogs-table-hdr').textContent=`Most recent ${rows.length} bets`;
   document.getElementById('dogs-kpi-wrap').style.display='';
   document.getElementById('dogs-table-wrap').style.display='';
