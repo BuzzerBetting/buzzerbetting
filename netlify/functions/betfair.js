@@ -9,11 +9,12 @@ async function getSessionToken(appKey) {
   const username = process.env.BFEX_USERNAME;
   const password = process.env.BFEX_PASSWORD;
   if (!username || !password) throw new Error('BFEX_USERNAME or BFEX_PASSWORD not set');
-  const res = await fetch('https://identitysso-cert.betfair.com/api/certlogin', {
+  const res = await fetch('https://identitysso.betfair.com/api/login', {
     method: 'POST',
     headers: {
       'X-Application': appKey,
       'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': 'application/json'
     },
     body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
   });
@@ -22,8 +23,8 @@ async function getSessionToken(appKey) {
   let data;
   try { data = JSON.parse(text); }
   catch(e) { throw new Error('Login returned non-JSON: ' + text.substring(0, 200)); }
-  if (data.loginStatus !== 'SUCCESS') throw new Error(`Login failed: ${data.loginStatus}`);
-  return data.sessionToken;
+  if (data.status !== 'SUCCESS') throw new Error(`Login failed: ${data.status} - ${data.error||''}`);
+  return data.token;
 }
 
 async function bfCall(method, params, appKey, session) {
