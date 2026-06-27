@@ -1779,6 +1779,8 @@ function monteCarloProfitProb(bets,settledPL){
 }
 
 
+// ── KEITHBOT ──
+function openKeithbotSection(){openTrkSection({prefix:'kbt',tab:'Keithbot',render:renderKeithbotTable});}
 function renderKeithbotTable(rows,summary){
   const tbody=document.getElementById('kbt-tbody');tbody.innerHTML='';
   let wins=0,losses=0,pl=0;
