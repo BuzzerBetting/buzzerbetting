@@ -3653,17 +3653,54 @@ async function scanOC(matchId, home, away, competition, btn) {
         .then(r => r.json()).catch(() => ({ ok: false }))
     ]);
 
-    // Build Betfair price lookup: normalised player name → { back, lastTraded }
+    // Build Betfair price lookup: normalised player name → full runner data
     const bfexByName = {};
     if (bfexData && bfexData.ok && bfexData.markets) {
       for (const mkt of Object.values(bfexData.markets)) {
         for (const p of (mkt.players ?? [])) {
           const key = normName(p.name);
-          if (!bfexByName[key] || (p.back && p.back < (bfexByName[key].back ?? 999))) {
-            bfexByName[key] = { back: p.back, lastTraded: p.lastTraded };
-          }
+          if (!bfexByName[key]) bfexByName[key] = p;
         }
       }
+    }
+
+    // Derive fair price and confidence from runner data
+    function deriveBfexFair(runner) {
+      if (!runner) return { fair: null, confidence: 'none' };
+      const totalMatched = runner.totalMatched ?? 0;
+      const lpm = runner.lastPriceTraded ?? null;
+
+      // Red — not enough to conclude
+      if (totalMatched < 100 || !lpm) return { fair: null, confidence: 'red' };
+
+      const bestBack = runner.back?.[0]?.price ?? null;
+      const bestBackSize = runner.back?.[0]?.size ?? 0;
+      const bestLay = runner.lay?.[0]?.price ?? null;
+      const bestLaySize = runner.lay?.[0]?.size ?? 0;
+
+      // Determine fair price
+      let fair = lpm;
+
+      // If back price is higher than LPM with £100+ available, use back price
+      if (bestBack && bestBack > lpm && bestBackSize >= 100) {
+        fair = bestBack;
+      }
+      // If clean spread (back and lay within 15% of LPM) with lay liquidity, use midpoint
+      else if (bestBack && bestLay && bestLaySize >= 10) {
+        const spread = (bestLay - bestBack) / lpm;
+        if (spread <= 0.15) fair = parseFloat(((bestBack + bestLay) / 2).toFixed(2));
+      }
+
+      // Confidence level
+      const wideSpread = bestBack && bestLay ? (bestLay - bestBack) / lpm > 0.15 : true;
+      let confidence;
+      if (totalMatched >= 500 && !wideSpread && bestLaySize >= 10) {
+        confidence = 'green';
+      } else {
+        confidence = 'yellow';
+      }
+
+      return { fair, confidence };
     }
 
     // Step 2: Parse OC odds into lookup by market → player name
@@ -3858,9 +3895,10 @@ async function scanOC(matchId, home, away, competition, btn) {
 
         const bestEv = Math.max(...evTfs.map(t => parseFloat(t.ev)));
 
-        // Look up Betfair exchange price for this player
+        // Look up Betfair exchange data for this player
         const bfexEntry = Object.entries(bfexByName).find(([k]) => fuzzyMatch(k, player.name));
-        const bfexPrice = bfexEntry ? (bfexEntry[1].back ?? bfexEntry[1].lastTraded ?? null) : null;
+        const bfexRunner = bfexEntry ? bfexEntry[1] : null;
+        const { fair: bfexPrice, confidence: bfexConfidence } = deriveBfexFair(bfexRunner);
         const bfexEv = bfexPrice ? (((bfexPrice / (market.needsAGS ? ags : sotV)) - 1) * 100) : null;
 
         evBets.push({
@@ -3871,6 +3909,7 @@ async function scanOC(matchId, home, away, competition, btn) {
           bookie: ocBook,
           bfexPrice,
           bfexEv,
+          bfexConfidence,
           tfs,
           bestEv,
           isConfident
@@ -3925,13 +3964,17 @@ function renderEVResults(home, away, bets) {
     tr.style.cssText = rowStyle;
 
     // BFEX price cell
-    let bfexCell = `<td class="r tn" style="color:var(--text3)">—</td><td class="r">—</td>`;
-    if (bet.bfexPrice) {
+    let bfexCell;
+    if (!bet.bfexPrice || bet.bfexConfidence === 'red') {
+      // Red dash — not enough to conclude
+      bfexCell = `<td class="r tn" style="color:var(--red)">—</td><td class="r">—</td>`;
+    } else {
       const bfexEvVal = bet.bfexEv;
-      const bfexCol = bfexEvVal > 0 ? 'var(--green)' : 'var(--red)';
-      const bfexBg  = bfexEvVal > 0 ? 'var(--green-bg)' : 'var(--surface2)';
-      bfexCell = `<td class="r tn" style="color:var(--purple);font-weight:500">${parseFloat(bet.bfexPrice).toFixed(2)}</td>` +
-        `<td class="r"><span class="badge" style="background:${bfexBg};color:${bfexCol}">${bfexEvVal > 0 ? '+' : ''}${bfexEvVal.toFixed(1)}%</span></td>`;
+      const evCol = bfexEvVal > 0 ? 'var(--green)' : 'var(--red)';
+      const evBgBfex = bfexEvVal > 0 ? 'var(--green-bg)' : 'var(--surface2)';
+      const priceCol = bet.bfexConfidence === 'green' ? 'var(--green)' : 'var(--amber)';
+      bfexCell = `<td class="r tn" style="color:${priceCol};font-weight:500">${parseFloat(bet.bfexPrice).toFixed(2)}</td>` +
+        `<td class="r"><span class="badge" style="background:${evBgBfex};color:${evCol}">${bfexEvVal > 0 ? '+' : ''}${bfexEvVal.toFixed(1)}%</span></td>`;
     }
 
     tr.innerHTML = `
