@@ -17,6 +17,7 @@ async function bfCall(method, params, appKey, session) {
     body: JSON.stringify(params)
   });
   const text = await res.text();
+  console.log(`[BF] ${method} status:${res.status} body:`, text.substring(0, 300));
   if (text.trim().startsWith('<')) throw new Error('SESSION_EXPIRED');
   const data = JSON.parse(text);
   if (data.faultcode) throw new Error(data.faultstring || JSON.stringify(data));
