@@ -3649,7 +3649,7 @@ async function scanOC(matchId, home, away, competition, btn) {
       fetch(`/.netlify/functions/lineups?matchId=${matchId}`)
         .then(r => r.json()).catch(() => ({ ok: false })),
       fetchBBOdds(matchId, home, away),
-      fetch(`http://178.128.40.248:3000/api/betfair?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`)
+      fetch(`/.netlify/functions/betfair-proxy?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`)
         .then(r => r.json()).catch(() => ({ ok: false }))
     ]);
 
