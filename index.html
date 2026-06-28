@@ -3515,10 +3515,10 @@ function renderCEVFixtures(leagues) {
           <span style="font-size:13px;font-weight:500">${m.home} v ${m.away}</span>
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <input placeholder="Header ID" value="${saved[0]}" id="mid-${key}-0" style="width:120px;padding:5px 8px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:11px;font-family:inherit">
-          <input placeholder="OTB ID" value="${saved[1]}" id="mid-${key}-1" style="width:120px;padding:5px 8px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:11px;font-family:inherit">
-          <input placeholder="Headed SOT ID" value="${saved[2]}" id="mid-${key}-2" style="width:120px;padding:5px 8px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:11px;font-family:inherit">
-          <input placeholder="SOT OTB ID" value="${saved[3]}" id="mid-${key}-3" style="width:120px;padding:5px 8px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:11px;font-family:inherit">
+          <input placeholder="Header ID" value="${saved[0]}" id="mid-${key}-0" oninput="saveOCMarketId('${key}',[0,1,2,3].map(i=>document.getElementById('mid-${key}-'+i)?.value.trim()||'').join(','))" style="width:120px;padding:5px 8px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:11px;font-family:inherit">
+          <input placeholder="OTB ID" value="${saved[1]}" id="mid-${key}-1" oninput="saveOCMarketId('${key}',[0,1,2,3].map(i=>document.getElementById('mid-${key}-'+i)?.value.trim()||'').join(','))" style="width:120px;padding:5px 8px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:11px;font-family:inherit">
+          <input placeholder="Headed SOT ID" value="${saved[2]}" id="mid-${key}-2" oninput="saveOCMarketId('${key}',[0,1,2,3].map(i=>document.getElementById('mid-${key}-'+i)?.value.trim()||'').join(','))" style="width:120px;padding:5px 8px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:11px;font-family:inherit">
+          <input placeholder="SOT OTB ID" value="${saved[3]}" id="mid-${key}-3" oninput="saveOCMarketId('${key}',[0,1,2,3].map(i=>document.getElementById('mid-${key}-'+i)?.value.trim()||'').join(','))" style="width:120px;padding:5px 8px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:11px;font-family:inherit">
           <button onclick="scanOC('${m.id}','${m.home.replace(/'/g,"\\'")}','${m.away.replace(/'/g,"\\'")}','${league.name.replace(/'/g,"\\'")}',this)"
             style="background:var(--surface2);border:.5px solid var(--border);border-radius:var(--radius);padding:6px 14px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--text2);white-space:nowrap;transition:all .15s"
             onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'"
@@ -3568,10 +3568,20 @@ function getOCCompSlug(c) {
   for(const[k,v]of Object.entries(map))if(s.includes(k))return v;
   return slugifyOC(c);
 }
-const OC_MARKET_IDS = {
+const OC_MARKET_IDS_DEFAULT = {
   'norway-v-france': '3584916118,3584916120,3585092326,3585077698',
   'senegal-v-iraq':  '3584926835,3584926838,3585094430,3585077705',
 };
+// Merge with any saved in localStorage
+const OC_MARKET_IDS_SAVED = JSON.parse(localStorage.getItem('bb_oc_market_ids') || '{}');
+const OC_MARKET_IDS = { ...OC_MARKET_IDS_DEFAULT, ...OC_MARKET_IDS_SAVED };
+
+function saveOCMarketId(key, ids) {
+  const saved = JSON.parse(localStorage.getItem('bb_oc_market_ids') || '{}');
+  saved[key] = ids;
+  localStorage.setItem('bb_oc_market_ids', JSON.stringify(saved));
+  OC_MARKET_IDS[key] = ids;
+}
 
 async function fetchWHSotOtb(home, away) {
   try {
