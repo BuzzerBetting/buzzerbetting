@@ -3643,7 +3643,7 @@ async function scanOC(matchId, home, away, competition, btn) {
     btn.innerHTML = '<i class="ti ti-loader"></i> Fetching odds...';
 
     // Step 1: Fetch OC odds, lineups, BB odds and Betfair exchange prices in parallel
-    const [ocRaw, lineupData, bfexData] = await Promise.all([
+    const [ocRaw, lineupData, , bfexData] = await Promise.all([
       fetch(`https://www.oddschecker.com/api/markets/v2/all-odds?market-ids=${ids}&repub=OC`)
         .then(r => r.json()).catch(() => []),
       fetch(`/.netlify/functions/lineups?matchId=${matchId}`)
@@ -3655,7 +3655,7 @@ async function scanOC(matchId, home, away, competition, btn) {
 
     // Build Betfair price lookup: normalised player name → { back, lastTraded }
     const bfexByName = {};
-    if (bfexData.ok && bfexData.markets) {
+    if (bfexData && bfexData.ok && bfexData.markets) {
       for (const mkt of Object.values(bfexData.markets)) {
         for (const p of (mkt.players ?? [])) {
           const key = normName(p.name);
