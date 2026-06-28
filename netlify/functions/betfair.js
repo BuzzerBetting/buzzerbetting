@@ -13,16 +13,14 @@ function proxyFetch(targetUrl, options = {}) {
   return new Promise((resolve, reject) => {
     const fixieUrl = process.env.FIXIE_URL;
     const target = new url.URL(targetUrl);
-    
     let reqOptions;
-    
     if (fixieUrl) {
       const proxy = new url.URL(fixieUrl);
       const auth = Buffer.from(`${proxy.username}:${proxy.password}`).toString('base64');
       reqOptions = {
         hostname: proxy.hostname,
         port: proxy.port || 80,
-        path: targetUrl, // full URL as path when using proxy
+        path: targetUrl,
         method: options.method || 'GET',
         headers: {
           ...options.headers,
@@ -39,12 +37,15 @@ function proxyFetch(targetUrl, options = {}) {
         headers: options.headers || {}
       };
     }
-
     const protocol = fixieUrl ? http : https;
     const req = protocol.request(reqOptions, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
-      res.on('end', () => resolve({ status: res.statusCode, text: () => Promise.resolve(data), json: () => Promise.resolve(JSON.parse(data)) }));
+      res.on('end', () => resolve({
+        status: res.statusCode,
+        text: () => Promise.resolve(data),
+        json: () => Promise.resolve(JSON.parse(data))
+      }));
     });
     req.on('error', reject);
     if (options.body) req.write(options.body);
@@ -52,25 +53,30 @@ function proxyFetch(targetUrl, options = {}) {
   });
 }
 
-async function getSessionToken(appKey) {
+async function getSessionToken() {
   const username = process.env.BFEX_USERNAME;
   const password = process.env.BFEX_PASSWORD;
+  // Use delayed key for login — no cert required
+  const loginKey = process.env.BFEX_DELAY_KEY;
   if (!username || !password) throw new Error('BFEX_USERNAME or BFEX_PASSWORD not set');
-  const res = await proxyFetch('https://identitysso-cert.betfair.com/api/certlogin', {
+  if (!loginKey) throw new Error('BFEX_DELAY_KEY not set');
+
+  const res = await proxyFetch('https://identitysso.betfair.com/api/login', {
     method: 'POST',
     headers: {
-      'X-Application': appKey,
+      'X-Application': loginKey,
       'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': 'application/json'
     },
     body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
   });
   const text = await res.text();
-  console.log('Login response:', text.substring(0, 200));
+  console.log('Login response:', text.substring(0, 300));
   let data;
   try { data = JSON.parse(text); }
   catch(e) { throw new Error('Login returned non-JSON: ' + text.substring(0, 200)); }
-  if (data.loginStatus !== 'SUCCESS') throw new Error(`Login failed: ${data.loginStatus}`);
-  return data.sessionToken;
+  if (data.status !== 'SUCCESS') throw new Error(`Login failed: ${data.status} ${data.error||''}`);
+  return data.token;
 }
 
 async function bfCall(method, params, appKey, session) {
@@ -95,6 +101,7 @@ async function bfCall(method, params, appKey, session) {
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
 
+  // Live key for API calls
   const appKey = process.env.BFEX_APP_KEY;
   if (!appKey) return {
     statusCode: 200, headers: CORS,
@@ -108,7 +115,7 @@ exports.handler = async (event) => {
   };
 
   try {
-    const session = await getSessionToken(appKey);
+    const session = await getSessionToken();
 
     const events = await bfCall('listEvents', {
       filter: { eventTypeIds: ['1'], textQuery: `${home} v ${away}` }
