@@ -352,6 +352,7 @@ input::placeholder{color:var(--text3)}
     </div>
     <div id="va-oth-status" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="va-oth-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="va-oth-status-title">Loading...</div><div class="ph-d" id="va-oth-status-msg"></div></div></div></div>
     <div id="va-oth-content" style="display:none">
+      <div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px" id="va-oth-kpis"></div>
       <div class="card">
         <div class="card-h">Monthly breakdown</div>
         <div style="overflow-x:auto">
@@ -2155,6 +2156,28 @@ async function openVAOtherSection() {
       document.getElementById('va-oth-status-msg').textContent='Summary tab appears empty.';
       document.getElementById('va-oth-status').style.display='';return;
     }
+    // Calculate KPIs
+    let grandTotal=0, bestVal=-Infinity, bestMonth='', monthCount=0;
+    data.rows.forEach(row=>{
+      const l15=parseFloat(row['L15 Horse'])||0;
+      const ew=parseFloat(row['EW Doubles'])||0;
+      const bfexH=parseFloat(row['BFEX Horse'])||0;
+      const bfexD=parseFloat(row['BFEX Dog'])||0;
+      const total=l15+ew+bfexH+bfexD;
+      grandTotal+=total;
+      if(total>bestVal){bestVal=total;bestMonth=row.Month;}
+      if(l15||ew||bfexH||bfexD) monthCount++;
+    });
+    const avgMonthly=monthCount>0?grandTotal/monthCount:0;
+    const plCol=grandTotal>0?'var(--green)':grandTotal<0?'var(--red)':'var(--text2)';
+    const avgCol=avgMonthly>0?'var(--green)':avgMonthly<0?'var(--red)':'var(--text2)';
+    const bestCol=bestVal>0?'var(--green)':bestVal<0?'var(--red)':'var(--text2)';
+    document.getElementById('va-oth-kpis').innerHTML=
+      '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+fmtGBP(grandTotal)+'</div><div class="kpi-s">All categories combined</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Months tracked</div><div class="kpi-v">'+monthCount+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Best month</div><div class="kpi-v" style="color:'+bestCol+'">'+fmtGBP(bestVal)+'</div><div class="kpi-s">'+bestMonth+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Monthly avg</div><div class="kpi-v" style="color:'+avgCol+'">'+fmtGBP(avgMonthly)+'</div></div>';
+
     const tbody=document.getElementById('va-oth-tbody'); tbody.innerHTML='';
     data.rows.forEach(row=>{
       const l15=parseFloat(row['L15 Horse'])||0;
