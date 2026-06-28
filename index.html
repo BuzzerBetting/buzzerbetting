@@ -293,13 +293,18 @@ input::placeholder{color:var(--text3)}
   <div id="tracker-overall" class="tracker-view" style="display:none">
     <button class="back" onclick="backToTrackerHub()"><i class="ti ti-arrow-left"></i> Bet tracker</button>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
-      <div class="sec-title" style="margin-bottom:0">Overall bets</div>
+      <div class="sec-title" style="margin-bottom:0">Overall Bets</div>
       <button onclick="openOverallSection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
     </div>
     <div id="ov-status" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="ov-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="ov-status-title">Loading...</div><div class="ph-d" id="ov-status-msg"></div></div></div></div>
     <div id="ov-content" style="display:none">
       <!-- All-time KPIs -->
       <div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px" id="ov-kpis"></div>
+      <div class="card" style="margin-bottom:12px;border-left:3px solid var(--red)">
+        <div style="padding:10px 16px">
+          <p style="font-size:12px;color:var(--red);margin:0"><i class="ti ti-alert-circle"></i> <strong>Note:</strong> Total P/L figures may be inaccurate due to previous Excel data loss. Current all-time profit: <strong>£267,546.01</strong> (from main tracking sheet).</p>
+        </div>
+      </div>
       <!-- Monthly breakdown -->
       <div class="card" style="margin-bottom:16px">
         <div class="card-h">Monthly breakdown</div>
@@ -322,11 +327,7 @@ input::placeholder{color:var(--text3)}
           </table>
         </div>
       </div>
-      <div class="card" style="border:1px solid var(--red-bg)">
-        <div style="padding:12px 20px">
-          <p style="font-size:12px;color:var(--red);margin:0"><i class="ti ti-alert-circle"></i> <strong>Note:</strong> Total P/L figures may be inaccurate due to previous Excel data loss. Current all-time profit: <strong>£267,546.01</strong> (from main tracking sheet).</p>
-        </div>
-      </div>
+
     </div>
   </div>
 
@@ -1671,12 +1672,16 @@ function renderValueTable(rows,summary){
   const allWR=total>0?(tW/total*100).toFixed(1)+'%':'—';
   const plCol=allTimePL!=null?(allTimePL>0?'var(--green)':allTimePL<0?'var(--red)':'var(--text2)'):(recentPL>0?'var(--green)':recentPL<0?'var(--red)':'var(--text2)');
   const displayPL=allTimePL!=null?allTimePL:recentPL;
+  const valTotalEV=summary.totalEV!=null?summary.totalEV:null;
+  const valEvCol=valTotalEV!=null?(valTotalEV>0?'var(--green)':valTotalEV<0?'var(--red)':'var(--text2)'):'var(--text2)';
+  const valEvKpi=valTotalEV!=null?`<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:${valEvCol}">${fmtGBP(valTotalEV)}</div></div>`:'';
   document.getElementById('val-kpis').innerHTML=`
     <div class="kpi"><div class="kpi-l">Total bets</div><div class="kpi-v">${total.toLocaleString()}</div><div class="kpi-s">Win rate ${allWR}</div></div>
     <div class="kpi"><div class="kpi-l">Wins</div><div class="kpi-v" style="color:var(--green)">${tW.toLocaleString()}</div><div class="kpi-s">Last 100: ${l50w}</div></div>
     <div class="kpi"><div class="kpi-l">Losses</div><div class="kpi-v" style="color:var(--red)">${tL.toLocaleString()}</div><div class="kpi-s">Last 100: ${l50l}</div></div>
-    <div class="kpi"><div class="kpi-l">All-time P/L</div><div class="kpi-v" style="color:${plCol}">${displayPL>=0?'+':''}£${Math.abs(displayPL).toFixed(2)}</div></div>
-    <div class="kpi"><div class="kpi-l">Recent P/L</div><div class="kpi-v" style="color:${recentPL>0?'var(--green)':recentPL<0?'var(--red)':'var(--text2)'}">${recentPL>=0?'+':''}£${Math.abs(recentPL).toFixed(2)}</div><div class="kpi-s">Last 100 bets</div></div>`;
+    ${valEvKpi}
+    <div class="kpi"><div class="kpi-l">All-time P/L</div><div class="kpi-v" style="color:${plCol}">${fmtGBP(displayPL)}</div></div>
+    <div class="kpi"><div class="kpi-l">Recent P/L</div><div class="kpi-v" style="color:${recentPL>0?'var(--green)':recentPL<0?'var(--red)':'var(--text2)'}">${fmtGBP(recentPL)}</div><div class="kpi-s">Last 100 bets</div></div>`;
   document.getElementById('val-table-hdr').textContent=`Most recent ${rows.length} bets`;
   document.getElementById('val-kpi-wrap').style.display='';
   document.getElementById('val-table-wrap').style.display='';
@@ -2263,7 +2268,7 @@ async function openPersonalMonthlySection() {
     trow2.innerHTML='<td style="color:var(--text3);font-size:10px;padding:4px 8px">TOTAL</td>'+
       '<td class="r tn" style="color:'+grandCol+';font-weight:600;padding:4px 8px">'+fmtGBP(grandTotal)+'</td>'+
       cats.map(c=>{const v=colTotals[c];const col=v>0?'var(--green)':v<0?'var(--red)':'var(--text2)';return '<td class="r tn" style="color:'+col+';padding:4px 8px">'+(v!==0?fmtGBP(v):'—')+'</td>';}).join('');
-    thead.parentElement.querySelector('thead').appendChild(trow2);
+    thead.parentElement.appendChild(trow2);
     // Table body
     const tbody = document.getElementById('pm-tbody'); tbody.innerHTML='';
     rows.forEach(row => {
@@ -2351,7 +2356,7 @@ async function openVAMonthlySection() {
         const evc=ev>0?'var(--green)':ev<0?'var(--red)':'var(--text2)';
         return '<td class="r tn" style="padding:4px 8px"><span style="color:'+plc+';display:block">'+(pl!==0?fmtGBP(pl):'—')+'</span>'+(ev!==0?'<span style="color:var(--amber);font-size:10px">'+fmtGBP(ev)+'</span>':'')+'</td>';
       }).join('');
-    theadRow.parentElement.querySelector('thead').appendChild(trow2);
+    theadRow.parentElement.appendChild(trow2);
     // Table body
     const tbody = document.getElementById('vm-tbody'); tbody.innerHTML='';
     rows.forEach(row=>{
@@ -2589,21 +2594,25 @@ async function openOverallSection(){
     const persData = persResp.status==='fulfilled'&&persResp.value.ok ? persResp.value.rows : [];
     const vaData = vaResp.status==='fulfilled'&&vaResp.value.ok ? vaResp.value.rows : [];
 
+    // Normalize month key — handle "Jun-26" vs "Jun 26" variations
+    const normMonth = m => String(m||'').trim().replace(' ','-').replace('--','-');
     // Build combined month map — only include months with data
     const monthMap = {};
     persData.forEach(r => {
       const rowPL = personalCats.reduce((s,c)=>s+(parseFloat(r[c])||0),0);
-      if(!rowPL) return; // skip months with no personal data
-      if(!monthMap[r.Month]) monthMap[r.Month]={month:r.Month,persPL:0,persEV:0,vaPL:0,vaEV:0};
-      monthMap[r.Month].persPL += rowPL;
+      if(!rowPL) return;
+      const key = normMonth(r.Month);
+      if(!monthMap[key]) monthMap[key]={month:r.Month,persPL:0,persEV:0,vaPL:0,vaEV:0};
+      monthMap[key].persPL += rowPL;
     });
     vaData.forEach(r => {
       const rowPL = vaCats.reduce((s,c)=>s+(parseFloat(r[c])||0),0);
       const rowEV = vaCats.reduce((s,c)=>s+(parseFloat(r[c+'_ev'])||0),0);
-      if(!rowPL&&!rowEV) return; // skip months with no VA data
-      if(!monthMap[r.Month]) monthMap[r.Month]={month:r.Month,persPL:0,persEV:0,vaPL:0,vaEV:0};
-      monthMap[r.Month].vaPL += rowPL;
-      monthMap[r.Month].vaEV += rowEV;
+      if(!rowPL&&!rowEV) return;
+      const key = normMonth(r.Month);
+      if(!monthMap[key]) monthMap[key]={month:r.Month,persPL:0,persEV:0,vaPL:0,vaEV:0};
+      monthMap[key].vaPL += rowPL;
+      monthMap[key].vaEV += rowEV;
     });
 
     const months = Object.values(monthMap);
