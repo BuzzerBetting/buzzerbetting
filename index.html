@@ -294,18 +294,45 @@ input::placeholder{color:var(--text3)}
     <button class="back" onclick="backToTrackerHub()"><i class="ti ti-arrow-left"></i> Bet tracker</button>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
       <div class="sec-title" style="margin-bottom:0">Overall bets</div>
-      <button onclick="openOverallSection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor=&apos;var(--brand)&apos;;this.style.color=&apos;var(--brand)&apos;" onmouseout="this.style.borderColor=&apos;var(--border)&apos;;this.style.color=&apos;var(--text2)&apos;"><i class="ti ti-refresh"></i> Refresh</button>
+      <button onclick="openOverallSection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
     </div>
     <div id="ov-status" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="ov-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="ov-status-title">Loading...</div><div class="ph-d" id="ov-status-msg"></div></div></div></div>
     <div id="ov-content" style="display:none">
+      <!-- All-time KPIs -->
       <div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px" id="ov-kpis"></div>
+      <!-- Monthly breakdown -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-h">Monthly breakdown</div>
+        <div style="overflow-x:auto">
+          <table class="dt" style="min-width:700px">
+            <thead>
+              <tr>
+                <th rowspan="2" style="vertical-align:bottom">Month</th>
+                <th colspan="2" class="r" style="border-bottom:.5px solid var(--border);text-align:center;background:var(--green-bg);color:var(--green)">Personal</th>
+                <th colspan="2" class="r" style="border-bottom:.5px solid var(--border);text-align:center;background:var(--blue-bg);color:var(--blue)">VA</th>
+                <th colspan="2" class="r" style="border-bottom:.5px solid var(--border);text-align:center">Combined</th>
+              </tr>
+              <tr>
+                <th class="r">EV</th><th class="r">P/L</th>
+                <th class="r">EV</th><th class="r">P/L</th>
+                <th class="r">EV</th><th class="r" style="font-weight:700">P/L</th>
+              </tr>
+            </thead>
+            <tbody id="ov-monthly-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <!-- Tab breakdown -->
       <div class="card">
-        <div class="card-h">Breakdown by tab</div>
+        <div class="card-h">Breakdown by tab (all-time)</div>
         <div style="overflow-x:auto">
           <table class="dt" style="min-width:640px">
             <thead><tr><th>Tab</th><th class="r">Bets</th><th class="r">Wins</th><th class="r">Losses</th><th class="r">Win Rate</th><th class="r">Total Staked</th><th class="r">Total EV</th><th class="r">Total P/L</th></tr></thead>
             <tbody id="ov-tbody"></tbody>
           </table>
+        </div>
+        <div style="padding:12px 20px;border-top:.5px solid var(--border)">
+          <p style="font-size:11px;color:var(--red);margin:0"><strong>Note:</strong> Total P/L figures may be inaccurate due to previous Excel data loss. Current all-time profit: <strong id="ov-actual-pl">£267,546.01</strong> (from main tracking sheet).</p>
         </div>
       </div>
     </div>
@@ -326,6 +353,7 @@ input::placeholder{color:var(--text3)}
       <div class="cat" onclick="showTrackerSection('personal','ninja')"><div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-star"></i></div><div><div class="cat-title">Ninja Golf BFEX</div><div class="cat-desc">Ninja Golf exchange bet history</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('personal','corners')"><div class="cat-ico" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-corner-right-down"></i></div><div><div class="cat-title">Corners</div><div class="cat-desc">Corner bet results and stats</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('personal','other')"><div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-layout-grid"></i></div><div><div class="cat-title">Other</div><div class="cat-desc">Monthly P/L breakdown across all other income streams</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
+      <div class="cat" onclick="showTrackerSection('personal','monthly')"><div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-calendar-stats"></i></div><div><div class="cat-title">Monthly Summary</div><div class="cat-desc">Month by month P/L across all personal categories</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
     </div>
   </div>
 
@@ -340,6 +368,7 @@ input::placeholder{color:var(--text3)}
       <div class="cat" onclick="showTrackerSection('va','casino')"><div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-diamond"></i></div><div><div class="cat-title">Casino</div><div class="cat-desc">VA casino session results</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('va','offers')"><div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-tag"></i></div><div><div class="cat-title">Offers</div><div class="cat-desc">Promotional offer results and P&amp;L</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('va','other')"><div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-layout-grid"></i></div><div><div class="cat-title">Other</div><div class="cat-desc">Monthly P/L breakdown — L15 Horse, EW Doubles, BFEX</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
+      <div class="cat" onclick="showTrackerSection('va','monthly')"><div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-calendar-stats"></i></div><div><div class="cat-title">Monthly Summary</div><div class="cat-desc">Month by month P/L and EV across all VA categories</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
     </div>
   </div>
 
@@ -359,6 +388,50 @@ input::placeholder{color:var(--text3)}
           <table class="dt" style="min-width:560px">
             <thead><tr><th>Month</th><th class="r">L15 Horse</th><th class="r">EW Doubles</th><th class="r">BFEX Horse</th><th class="r">BFEX Dog</th><th class="r">Total P/L</th></tr></thead>
             <tbody id="va-oth-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PERSONAL MONTHLY SUMMARY -->
+  <div id="ts-personal-monthly" class="tracker-section" style="display:none">
+    <button class="back" onclick="backToTrackerSection('personal')"><i class="ti ti-arrow-left"></i> Personal bets</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+      <div class="sec-title" style="margin-bottom:0">Monthly Summary</div>
+      <button onclick="openPersonalMonthlySection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+    </div>
+    <div id="pm-status" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="pm-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="pm-status-title">Loading...</div><div class="ph-d" id="pm-status-msg"></div></div></div></div>
+    <div id="pm-content" style="display:none">
+      <div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px" id="pm-kpis"></div>
+      <div class="card">
+        <div class="card-h">Monthly P/L by category</div>
+        <div style="overflow-x:auto;max-height:600px;overflow-y:auto">
+          <table class="dt" id="pm-table" style="min-width:900px">
+            <thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr id="pm-thead-row"></tr></thead>
+            <tbody id="pm-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VA MONTHLY SUMMARY -->
+  <div id="ts-va-monthly" class="tracker-section" style="display:none">
+    <button class="back" onclick="backToTrackerSection('va')"><i class="ti ti-arrow-left"></i> VA bets</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+      <div class="sec-title" style="margin-bottom:0">Monthly Summary</div>
+      <button onclick="openVAMonthlySection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+    </div>
+    <div id="vm-status" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="vm-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="vm-status-title">Loading...</div><div class="ph-d" id="vm-status-msg"></div></div></div></div>
+    <div id="vm-content" style="display:none">
+      <div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px" id="vm-kpis"></div>
+      <div class="card">
+        <div class="card-h">Monthly P/L by category</div>
+        <div style="overflow-x:auto;max-height:600px;overflow-y:auto">
+          <table class="dt" id="vm-table" style="min-width:1000px">
+            <thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr id="vm-thead-row"></tr></thead>
+            <tbody id="vm-tbody"></tbody>
           </table>
         </div>
       </div>
@@ -1081,7 +1154,7 @@ function showCalc(name){document.getElementById('calc-hub').style.display='none'
 function backToCalcHub(){document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
 function showTracker(name){document.getElementById('tracker-hub').style.display='none';document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.getElementById('tracker-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='overall')openOverallSection();}
 function backToTrackerHub(){document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('tracker-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
-function showTrackerSection(parent,name){document.getElementById('tracker-'+parent).style.display='none';document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('ts-'+parent+'-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(parent==='personal'&&name==='dogs')openDogsSection();if(parent==='personal'&&name==='american')openAmericanSection();if(parent==='personal'&&name==='value')openValueSection();if(parent==='personal'&&name==='keithbot')openKeithbotSection();if(parent==='personal'&&name==='bbhorses')openBBHorseSection();if(parent==='personal'&&name==='bbgolf')openBBGolfSection();if(parent==='personal'&&name==='freeze')openFreezeSection();if(parent==='personal'&&name==='ninja')openNinjaSection();if(parent==='personal'&&name==='corners')openCornersSection();if(parent==='personal'&&name==='other')openOtherSection();if(parent==='va'&&name==='discord')openVADiscordSection();if(parent==='va'&&name==='racing')openVARacingSection();if(parent==='va'&&name==='bettracker')openVABetTrackerSection();if(parent==='va'&&name==='casino')openVACasinoSection();if(parent==='va'&&name==='offers')openVAOffersSection();if(parent==='va'&&name==='other')openVAOtherSection();}
+function showTrackerSection(parent,name){document.getElementById('tracker-'+parent).style.display='none';document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('ts-'+parent+'-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(parent==='personal'&&name==='dogs')openDogsSection();if(parent==='personal'&&name==='american')openAmericanSection();if(parent==='personal'&&name==='value')openValueSection();if(parent==='personal'&&name==='keithbot')openKeithbotSection();if(parent==='personal'&&name==='bbhorses')openBBHorseSection();if(parent==='personal'&&name==='bbgolf')openBBGolfSection();if(parent==='personal'&&name==='freeze')openFreezeSection();if(parent==='personal'&&name==='ninja')openNinjaSection();if(parent==='personal'&&name==='corners')openCornersSection();if(parent==='personal'&&name==='other')openOtherSection();if(parent==='va'&&name==='discord')openVADiscordSection();if(parent==='va'&&name==='racing')openVARacingSection();if(parent==='va'&&name==='bettracker')openVABetTrackerSection();if(parent==='va'&&name==='casino')openVACasinoSection();if(parent==='va'&&name==='offers')openVAOffersSection();if(parent==='va'&&name==='other')openVAOtherSection();if(parent==='personal'&&name==='monthly')openPersonalMonthlySection();if(parent==='va'&&name==='monthly')openVAMonthlySection();}
 function backToTrackerSection(parent){document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('tracker-'+parent).style.display='block';window.scrollTo({top:0,behavior:'smooth'});}
 
 // ── GREETING ──
@@ -2131,6 +2204,137 @@ async function openVAOffersSection() {
 }
 
 
+
+// ── PERSONAL MONTHLY SUMMARY ──
+async function openPersonalMonthlySection() {
+  document.getElementById('pm-status').style.display='';
+  document.getElementById('pm-content').style.display='none';
+  document.getElementById('pm-status-ico').innerHTML='<i class="ti ti-loader"></i>';
+  document.getElementById('pm-status-title').textContent='Loading...';
+  document.getElementById('pm-status-msg').textContent='Fetching monthly data...';
+  try {
+    const url = localStorage.getItem('bb_main_url');
+    if(!url) throw new Error('NO_URL');
+    const r = await fetch('/.netlify/functions/sheets?url='+encodeURIComponent(url)+'&tab=Overall+Profit');
+    const data = await r.json();
+    document.getElementById('pm-status').style.display='none';
+    if(!data.ok){document.getElementById('pm-status-ico').innerHTML='<i class="ti ti-alert-circle"></i>';document.getElementById('pm-status-title').textContent='Error';document.getElementById('pm-status-msg').textContent=data.error||'Unknown error';document.getElementById('pm-status').style.display='';return;}
+    if(!data.rows||!data.rows.length){document.getElementById('pm-status-ico').innerHTML='<i class="ti ti-inbox"></i>';document.getElementById('pm-status-title').textContent='No data';document.getElementById('pm-status-msg').textContent='Overall Profit tab appears empty.';document.getElementById('pm-status').style.display='';return;}
+
+    const cats = ['VA','Punt/Extra','Shop','Impact Sub','B365 Outliers','Data Accs','Casino','EP Acca','BFEX Horse','Dog Lay','Refunds','EPs','2UPs'];
+    let grandTotal=0, bestVal=-Infinity, bestMonth='', monthCount=0;
+    data.rows.forEach(r => {
+      const rowTotal = cats.reduce((s,c) => s+(parseFloat(r[c])||0), 0);
+      grandTotal += rowTotal;
+      if(rowTotal>bestVal){bestVal=rowTotal;bestMonth=r.Month;}
+      if(cats.some(c=>parseFloat(r[c])||0)) monthCount++;
+    });
+    const avgMonthly = monthCount>0?grandTotal/monthCount:0;
+    const plCol=grandTotal>0?'var(--green)':grandTotal<0?'var(--red)':'var(--text2)';
+    const avgCol=avgMonthly>0?'var(--green)':avgMonthly<0?'var(--red)':'var(--text2)';
+    const bestCol=bestVal>0?'var(--green)':bestVal<0?'var(--red)':'var(--text2)';
+    document.getElementById('pm-kpis').innerHTML=
+      '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+fmtGBP(grandTotal)+'</div><div class="kpi-s">All categories combined</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Months tracked</div><div class="kpi-v">'+monthCount+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Best month</div><div class="kpi-v" style="color:'+bestCol+'">'+fmtGBP(bestVal)+'</div><div class="kpi-s">'+bestMonth+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Monthly avg</div><div class="kpi-v" style="color:'+avgCol+'">'+fmtGBP(avgMonthly)+'</div></div>';
+
+    // Build table headers
+    const thead = document.getElementById('pm-thead-row');
+    thead.innerHTML='<th>Month</th>'+cats.map(c=>'<th class="r" style="font-size:11px;white-space:nowrap">'+c+'</th>').join('')+'<th class="r" style="font-weight:700">Total</th>';
+
+    // Build table rows
+    const tbody = document.getElementById('pm-tbody'); tbody.innerHTML='';
+    data.rows.forEach(row => {
+      const rowTotal = cats.reduce((s,c) => s+(parseFloat(row[c])||0), 0);
+      const totCol=rowTotal>0?'var(--green)':rowTotal<0?'var(--red)':'var(--text2)';
+      const tr = document.createElement('tr');
+      const cells = cats.map(c => {
+        const v=parseFloat(row[c])||0;
+        const col=v>0?'var(--green)':v<0?'var(--red)':'var(--text2)';
+        return '<td class="r tn" style="color:'+col+'">'+(v!==0?fmtGBP(v):'—')+'</td>';
+      }).join('');
+      tr.innerHTML='<td style="font-weight:500;white-space:nowrap">'+row.Month+'</td>'+cells+'<td class="r tn" style="color:'+totCol+';font-weight:600">'+(rowTotal!==0?fmtGBP(rowTotal):'—')+'</td>';
+      tbody.appendChild(tr);
+    });
+    document.getElementById('pm-content').style.display='';
+  } catch(err) {
+    const noUrl=err.message==='NO_URL';
+    document.getElementById('pm-status-ico').innerHTML='<i class="ti ti-plug-connected-x"></i>';
+    document.getElementById('pm-status-title').textContent=noUrl?'No sheet connected':'Could not reach sheet';
+    document.getElementById('pm-status-msg').textContent=noUrl?'Go to Bet Tracker and paste your Main sheet URL in Data connections.':err.message;
+    document.getElementById('pm-status').style.display='';
+  }
+}
+
+// ── VA MONTHLY SUMMARY ──
+async function openVAMonthlySection() {
+  document.getElementById('vm-status').style.display='';
+  document.getElementById('vm-content').style.display='none';
+  document.getElementById('vm-status-ico').innerHTML='<i class="ti ti-loader"></i>';
+  document.getElementById('vm-status-title').textContent='Loading...';
+  document.getElementById('vm-status-msg').textContent='Fetching monthly VA data...';
+  try {
+    const url = localStorage.getItem('bb_va_url');
+    if(!url) throw new Error('NO_URL');
+    const r = await fetch('/.netlify/functions/sheets?url='+encodeURIComponent(url)+'&tab=Summary');
+    const data = await r.json();
+    document.getElementById('vm-status').style.display='none';
+    if(!data.ok){document.getElementById('vm-status-ico').innerHTML='<i class="ti ti-alert-circle"></i>';document.getElementById('vm-status-title').textContent='Error';document.getElementById('vm-status-msg').textContent=data.error||'Unknown error';document.getElementById('vm-status').style.display='';return;}
+    if(!data.rows||!data.rows.length){document.getElementById('vm-status-ico').innerHTML='<i class="ti ti-inbox"></i>';document.getElementById('vm-status-title').textContent='No data';document.getElementById('vm-status-msg').textContent='Summary tab appears empty.';document.getElementById('vm-status').style.display='';return;}
+
+    const cats = ['Discord','BB-BT','BB-RTP','L15 Horse','Offers','Casino','EW Double','BB-EP','Refunds','L15 Football','Acca Ins','BFEX Horse','BFEX Dog'];
+    let grandPL=0, grandEV=0, bestVal=-Infinity, bestMonth='', monthCount=0;
+    data.rows.forEach(r => {
+      const rowPL = cats.reduce((s,c) => s+(parseFloat(r[c])||0), 0);
+      const rowEV = cats.reduce((s,c) => s+(parseFloat(r[c+'_ev'])||0), 0);
+      grandPL+=rowPL; grandEV+=rowEV;
+      if(rowPL>bestVal){bestVal=rowPL;bestMonth=r.Month;}
+      if(cats.some(c=>parseFloat(r[c])||0)) monthCount++;
+    });
+    const avgMonthly=monthCount>0?grandPL/monthCount:0;
+    const plCol=grandPL>0?'var(--green)':grandPL<0?'var(--red)':'var(--text2)';
+    const evCol=grandEV>0?'var(--green)':grandEV<0?'var(--red)':'var(--text2)';
+    const avgCol=avgMonthly>0?'var(--green)':avgMonthly<0?'var(--red)':'var(--text2)';
+    const bestCol=bestVal>0?'var(--green)':bestVal<0?'var(--red)':'var(--text2)';
+    document.getElementById('vm-kpis').innerHTML=
+      '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+fmtGBP(grandPL)+'</div><div class="kpi-s">All categories combined</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:'+evCol+'">'+fmtGBP(grandEV)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Best month</div><div class="kpi-v" style="color:'+bestCol+'">'+fmtGBP(bestVal)+'</div><div class="kpi-s">'+bestMonth+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Monthly avg P/L</div><div class="kpi-v" style="color:'+avgCol+'">'+fmtGBP(avgMonthly)+'</div></div>';
+
+    // Build table headers
+    const thead = document.getElementById('vm-thead-row');
+    thead.innerHTML='<th>Month</th>'+cats.map(c=>'<th class="r" style="font-size:11px;white-space:nowrap">'+c+'</th>').join('')+'<th class="r" style="font-weight:700">Total P/L</th><th class="r">Total EV</th>';
+
+    // Build table rows
+    const tbody = document.getElementById('vm-tbody'); tbody.innerHTML='';
+    data.rows.forEach(row => {
+      const rowPL = cats.reduce((s,c) => s+(parseFloat(row[c])||0), 0);
+      const rowEV = cats.reduce((s,c) => s+(parseFloat(row[c+'_ev'])||0), 0);
+      const totCol=rowPL>0?'var(--green)':rowPL<0?'var(--red)':'var(--text2)';
+      const evC=rowEV>0?'var(--green)':rowEV<0?'var(--red)':'var(--text2)';
+      const tr = document.createElement('tr');
+      const cells = cats.map(c => {
+        const v=parseFloat(row[c])||0;
+        const col=v>0?'var(--green)':v<0?'var(--red)':'var(--text2)';
+        return '<td class="r tn" style="color:'+col+'">'+(v!==0?fmtGBP(v):'—')+'</td>';
+      }).join('');
+      tr.innerHTML='<td style="font-weight:500;white-space:nowrap">'+row.Month+'</td>'+cells+
+        '<td class="r tn" style="color:'+totCol+';font-weight:600">'+(rowPL!==0?fmtGBP(rowPL):'—')+'</td>'+
+        '<td class="r tn" style="color:'+evC+'">'+(rowEV!==0?fmtGBP(rowEV):'—')+'</td>';
+      tbody.appendChild(tr);
+    });
+    document.getElementById('vm-content').style.display='';
+  } catch(err) {
+    const noUrl=err.message==='NO_URL';
+    document.getElementById('vm-status-ico').innerHTML='<i class="ti ti-plug-connected-x"></i>';
+    document.getElementById('vm-status-title').textContent=noUrl?'No VA sheet connected':'Could not reach sheet';
+    document.getElementById('vm-status-msg').textContent=noUrl?'Go to Bet Tracker and paste your VA sheet URL in Data connections.':err.message;
+    document.getElementById('vm-status').style.display='';
+  }
+}
+
 // VA OTHER (Summary tab)
 async function openVAOtherSection() {
   document.getElementById('va-oth-status').style.display='';
@@ -2218,15 +2422,17 @@ const OVERALL_TABS = [
 ];
 
 async function openOverallSection(){
-  const url = localStorage.getItem('bb_main_url');
+  const mainUrl = localStorage.getItem('bb_main_url');
+  const vaUrl = localStorage.getItem('bb_va_url');
   document.getElementById('ov-status').style.display='';
   document.getElementById('ov-content').style.display='none';
-  if(!url){
+  if(!mainUrl){
     document.getElementById('ov-status-ico').innerHTML='<i class="ti ti-plug-connected-x"></i>';
     document.getElementById('ov-status-title').textContent='No data connection set up';
     document.getElementById('ov-status-msg').textContent='Go to Bet Tracker and paste your Main Tracking Sheet URL in the Data connections card.';
     return;
   }
+  const url = mainUrl;
   document.getElementById('ov-status-ico').innerHTML='<i class="ti ti-loader"></i>';
   document.getElementById('ov-status-title').textContent='Loading...';
   document.getElementById('ov-status-msg').textContent='Fetching stats from all tabs — this may take a moment.';
@@ -2294,6 +2500,45 @@ async function openOverallSection(){
     '<div class="kpi"><div class="kpi-l">Total staked</div><div class="kpi-v">£'+fmt(grandStake)+'</div></div>'+
     '<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:'+evCol+'">'+fmtGBP(grandEV)+'</div></div>'+
     '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+fmtGBP(grandPL)+'</div></div>';
+
+  // Monthly breakdown — fetch from both sheets in parallel
+  const monthlyTbody = document.getElementById('ov-monthly-tbody');
+  monthlyTbody.innerHTML='';
+  try {
+    const personalCats = ['VA','Punt/Extra','Shop','Impact Sub','B365 Outliers','Data Accs','Casino','EP Acca','BFEX Horse','Dog Lay','Refunds','EPs','2UPs'];
+    const vaCats = ['Discord','BB-BT','BB-RTP','L15 Horse','Offers','Casino','EW Double','BB-EP','Refunds','L15 Football','Acca Ins','BFEX Horse','BFEX Dog'];
+    const [persResp, vaResp] = await Promise.allSettled([
+      mainUrl ? fetch('/.netlify/functions/sheets?url='+encodeURIComponent(mainUrl)+'&tab=Overall+Profit').then(r=>r.json()) : Promise.resolve({ok:false}),
+      vaUrl ? fetch('/.netlify/functions/sheets?url='+encodeURIComponent(vaUrl)+'&tab=Summary').then(r=>r.json()) : Promise.resolve({ok:false})
+    ]);
+    const persData = persResp.status==='fulfilled'&&persResp.value.ok ? persResp.value.rows : [];
+    const vaData = vaResp.status==='fulfilled'&&vaResp.value.ok ? vaResp.value.rows : [];
+    // Build month map
+    const monthMap = {};
+    persData.forEach(r => {
+      if(!monthMap[r.Month]) monthMap[r.Month]={month:r.Month,persPL:0,persEV:0,vaPL:0,vaEV:0};
+      monthMap[r.Month].persPL += personalCats.reduce((s,c)=>s+(parseFloat(r[c])||0),0);
+    });
+    vaData.forEach(r => {
+      if(!monthMap[r.Month]) monthMap[r.Month]={month:r.Month,persPL:0,persEV:0,vaPL:0,vaEV:0};
+      monthMap[r.Month].vaPL += vaCats.reduce((s,c)=>s+(parseFloat(r[c])||0),0);
+      monthMap[r.Month].vaEV += vaCats.reduce((s,c)=>s+(parseFloat(r[c+'_ev'])||0),0);
+    });
+    const months = Object.values(monthMap);
+    months.forEach(m => {
+      const combPL=m.persPL+m.vaPL, combEV=m.persEV+m.vaEV;
+      const cell=(v)=>{const c=v>0?'var(--green)':v<0?'var(--red)':'var(--text2)';return '<td class="r tn" style="color:'+c+'">'+(v!==0?fmtGBP(v):'--')+'</td>';};
+      const combCol=combPL>0?'var(--green)':combPL<0?'var(--red)':'var(--text2)';
+      const tr=document.createElement('tr');
+      tr.innerHTML='<td style="font-weight:500;white-space:nowrap">'+m.month+'</td>'+cell(m.persEV)+cell(m.persPL)+cell(m.vaEV)+cell(m.vaPL)+cell(combEV)+'<td class="r tn" style="color:'+combCol+';font-weight:700">'+(combPL!==0?fmtGBP(combPL):'--')+'</td>';
+      monthlyTbody.appendChild(tr);
+    });
+    if(!months.length) {
+      const tr=document.createElement('tr');
+      tr.innerHTML='<td colspan="7" style="color:var(--text3);text-align:center;padding:16px">No monthly data available — connect both sheets</td>';
+      monthlyTbody.appendChild(tr);
+    }
+  } catch(e) { console.error('Monthly breakdown error:', e); }
 
   document.getElementById('ov-content').style.display='';
 }
