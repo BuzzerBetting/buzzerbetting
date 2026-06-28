@@ -3582,27 +3582,23 @@ function saveOCMarketId(key, ids) {
   OC_MARKET_IDS[key] = ids;
 }
 
-async function fetchWHSotOtb(home, away) {
+async function fetchWHMarket(home, away, query, marketFilter) {
   try {
-    const q = encodeURIComponent(`${home} ${away} shot on target from outside the penalty area`);
+    const q = encodeURIComponent(query);
     const url = `https://search.williamhill.com/v2/?locale=en-gb&q=${q}&type=selection`;
     const r = await fetch(url);
     const data = await r.json();
     const hits = data?.data?.hits ?? [];
-
     const players = {};
     for (const hit of hits) {
       const v = hit.value;
       if (!v.active) continue;
-      // Check it's the right match
       const eventName = (v.event?.name ?? '').toLowerCase();
       const h = slugifyOC(home).replace(/-/g,' ');
       const a = slugifyOC(away).replace(/-/g,' ');
       if (!eventName.includes(h) && !eventName.includes(a)) continue;
-      // Check it's the right market
       const marketName = (v.market?.name ?? '').toLowerCase();
-      if (!marketName.includes('outside')) continue;
-
+      if (!marketName.includes(marketFilter)) continue;
       const name = v.name ?? '';
       if (!name) continue;
       const num = parseFloat(v.currentPriceNum ?? 0);
@@ -3610,20 +3606,13 @@ async function fetchWHSotOtb(home, away) {
       if (!num || !den) continue;
       const dec = parseFloat((num / den + 1).toFixed(3));
       if (dec <= 1) continue;
-
       if (!players[name] || dec > players[name].best) {
-        players[name] = {
-          name,
-          odds: { 'WH': dec },
-          best: dec,
-          bestBook: 'William Hill'
-        };
+        players[name] = { name, odds: { 'WH': dec }, best: dec, bestBook: 'William Hill' };
       }
     }
-
     return Object.values(players).sort((a, b) => a.best - b.best);
   } catch(e) {
-    console.warn('WH SOT OTB fetch failed:', e.message);
+    console.warn(`WH ${marketFilter} fetch failed:`, e.message);
     return [];
   }
 }
@@ -3745,11 +3734,24 @@ async function scanOC(matchId, home, away, competition, btn) {
       }
     }
 
-    // Step 3: Fetch WH SOT OTB
+    // Step 3: Fetch all WH markets in parallel
     btn.innerHTML = '<i class="ti ti-loader"></i> Fetching WH odds...';
-    const whPlayers = await fetchWHSotOtb(home, away);
-    const whByName = {};
-    for (const p of whPlayers) whByName[p.name.toLowerCase()] = p;
+    const [whSotOtbPlayers, whLfPlayers, whRfPlayers, wh6ydPlayers] = await Promise.all([
+      fetchWHMarket(home, away, `${home} ${away} shot on target from outside the penalty area`, 'outside'),
+      fetchWHMarket(home, away, 'to score with left foot', 'with left foot'),
+      fetchWHMarket(home, away, 'to score with right foot', 'with right foot'),
+      fetchWHMarket(home, away, 'to score inside the 6 yard box', 'inside the 6 yard box'),
+    ]);
+    const whLookups = {
+      sot_otb: {},
+      lf_goal: {},
+      rf_goal: {},
+      six_yd:  {},
+    };
+    for (const p of whSotOtbPlayers) whLookups.sot_otb[p.name.toLowerCase()] = p;
+    for (const p of whLfPlayers)     whLookups.lf_goal[p.name.toLowerCase()] = p;
+    for (const p of whRfPlayers)     whLookups.rf_goal[p.name.toLowerCase()] = p;
+    for (const p of wh6ydPlayers)    whLookups.six_yd[p.name.toLowerCase()] = p;
 
     // Step 4: Check lineups loaded
     if (!lineupData.ok) {
@@ -3789,10 +3791,13 @@ async function scanOC(matchId, home, away, competition, btn) {
     ];
 
     const MARKET_CONFIG = [
-      { key: 'header',     label: 'Header Scorer',   calcKey: 'headerGoal', needsAGS: true,  isShot: false, useWH: false },
-      { key: 'otb',        label: 'Score OTB',       calcKey: 'otbGoal',    needsAGS: true,  isShot: false, useWH: false },
-      { key: 'headed_sot', label: 'Headed SOT 1+',   calcKey: 'headedSOTs', needsAGS: false, isShot: true,  useWH: false },
-      { key: 'sot_otb',    label: 'SOT Outside Box', calcKey: 'otbSOTP',    needsAGS: false, isShot: true,  useWH: true  },
+      { key: 'header',   label: 'Header Scorer',   calcKey: 'headerGoal', needsAGS: true,  isShot: false, useWH: false },
+      { key: 'otb',      label: 'Score OTB',        calcKey: 'otbGoal',    needsAGS: true,  isShot: false, useWH: false },
+      { key: 'headed_sot', label: 'Headed SOT 1+',  calcKey: 'headedSOTs', needsAGS: false, isShot: true,  useWH: false },
+      { key: 'sot_otb',  label: 'SOT Outside Box',  calcKey: 'otbSOTP',    needsAGS: false, isShot: true,  useWH: true,  whKey: 'sot_otb' },
+      { key: 'lf_goal',  label: 'Left Foot Goal',   calcKey: 'lfGoal',     needsAGS: true,  isShot: false, useWH: true,  whKey: 'lf_goal' },
+      { key: 'rf_goal',  label: 'Right Foot Goal',  calcKey: 'rfGoal',     needsAGS: true,  isShot: false, useWH: true,  whKey: 'rf_goal' },
+      { key: 'six_yd',   label: '6 Yard Box',       calcKey: null,         needsAGS: false, isShot: false, useWH: true,  whKey: 'six_yd',  noCalc: true },
     ];
 
     function normName(n) {
@@ -3839,13 +3844,40 @@ async function scanOC(matchId, home, away, competition, btn) {
       const sotV = bbOdds.sot || null;
 
       for (const market of MARKET_CONFIG) {
+        // For noCalc markets (6yd box), skip fair odds — just show WH price
+        if (market.noCalc) {
+          const lookup = whLookups[market.whKey] ?? {};
+          const entry = Object.entries(lookup).find(([k]) => fuzzyMatch(k, player.name));
+          if (!entry) continue;
+          const ocPrice = entry[1].best;
+          const bfexEntry = Object.entries(bfexByName).find(([k]) => fuzzyMatch(k, player.name));
+          const bfexRunner = bfexEntry ? bfexEntry[1] : null;
+          const { fair: bfexPrice, confidence: bfexConfidence } = deriveBfexFair(bfexRunner);
+          evBets.push({
+            player: player.name,
+            market: market.label,
+            bbFair: null,
+            ocOdds: ocPrice.toFixed(2),
+            bookie: 'William Hill',
+            bfexPrice,
+            bfexEv: null,
+            bfexConfidence,
+            tfs: TIMEFRAMES.map(tf => ({ label: tf.label, fairOdds: null, ev: null, quality: 'none' })),
+            bestEv: null,
+            isConfident: false,
+            noCalc: true,
+          });
+          continue;
+        }
+
         if (market.needsAGS && !ags) continue;
-        if (!market.needsAGS && !sotV) continue;
+        if (!market.needsAGS && !market.useWH && !sotV) continue;
 
         // Get OC/WH price for this player
         let ocPrice = null, ocBook = null;
         if (market.useWH) {
-          const entry = Object.entries(whByName).find(([k]) => fuzzyMatch(k, player.name));
+          const lookup = whLookups[market.whKey] ?? {};
+          const entry = Object.entries(lookup).find(([k]) => fuzzyMatch(k, player.name));
           if (entry) { ocPrice = entry[1].best; ocBook = 'William Hill'; }
         } else {
           const mktPlayers = ocMarkets[market.key] ?? {};
@@ -3926,7 +3958,11 @@ async function scanOC(matchId, home, away, competition, btn) {
       }
     }
 
-    evBets.sort((a, b) => b.bestEv - a.bestEv);
+    evBets.sort((a, b) => {
+      if (a.noCalc && !b.noCalc) return 1;
+      if (!a.noCalc && b.noCalc) return -1;
+      return (b.bestEv ?? 0) - (a.bestEv ?? 0);
+    });
     renderEVResults(home, away, evBets);
 
   } catch(err) {
@@ -3955,10 +3991,8 @@ function renderEVResults(home, away, bets) {
     const ev = bet.bestEv;
     const evCol = ev >= 20 ? 'var(--green)' : ev >= 10 ? 'var(--amber)' : 'var(--blue)';
     const evBg  = ev >= 20 ? 'var(--green-bg)' : ev >= 10 ? 'var(--amber-bg)' : 'var(--blue-bg)';
-    // Row colour: green = confident, amber = low data
-    const rowStyle = bet.isConfident
-      ? ''
-      : 'background:var(--amber-bg)';
+    // Row colour: noCalc = subtle grey, confident = none, low data = amber
+    const rowStyle = bet.noCalc ? 'background:var(--surface2)' : (bet.isConfident ? '' : 'background:var(--amber-bg)');
 
     // Build 4 timeframe cells
     const tfCells = bet.tfs.map(tf => {
@@ -3968,6 +4002,11 @@ function renderEVResults(home, away, bets) {
       const conf = tf.quality === 'high' ? '' : 'opacity:0.6;';
       return `<td class="r tn" style="color:${col};${conf}">${tf.fairOdds}</td>`;
     }).join('');
+
+    // EV% cell
+    const evCell = bet.noCalc
+      ? `<td class="r"><span class="badge" style="background:var(--surface);color:var(--text3);border:.5px solid var(--border)">No calc</span></td>`
+      : `<td class="r"><span class="badge" style="background:${evBg};color:${evCol}">+${ev.toFixed(1)}%</span></td>`;
 
     const tr = document.createElement('tr');
     tr.style.cssText = rowStyle;
@@ -3989,7 +4028,7 @@ function renderEVResults(home, away, bets) {
       ${tfCells}
       <td class="r tn" style="font-weight:600;color:var(--green)">${bet.ocOdds}</td>
       <td style="font-size:12px;color:var(--text2)">${bet.bookie}</td>
-      <td class="r"><span class="badge" style="background:${evBg};color:${evCol}">+${ev.toFixed(1)}%</span></td>`;
+      ${evCell}`;
     tbody.appendChild(tr);
   }
 
@@ -3998,6 +4037,7 @@ function renderEVResults(home, away, bets) {
   legend.innerHTML = `<td colspan="11" style="padding:10px 16px;font-size:11px;color:var(--text2);border-top:.5px solid var(--border)">
     <span style="display:inline-block;width:10px;height:10px;background:var(--surface);border:.5px solid var(--border);border-radius:2px;margin-right:4px"></span>High data confidence &nbsp;·&nbsp;
     <span style="display:inline-block;width:10px;height:10px;background:var(--amber-bg);border:.5px solid var(--amber-bd);border-radius:2px;margin-right:4px"></span>Low data (xG &lt;10 / shots &lt;50 / SOT &lt;20) &nbsp;·&nbsp;
+    <span style="display:inline-block;width:10px;height:10px;background:var(--surface2);border:.5px solid var(--border);border-radius:2px;margin-right:4px"></span>No fair odds calc yet &nbsp;·&nbsp;
     Faded fair odds = below minimum threshold
   </td>`;
   tbody.appendChild(legend);
