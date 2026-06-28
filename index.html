@@ -322,17 +322,9 @@ input::placeholder{color:var(--text3)}
           </table>
         </div>
       </div>
-      <!-- Tab breakdown -->
-      <div class="card">
-        <div class="card-h">Breakdown by tab (all-time)</div>
-        <div style="overflow-x:auto">
-          <table class="dt" style="min-width:640px">
-            <thead><tr><th>Tab</th><th class="r">Bets</th><th class="r">Wins</th><th class="r">Losses</th><th class="r">Win Rate</th><th class="r">Total Staked</th><th class="r">Total EV</th><th class="r">Total P/L</th></tr></thead>
-            <tbody id="ov-tbody"></tbody>
-          </table>
-        </div>
-        <div style="padding:12px 20px;border-top:.5px solid var(--border)">
-          <p style="font-size:11px;color:var(--red);margin:0"><strong>Note:</strong> Total P/L figures may be inaccurate due to previous Excel data loss. Current all-time profit: <strong id="ov-actual-pl">£267,546.01</strong> (from main tracking sheet).</p>
+      <div class="card" style="border:1px solid var(--red-bg)">
+        <div style="padding:12px 20px">
+          <p style="font-size:12px;color:var(--red);margin:0"><i class="ti ti-alert-circle"></i> <strong>Note:</strong> Total P/L figures may be inaccurate due to previous Excel data loss. Current all-time profit: <strong>£267,546.01</strong> (from main tracking sheet).</p>
         </div>
       </div>
     </div>
@@ -343,6 +335,7 @@ input::placeholder{color:var(--text3)}
     <button class="back" onclick="backToTrackerHub()"><i class="ti ti-arrow-left"></i> Bet tracker</button>
     <div class="sec-title">Personal bets</div>
     <div class="grid">
+      <div class="cat" onclick="showTrackerSection('personal','monthly')"><div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-calendar-stats"></i></div><div><div class="cat-title">Monthly Summary</div><div class="cat-desc">Month by month P/L across all personal categories</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('personal','value')"><div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-trending-up"></i></div><div><div class="cat-title">Value</div><div class="cat-desc">Value betting results and ROI</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('personal','keithbot')"><div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-robot"></i></div><div><div class="cat-title">KeithBot</div><div class="cat-desc">KeithBot bet history and stats</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('personal','dogs')"><div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-activity"></i></div><div><div class="cat-title">Dogs + Horses DogBot</div><div class="cat-desc">Greyhound and horse racing results</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
@@ -353,7 +346,6 @@ input::placeholder{color:var(--text3)}
       <div class="cat" onclick="showTrackerSection('personal','ninja')"><div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-star"></i></div><div><div class="cat-title">Ninja Golf BFEX</div><div class="cat-desc">Ninja Golf exchange bet history</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('personal','corners')"><div class="cat-ico" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-corner-right-down"></i></div><div><div class="cat-title">Corners</div><div class="cat-desc">Corner bet results and stats</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('personal','other')"><div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-layout-grid"></i></div><div><div class="cat-title">Other</div><div class="cat-desc">Monthly P/L breakdown across all other income streams</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
-      <div class="cat" onclick="showTrackerSection('personal','monthly')"><div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-calendar-stats"></i></div><div><div class="cat-title">Monthly Summary</div><div class="cat-desc">Month by month P/L across all personal categories</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
     </div>
   </div>
 
@@ -362,13 +354,13 @@ input::placeholder{color:var(--text3)}
     <button class="back" onclick="backToTrackerHub()"><i class="ti ti-arrow-left"></i> Bet tracker</button>
     <div class="sec-title">VA bets</div>
     <div class="grid">
+      <div class="cat" onclick="showTrackerSection('va','monthly')"><div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-calendar-stats"></i></div><div><div class="cat-title">Monthly Summary</div><div class="cat-desc">Month by month P/L and EV across all VA categories</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('va','discord')"><div class="cat-ico" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-brand-discord"></i></div><div><div class="cat-title">Discord</div><div class="cat-desc">Discord channel bets and results</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('va','racing')"><div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-trophy"></i></div><div><div class="cat-title">BB Racing Tracker Pro</div><div class="cat-desc">BB professional racing tracker results</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('va','bettracker')"><div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-clipboard-list"></i></div><div><div class="cat-title">BB Bet Tracker</div><div class="cat-desc">BB bet tracker history and stats</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('va','casino')"><div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-diamond"></i></div><div><div class="cat-title">Casino</div><div class="cat-desc">VA casino session results</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('va','offers')"><div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-tag"></i></div><div><div class="cat-title">Offers</div><div class="cat-desc">Promotional offer results and P&amp;L</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('va','other')"><div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-layout-grid"></i></div><div><div class="cat-title">Other</div><div class="cat-desc">Monthly P/L breakdown — L15 Horse, EW Doubles, BFEX</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
-      <div class="cat" onclick="showTrackerSection('va','monthly')"><div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-calendar-stats"></i></div><div><div class="cat-title">Monthly Summary</div><div class="cat-desc">Month by month P/L and EV across all VA categories</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
     </div>
   </div>
 
@@ -448,7 +440,7 @@ input::placeholder{color:var(--text3)}
       </button>
     </div>
     <div id="val-status-card" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="val-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="val-status-title">Loading...</div><div class="ph-d" id="val-status-msg"></div></div></div></div>
-    <div id="val-kpi-wrap" style="display:none"><div class="kpis" id="val-kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px"></div></div>
+    <div id="val-kpi-wrap" style="display:none"><div class="kpis" id="val-kpis" style="grid-template-columns:repeat(6,1fr);margin-bottom:16px"></div></div>
     <div id="val-table-wrap" style="display:none">
       <div class="card">
         <div style="padding:12px 20px;border-bottom:.5px solid var(--border)">
@@ -474,7 +466,7 @@ input::placeholder{color:var(--text3)}
     <button class="back" onclick="backToTrackerSection('personal')"><i class="ti ti-arrow-left"></i> Personal bets</button>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px"><div class="sec-title" style="margin-bottom:0">KeithBot</div><button onclick="openKeithbotSection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'"><i class="ti ti-refresh"></i> Refresh</button></div>
     <div id="kbt-status-card" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="kbt-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="kbt-status-title">Loading...</div><div class="ph-d" id="kbt-status-msg"></div></div></div></div>
-    <div id="kbt-kpi-wrap" style="display:none"><div class="kpis" id="kbt-kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px"></div></div>
+    <div id="kbt-kpi-wrap" style="display:none"><div class="kpis" id="kbt-kpis" style="grid-template-columns:repeat(6,1fr);margin-bottom:16px"></div></div>
     <div id="kbt-table-wrap" style="display:none"><div class="card"><div style="padding:12px 20px;border-bottom:.5px solid var(--border)"><span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500" id="kbt-table-hdr">Bets</span></div><div style="overflow-x:auto;max-height:520px;overflow-y:auto"><table class="dt" style="min-width:680px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr><th style="min-width:72px">Date</th><th>Result</th><th style="min-width:110px">Player</th><th style="min-width:180px">Bet</th><th class="r">Odds</th><th class="r">Stake</th><th class="r">P/L</th><th class="r">EV</th></tr></thead><tbody id="kbt-tbody"></tbody></table></div></div></div>
   </div>
   <div id="ts-personal-dogs" class="tracker-section" style="display:none">
@@ -520,14 +512,14 @@ input::placeholder{color:var(--text3)}
     <button class="back" onclick="backToTrackerSection('personal')"><i class="ti ti-arrow-left"></i> Personal bets</button>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px"><div class="sec-title" style="margin-bottom:0">BB Horses</div><button onclick="openBBHorseSection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'"><i class="ti ti-refresh"></i> Refresh</button></div>
     <div id="bbh-status-card" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="bbh-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="bbh-status-title">Loading...</div><div class="ph-d" id="bbh-status-msg"></div></div></div></div>
-    <div id="bbh-kpi-wrap" style="display:none"><div class="kpis" id="bbh-kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px"></div></div>
+    <div id="bbh-kpi-wrap" style="display:none"><div class="kpis" id="bbh-kpis" style="grid-template-columns:repeat(6,1fr);margin-bottom:16px"></div></div>
     <div id="bbh-table-wrap" style="display:none"><div class="card"><div style="padding:12px 20px;border-bottom:.5px solid var(--border)"><span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500" id="bbh-table-hdr">Bets</span></div><div style="overflow-x:auto;max-height:520px;overflow-y:auto"><table class="dt" style="min-width:640px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr><th style="min-width:72px">Date</th><th style="min-width:80px">Race</th><th style="min-width:140px">Horse</th><th>Places</th><th class="r">Odds</th><th class="r">Stake</th><th class="r">P/L</th><th class="r">EV</th></tr></thead><tbody id="bbh-tbody"></tbody></table></div></div></div>
   </div>
   <div id="ts-personal-bbgolf" class="tracker-section" style="display:none">
     <button class="back" onclick="backToTrackerSection('personal')"><i class="ti ti-arrow-left"></i> Personal bets</button>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px"><div class="sec-title" style="margin-bottom:0">BB Golf</div><button onclick="openBBGolfSection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'"><i class="ti ti-refresh"></i> Refresh</button></div>
     <div id="bbg-status-card" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="bbg-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="bbg-status-title">Loading...</div><div class="ph-d" id="bbg-status-msg"></div></div></div></div>
-    <div id="bbg-kpi-wrap" style="display:none"><div class="kpis" id="bbg-kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px"></div></div>
+    <div id="bbg-kpi-wrap" style="display:none"><div class="kpis" id="bbg-kpis" style="grid-template-columns:repeat(6,1fr);margin-bottom:16px"></div></div>
     <div id="bbg-table-wrap" style="display:none"><div class="card"><div style="padding:12px 20px;border-bottom:.5px solid var(--border)"><span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500" id="bbg-table-hdr">Bets</span></div><div style="overflow-x:auto;max-height:520px;overflow-y:auto"><table class="dt" style="min-width:660px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr><th style="min-width:72px">Date</th><th style="min-width:130px">Event</th><th style="min-width:120px">Player</th><th>Places</th><th class="r">Odds</th><th class="r">Stake</th><th class="r">P/L</th><th class="r">EV</th></tr></thead><tbody id="bbg-tbody"></tbody></table></div></div></div>
   </div>
   <div id="ts-personal-american" class="tracker-section" style="display:none">
@@ -564,7 +556,7 @@ input::placeholder{color:var(--text3)}
     <button class="back" onclick="backToTrackerSection('personal')"><i class="ti ti-arrow-left"></i> Personal bets</button>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px"><div class="sec-title" style="margin-bottom:0">Freeze</div><button onclick="openFreezeSection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'"><i class="ti ti-refresh"></i> Refresh</button></div>
     <div id="frz-status-card" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="frz-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="frz-status-title">Loading...</div><div class="ph-d" id="frz-status-msg"></div></div></div></div>
-    <div id="frz-kpi-wrap" style="display:none"><div class="kpis" id="frz-kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px"></div></div>
+    <div id="frz-kpi-wrap" style="display:none"><div class="kpis" id="frz-kpis" style="grid-template-columns:repeat(6,1fr);margin-bottom:16px"></div></div>
     <div id="frz-table-wrap" style="display:none"><div class="card"><div style="padding:12px 20px;border-bottom:.5px solid var(--border)"><span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500" id="frz-table-hdr">Bets</span></div><div style="overflow-x:auto;max-height:520px;overflow-y:auto"><table class="dt" style="min-width:580px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr><th style="min-width:72px">Date</th><th>Result</th><th style="min-width:150px">Team</th><th class="r">Acca Odds</th><th class="r">Stake</th><th class="r">P/L</th><th class="r">EV</th></tr></thead><tbody id="frz-tbody"></tbody></table></div></div></div>
   </div>
   <div id="ts-personal-ninja" class="tracker-section" style="display:none">
@@ -615,7 +607,7 @@ input::placeholder{color:var(--text3)}
       <button onclick="openVARacingSection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
     </div>
     <div id="va-rtp-status" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="va-rtp-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="va-rtp-status-title">Loading...</div><div class="ph-d" id="va-rtp-status-msg"></div></div></div></div>
-    <div id="va-rtp-kpi-wrap" style="display:none"><div class="kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px" id="va-rtp-kpis"></div></div>
+    <div id="va-rtp-kpi-wrap" style="display:none"><div class="kpis" style="grid-template-columns:repeat(6,1fr);margin-bottom:16px" id="va-rtp-kpis"></div></div>
     <div id="va-rtp-table-wrap" class="card" style="display:none">
       <div style="padding:12px 20px;border-bottom:.5px solid var(--border)"><span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500">Most recent 100 bets</span></div>
       <div style="overflow-x:auto;max-height:520px;overflow-y:auto">
@@ -1811,12 +1803,16 @@ function trkFinish(p,tbody,rows,summary,recentPL,wins,losses,colspan){
   const l100l=summary.last50losses!=null?summary.last50losses:losses;
   const plCol=allTimePL!=null?(allTimePL>0?'var(--green)':allTimePL<0?'var(--red)':'var(--text2)'):(recentPL>0?'var(--green)':recentPL<0?'var(--red)':'var(--text2)');
   const displayPL=allTimePL!=null?allTimePL:recentPL;
+  const totalEV=summary.totalEV!=null?summary.totalEV:null;
+  const evCol=totalEV!=null?(totalEV>0?'var(--green)':totalEV<0?'var(--red)':'var(--text2)'):'var(--text2)';
+  const evKpi=totalEV!=null?`<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:${evCol}">${fmtGBP(totalEV)}</div></div>`:'';
   document.getElementById(p+'-kpis').innerHTML=`
     <div class="kpi"><div class="kpi-l">Total bets</div><div class="kpi-v">${total.toLocaleString()}</div><div class="kpi-s">Win rate ${allWR}</div></div>
     <div class="kpi"><div class="kpi-l">Wins</div><div class="kpi-v" style="color:var(--green)">${tW.toLocaleString()}</div><div class="kpi-s">Last 100: ${l100w}</div></div>
     <div class="kpi"><div class="kpi-l">Losses</div><div class="kpi-v" style="color:var(--red)">${tL.toLocaleString()}</div><div class="kpi-s">Last 100: ${l100l}</div></div>
-    <div class="kpi"><div class="kpi-l">All-time P/L</div><div class="kpi-v" style="color:${plCol}">${displayPL>=0?'+':''}£${Math.abs(displayPL).toFixed(2)}</div></div>
-    <div class="kpi"><div class="kpi-l">Recent P/L</div><div class="kpi-v" style="color:${recentPL>0?'var(--green)':recentPL<0?'var(--red)':'var(--text2)'}">${recentPL>=0?'+':''}£${Math.abs(recentPL).toFixed(2)}</div><div class="kpi-s">Last 100 bets</div></div>`;
+    ${evKpi}
+    <div class="kpi"><div class="kpi-l">All-time P/L</div><div class="kpi-v" style="color:${plCol}">${fmtGBP(displayPL)}</div></div>
+    <div class="kpi"><div class="kpi-l">Recent P/L</div><div class="kpi-v" style="color:${recentPL>0?'var(--green)':recentPL<0?'var(--red)':'var(--text2)'}">${fmtGBP(recentPL)}</div><div class="kpi-s">Last 100 bets</div></div>`;
   document.getElementById(p+'-table-hdr').textContent=`Most recent ${rows.length} bets`;
   document.getElementById(p+'-kpi-wrap').style.display='';
   document.getElementById(p+'-table-wrap').style.display='';
@@ -2051,11 +2047,13 @@ async function openVARacingSection() {
     const s=data.summary||{};
     const plCol=s.totalPL>0?'var(--green)':s.totalPL<0?'var(--red)':'var(--text2)';
     const wr=s.totalBets>0?((s.wins/s.totalBets)*100).toFixed(1)+'%':'--';
+    const rtpEvCol=(s.totalEV||0)>0?'var(--green)':(s.totalEV||0)<0?'var(--red)':'var(--text2)';
     document.getElementById('va-'+p+'-kpis').innerHTML=
       '<div class="kpi"><div class="kpi-l">Total bets</div><div class="kpi-v">'+s.totalBets.toLocaleString()+'</div><div class="kpi-s">Win rate '+wr+'</div></div>'+
       '<div class="kpi"><div class="kpi-l">Wins</div><div class="kpi-v" style="color:var(--green)">'+(s.wins||0).toLocaleString()+'</div><div class="kpi-s">Last 100: '+(s.last50wins||0)+'</div></div>'+
       '<div class="kpi"><div class="kpi-l">Losses</div><div class="kpi-v" style="color:var(--red)">'+(s.losses||0).toLocaleString()+'</div><div class="kpi-s">Last 100: '+(s.last50losses||0)+'</div></div>'+
       '<div class="kpi"><div class="kpi-l">Places</div><div class="kpi-v" style="color:var(--green);opacity:.7">'+(s.places||0).toLocaleString()+'</div><div class="kpi-s">Last 100: '+(s.last50places||0)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:'+rtpEvCol+'">'+fmtGBP(s.totalEV||0)+'</div></div>'+
       '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+fmtGBP(s.totalPL||0)+'</div></div>';
     document.getElementById('va-'+p+'-kpi-wrap').style.display='';
     const tbody=document.getElementById('va-'+p+'-tbody'); tbody.innerHTML='';
@@ -2218,18 +2216,34 @@ async function openPersonalMonthlySection() {
     const r = await fetch('/.netlify/functions/sheets?url='+encodeURIComponent(url)+'&tab=Overall+Profit');
     const data = await r.json();
     document.getElementById('pm-status').style.display='none';
-    if(!data.ok){document.getElementById('pm-status-ico').innerHTML='<i class="ti ti-alert-circle"></i>';document.getElementById('pm-status-title').textContent='Error';document.getElementById('pm-status-msg').textContent=data.error||'Unknown error';document.getElementById('pm-status').style.display='';return;}
-    if(!data.rows||!data.rows.length){document.getElementById('pm-status-ico').innerHTML='<i class="ti ti-inbox"></i>';document.getElementById('pm-status-title').textContent='No data';document.getElementById('pm-status-msg').textContent='Overall Profit tab appears empty.';document.getElementById('pm-status').style.display='';return;}
-
-    const cats = ['VA','Punt/Extra','Shop','Impact Sub','B365 Outliers','Data Accs','Casino','EP Acca','BFEX Horse','Dog Lay','Refunds','EPs','2UPs'];
+    if(!data.ok||!data.rows||!data.rows.length){
+      document.getElementById('pm-status-ico').innerHTML='<i class="ti ti-alert-circle"></i>';
+      document.getElementById('pm-status-title').textContent=data.ok?'No data found':'Error loading data';
+      document.getElementById('pm-status-msg').textContent=data.error||'Overall Profit tab appears empty.';
+      document.getElementById('pm-status').style.display='';return;
+    }
+    // Categories — exclude VA (covered in VA section)
+    const cats = ['Punt/Extra','Shop','Impact Sub','B365 Outliers','Data Accs','Casino','EP Acca','BFEX Horse','Dog Lay','Refunds','EPs','2UPs'];
+    // Filter to months with any data
+    const rows = data.rows.filter(r => cats.some(c => parseFloat(r[c])||0));
+    if(!rows.length){
+      document.getElementById('pm-status-ico').innerHTML='<i class="ti ti-inbox"></i>';
+      document.getElementById('pm-status-title').textContent='No data found';
+      document.getElementById('pm-status-msg').textContent='No monthly data available yet.';
+      document.getElementById('pm-status').style.display='';return;
+    }
+    // Calculate column totals and grand totals
+    const colTotals = {};
+    cats.forEach(c => colTotals[c]=0);
     let grandTotal=0, bestVal=-Infinity, bestMonth='', monthCount=0;
-    data.rows.forEach(r => {
-      const rowTotal = cats.reduce((s,c) => s+(parseFloat(r[c])||0), 0);
-      grandTotal += rowTotal;
+    rows.forEach(r => {
+      const rowTotal = cats.reduce((s,c)=>s+(parseFloat(r[c])||0),0);
+      grandTotal+=rowTotal;
+      cats.forEach(c => colTotals[c]+=(parseFloat(r[c])||0));
       if(rowTotal>bestVal){bestVal=rowTotal;bestMonth=r.Month;}
-      if(cats.some(c=>parseFloat(r[c])||0)) monthCount++;
+      monthCount++;
     });
-    const avgMonthly = monthCount>0?grandTotal/monthCount:0;
+    const avgMonthly=monthCount>0?grandTotal/monthCount:0;
     const plCol=grandTotal>0?'var(--green)':grandTotal<0?'var(--red)':'var(--text2)';
     const avgCol=avgMonthly>0?'var(--green)':avgMonthly<0?'var(--red)':'var(--text2)';
     const bestCol=bestVal>0?'var(--green)':bestVal<0?'var(--red)':'var(--text2)';
@@ -2238,23 +2252,26 @@ async function openPersonalMonthlySection() {
       '<div class="kpi"><div class="kpi-l">Months tracked</div><div class="kpi-v">'+monthCount+'</div></div>'+
       '<div class="kpi"><div class="kpi-l">Best month</div><div class="kpi-v" style="color:'+bestCol+'">'+fmtGBP(bestVal)+'</div><div class="kpi-s">'+bestMonth+'</div></div>'+
       '<div class="kpi"><div class="kpi-l">Monthly avg</div><div class="kpi-v" style="color:'+avgCol+'">'+fmtGBP(avgMonthly)+'</div></div>';
-
-    // Build table headers
+    // Build table
     const thead = document.getElementById('pm-thead-row');
-    thead.innerHTML='<th>Month</th>'+cats.map(c=>'<th class="r" style="font-size:11px;white-space:nowrap">'+c+'</th>').join('')+'<th class="r" style="font-weight:700">Total</th>';
-
-    // Build table rows
+    // Header row 1: Month, Total P/L, then categories
+    thead.innerHTML='<th>Month</th><th class="r" style="font-weight:700">Total P/L</th>'+cats.map(c=>'<th class="r" style="font-size:11px;white-space:nowrap">'+c+'</th>').join('');
+    // Header row 2: column totals
+    const trow2 = document.createElement('tr');
+    trow2.style.cssText='background:var(--surface2);font-size:11px';
+    const grandCol=grandTotal>0?'var(--green)':grandTotal<0?'var(--red)':'var(--text2)';
+    trow2.innerHTML='<td style="color:var(--text3);font-size:10px;padding:4px 8px">TOTAL</td>'+
+      '<td class="r tn" style="color:'+grandCol+';font-weight:600;padding:4px 8px">'+fmtGBP(grandTotal)+'</td>'+
+      cats.map(c=>{const v=colTotals[c];const col=v>0?'var(--green)':v<0?'var(--red)':'var(--text2)';return '<td class="r tn" style="color:'+col+';padding:4px 8px">'+(v!==0?fmtGBP(v):'—')+'</td>';}).join('');
+    thead.parentElement.querySelector('thead').appendChild(trow2);
+    // Table body
     const tbody = document.getElementById('pm-tbody'); tbody.innerHTML='';
-    data.rows.forEach(row => {
-      const rowTotal = cats.reduce((s,c) => s+(parseFloat(row[c])||0), 0);
+    rows.forEach(row => {
+      const rowTotal = cats.reduce((s,c)=>s+(parseFloat(row[c])||0),0);
       const totCol=rowTotal>0?'var(--green)':rowTotal<0?'var(--red)':'var(--text2)';
       const tr = document.createElement('tr');
-      const cells = cats.map(c => {
-        const v=parseFloat(row[c])||0;
-        const col=v>0?'var(--green)':v<0?'var(--red)':'var(--text2)';
-        return '<td class="r tn" style="color:'+col+'">'+(v!==0?fmtGBP(v):'—')+'</td>';
-      }).join('');
-      tr.innerHTML='<td style="font-weight:500;white-space:nowrap">'+row.Month+'</td>'+cells+'<td class="r tn" style="color:'+totCol+';font-weight:600">'+(rowTotal!==0?fmtGBP(rowTotal):'—')+'</td>';
+      const cells = cats.map(c=>{const v=parseFloat(row[c])||0;const col=v>0?'var(--green)':v<0?'var(--red)':'var(--text2)';return '<td class="r tn" style="color:'+col+'">'+(v!==0?fmtGBP(v):'—')+'</td>';}).join('');
+      tr.innerHTML='<td style="font-weight:500;white-space:nowrap">'+row.Month+'</td><td class="r tn" style="color:'+totCol+';font-weight:600">'+(rowTotal!==0?fmtGBP(rowTotal):'—')+'</td>'+cells;
       tbody.appendChild(tr);
     });
     document.getElementById('pm-content').style.display='';
@@ -2264,6 +2281,103 @@ async function openPersonalMonthlySection() {
     document.getElementById('pm-status-title').textContent=noUrl?'No sheet connected':'Could not reach sheet';
     document.getElementById('pm-status-msg').textContent=noUrl?'Go to Bet Tracker and paste your Main sheet URL in Data connections.':err.message;
     document.getElementById('pm-status').style.display='';
+  }
+}
+
+// ── VA MONTHLY SUMMARY ──
+async function openVAMonthlySection() {
+  document.getElementById('vm-status').style.display='';
+  document.getElementById('vm-content').style.display='none';
+  document.getElementById('vm-status-ico').innerHTML='<i class="ti ti-loader"></i>';
+  document.getElementById('vm-status-title').textContent='Loading...';
+  document.getElementById('vm-status-msg').textContent='Fetching monthly VA data...';
+  try {
+    const url = localStorage.getItem('bb_va_url');
+    if(!url) throw new Error('NO_URL');
+    const r = await fetch('/.netlify/functions/sheets?url='+encodeURIComponent(url)+'&tab=Summary');
+    const data = await r.json();
+    document.getElementById('vm-status').style.display='none';
+    if(!data.ok||!data.rows||!data.rows.length){
+      document.getElementById('vm-status-ico').innerHTML='<i class="ti ti-alert-circle"></i>';
+      document.getElementById('vm-status-title').textContent=data.ok?'No data found':'Error loading data';
+      document.getElementById('vm-status-msg').textContent=data.error||'Summary tab appears empty.';
+      document.getElementById('vm-status').style.display='';return;
+    }
+    const cats = ['Discord','BB-BT','BB-RTP','L15 Horse','Offers','Casino','EW Double','BB-EP','Refunds','L15 Football','Acca Ins','BFEX Horse','BFEX Dog'];
+    // Filter to months with any data
+    const rows = data.rows.filter(r => cats.some(c => parseFloat(r[c])||0));
+    if(!rows.length){
+      document.getElementById('vm-status-ico').innerHTML='<i class="ti ti-inbox"></i>';
+      document.getElementById('vm-status-title').textContent='No data found';
+      document.getElementById('vm-status-msg').textContent='No monthly data available yet.';
+      document.getElementById('vm-status').style.display='';return;
+    }
+    // Calculate column totals
+    const colPL={}, colEV={};
+    cats.forEach(c=>{colPL[c]=0;colEV[c]=0;});
+    let grandPL=0, grandEV=0, bestVal=-Infinity, bestMonth='', monthCount=0;
+    rows.forEach(r=>{
+      const rowPL=cats.reduce((s,c)=>s+(parseFloat(r[c])||0),0);
+      const rowEV=cats.reduce((s,c)=>s+(parseFloat(r[c+'_ev'])||0),0);
+      grandPL+=rowPL; grandEV+=rowEV;
+      cats.forEach(c=>{colPL[c]+=(parseFloat(r[c])||0);colEV[c]+=(parseFloat(r[c+'_ev'])||0);});
+      if(rowPL>bestVal){bestVal=rowPL;bestMonth=r.Month;}
+      monthCount++;
+    });
+    const avgMonthly=monthCount>0?grandPL/monthCount:0;
+    const plCol=grandPL>0?'var(--green)':grandPL<0?'var(--red)':'var(--text2)';
+    const evCol=grandEV>0?'var(--green)':grandEV<0?'var(--red)':'var(--text2)';
+    const avgCol=avgMonthly>0?'var(--green)':avgMonthly<0?'var(--red)':'var(--text2)';
+    const bestCol=bestVal>0?'var(--green)':bestVal<0?'var(--red)':'var(--text2)';
+    document.getElementById('vm-kpis').innerHTML=
+      '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+fmtGBP(grandPL)+'</div><div class="kpi-s">All categories combined</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:'+evCol+'">'+fmtGBP(grandEV)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Best month</div><div class="kpi-v" style="color:'+bestCol+'">'+fmtGBP(bestVal)+'</div><div class="kpi-s">'+bestMonth+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Monthly avg P/L</div><div class="kpi-v" style="color:'+avgCol+'">'+fmtGBP(avgMonthly)+'</div></div>';
+    // Build table headers
+    const theadRow = document.getElementById('vm-thead-row');
+    theadRow.innerHTML='<th>Month</th><th class="r" style="font-weight:700">Total P/L</th><th class="r">Total EV</th>'+cats.map(c=>'<th class="r" style="font-size:11px;white-space:nowrap">'+c+'</th>').join('');
+    // Totals sub-header row
+    const trow2 = document.createElement('tr');
+    trow2.style.cssText='background:var(--surface2);font-size:11px';
+    const grandPLcol=grandPL>0?'var(--green)':grandPL<0?'var(--red)':'var(--text2)';
+    const grandEVcol=grandEV>0?'var(--green)':grandEV<0?'var(--red)':'var(--text2)';
+    trow2.innerHTML='<td style="color:var(--text3);font-size:10px;padding:4px 8px">TOTAL</td>'+
+      '<td class="r tn" style="color:'+grandPLcol+';font-weight:600;padding:4px 8px">'+fmtGBP(grandPL)+'</td>'+
+      '<td class="r tn" style="color:'+grandEVcol+';padding:4px 8px">'+fmtGBP(grandEV)+'</td>'+
+      cats.map(c=>{
+        const pl=colPL[c], ev=colEV[c];
+        const plc=pl>0?'var(--green)':pl<0?'var(--red)':'var(--text2)';
+        const evc=ev>0?'var(--green)':ev<0?'var(--red)':'var(--text2)';
+        return '<td class="r tn" style="padding:4px 8px"><span style="color:'+plc+';display:block">'+(pl!==0?fmtGBP(pl):'—')+'</span>'+(ev!==0?'<span style="color:var(--amber);font-size:10px">'+fmtGBP(ev)+'</span>':'')+'</td>';
+      }).join('');
+    theadRow.parentElement.querySelector('thead').appendChild(trow2);
+    // Table body
+    const tbody = document.getElementById('vm-tbody'); tbody.innerHTML='';
+    rows.forEach(row=>{
+      const rowPL=cats.reduce((s,c)=>s+(parseFloat(row[c])||0),0);
+      const rowEV=cats.reduce((s,c)=>s+(parseFloat(row[c+'_ev'])||0),0);
+      const totCol=rowPL>0?'var(--green)':rowPL<0?'var(--red)':'var(--text2)';
+      const evC=rowEV>0?'var(--green)':rowEV<0?'var(--red)':'var(--text2)';
+      const tr=document.createElement('tr');
+      const cells=cats.map(c=>{
+        const v=parseFloat(row[c])||0, ev=parseFloat(row[c+'_ev'])||0;
+        const col=v>0?'var(--green)':v<0?'var(--red)':'var(--text2)';
+        const evcol=ev>0?'var(--green)':ev<0?'var(--red)':'var(--text2)';
+        return '<td class="r tn"><span style="color:'+col+'">'+(v!==0?fmtGBP(v):'—')+'</span>'+(ev!==0?'<br><span style="font-size:10px;color:var(--amber)">'+fmtGBP(ev)+'</span>':'')+'</td>';
+      }).join('');
+      tr.innerHTML='<td style="font-weight:500;white-space:nowrap">'+row.Month+'</td>'+
+        '<td class="r tn" style="color:'+totCol+';font-weight:600">'+(rowPL!==0?fmtGBP(rowPL):'—')+'</td>'+
+        '<td class="r tn" style="color:'+evC+'">'+(rowEV!==0?fmtGBP(rowEV):'—')+'</td>'+cells;
+      tbody.appendChild(tr);
+    });
+    document.getElementById('vm-content').style.display='';
+  } catch(err) {
+    const noUrl=err.message==='NO_URL';
+    document.getElementById('vm-status-ico').innerHTML='<i class="ti ti-plug-connected-x"></i>';
+    document.getElementById('vm-status-title').textContent=noUrl?'No VA sheet connected':'Could not reach sheet';
+    document.getElementById('vm-status-msg').textContent=noUrl?'Go to Bet Tracker and paste your VA sheet URL in Data connections.':err.message;
+    document.getElementById('vm-status').style.display='';
   }
 }
 
@@ -2432,72 +2546,33 @@ async function openOverallSection(){
     document.getElementById('ov-status-msg').textContent='Go to Bet Tracker and paste your Main Tracking Sheet URL in the Data connections card.';
     return;
   }
-  const url = mainUrl;
   document.getElementById('ov-status-ico').innerHTML='<i class="ti ti-loader"></i>';
   document.getElementById('ov-status-title').textContent='Loading...';
   document.getElementById('ov-status-msg').textContent='Fetching stats from all tabs — this may take a moment.';
 
+  // Fetch tab summaries for KPIs
+  const url = mainUrl;
   const results = await Promise.allSettled(OVERALL_TABS.map(async t => {
     const r = await fetch('/.netlify/functions/sheets?url='+encodeURIComponent(url)+'&tab='+encodeURIComponent(t.tab));
     const d = await r.json();
     return {...t, summary: d.ok ? d.summary : null};
   }));
-
   document.getElementById('ov-status').style.display='none';
 
   let grandBets=0, grandStake=0, grandEV=0, grandPL=0, grandWins=0, grandLosses=0;
-  const tbody = document.getElementById('ov-tbody');
-  tbody.innerHTML='';
-  const fmt = n => Math.abs(n).toLocaleString('en-GB',{minimumFractionDigits:0,maximumFractionDigits:0});
-
   results.forEach(r => {
-    if(r.status !== 'fulfilled') return;
-    const {label, hasEV, summary} = r.value;
-    if(!summary) {
-      const tr = document.createElement('tr');
-      tr.innerHTML='<td style="font-weight:500">'+label+'</td><td class="r tn" colspan="7" style="color:var(--text3)">Could not load</td>';
-      tbody.appendChild(tr); return;
-    }
-    const bets=summary.totalBets||0, wins=summary.wins||0, losses=summary.losses||0;
-    const stake=summary.totalStake||0, ev=summary.totalEV||0, pl=summary.totalPL||0;
-    const wr = bets>0?((wins/bets)*100).toFixed(1)+'%':'--';
-    const plCol = pl>0?'var(--green)':pl<0?'var(--red)':'var(--text2)';
-    const evCol = ev>0?'var(--green)':ev<0?'var(--red)':'var(--text2)';
-    grandBets+=bets; grandStake+=stake; grandEV+=ev; grandPL+=pl; grandWins+=wins; grandLosses+=losses;
-    const tr = document.createElement('tr');
-    tr.innerHTML =
-      '<td style="font-weight:500">'+label+'</td>'+
-      '<td class="r tn">'+bets.toLocaleString()+'</td>'+
-      '<td class="r tn" style="color:var(--green)">'+wins.toLocaleString()+'</td>'+
-      '<td class="r tn" style="color:var(--red)">'+losses.toLocaleString()+'</td>'+
-      '<td class="r tn">'+wr+'</td>'+
-      '<td class="r tn">£'+fmt(stake)+'</td>'+
-      '<td class="r tn" style="color:'+evCol+'">'+(hasEV?(ev>=0?'+':'')+'£'+fmt(ev):'--')+'</td>'+
-      '<td class="r tn" style="color:'+plCol+';font-weight:500">'+(pl>=0?'+':'')+'£'+fmt(pl)+'</td>';
-    tbody.appendChild(tr);
+    if(r.status!=='fulfilled'||!r.value.summary) return;
+    const s=r.value.summary;
+    grandBets+=s.totalBets||0; grandStake+=s.totalStake||0;
+    grandEV+=s.totalEV||0; grandPL+=s.totalPL||0;
+    grandWins+=s.wins||0; grandLosses+=s.losses||0;
   });
-
-  const tPlCol = grandPL>0?'var(--green)':grandPL<0?'var(--red)':'var(--text2)';
-  const tEvCol = grandEV>0?'var(--green)':grandEV<0?'var(--red)':'var(--text2)';
-  const tWr = grandBets>0?((grandWins/grandBets)*100).toFixed(1)+'%':'--';
-  const ft = document.createElement('tr');
-  ft.style.cssText='background:var(--surface2);border-top:1px solid var(--border)';
-  ft.innerHTML =
-    '<td style="font-weight:700">Total</td>'+
-    '<td class="r tn" style="font-weight:600">'+grandBets.toLocaleString()+'</td>'+
-    '<td class="r tn" style="color:var(--green);font-weight:600">'+grandWins.toLocaleString()+'</td>'+
-    '<td class="r tn" style="color:var(--red);font-weight:600">'+grandLosses.toLocaleString()+'</td>'+
-    '<td class="r tn" style="font-weight:600">'+tWr+'</td>'+
-    '<td class="r tn" style="font-weight:600">£'+fmt(grandStake)+'</td>'+
-    '<td class="r tn" style="color:'+tEvCol+';font-weight:600">'+fmtGBP(grandEV)+'</td>'+
-    '<td class="r tn" style="color:'+tPlCol+';font-weight:700">'+fmtGBP(grandPL)+'</td>';
-  tbody.appendChild(ft);
-
-  const plCol = grandPL>0?'var(--green)':grandPL<0?'var(--red)':'var(--text2)';
-  const evCol = grandEV>0?'var(--green)':grandEV<0?'var(--red)':'var(--text2)';
-  document.getElementById('ov-kpis').innerHTML =
+  const tWr=grandBets>0?((grandWins/grandBets)*100).toFixed(1)+'%':'--';
+  const plCol=grandPL>0?'var(--green)':grandPL<0?'var(--red)':'var(--text2)';
+  const evCol=grandEV>0?'var(--green)':grandEV<0?'var(--red)':'var(--text2)';
+  document.getElementById('ov-kpis').innerHTML=
     '<div class="kpi"><div class="kpi-l">Total bets</div><div class="kpi-v">'+grandBets.toLocaleString()+'</div><div class="kpi-s">Win rate '+tWr+'</div></div>'+
-    '<div class="kpi"><div class="kpi-l">Total staked</div><div class="kpi-v">£'+fmt(grandStake)+'</div></div>'+
+    '<div class="kpi"><div class="kpi-l">Total staked</div><div class="kpi-v">'+fmtGBP(grandStake,false)+'</div></div>'+
     '<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:'+evCol+'">'+fmtGBP(grandEV)+'</div></div>'+
     '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+fmtGBP(grandPL)+'</div></div>';
 
@@ -2513,33 +2588,43 @@ async function openOverallSection(){
     ]);
     const persData = persResp.status==='fulfilled'&&persResp.value.ok ? persResp.value.rows : [];
     const vaData = vaResp.status==='fulfilled'&&vaResp.value.ok ? vaResp.value.rows : [];
-    // Build month map
+
+    // Build combined month map — only include months with data
     const monthMap = {};
     persData.forEach(r => {
+      const rowPL = personalCats.reduce((s,c)=>s+(parseFloat(r[c])||0),0);
+      if(!rowPL) return; // skip months with no personal data
       if(!monthMap[r.Month]) monthMap[r.Month]={month:r.Month,persPL:0,persEV:0,vaPL:0,vaEV:0};
-      monthMap[r.Month].persPL += personalCats.reduce((s,c)=>s+(parseFloat(r[c])||0),0);
+      monthMap[r.Month].persPL += rowPL;
     });
     vaData.forEach(r => {
+      const rowPL = vaCats.reduce((s,c)=>s+(parseFloat(r[c])||0),0);
+      const rowEV = vaCats.reduce((s,c)=>s+(parseFloat(r[c+'_ev'])||0),0);
+      if(!rowPL&&!rowEV) return; // skip months with no VA data
       if(!monthMap[r.Month]) monthMap[r.Month]={month:r.Month,persPL:0,persEV:0,vaPL:0,vaEV:0};
-      monthMap[r.Month].vaPL += vaCats.reduce((s,c)=>s+(parseFloat(r[c])||0),0);
-      monthMap[r.Month].vaEV += vaCats.reduce((s,c)=>s+(parseFloat(r[c+'_ev'])||0),0);
+      monthMap[r.Month].vaPL += rowPL;
+      monthMap[r.Month].vaEV += rowEV;
     });
+
     const months = Object.values(monthMap);
-    months.forEach(m => {
-      const combPL=m.persPL+m.vaPL, combEV=m.persEV+m.vaEV;
-      const cell=(v)=>{const c=v>0?'var(--green)':v<0?'var(--red)':'var(--text2)';return '<td class="r tn" style="color:'+c+'">'+(v!==0?fmtGBP(v):'--')+'</td>';};
-      const combCol=combPL>0?'var(--green)':combPL<0?'var(--red)':'var(--text2)';
-      const tr=document.createElement('tr');
-      tr.innerHTML='<td style="font-weight:500;white-space:nowrap">'+m.month+'</td>'+cell(m.persEV)+cell(m.persPL)+cell(m.vaEV)+cell(m.vaPL)+cell(combEV)+'<td class="r tn" style="color:'+combCol+';font-weight:700">'+(combPL!==0?fmtGBP(combPL):'--')+'</td>';
-      monthlyTbody.appendChild(tr);
-    });
     if(!months.length) {
       const tr=document.createElement('tr');
       tr.innerHTML='<td colspan="7" style="color:var(--text3);text-align:center;padding:16px">No monthly data available — connect both sheets</td>';
       monthlyTbody.appendChild(tr);
+    } else {
+      months.forEach(m => {
+        const combPL=m.persPL+m.vaPL, combEV=m.persEV+m.vaEV;
+        const cell=(v,bold)=>{
+          if(v===0) return '<td class="r tn" style="color:var(--text3)">--</td>';
+          const c=v>0?'var(--green)':v<0?'var(--red)':'var(--text2)';
+          return '<td class="r tn" style="color:'+c+';'+(bold?'font-weight:700':'')+'">'+fmtGBP(v)+'</td>';
+        };
+        const tr=document.createElement('tr');
+        tr.innerHTML='<td style="font-weight:500;white-space:nowrap">'+m.month+'</td>'+cell(m.persEV)+cell(m.persPL)+cell(m.vaEV)+cell(m.vaPL)+cell(combEV)+cell(combPL,true);
+        monthlyTbody.appendChild(tr);
+      });
     }
   } catch(e) { console.error('Monthly breakdown error:', e); }
-
   document.getElementById('ov-content').style.display='';
 }
 
