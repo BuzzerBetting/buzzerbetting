@@ -1918,8 +1918,8 @@ async function openVADiscordSection() {
       '<div class="kpi"><div class="kpi-l">Total bets</div><div class="kpi-v">'+s.totalBets.toLocaleString()+'</div><div class="kpi-s">Win rate '+wr+'</div></div>'+
       '<div class="kpi"><div class="kpi-l">Wins</div><div class="kpi-v" style="color:var(--green)">'+(s.wins||0).toLocaleString()+'</div><div class="kpi-s">Last 100: '+(s.last50wins||0)+'</div></div>'+
       '<div class="kpi"><div class="kpi-l">Losses</div><div class="kpi-v" style="color:var(--red)">'+(s.losses||0).toLocaleString()+'</div><div class="kpi-s">Last 100: '+(s.last50losses||0)+'</div></div>'+
-      '<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:'+evCol+'">'+(s.totalEV>=0?'+':'')+'£'+Math.abs(s.totalEV||0).toFixed(2)+'</div></div>'+
-      '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+(s.totalPL>=0?'+':'')+'£'+Math.abs(s.totalPL||0).toFixed(2)+'</div></div>';
+      '<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:'+evCol+'">'+fmtGBP(s.totalEV||0)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+fmtGBP(s.totalPL||0)+'</div></div>';
     document.getElementById('va-'+p+'-kpi-wrap').style.display='';
     const tbody=document.getElementById('va-'+p+'-tbody'); tbody.innerHTML='';
     data.rows.forEach(b=>{
@@ -1931,7 +1931,7 @@ async function openVADiscordSection() {
       const plC=pl>0?'var(--green)':pl<0?'var(--red)':'var(--text2)';
       const evC=ev>0?'var(--green)':ev<0?'var(--red)':'var(--text2)';
       const tr=document.createElement('tr');
-      tr.innerHTML='<td style="font-size:12px;white-space:nowrap">'+b.Date+'</td><td>'+badge+'</td><td style="font-weight:500;font-size:13px">'+b.Bet+'</td><td class="r tn">'+(b.Odds||'--')+'</td><td class="r tn">£'+(parseFloat(b.Stake)||0).toFixed(2)+'</td><td class="r tn" style="color:'+plC+'">'+(pl>=0?'+':'')+'£'+Math.abs(pl).toFixed(2)+'</td><td class="r tn" style="color:'+evC+'">'+(ev>=0?'+':'')+'£'+Math.abs(ev).toFixed(2)+'</td>';
+      tr.innerHTML='<td style="font-size:12px;white-space:nowrap">'+b.Date+'</td><td>'+badge+'</td><td style="font-weight:500;font-size:13px">'+b.Bet+'</td><td class="r tn">'+(b.Odds||'--')+'</td><td class="r tn">£'+(parseFloat(b.Stake)||0).toFixed(2)+'</td><td class="r tn" style="color:'+plC+'">'+fmtGBP(pl)+'</td><td class="r tn" style="color:'+evC+'">'+fmtGBP(ev)+'</td>';
       tbody.appendChild(tr);
     });
     document.getElementById('va-'+p+'-table-wrap').style.display='';
@@ -1960,7 +1960,7 @@ async function openVARacingSection() {
       '<div class="kpi"><div class="kpi-l">Wins</div><div class="kpi-v" style="color:var(--green)">'+(s.wins||0).toLocaleString()+'</div><div class="kpi-s">Last 100: '+(s.last50wins||0)+'</div></div>'+
       '<div class="kpi"><div class="kpi-l">Losses</div><div class="kpi-v" style="color:var(--red)">'+(s.losses||0).toLocaleString()+'</div><div class="kpi-s">Last 100: '+(s.last50losses||0)+'</div></div>'+
       '<div class="kpi"><div class="kpi-l">Places</div><div class="kpi-v" style="color:var(--green);opacity:.7">'+(s.places||0).toLocaleString()+'</div><div class="kpi-s">Last 100: '+(s.last50places||0)+'</div></div>'+
-      '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+(s.totalPL>=0?'+':'')+'£'+Math.abs(s.totalPL||0).toFixed(2)+'</div></div>';
+      '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+fmtGBP(s.totalPL||0)+'</div></div>';
     document.getElementById('va-'+p+'-kpi-wrap').style.display='';
     const tbody=document.getElementById('va-'+p+'-tbody'); tbody.innerHTML='';
     data.rows.forEach(b=>{
@@ -1973,7 +1973,7 @@ async function openVARacingSection() {
       const plC=pl>0?'var(--green)':pl<0?'var(--red)':'var(--text2)';
       const evC=ev>0?'var(--green)':ev<0?'var(--red)':'var(--text2)';
       const tr=document.createElement('tr');
-      tr.innerHTML='<td style="font-size:12px;white-space:nowrap">'+b.Date+'</td><td>'+badge+'</td><td style="font-size:12px">'+b.Race+'</td><td style="font-weight:500;font-size:13px">'+b.Horse+'</td><td class="r tn">'+(b.Odds||'--')+'</td><td class="r tn">£'+(parseFloat(b.Stake)||0).toFixed(2)+'</td><td class="r tn" style="color:'+plC+'">'+(pl>=0?'+':'')+'£'+Math.abs(pl).toFixed(2)+'</td><td class="r tn" style="color:'+evC+'">'+(ev>=0?'+':'')+'£'+Math.abs(ev).toFixed(2)+'</td>';
+      tr.innerHTML='<td style="font-size:12px;white-space:nowrap">'+b.Date+'</td><td>'+badge+'</td><td style="font-size:12px">'+b.Race+'</td><td style="font-weight:500;font-size:13px">'+b.Horse+'</td><td class="r tn">'+(b.Odds||'--')+'</td><td class="r tn">£'+(parseFloat(b.Stake)||0).toFixed(2)+'</td><td class="r tn" style="color:'+plC+'">'+fmtGBP(pl)+'</td><td class="r tn" style="color:'+evC+'">'+fmtGBP(ev)+'</td>';
       tbody.appendChild(tr);
     });
     document.getElementById('va-'+p+'-table-wrap').style.display='';
@@ -2002,8 +2002,8 @@ async function openVABetTrackerSection() {
       '<div class="kpi"><div class="kpi-l">Total bets</div><div class="kpi-v">'+s.totalBets.toLocaleString()+'</div><div class="kpi-s">Win rate '+wr+'</div></div>'+
       '<div class="kpi"><div class="kpi-l">Wins</div><div class="kpi-v" style="color:var(--green)">'+(s.wins||0).toLocaleString()+'</div><div class="kpi-s">Last 100: '+(s.last50wins||0)+'</div></div>'+
       '<div class="kpi"><div class="kpi-l">Losses</div><div class="kpi-v" style="color:var(--red)">'+(s.losses||0).toLocaleString()+'</div><div class="kpi-s">Last 100: '+(s.last50losses||0)+'</div></div>'+
-      '<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:'+evCol+'">'+(s.totalEV>=0?'+':'')+'£'+Math.abs(s.totalEV||0).toFixed(2)+'</div></div>'+
-      '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+(s.totalPL>=0?'+':'')+'£'+Math.abs(s.totalPL||0).toFixed(2)+'</div></div>';
+      '<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:'+evCol+'">'+fmtGBP(s.totalEV||0)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+fmtGBP(s.totalPL||0)+'</div></div>';
     document.getElementById('va-'+p+'-kpi-wrap').style.display='';
     const tbody=document.getElementById('va-'+p+'-tbody'); tbody.innerHTML='';
     data.rows.forEach(b=>{
@@ -2016,7 +2016,7 @@ async function openVABetTrackerSection() {
       const evC=ev>0?'var(--green)':ev<0?'var(--red)':'var(--text2)';
       const tr=document.createElement('tr');
       tr.title=b.BetFull||b.Bet||'';
-      tr.innerHTML='<td style="font-size:12px;white-space:nowrap">'+b.Date+'</td><td>'+badge+'</td><td style="font-weight:500;font-size:13px">'+b.Bet+'</td><td class="r tn">'+(b.Odds||'--')+'</td><td class="r tn">£'+(parseFloat(b.Stake)||0).toFixed(2)+'</td><td class="r tn" style="color:'+plC+'">'+(pl>=0?'+':'')+'£'+Math.abs(pl).toFixed(2)+'</td><td class="r tn" style="color:'+evC+'">'+(ev>=0?'+':'')+'£'+Math.abs(ev).toFixed(2)+'</td>';
+      tr.innerHTML='<td style="font-size:12px;white-space:nowrap">'+b.Date+'</td><td>'+badge+'</td><td style="font-weight:500;font-size:13px">'+b.Bet+'</td><td class="r tn">'+(b.Odds||'--')+'</td><td class="r tn">£'+(parseFloat(b.Stake)||0).toFixed(2)+'</td><td class="r tn" style="color:'+plC+'">'+fmtGBP(pl)+'</td><td class="r tn" style="color:'+evC+'">'+fmtGBP(ev)+'</td>';
       tbody.appendChild(tr);
     });
     document.getElementById('va-'+p+'-table-wrap').style.display='';
@@ -2042,8 +2042,8 @@ async function openVACasinoSection() {
     const evCol=s.totalEV>0?'var(--green)':s.totalEV<0?'var(--red)':'var(--text2)';
     document.getElementById('va-'+p+'-kpis').innerHTML=
       '<div class="kpi"><div class="kpi-l">Total days</div><div class="kpi-v">'+(s.totalDays||0)+'</div></div>'+
-      '<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:'+evCol+'">'+(s.totalEV>=0?'+':'')+'£'+Math.abs(s.totalEV||0).toFixed(2)+'</div></div>'+
-      '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+(s.totalPL>=0?'+':'')+'£'+Math.abs(s.totalPL||0).toFixed(2)+'</div></div>';
+      '<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:'+evCol+'">'+fmtGBP(s.totalEV||0)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+fmtGBP(s.totalPL||0)+'</div></div>';
     document.getElementById('va-'+p+'-kpi-wrap').style.display='';
     const tbody=document.getElementById('va-'+p+'-tbody'); tbody.innerHTML='';
     data.rows.forEach(b=>{
@@ -2051,7 +2051,7 @@ async function openVACasinoSection() {
       const plC=pl>0?'var(--green)':pl<0?'var(--red)':'var(--text2)';
       const evC=ev>0?'var(--green)':ev<0?'var(--red)':'var(--text2)';
       const tr=document.createElement('tr');
-      tr.innerHTML='<td style="font-size:12px;white-space:nowrap">'+b.date+'</td><td class="r tn">'+b.offers+'</td><td class="r tn" style="color:'+plC+'">'+(pl>=0?'+':'')+'£'+Math.abs(pl).toFixed(2)+'</td><td class="r tn" style="color:'+evC+'">'+(ev>=0?'+':'')+'£'+Math.abs(ev).toFixed(2)+'</td>';
+      tr.innerHTML='<td style="font-size:12px;white-space:nowrap">'+b.date+'</td><td class="r tn">'+b.offers+'</td><td class="r tn" style="color:'+plC+'">'+fmtGBP(pl)+'</td><td class="r tn" style="color:'+evC+'">'+fmtGBP(ev)+'</td>';
       tbody.appendChild(tr);
     });
     document.getElementById('va-'+p+'-table-wrap').style.display='';
@@ -2080,8 +2080,8 @@ async function openVAOffersSection() {
       '<div class="kpi"><div class="kpi-l">Total bets</div><div class="kpi-v">'+s.totalBets.toLocaleString()+'</div><div class="kpi-s">Win rate '+wr+'</div></div>'+
       '<div class="kpi"><div class="kpi-l">Wins</div><div class="kpi-v" style="color:var(--green)">'+(s.wins||0).toLocaleString()+'</div><div class="kpi-s">Last 100: '+(s.last50wins||0)+'</div></div>'+
       '<div class="kpi"><div class="kpi-l">Losses</div><div class="kpi-v" style="color:var(--red)">'+(s.losses||0).toLocaleString()+'</div><div class="kpi-s">Last 100: '+(s.last50losses||0)+'</div></div>'+
-      '<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:'+evCol+'">'+(s.totalEV>=0?'+':'')+'£'+Math.abs(s.totalEV||0).toFixed(2)+'</div></div>'+
-      '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+(s.totalPL>=0?'+':'')+'£'+Math.abs(s.totalPL||0).toFixed(2)+'</div></div>';
+      '<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:'+evCol+'">'+fmtGBP(s.totalEV||0)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+fmtGBP(s.totalPL||0)+'</div></div>';
     document.getElementById('va-'+p+'-kpi-wrap').style.display='';
     const tbody=document.getElementById('va-'+p+'-tbody'); tbody.innerHTML='';
     data.rows.forEach(b=>{
@@ -2094,7 +2094,7 @@ async function openVAOffersSection() {
       const evC=ev>0?'var(--green)':ev<0?'var(--red)':'var(--text2)';
       const betType=b['Bet Type']||'';
       const tr=document.createElement('tr');
-      tr.innerHTML='<td style="font-size:12px;white-space:nowrap">'+b.Date+'</td><td><span style="font-size:11px;background:var(--surface2);padding:2px 6px;border-radius:4px">'+betType+'</span></td><td>'+badge+'</td><td style="font-weight:500;font-size:13px">'+b.Bet+'</td><td class="r tn">'+(b.Odds||'--')+'</td><td class="r tn">£'+(parseFloat(b.Stake)||0).toFixed(2)+'</td><td class="r tn" style="color:'+plC+'">'+(pl>=0?'+':'')+'£'+Math.abs(pl).toFixed(2)+'</td><td class="r tn" style="color:'+evC+'">'+(ev>=0?'+':'')+'£'+Math.abs(ev).toFixed(2)+'</td>';
+      tr.innerHTML='<td style="font-size:12px;white-space:nowrap">'+b.Date+'</td><td><span style="font-size:11px;background:var(--surface2);padding:2px 6px;border-radius:4px">'+betType+'</span></td><td>'+badge+'</td><td style="font-weight:500;font-size:13px">'+b.Bet+'</td><td class="r tn">'+(b.Odds||'--')+'</td><td class="r tn">£'+(parseFloat(b.Stake)||0).toFixed(2)+'</td><td class="r tn" style="color:'+plC+'">'+fmtGBP(pl)+'</td><td class="r tn" style="color:'+evC+'">'+fmtGBP(ev)+'</td>';
       tbody.appendChild(tr);
     });
     document.getElementById('va-'+p+'-table-wrap').style.display='';
@@ -2143,7 +2143,7 @@ async function openOverallSection(){
   let grandBets=0, grandStake=0, grandEV=0, grandPL=0, grandWins=0, grandLosses=0;
   const tbody = document.getElementById('ov-tbody');
   tbody.innerHTML='';
-  const fmt = n => Math.abs(n).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  const fmt = n => Math.abs(n).toLocaleString('en-GB',{minimumFractionDigits:0,maximumFractionDigits:0});
 
   results.forEach(r => {
     if(r.status !== 'fulfilled') return;
@@ -2184,8 +2184,8 @@ async function openOverallSection(){
     '<td class="r tn" style="color:var(--red);font-weight:600">'+grandLosses.toLocaleString()+'</td>'+
     '<td class="r tn" style="font-weight:600">'+tWr+'</td>'+
     '<td class="r tn" style="font-weight:600">£'+fmt(grandStake)+'</td>'+
-    '<td class="r tn" style="color:'+tEvCol+';font-weight:600">'+(grandEV>=0?'+':'')+'£'+fmt(grandEV)+'</td>'+
-    '<td class="r tn" style="color:'+tPlCol+';font-weight:700">'+(grandPL>=0?'+':'')+'£'+fmt(grandPL)+'</td>';
+    '<td class="r tn" style="color:'+tEvCol+';font-weight:600">'+fmtGBP(grandEV)+'</td>'+
+    '<td class="r tn" style="color:'+tPlCol+';font-weight:700">'+fmtGBP(grandPL)+'</td>';
   tbody.appendChild(ft);
 
   const plCol = grandPL>0?'var(--green)':grandPL<0?'var(--red)':'var(--text2)';
@@ -2193,8 +2193,8 @@ async function openOverallSection(){
   document.getElementById('ov-kpis').innerHTML =
     '<div class="kpi"><div class="kpi-l">Total bets</div><div class="kpi-v">'+grandBets.toLocaleString()+'</div><div class="kpi-s">Win rate '+tWr+'</div></div>'+
     '<div class="kpi"><div class="kpi-l">Total staked</div><div class="kpi-v">£'+fmt(grandStake)+'</div></div>'+
-    '<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:'+evCol+'">'+(grandEV>=0?'+':'')+'£'+fmt(grandEV)+'</div></div>'+
-    '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+(grandPL>=0?'+':'')+'£'+fmt(grandPL)+'</div></div>';
+    '<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:'+evCol+'">'+fmtGBP(grandEV)+'</div></div>'+
+    '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+fmtGBP(grandPL)+'</div></div>';
 
   document.getElementById('ov-content').style.display='';
 }
@@ -2380,6 +2380,7 @@ function updateBfexTokenStatus(){
   else{const minsLeft=Math.round((4-ageH)*60);el.textContent='Valid — expires in ~'+minsLeft+' min';el.style.color='var(--green)';}
 }
 function getBfexSession(){return localStorage.getItem('bb_bfex_session')||null;}
+function fmtGBP(val,showSign=true){const n=parseFloat(val)||0;const s=Math.abs(n).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});return(showSign?(n>=0?'+':'-'):n<0?'-':'')+'£'+s;}
 
 // ── DOGS + HORSES ──
 async function openDogsSection(){
