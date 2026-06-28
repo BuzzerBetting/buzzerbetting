@@ -254,6 +254,19 @@ input::placeholder{color:var(--text3)}
           <span id="conn-saved" style="display:none;font-size:12px;color:var(--green)"><i class="ti ti-check"></i> Saved</span>
           <span style="font-size:12px;color:var(--text3)">Stored locally — never leaves your device</span>
         </div>
+        <!-- Betfair session token -->
+        <div style="margin-top:18px;padding-top:16px;border-top:.5px solid var(--border)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <label class="lbl" style="margin-bottom:0">Betfair session token</label>
+            <span id="bfex-token-status" style="font-size:11px;color:var(--text3)">Not set</span>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <input id="bfex-session-input" type="password" placeholder="Paste token from Betfair demo tool..." style="font-size:12px;flex:1">
+            <button onclick="saveBfexSession()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap">Save token</button>
+            <a href="https://apps.betfair.com/visualisers/api-ng-account-operations/" target="_blank" style="font-size:12px;color:var(--brand);white-space:nowrap;text-decoration:none">Get token →</a>
+          </div>
+          <p style="font-size:11px;color:var(--text3);margin-top:6px">Token expires every 4 hours. Click "Get token", copy the session token shown at the top of that page, paste here and save.</p>
+        </div>
       </div>
     </div>
 
@@ -2037,6 +2050,7 @@ function initConnections(){
   const vEl=document.getElementById('url-va');
   if(mEl)mEl.value=m;
   if(vEl)vEl.value=v;
+  updateBfexTokenStatus();
 }
 function saveConnections(){
   const m=(document.getElementById('url-main').value||'').trim();
@@ -2047,6 +2061,25 @@ function saveConnections(){
   el.style.display='inline';
   setTimeout(()=>el.style.display='none',2500);
 }
+function saveBfexSession(){
+  const val=(document.getElementById('bfex-session-input').value||'').trim();
+  if(!val)return;
+  localStorage.setItem('bb_bfex_session',val);
+  localStorage.setItem('bb_bfex_session_ts',Date.now());
+  document.getElementById('bfex-session-input').value='';
+  updateBfexTokenStatus();
+}
+function updateBfexTokenStatus(){
+  const token=localStorage.getItem('bb_bfex_session');
+  const ts=parseInt(localStorage.getItem('bb_bfex_session_ts')||'0');
+  const el=document.getElementById('bfex-token-status');
+  if(!el)return;
+  if(!token){el.textContent='Not set';el.style.color='var(--text3)';return;}
+  const ageH=(Date.now()-ts)/1000/60/60;
+  if(ageH>4){el.textContent='Expired — please refresh';el.style.color='var(--red)';}
+  else{const minsLeft=Math.round((4-ageH)*60);el.textContent='Valid — expires in ~'+minsLeft+' min';el.style.color='var(--green)';}
+}
+function getBfexSession(){return localStorage.getItem('bb_bfex_session')||null;}
 
 // ── DOGS + HORSES ──
 async function openDogsSection(){
