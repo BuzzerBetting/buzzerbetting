@@ -739,6 +739,7 @@ input::placeholder{color:var(--text3)}
     <div style="display:flex;gap:8px">
       <button onclick="initCalcEV(0)" style="display:flex;align-items:center;gap:6px;background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Today</button>
       <button onclick="initCalcEV(1)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit" id="cev-tomorrow-btn">Tomorrow</button>
+      <button onclick="scanAllOC(this)" style="display:flex;align-items:center;gap:6px;background:var(--green);color:#fff;border:none;border-radius:var(--radius);padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit" id="cev-scan-all-btn"><i class="ti ti-bolt"></i> Scan All</button>
     </div>
   </div>
 
@@ -751,9 +752,10 @@ input::placeholder{color:var(--text3)}
       <button onclick="document.getElementById('cev-results').style.display='none'" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px"><i class="ti ti-x"></i></button>
     </div>
     <div class="card" style="overflow-x:auto">
-      <table class="dt" style="min-width:1000px">
+      <table class="dt" style="min-width:1100px">
         <thead>
           <tr>
+            <th>Match</th>
             <th>Player</th>
             <th>Market</th>
             <th class="r">BB Fair</th>
@@ -3624,32 +3626,21 @@ const CONF_XG   = 10.0;  // confident xG threshold (green vs yellow)
 const CONF_SHOTS= 50;    // confident shots threshold
 const CONF_SOT  = 20;    // confident SOT threshold
 
-async function scanOC(matchId, home, away, competition, btn) {
-  const origHtml = btn.innerHTML;
-  btn.disabled = true;
+async function runScanCore(matchId, home, away, competition, idsArr) {
+  const ids = idsArr.filter(Boolean).join(',');
+  const hasAllIds = idsArr.filter(Boolean).length === 4;
 
-  try {
-    const key = `${slugifyOC(home)}-v-${slugifyOC(away)}`;
-    const inputs = [0,1,2,3].map(i => document.getElementById(`mid-${key}-${i}`)?.value.trim());
-    const ids = inputs.filter(Boolean).join(',');
-
-    if (inputs.filter(Boolean).length !== 4) {
-      alert('Please fill in all 4 market IDs');
-      return;
-    }
-
-    btn.innerHTML = '<i class="ti ti-loader"></i> Fetching odds...';
-
-    // Step 1: Fetch OC odds, lineups, BB odds and Betfair exchange prices in parallel
-    const [ocRaw, lineupData, , bfexData] = await Promise.all([
-      fetch(`https://www.oddschecker.com/api/markets/v2/all-odds?market-ids=${ids}&repub=OC`)
-        .then(r => r.json()).catch(() => []),
-      fetch(`/.netlify/functions/lineups?matchId=${matchId}`)
-        .then(r => r.json()).catch(() => ({ ok: false })),
-      fetchBBOdds(matchId, home, away),
-      fetch(`/.netlify/functions/betfair-proxy?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`)
-        .then(r => r.json()).catch(() => ({ ok: false }))
-    ]);
+  // Step 1: Fetch OC odds (only if all 4 IDs present), lineups, BB odds and Betfair in parallel
+  const [ocRaw, lineupData, , bfexData] = await Promise.all([
+    hasAllIds
+      ? fetch(`https://www.oddschecker.com/api/markets/v2/all-odds?market-ids=${ids}&repub=OC`).then(r => r.json()).catch(() => [])
+      : Promise.resolve([]),
+    fetch(`/.netlify/functions/lineups?matchId=${matchId}`)
+      .then(r => r.json()).catch(() => ({ ok: false })),
+    fetchBBOdds(matchId, home, away),
+    fetch(`/.netlify/functions/betfair-proxy?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`)
+      .then(r => r.json()).catch(() => ({ ok: false }))
+  ]);
 
     // Build Betfair price lookup: normalised player name → full runner data
     const bfexByName = {};
@@ -3735,7 +3726,6 @@ async function scanOC(matchId, home, away, competition, btn) {
     }
 
     // Step 3: Fetch all WH markets in parallel
-    btn.innerHTML = '<i class="ti ti-loader"></i> Fetching WH odds...';
     const [whSotOtbPlayers, whLfPlayers, whRfPlayers, wh6ydPlayers] = await Promise.all([
       fetchWHMarket(home, away, `${home} ${away} shot on target from outside the penalty area`, 'outside'),
       fetchWHMarket(home, away, 'to score with left foot', 'with left foot'),
@@ -3755,8 +3745,8 @@ async function scanOC(matchId, home, away, competition, btn) {
 
     // Step 4: Check lineups loaded
     if (!lineupData.ok) {
-      alert('Could not fetch lineups — lineups may not be available yet');
-      return;
+      console.warn(`No lineups for ${home} v ${away}`);
+      return [];
     }
 
     const allPlayers = [];
@@ -3767,7 +3757,6 @@ async function scanOC(matchId, home, away, competition, btn) {
     }
 
     // Step 5: Fetch player stats for all players in parallel
-    btn.innerHTML = `<i class="ti ti-loader"></i> Fetching stats (0/${allPlayers.length})...`;
     let fetched = 0;
     const statsMap = {};
     await Promise.allSettled(allPlayers.map(async p => {
@@ -3777,12 +3766,9 @@ async function scanOC(matchId, home, away, competition, btn) {
         if (d.ok) statsMap[p.id] = d;
       } catch(e) {}
       fetched++;
-      btn.innerHTML = `<i class="ti ti-loader"></i> Fetching stats (${fetched}/${allPlayers.length})...`;
     }));
 
     // Step 6: Calculate EV for each player × market × timeframe
-    btn.innerHTML = '<i class="ti ti-loader"></i> Calculating EV...';
-
     const TIMEFRAMES = [
       { key: 'currentTeam',   label: 'Curr Team' },
       { key: 'currentSeason', label: 'This Season' },
@@ -3855,6 +3841,7 @@ async function scanOC(matchId, home, away, competition, btn) {
           const { fair: bfexPrice, confidence: bfexConfidence } = deriveBfexFair(bfexRunner);
           evBets.push({
             player: player.name,
+            match: `${home} v ${away}`,
             market: market.label,
             bbFair: null,
             ocOdds: ocPrice.toFixed(2),
@@ -3944,6 +3931,7 @@ async function scanOC(matchId, home, away, competition, btn) {
 
         evBets.push({
           player: player.name,
+          match: `${home} v ${away}`,
           market: market.label,
           bbFair: market.needsAGS ? ags : sotV,
           ocOdds: ocPrice.toFixed(2),
@@ -3963,8 +3951,22 @@ async function scanOC(matchId, home, away, competition, btn) {
       if (!a.noCalc && b.noCalc) return -1;
       return (b.bestEv ?? 0) - (a.bestEv ?? 0);
     });
-    renderEVResults(home, away, evBets);
+    return evBets;
+}
 
+async function scanOC(matchId, home, away, competition, btn) {
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  try {
+    const key = `${slugifyOC(home)}-v-${slugifyOC(away)}`;
+    const idsArr = [0,1,2,3].map(i => document.getElementById(`mid-${key}-${i}`)?.value.trim() || '');
+    if (idsArr.filter(Boolean).length !== 4) {
+      alert('Please fill in all 4 market IDs');
+      return;
+    }
+    btn.innerHTML = '<i class="ti ti-loader"></i> Scanning...';
+    const evBets = await runScanCore(matchId, home, away, competition, idsArr);
+    renderEVResults(`${home} v ${away} — +EV bets`, evBets);
   } catch(err) {
     console.error('scanOC error:', err);
     alert(`Scan failed: ${err.message}`);
@@ -3974,10 +3976,55 @@ async function scanOC(matchId, home, away, competition, btn) {
   }
 }
 
-function renderEVResults(home, away, bets) {
+async function scanAllOC(btn) {
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader"></i> Scanning...';
+
+  // Collect all fixtures that have at least one market ID filled in
+  const toScan = [];
+  for (const fixture of cevFixtures) {
+    const key = `${slugifyOC(fixture.home)}-v-${slugifyOC(fixture.away)}`;
+    const ids = [0,1,2,3].map(i => document.getElementById(`mid-${key}-${i}`)?.value.trim() || '');
+    const hasIds = ids.some(Boolean);
+    // Always include for WH markets even without OC IDs
+    toScan.push({ fixture, key, ids });
+  }
+
+  if (!toScan.length) {
+    alert('No fixtures loaded — click Today or Tomorrow first');
+    btn.innerHTML = origHtml;
+    btn.disabled = false;
+    return;
+  }
+
+  const allEvBets = [];
+  for (const { fixture, key, ids } of toScan) {
+    btn.innerHTML = `<i class="ti ti-loader"></i> Scanning ${fixture.home} v ${fixture.away}...`;
+    try {
+      // Reuse scanOC core by calling it with a dummy btn that doesn't render
+      const bets = await runScanCore(fixture.id, fixture.home, fixture.away, fixture.leagueName, ids);
+      allEvBets.push(...bets);
+    } catch(e) {
+      console.warn(`Scan failed for ${fixture.home} v ${fixture.away}:`, e.message);
+    }
+  }
+
+  allEvBets.sort((a, b) => {
+    if (a.noCalc && !b.noCalc) return 1;
+    if (!a.noCalc && b.noCalc) return -1;
+    return (b.bestEv ?? 0) - (a.bestEv ?? 0);
+  });
+
+  renderEVResults(`+EV Bets — All Matches`, allEvBets);
+  btn.innerHTML = origHtml;
+  btn.disabled = false;
+}
+
+
   const resultsEl = document.getElementById('cev-results');
   const tbody = document.getElementById('cev-tbody');
-  document.getElementById('cev-results-title').textContent = `${home} v ${away} — +EV bets`;
+  document.getElementById('cev-results-title').textContent = title || '+EV Bets';
   tbody.innerHTML = '';
 
   if (!bets.length) {
@@ -4021,6 +4068,7 @@ function renderEVResults(home, away, bets) {
     }
 
     tr.innerHTML = `
+      <td style="font-size:12px;color:var(--text3);white-space:nowrap">${bet.match ?? ''}</td>
       <td style="font-weight:500">${bet.player}</td>
       <td style="font-size:12px;color:var(--text2)">${bet.market}</td>
       <td class="r tn" style="color:var(--blue);font-weight:500">${bet.bbFair ? bet.bbFair.toFixed(2) : '—'}</td>
@@ -4034,7 +4082,7 @@ function renderEVResults(home, away, bets) {
 
   // Legend
   const legend = document.createElement('tr');
-  legend.innerHTML = `<td colspan="11" style="padding:10px 16px;font-size:11px;color:var(--text2);border-top:.5px solid var(--border)">
+  legend.innerHTML = `<td colspan="12" style="padding:10px 16px;font-size:11px;color:var(--text2);border-top:.5px solid var(--border)">
     <span style="display:inline-block;width:10px;height:10px;background:var(--surface);border:.5px solid var(--border);border-radius:2px;margin-right:4px"></span>High data confidence &nbsp;·&nbsp;
     <span style="display:inline-block;width:10px;height:10px;background:var(--amber-bg);border:.5px solid var(--amber-bd);border-radius:2px;margin-right:4px"></span>Low data (xG &lt;10 / shots &lt;50 / SOT &lt;20) &nbsp;·&nbsp;
     <span style="display:inline-block;width:10px;height:10px;background:var(--surface2);border:.5px solid var(--border);border-radius:2px;margin-right:4px"></span>No fair odds calc yet &nbsp;·&nbsp;
