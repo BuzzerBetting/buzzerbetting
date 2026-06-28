@@ -757,14 +757,13 @@ input::placeholder{color:var(--text3)}
             <th>Player</th>
             <th>Market</th>
             <th class="r">BB Fair</th>
+            <th class="r">BFEX</th>
             <th class="r">Curr Team</th>
             <th class="r">This Season</th>
             <th class="r">+Last Season</th>
             <th class="r">+2 Seasons</th>
             <th class="r">Odds</th>
             <th>Bookie</th>
-            <th class="r">BFEX</th>
-            <th class="r">BFEX EV%</th>
             <th class="r">EV%</th>
           </tr>
         </thead>
@@ -3973,35 +3972,30 @@ function renderEVResults(home, away, bets) {
     const tr = document.createElement('tr');
     tr.style.cssText = rowStyle;
 
-    // BFEX price cell
+    // BFEX price cell (single column, no EV%)
     let bfexCell;
     if (!bet.bfexPrice || bet.bfexConfidence === 'red') {
-      // Red dash — not enough to conclude
-      bfexCell = `<td class="r tn" style="color:var(--red)">—</td><td class="r">—</td>`;
+      bfexCell = `<td class="r tn" style="color:var(--red)">—</td>`;
     } else {
-      const bfexEvVal = bet.bfexEv;
-      const evCol = bfexEvVal > 0 ? 'var(--green)' : 'var(--red)';
-      const evBgBfex = bfexEvVal > 0 ? 'var(--green-bg)' : 'var(--surface2)';
       const priceCol = bet.bfexConfidence === 'green' ? 'var(--green)' : 'var(--amber)';
-      bfexCell = `<td class="r tn" style="color:${priceCol};font-weight:500">${parseFloat(bet.bfexPrice).toFixed(2)}</td>` +
-        `<td class="r"><span class="badge" style="background:${evBgBfex};color:${evCol}">${bfexEvVal > 0 ? '+' : ''}${bfexEvVal.toFixed(1)}%</span></td>`;
+      bfexCell = `<td class="r tn" style="color:${priceCol};font-weight:500">${parseFloat(bet.bfexPrice).toFixed(2)}</td>`;
     }
 
     tr.innerHTML = `
       <td style="font-weight:500">${bet.player}</td>
       <td style="font-size:12px;color:var(--text2)">${bet.market}</td>
       <td class="r tn" style="color:var(--blue);font-weight:500">${bet.bbFair ? bet.bbFair.toFixed(2) : '—'}</td>
+      ${bfexCell}
       ${tfCells}
       <td class="r tn" style="font-weight:600;color:var(--green)">${bet.ocOdds}</td>
       <td style="font-size:12px;color:var(--text2)">${bet.bookie}</td>
-      ${bfexCell}
       <td class="r"><span class="badge" style="background:${evBg};color:${evCol}">+${ev.toFixed(1)}%</span></td>`;
     tbody.appendChild(tr);
   }
 
   // Legend
   const legend = document.createElement('tr');
-  legend.innerHTML = `<td colspan="12" style="padding:10px 16px;font-size:11px;color:var(--text2);border-top:.5px solid var(--border)">
+  legend.innerHTML = `<td colspan="11" style="padding:10px 16px;font-size:11px;color:var(--text2);border-top:.5px solid var(--border)">
     <span style="display:inline-block;width:10px;height:10px;background:var(--surface);border:.5px solid var(--border);border-radius:2px;margin-right:4px"></span>High data confidence &nbsp;·&nbsp;
     <span style="display:inline-block;width:10px;height:10px;background:var(--amber-bg);border:.5px solid var(--amber-bd);border-radius:2px;margin-right:4px"></span>Low data (xG &lt;10 / shots &lt;50 / SOT &lt;20) &nbsp;·&nbsp;
     Faded fair odds = below minimum threshold
