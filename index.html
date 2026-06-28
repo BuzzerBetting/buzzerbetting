@@ -334,7 +334,6 @@ input::placeholder{color:var(--text3)}
     <button class="back" onclick="backToTrackerHub()"><i class="ti ti-arrow-left"></i> Bet tracker</button>
     <div class="sec-title">VA bets</div>
     <div class="grid">
-      <div class="cat" onclick="showTrackerSection('va','overall')"><div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-chart-pie"></i></div><div><div class="cat-title">Overall</div><div class="cat-desc">Combined VA performance and P&amp;L</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('va','discord')"><div class="cat-ico" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-brand-discord"></i></div><div><div class="cat-title">Discord</div><div class="cat-desc">Discord channel bets and results</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('va','racing')"><div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-trophy"></i></div><div><div class="cat-title">BB Racing Tracker Pro</div><div class="cat-desc">BB professional racing tracker results</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('va','bettracker')"><div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-clipboard-list"></i></div><div><div class="cat-title">BB Bet Tracker</div><div class="cat-desc">BB bet tracker history and stats</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
@@ -495,12 +494,90 @@ input::placeholder{color:var(--text3)}
   </div>
 
   <!-- VA section views -->
-  <div id="ts-va-overall" class="tracker-section" style="display:none"><button class="back" onclick="backToTrackerSection('va')"><i class="ti ti-arrow-left"></i> VA bets</button><div class="sec-title">Overall</div><div class="card"><div class="ph"><div class="ph-ico"><i class="ti ti-chart-pie"></i></div><div class="ph-t">Not connected yet</div><div class="ph-d">Connect your VA sheet to see overall performance and P&amp;L here.</div></div></div></div>
-  <div id="ts-va-discord" class="tracker-section" style="display:none"><button class="back" onclick="backToTrackerSection('va')"><i class="ti ti-arrow-left"></i> VA bets</button><div class="sec-title">Discord</div><div class="card"><div class="ph"><div class="ph-ico"><i class="ti ti-brand-discord"></i></div><div class="ph-t">Not connected yet</div><div class="ph-d">Connect your Discord tab to see channel bet results here.</div></div></div></div>
-  <div id="ts-va-racing" class="tracker-section" style="display:none"><button class="back" onclick="backToTrackerSection('va')"><i class="ti ti-arrow-left"></i> VA bets</button><div class="sec-title">BB Racing Tracker Pro</div><div class="card"><div class="ph"><div class="ph-ico"><i class="ti ti-trophy"></i></div><div class="ph-t">Not connected yet</div><div class="ph-d">Connect your BB Racing Tracker Pro tab to see results here.</div></div></div></div>
-  <div id="ts-va-bettracker" class="tracker-section" style="display:none"><button class="back" onclick="backToTrackerSection('va')"><i class="ti ti-arrow-left"></i> VA bets</button><div class="sec-title">BB Bet Tracker</div><div class="card"><div class="ph"><div class="ph-ico"><i class="ti ti-clipboard-list"></i></div><div class="ph-t">Not connected yet</div><div class="ph-d">Connect your BB Bet Tracker tab to see history and stats here.</div></div></div></div>
-  <div id="ts-va-casino" class="tracker-section" style="display:none"><button class="back" onclick="backToTrackerSection('va')"><i class="ti ti-arrow-left"></i> VA bets</button><div class="sec-title">Casino</div><div class="card"><div class="ph"><div class="ph-ico"><i class="ti ti-diamond"></i></div><div class="ph-t">Not connected yet</div><div class="ph-d">Connect your Casino tab to see VA session results here.</div></div></div></div>
-  <div id="ts-va-offers" class="tracker-section" style="display:none"><button class="back" onclick="backToTrackerSection('va')"><i class="ti ti-arrow-left"></i> VA bets</button><div class="sec-title">Offers</div><div class="card"><div class="ph"><div class="ph-ico"><i class="ti ti-tag"></i></div><div class="ph-t">Not connected yet</div><div class="ph-d">Connect your Offers tab to see promotional results and P&amp;L here.</div></div></div></div>
+  <!-- VA: DISCORD -->
+  <div id="ts-va-discord" class="tracker-section" style="display:none">
+    <button class="back" onclick="backToTrackerSection('va')"><i class="ti ti-arrow-left"></i> VA bets</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+      <div class="sec-title" style="margin-bottom:0">Discord</div>
+      <button onclick="openVADiscordSection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+    </div>
+    <div id="va-disc-status" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="va-disc-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="va-disc-status-title">Loading...</div><div class="ph-d" id="va-disc-status-msg"></div></div></div></div>
+    <div id="va-disc-kpi-wrap" style="display:none"><div class="kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px" id="va-disc-kpis"></div></div>
+    <div id="va-disc-table-wrap" class="card" style="display:none">
+      <div style="padding:12px 20px;border-bottom:.5px solid var(--border)"><span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500">Most recent 100 bets</span></div>
+      <div style="overflow-x:auto;max-height:520px;overflow-y:auto">
+        <table class="dt" style="min-width:560px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr><th>Date</th><th>Result</th><th style="min-width:200px">Bet</th><th class="r">Odds</th><th class="r">Stake</th><th class="r">P/L</th><th class="r">EV</th></tr></thead><tbody id="va-disc-tbody"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- VA: BB RACING TRACKER PRO -->
+  <div id="ts-va-racing" class="tracker-section" style="display:none">
+    <button class="back" onclick="backToTrackerSection('va')"><i class="ti ti-arrow-left"></i> VA bets</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+      <div class="sec-title" style="margin-bottom:0">BB Racing Tracker Pro</div>
+      <button onclick="openVARacingSection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+    </div>
+    <div id="va-rtp-status" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="va-rtp-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="va-rtp-status-title">Loading...</div><div class="ph-d" id="va-rtp-status-msg"></div></div></div></div>
+    <div id="va-rtp-kpi-wrap" style="display:none"><div class="kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px" id="va-rtp-kpis"></div></div>
+    <div id="va-rtp-table-wrap" class="card" style="display:none">
+      <div style="padding:12px 20px;border-bottom:.5px solid var(--border)"><span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500">Most recent 100 bets</span></div>
+      <div style="overflow-x:auto;max-height:520px;overflow-y:auto">
+        <table class="dt" style="min-width:600px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr><th>Date</th><th>Result</th><th>Race</th><th style="min-width:160px">Horse</th><th class="r">Odds</th><th class="r">Stake</th><th class="r">P/L</th><th class="r">EV</th></tr></thead><tbody id="va-rtp-tbody"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- VA: BB BET TRACKER -->
+  <div id="ts-va-bettracker" class="tracker-section" style="display:none">
+    <button class="back" onclick="backToTrackerSection('va')"><i class="ti ti-arrow-left"></i> VA bets</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+      <div class="sec-title" style="margin-bottom:0">BB Bet Tracker</div>
+      <button onclick="openVABetTrackerSection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+    </div>
+    <div id="va-bt-status" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="va-bt-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="va-bt-status-title">Loading...</div><div class="ph-d" id="va-bt-status-msg"></div></div></div></div>
+    <div id="va-bt-kpi-wrap" style="display:none"><div class="kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px" id="va-bt-kpis"></div></div>
+    <div id="va-bt-table-wrap" class="card" style="display:none">
+      <div style="padding:12px 20px;border-bottom:.5px solid var(--border)"><span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500">Most recent 100 bets</span></div>
+      <div style="overflow-x:auto;max-height:520px;overflow-y:auto">
+        <table class="dt" style="min-width:560px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr><th>Date</th><th>Result</th><th style="min-width:200px">Bet</th><th class="r">Odds</th><th class="r">Stake</th><th class="r">P/L</th><th class="r">EV</th></tr></thead><tbody id="va-bt-tbody"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- VA: CASINO -->
+  <div id="ts-va-casino" class="tracker-section" style="display:none">
+    <button class="back" onclick="backToTrackerSection('va')"><i class="ti ti-arrow-left"></i> VA bets</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+      <div class="sec-title" style="margin-bottom:0">Casino</div>
+      <button onclick="openVACasinoSection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+    </div>
+    <div id="va-cas-status" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="va-cas-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="va-cas-status-title">Loading...</div><div class="ph-d" id="va-cas-status-msg"></div></div></div></div>
+    <div id="va-cas-kpi-wrap" style="display:none"><div class="kpis" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px" id="va-cas-kpis"></div></div>
+    <div id="va-cas-table-wrap" class="card" style="display:none">
+      <div style="padding:12px 20px;border-bottom:.5px solid var(--border)"><span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500">Daily summary</span></div>
+      <div style="overflow-x:auto;max-height:520px;overflow-y:auto">
+        <table class="dt" style="min-width:400px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr><th>Date</th><th class="r">Offers</th><th class="r">P/L</th><th class="r">EV</th></tr></thead><tbody id="va-cas-tbody"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- VA: OFFERS -->
+  <div id="ts-va-offers" class="tracker-section" style="display:none">
+    <button class="back" onclick="backToTrackerSection('va')"><i class="ti ti-arrow-left"></i> VA bets</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+      <div class="sec-title" style="margin-bottom:0">Offers</div>
+      <button onclick="openVAOffersSection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+    </div>
+    <div id="va-off-status" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="va-off-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="va-off-status-title">Loading...</div><div class="ph-d" id="va-off-status-msg"></div></div></div></div>
+    <div id="va-off-kpi-wrap" style="display:none"><div class="kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px" id="va-off-kpis"></div></div>
+    <div id="va-off-table-wrap" class="card" style="display:none">
+      <div style="padding:12px 20px;border-bottom:.5px solid var(--border)"><span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500">Most recent 100 bets</span></div>
+      <div style="overflow-x:auto;max-height:520px;overflow-y:auto">
+        <table class="dt" style="min-width:600px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr><th>Date</th><th>Type</th><th>Result</th><th style="min-width:160px">Bet</th><th class="r">Odds</th><th class="r">Stake</th><th class="r">P/L</th><th class="r">EV</th></tr></thead><tbody id="va-off-tbody"></tbody></table>
+      </div>
+    </div>
+  </div>
 
 </div>
 
@@ -981,7 +1058,7 @@ function showCalc(name){document.getElementById('calc-hub').style.display='none'
 function backToCalcHub(){document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
 function showTracker(name){document.getElementById('tracker-hub').style.display='none';document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.getElementById('tracker-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='overall')openOverallSection();}
 function backToTrackerHub(){document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('tracker-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
-function showTrackerSection(parent,name){document.getElementById('tracker-'+parent).style.display='none';document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('ts-'+parent+'-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(parent==='personal'&&name==='dogs')openDogsSection();if(parent==='personal'&&name==='american')openAmericanSection();if(parent==='personal'&&name==='value')openValueSection();if(parent==='personal'&&name==='keithbot')openKeithbotSection();if(parent==='personal'&&name==='bbhorses')openBBHorseSection();if(parent==='personal'&&name==='bbgolf')openBBGolfSection();if(parent==='personal'&&name==='freeze')openFreezeSection();if(parent==='personal'&&name==='ninja')openNinjaSection();if(parent==='personal'&&name==='corners')openCornersSection();if(parent==='personal'&&name==='other')openOtherSection();}
+function showTrackerSection(parent,name){document.getElementById('tracker-'+parent).style.display='none';document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('ts-'+parent+'-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(parent==='personal'&&name==='dogs')openDogsSection();if(parent==='personal'&&name==='american')openAmericanSection();if(parent==='personal'&&name==='value')openValueSection();if(parent==='personal'&&name==='keithbot')openKeithbotSection();if(parent==='personal'&&name==='bbhorses')openBBHorseSection();if(parent==='personal'&&name==='bbgolf')openBBGolfSection();if(parent==='personal'&&name==='freeze')openFreezeSection();if(parent==='personal'&&name==='ninja')openNinjaSection();if(parent==='personal'&&name==='corners')openCornersSection();if(parent==='personal'&&name==='other')openOtherSection();if(parent==='va'&&name==='discord')openVADiscordSection();if(parent==='va'&&name==='racing')openVARacingSection();if(parent==='va'&&name==='bettracker')openVABetTrackerSection();if(parent==='va'&&name==='casino')openVACasinoSection();if(parent==='va'&&name==='offers')openVAOffersSection();}
 function backToTrackerSection(parent){document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('tracker-'+parent).style.display='block';window.scrollTo({top:0,behavior:'smooth'});}
 
 // ── GREETING ──
@@ -1804,6 +1881,229 @@ function monteCarloProfitProb(bets,settledPL){
   return profitable/SIMS;
 }
 
+
+
+// ── VA SECTIONS ──
+function vaStatus(p, icon, title, msg) {
+  document.getElementById('va-'+p+'-status-ico').innerHTML='<i class="ti '+icon+'"></i>';
+  document.getElementById('va-'+p+'-status-title').textContent=title;
+  document.getElementById('va-'+p+'-status-msg').textContent=msg;
+  document.getElementById('va-'+p+'-status').style.display='';
+}
+function vaHideAll(p) {
+  ['status','kpi-wrap','table-wrap'].forEach(s=>{const el=document.getElementById('va-'+p+'-'+s);if(el)el.style.display='none';});
+}
+async function vaFetch(tab) {
+  const url = localStorage.getItem('bb_va_url');
+  if(!url) throw new Error('NO_URL');
+  const r = await fetch('/.netlify/functions/sheets?url='+encodeURIComponent(url)+'&tab='+encodeURIComponent(tab));
+  return r.json();
+}
+
+// DISCORD
+async function openVADiscordSection() {
+  const p='disc'; vaHideAll(p);
+  document.getElementById('va-'+p+'-status').style.display='';
+  vaStatus(p,'ti-loader','Loading...','Fetching Discord bets...');
+  try {
+    const data = await vaFetch('Discord');
+    document.getElementById('va-'+p+'-status').style.display='none';
+    if(!data.ok){vaStatus(p,'ti-alert-circle','Error',data.error||'Unknown error');document.getElementById('va-'+p+'-status').style.display='';return;}
+    if(!data.rows||!data.rows.length){vaStatus(p,'ti-inbox','No data found','Discord tab appears empty.');document.getElementById('va-'+p+'-status').style.display='';return;}
+    const s=data.summary||{};
+    const plCol=s.totalPL>0?'var(--green)':s.totalPL<0?'var(--red)':'var(--text2)';
+    const evCol=s.totalEV>0?'var(--green)':s.totalEV<0?'var(--red)':'var(--text2)';
+    const wr=s.totalBets>0?((s.wins/s.totalBets)*100).toFixed(1)+'%':'--';
+    document.getElementById('va-'+p+'-kpis').innerHTML=
+      '<div class="kpi"><div class="kpi-l">Total bets</div><div class="kpi-v">'+s.totalBets.toLocaleString()+'</div><div class="kpi-s">Win rate '+wr+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Wins</div><div class="kpi-v" style="color:var(--green)">'+(s.wins||0).toLocaleString()+'</div><div class="kpi-s">Last 100: '+(s.last50wins||0)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Losses</div><div class="kpi-v" style="color:var(--red)">'+(s.losses||0).toLocaleString()+'</div><div class="kpi-s">Last 100: '+(s.last50losses||0)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:'+evCol+'">'+(s.totalEV>=0?'+':'')+'£'+Math.abs(s.totalEV||0).toFixed(2)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+(s.totalPL>=0?'+':'')+'£'+Math.abs(s.totalPL||0).toFixed(2)+'</div></div>';
+    document.getElementById('va-'+p+'-kpi-wrap').style.display='';
+    const tbody=document.getElementById('va-'+p+'-tbody'); tbody.innerHTML='';
+    data.rows.forEach(b=>{
+      const res=String(b.Result||'').trim().toLowerCase();
+      let badge='<span style="color:var(--text3)">Open</span>';
+      if(res==='w'||res==='win')badge='<span class="badge" style="background:var(--green-bg);color:var(--green);font-weight:600">W</span>';
+      else if(res==='l'||res==='loss'||res==='i')badge='<span class="badge" style="background:var(--red-bg);color:var(--red)">L</span>';
+      const pl=parseFloat(b['P/L'])||0, ev=parseFloat(b.EV)||0;
+      const plC=pl>0?'var(--green)':pl<0?'var(--red)':'var(--text2)';
+      const evC=ev>0?'var(--green)':ev<0?'var(--red)':'var(--text2)';
+      const tr=document.createElement('tr');
+      tr.innerHTML='<td style="font-size:12px;white-space:nowrap">'+b.Date+'</td><td>'+badge+'</td><td style="font-weight:500;font-size:13px">'+b.Bet+'</td><td class="r tn">'+(b.Odds||'--')+'</td><td class="r tn">£'+(parseFloat(b.Stake)||0).toFixed(2)+'</td><td class="r tn" style="color:'+plC+'">'+(pl>=0?'+':'')+'£'+Math.abs(pl).toFixed(2)+'</td><td class="r tn" style="color:'+evC+'">'+(ev>=0?'+':'')+'£'+Math.abs(ev).toFixed(2)+'</td>';
+      tbody.appendChild(tr);
+    });
+    document.getElementById('va-'+p+'-table-wrap').style.display='';
+  } catch(err) {
+    const noUrl = err.message==='NO_URL';
+    vaStatus(p,'ti-plug-connected-x',noUrl?'No VA sheet connected':'Could not reach sheet',noUrl?'Go to Bet Tracker and paste your VA sheet URL in Data connections.':err.message);
+    document.getElementById('va-'+p+'-status').style.display='';
+  }
+}
+
+// BB RACING TRACKER PRO
+async function openVARacingSection() {
+  const p='rtp'; vaHideAll(p);
+  document.getElementById('va-'+p+'-status').style.display='';
+  vaStatus(p,'ti-loader','Loading...','Fetching BB Racing Tracker Pro bets...');
+  try {
+    const data = await vaFetch('BB - RTP');
+    document.getElementById('va-'+p+'-status').style.display='none';
+    if(!data.ok){vaStatus(p,'ti-alert-circle','Error',data.error||'Unknown error');document.getElementById('va-'+p+'-status').style.display='';return;}
+    if(!data.rows||!data.rows.length){vaStatus(p,'ti-inbox','No data found','BB - RTP tab appears empty.');document.getElementById('va-'+p+'-status').style.display='';return;}
+    const s=data.summary||{};
+    const plCol=s.totalPL>0?'var(--green)':s.totalPL<0?'var(--red)':'var(--text2)';
+    const wr=s.totalBets>0?((s.wins/s.totalBets)*100).toFixed(1)+'%':'--';
+    document.getElementById('va-'+p+'-kpis').innerHTML=
+      '<div class="kpi"><div class="kpi-l">Total bets</div><div class="kpi-v">'+s.totalBets.toLocaleString()+'</div><div class="kpi-s">Win rate '+wr+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Wins</div><div class="kpi-v" style="color:var(--green)">'+(s.wins||0).toLocaleString()+'</div><div class="kpi-s">Last 100: '+(s.last50wins||0)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Losses</div><div class="kpi-v" style="color:var(--red)">'+(s.losses||0).toLocaleString()+'</div><div class="kpi-s">Last 100: '+(s.last50losses||0)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Places</div><div class="kpi-v" style="color:var(--green);opacity:.7">'+(s.places||0).toLocaleString()+'</div><div class="kpi-s">Last 100: '+(s.last50places||0)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+(s.totalPL>=0?'+':'')+'£'+Math.abs(s.totalPL||0).toFixed(2)+'</div></div>';
+    document.getElementById('va-'+p+'-kpi-wrap').style.display='';
+    const tbody=document.getElementById('va-'+p+'-tbody'); tbody.innerHTML='';
+    data.rows.forEach(b=>{
+      const res=String(b.Result||'').trim();
+      let badge='<span style="color:var(--text3)">Open</span>';
+      if(res==='w')badge='<span class="badge" style="background:var(--green-bg);color:var(--green);font-weight:600">W</span>';
+      else if(res==='l')badge='<span class="badge" style="background:var(--red-bg);color:var(--red)">L</span>';
+      else if(res==='p')badge='<span class="badge" style="background:#d4edda;color:#5a9a6f">P</span>';
+      const pl=parseFloat(b['P/L'])||0, ev=parseFloat(b.EV)||0;
+      const plC=pl>0?'var(--green)':pl<0?'var(--red)':'var(--text2)';
+      const evC=ev>0?'var(--green)':ev<0?'var(--red)':'var(--text2)';
+      const tr=document.createElement('tr');
+      tr.innerHTML='<td style="font-size:12px;white-space:nowrap">'+b.Date+'</td><td>'+badge+'</td><td style="font-size:12px">'+b.Race+'</td><td style="font-weight:500;font-size:13px">'+b.Horse+'</td><td class="r tn">'+(b.Odds||'--')+'</td><td class="r tn">£'+(parseFloat(b.Stake)||0).toFixed(2)+'</td><td class="r tn" style="color:'+plC+'">'+(pl>=0?'+':'')+'£'+Math.abs(pl).toFixed(2)+'</td><td class="r tn" style="color:'+evC+'">'+(ev>=0?'+':'')+'£'+Math.abs(ev).toFixed(2)+'</td>';
+      tbody.appendChild(tr);
+    });
+    document.getElementById('va-'+p+'-table-wrap').style.display='';
+  } catch(err) {
+    const noUrl = err.message==='NO_URL';
+    vaStatus(p,'ti-plug-connected-x',noUrl?'No VA sheet connected':'Could not reach sheet',noUrl?'Go to Bet Tracker and paste your VA sheet URL in Data connections.':err.message);
+    document.getElementById('va-'+p+'-status').style.display='';
+  }
+}
+
+// BB BET TRACKER
+async function openVABetTrackerSection() {
+  const p='bt'; vaHideAll(p);
+  document.getElementById('va-'+p+'-status').style.display='';
+  vaStatus(p,'ti-loader','Loading...','Fetching BB Bet Tracker bets...');
+  try {
+    const data = await vaFetch('BB - BT');
+    document.getElementById('va-'+p+'-status').style.display='none';
+    if(!data.ok){vaStatus(p,'ti-alert-circle','Error',data.error||'Unknown error');document.getElementById('va-'+p+'-status').style.display='';return;}
+    if(!data.rows||!data.rows.length){vaStatus(p,'ti-inbox','No data found','BB - BT tab appears empty.');document.getElementById('va-'+p+'-status').style.display='';return;}
+    const s=data.summary||{};
+    const plCol=s.totalPL>0?'var(--green)':s.totalPL<0?'var(--red)':'var(--text2)';
+    const evCol=s.totalEV>0?'var(--green)':s.totalEV<0?'var(--red)':'var(--text2)';
+    const wr=s.totalBets>0?((s.wins/s.totalBets)*100).toFixed(1)+'%':'--';
+    document.getElementById('va-'+p+'-kpis').innerHTML=
+      '<div class="kpi"><div class="kpi-l">Total bets</div><div class="kpi-v">'+s.totalBets.toLocaleString()+'</div><div class="kpi-s">Win rate '+wr+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Wins</div><div class="kpi-v" style="color:var(--green)">'+(s.wins||0).toLocaleString()+'</div><div class="kpi-s">Last 100: '+(s.last50wins||0)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Losses</div><div class="kpi-v" style="color:var(--red)">'+(s.losses||0).toLocaleString()+'</div><div class="kpi-s">Last 100: '+(s.last50losses||0)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:'+evCol+'">'+(s.totalEV>=0?'+':'')+'£'+Math.abs(s.totalEV||0).toFixed(2)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+(s.totalPL>=0?'+':'')+'£'+Math.abs(s.totalPL||0).toFixed(2)+'</div></div>';
+    document.getElementById('va-'+p+'-kpi-wrap').style.display='';
+    const tbody=document.getElementById('va-'+p+'-tbody'); tbody.innerHTML='';
+    data.rows.forEach(b=>{
+      const res=String(b.Result||'').trim().toLowerCase();
+      let badge='<span style="color:var(--text3)">Open</span>';
+      if(res==='w'||res==='win')badge='<span class="badge" style="background:var(--green-bg);color:var(--green);font-weight:600">W</span>';
+      else if(res==='l'||res==='loss'||res==='i')badge='<span class="badge" style="background:var(--red-bg);color:var(--red)">L</span>';
+      const pl=parseFloat(b['P/L'])||0, ev=parseFloat(b.EV)||0;
+      const plC=pl>0?'var(--green)':pl<0?'var(--red)':'var(--text2)';
+      const evC=ev>0?'var(--green)':ev<0?'var(--red)':'var(--text2)';
+      const tr=document.createElement('tr');
+      tr.title=b.BetFull||b.Bet||'';
+      tr.innerHTML='<td style="font-size:12px;white-space:nowrap">'+b.Date+'</td><td>'+badge+'</td><td style="font-weight:500;font-size:13px">'+b.Bet+'</td><td class="r tn">'+(b.Odds||'--')+'</td><td class="r tn">£'+(parseFloat(b.Stake)||0).toFixed(2)+'</td><td class="r tn" style="color:'+plC+'">'+(pl>=0?'+':'')+'£'+Math.abs(pl).toFixed(2)+'</td><td class="r tn" style="color:'+evC+'">'+(ev>=0?'+':'')+'£'+Math.abs(ev).toFixed(2)+'</td>';
+      tbody.appendChild(tr);
+    });
+    document.getElementById('va-'+p+'-table-wrap').style.display='';
+  } catch(err) {
+    const noUrl = err.message==='NO_URL';
+    vaStatus(p,'ti-plug-connected-x',noUrl?'No VA sheet connected':'Could not reach sheet',noUrl?'Go to Bet Tracker and paste your VA sheet URL in Data connections.':err.message);
+    document.getElementById('va-'+p+'-status').style.display='';
+  }
+}
+
+// CASINO
+async function openVACasinoSection() {
+  const p='cas'; vaHideAll(p);
+  document.getElementById('va-'+p+'-status').style.display='';
+  vaStatus(p,'ti-loader','Loading...','Fetching Casino data...');
+  try {
+    const data = await vaFetch('Casino');
+    document.getElementById('va-'+p+'-status').style.display='none';
+    if(!data.ok){vaStatus(p,'ti-alert-circle','Error',data.error||'Unknown error');document.getElementById('va-'+p+'-status').style.display='';return;}
+    if(!data.rows||!data.rows.length){vaStatus(p,'ti-inbox','No data found','Casino tab appears empty.');document.getElementById('va-'+p+'-status').style.display='';return;}
+    const s=data.summary||{};
+    const plCol=s.totalPL>0?'var(--green)':s.totalPL<0?'var(--red)':'var(--text2)';
+    const evCol=s.totalEV>0?'var(--green)':s.totalEV<0?'var(--red)':'var(--text2)';
+    document.getElementById('va-'+p+'-kpis').innerHTML=
+      '<div class="kpi"><div class="kpi-l">Total days</div><div class="kpi-v">'+(s.totalDays||0)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:'+evCol+'">'+(s.totalEV>=0?'+':'')+'£'+Math.abs(s.totalEV||0).toFixed(2)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+(s.totalPL>=0?'+':'')+'£'+Math.abs(s.totalPL||0).toFixed(2)+'</div></div>';
+    document.getElementById('va-'+p+'-kpi-wrap').style.display='';
+    const tbody=document.getElementById('va-'+p+'-tbody'); tbody.innerHTML='';
+    data.rows.forEach(b=>{
+      const pl=parseFloat(b.pl)||0, ev=parseFloat(b.ev)||0;
+      const plC=pl>0?'var(--green)':pl<0?'var(--red)':'var(--text2)';
+      const evC=ev>0?'var(--green)':ev<0?'var(--red)':'var(--text2)';
+      const tr=document.createElement('tr');
+      tr.innerHTML='<td style="font-size:12px;white-space:nowrap">'+b.date+'</td><td class="r tn">'+b.offers+'</td><td class="r tn" style="color:'+plC+'">'+(pl>=0?'+':'')+'£'+Math.abs(pl).toFixed(2)+'</td><td class="r tn" style="color:'+evC+'">'+(ev>=0?'+':'')+'£'+Math.abs(ev).toFixed(2)+'</td>';
+      tbody.appendChild(tr);
+    });
+    document.getElementById('va-'+p+'-table-wrap').style.display='';
+  } catch(err) {
+    const noUrl = err.message==='NO_URL';
+    vaStatus(p,'ti-plug-connected-x',noUrl?'No VA sheet connected':'Could not reach sheet',noUrl?'Go to Bet Tracker and paste your VA sheet URL in Data connections.':err.message);
+    document.getElementById('va-'+p+'-status').style.display='';
+  }
+}
+
+// OFFERS
+async function openVAOffersSection() {
+  const p='off'; vaHideAll(p);
+  document.getElementById('va-'+p+'-status').style.display='';
+  vaStatus(p,'ti-loader','Loading...','Fetching Offers bets...');
+  try {
+    const data = await vaFetch('Offers');
+    document.getElementById('va-'+p+'-status').style.display='none';
+    if(!data.ok){vaStatus(p,'ti-alert-circle','Error',data.error||'Unknown error');document.getElementById('va-'+p+'-status').style.display='';return;}
+    if(!data.rows||!data.rows.length){vaStatus(p,'ti-inbox','No data found','Offers tab appears empty.');document.getElementById('va-'+p+'-status').style.display='';return;}
+    const s=data.summary||{};
+    const plCol=s.totalPL>0?'var(--green)':s.totalPL<0?'var(--red)':'var(--text2)';
+    const evCol=s.totalEV>0?'var(--green)':s.totalEV<0?'var(--red)':'var(--text2)';
+    const wr=s.totalBets>0?((s.wins/s.totalBets)*100).toFixed(1)+'%':'--';
+    document.getElementById('va-'+p+'-kpis').innerHTML=
+      '<div class="kpi"><div class="kpi-l">Total bets</div><div class="kpi-v">'+s.totalBets.toLocaleString()+'</div><div class="kpi-s">Win rate '+wr+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Wins</div><div class="kpi-v" style="color:var(--green)">'+(s.wins||0).toLocaleString()+'</div><div class="kpi-s">Last 100: '+(s.last50wins||0)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Losses</div><div class="kpi-v" style="color:var(--red)">'+(s.losses||0).toLocaleString()+'</div><div class="kpi-s">Last 100: '+(s.last50losses||0)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:'+evCol+'">'+(s.totalEV>=0?'+':'')+'£'+Math.abs(s.totalEV||0).toFixed(2)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+(s.totalPL>=0?'+':'')+'£'+Math.abs(s.totalPL||0).toFixed(2)+'</div></div>';
+    document.getElementById('va-'+p+'-kpi-wrap').style.display='';
+    const tbody=document.getElementById('va-'+p+'-tbody'); tbody.innerHTML='';
+    data.rows.forEach(b=>{
+      const res=String(b.Result||'').trim();
+      let badge='<span style="color:var(--text3)">Open</span>';
+      if(res==='w')badge='<span class="badge" style="background:var(--green-bg);color:var(--green);font-weight:600">W</span>';
+      else if(res==='l')badge='<span class="badge" style="background:var(--red-bg);color:var(--red)">L</span>';
+      const pl=parseFloat(b['P/L'])||0, ev=parseFloat(b.EV)||0;
+      const plC=pl>0?'var(--green)':pl<0?'var(--red)':'var(--text2)';
+      const evC=ev>0?'var(--green)':ev<0?'var(--red)':'var(--text2)';
+      const betType=b['Bet Type']||'';
+      const tr=document.createElement('tr');
+      tr.innerHTML='<td style="font-size:12px;white-space:nowrap">'+b.Date+'</td><td><span style="font-size:11px;background:var(--surface2);padding:2px 6px;border-radius:4px">'+betType+'</span></td><td>'+badge+'</td><td style="font-weight:500;font-size:13px">'+b.Bet+'</td><td class="r tn">'+(b.Odds||'--')+'</td><td class="r tn">£'+(parseFloat(b.Stake)||0).toFixed(2)+'</td><td class="r tn" style="color:'+plC+'">'+(pl>=0?'+':'')+'£'+Math.abs(pl).toFixed(2)+'</td><td class="r tn" style="color:'+evC+'">'+(ev>=0?'+':'')+'£'+Math.abs(ev).toFixed(2)+'</td>';
+      tbody.appendChild(tr);
+    });
+    document.getElementById('va-'+p+'-table-wrap').style.display='';
+  } catch(err) {
+    const noUrl = err.message==='NO_URL';
+    vaStatus(p,'ti-plug-connected-x',noUrl?'No VA sheet connected':'Could not reach sheet',noUrl?'Go to Bet Tracker and paste your VA sheet URL in Data connections.':err.message);
+    document.getElementById('va-'+p+'-status').style.display='';
+  }
+}
 
 // ── OVERALL ──
 const OVERALL_TABS = [
