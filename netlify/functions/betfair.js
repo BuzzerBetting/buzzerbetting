@@ -1,12 +1,80 @@
 // netlify/functions/betfair.js
+const https = require('https');
+const http = require('http');
+const url = require('url');
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Content-Type': 'application/json'
 };
 const BFEX_BASE = 'https://api.betfair.com/exchange/betting/rest/v1.0';
 
+function proxyFetch(targetUrl, options = {}) {
+  return new Promise((resolve, reject) => {
+    const fixieUrl = process.env.FIXIE_URL;
+    const target = new url.URL(targetUrl);
+    
+    let reqOptions;
+    
+    if (fixieUrl) {
+      const proxy = new url.URL(fixieUrl);
+      const auth = Buffer.from(`${proxy.username}:${proxy.password}`).toString('base64');
+      reqOptions = {
+        hostname: proxy.hostname,
+        port: proxy.port || 80,
+        path: targetUrl, // full URL as path when using proxy
+        method: options.method || 'GET',
+        headers: {
+          ...options.headers,
+          'Host': target.hostname,
+          'Proxy-Authorization': `Basic ${auth}`,
+        }
+      };
+    } else {
+      reqOptions = {
+        hostname: target.hostname,
+        port: target.port || (target.protocol === 'https:' ? 443 : 80),
+        path: target.pathname + target.search,
+        method: options.method || 'GET',
+        headers: options.headers || {}
+      };
+    }
+
+    const protocol = fixieUrl ? http : https;
+    const req = protocol.request(reqOptions, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => resolve({ status: res.statusCode, text: () => Promise.resolve(data), json: () => Promise.resolve(JSON.parse(data)) }));
+    });
+    req.on('error', reject);
+    if (options.body) req.write(options.body);
+    req.end();
+  });
+}
+
+async function getSessionToken(appKey) {
+  const username = process.env.BFEX_USERNAME;
+  const password = process.env.BFEX_PASSWORD;
+  if (!username || !password) throw new Error('BFEX_USERNAME or BFEX_PASSWORD not set');
+  const res = await proxyFetch('https://identitysso-cert.betfair.com/api/certlogin', {
+    method: 'POST',
+    headers: {
+      'X-Application': appKey,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+  });
+  const text = await res.text();
+  console.log('Login response:', text.substring(0, 200));
+  let data;
+  try { data = JSON.parse(text); }
+  catch(e) { throw new Error('Login returned non-JSON: ' + text.substring(0, 200)); }
+  if (data.loginStatus !== 'SUCCESS') throw new Error(`Login failed: ${data.loginStatus}`);
+  return data.sessionToken;
+}
+
 async function bfCall(method, params, appKey, session) {
-  const res = await fetch(`${BFEX_BASE}/${method}/`, {
+  const res = await proxyFetch(`${BFEX_BASE}/${method}/`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -33,19 +101,15 @@ exports.handler = async (event) => {
     body: JSON.stringify({ ok: false, error: 'BFEX_APP_KEY not set' })
   };
 
-  const { home, away, session } = event.queryStringParameters || {};
-
-  if (!session) return {
-    statusCode: 200, headers: CORS,
-    body: JSON.stringify({ ok: false, error: 'SESSION_MISSING' })
-  };
-
+  const { home, away } = event.queryStringParameters || {};
   if (!home || !away) return {
     statusCode: 400, headers: CORS,
     body: JSON.stringify({ ok: false, error: 'home and away required' })
   };
 
   try {
+    const session = await getSessionToken(appKey);
+
     const events = await bfCall('listEvents', {
       filter: { eventTypeIds: ['1'], textQuery: `${home} v ${away}` }
     }, appKey, session);
