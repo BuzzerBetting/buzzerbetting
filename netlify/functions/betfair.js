@@ -5,28 +5,6 @@ const CORS = {
 };
 const BFEX_BASE = 'https://api.betfair.com/exchange/betting/rest/v1.0';
 
-async function getSessionToken(appKey) {
-  const username = process.env.BFEX_USERNAME;
-  const password = process.env.BFEX_PASSWORD;
-  if (!username || !password) throw new Error('BFEX_USERNAME or BFEX_PASSWORD not set');
-  const res = await fetch('https://identitysso.betfair.com/api/login', {
-    method: 'POST',
-    headers: {
-      'X-Application': appKey,
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Accept': 'application/json'
-    },
-    body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
-  });
-  const text = await res.text();
-  console.log('Login response:', text.substring(0, 200));
-  let data;
-  try { data = JSON.parse(text); }
-  catch(e) { throw new Error('Login returned non-JSON: ' + text.substring(0, 200)); }
-  if (data.status !== 'SUCCESS') throw new Error(`Login failed: ${data.status} - ${data.error||''}`);
-  return data.token;
-}
-
 async function bfCall(method, params, appKey, session) {
   const res = await fetch(`${BFEX_BASE}/${method}/`, {
     method: 'POST',
@@ -39,7 +17,7 @@ async function bfCall(method, params, appKey, session) {
     body: JSON.stringify(params)
   });
   const text = await res.text();
-  if (text.trim().startsWith('<')) throw new Error(`Betfair returned HTML — check app key and session token`);
+  if (text.trim().startsWith('<')) throw new Error('SESSION_EXPIRED');
   const data = JSON.parse(text);
   if (data.faultcode) throw new Error(data.faultstring || JSON.stringify(data));
   return data;
@@ -54,15 +32,19 @@ exports.handler = async (event) => {
     body: JSON.stringify({ ok: false, error: 'BFEX_APP_KEY not set' })
   };
 
-  const { home, away } = event.queryStringParameters || {};
+  const { home, away, session } = event.queryStringParameters || {};
+
+  if (!session) return {
+    statusCode: 200, headers: CORS,
+    body: JSON.stringify({ ok: false, error: 'SESSION_MISSING' })
+  };
+
   if (!home || !away) return {
     statusCode: 400, headers: CORS,
     body: JSON.stringify({ ok: false, error: 'home and away required' })
   };
 
   try {
-    const session = await getSessionToken(appKey);
-
     const events = await bfCall('listEvents', {
       filter: { eventTypeIds: ['1'], textQuery: `${home} v ${away}` }
     }, appKey, session);
@@ -116,9 +98,10 @@ exports.handler = async (event) => {
     };
 
   } catch (err) {
+    const expired = err.message === 'SESSION_EXPIRED';
     return {
-      statusCode: 500, headers: CORS,
-      body: JSON.stringify({ ok: false, error: err.message })
+      statusCode: expired ? 200 : 500, headers: CORS,
+      body: JSON.stringify({ ok: false, error: err.message, sessionExpired: expired })
     };
   }
 };
