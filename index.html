@@ -751,7 +751,7 @@ input::placeholder{color:var(--text3)}
       <button onclick="document.getElementById('cev-results').style.display='none'" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px"><i class="ti ti-x"></i></button>
     </div>
     <div class="card" style="overflow-x:auto">
-      <table class="dt" style="min-width:800px">
+      <table class="dt" style="min-width:1000px">
         <thead>
           <tr>
             <th>Player</th>
@@ -763,6 +763,8 @@ input::placeholder{color:var(--text3)}
             <th class="r">+2 Seasons</th>
             <th class="r">Odds</th>
             <th>Bookie</th>
+            <th class="r">BFEX</th>
+            <th class="r">BFEX EV%</th>
             <th class="r">EV%</th>
           </tr>
         </thead>
@@ -3640,14 +3642,29 @@ async function scanOC(matchId, home, away, competition, btn) {
 
     btn.innerHTML = '<i class="ti ti-loader"></i> Fetching odds...';
 
-    // Step 1: Fetch OC odds, lineups, and BB odds in parallel
-    const [ocRaw, lineupData] = await Promise.all([
+    // Step 1: Fetch OC odds, lineups, BB odds and Betfair exchange prices in parallel
+    const [ocRaw, lineupData, bfexData] = await Promise.all([
       fetch(`https://www.oddschecker.com/api/markets/v2/all-odds?market-ids=${ids}&repub=OC`)
         .then(r => r.json()).catch(() => []),
       fetch(`/.netlify/functions/lineups?matchId=${matchId}`)
         .then(r => r.json()).catch(() => ({ ok: false })),
-      fetchBBOdds(matchId, home, away)
+      fetchBBOdds(matchId, home, away),
+      fetch(`http://178.128.40.248:3000/api/betfair?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`)
+        .then(r => r.json()).catch(() => ({ ok: false }))
     ]);
+
+    // Build Betfair price lookup: normalised player name → { back, lastTraded }
+    const bfexByName = {};
+    if (bfexData.ok && bfexData.markets) {
+      for (const mkt of Object.values(bfexData.markets)) {
+        for (const p of (mkt.players ?? [])) {
+          const key = normName(p.name);
+          if (!bfexByName[key] || (p.back && p.back < (bfexByName[key].back ?? 999))) {
+            bfexByName[key] = { back: p.back, lastTraded: p.lastTraded };
+          }
+        }
+      }
+    }
 
     // Step 2: Parse OC odds into lookup by market → player name
     const MARKET_KEYS = ['header', 'otb', 'headed_sot', 'sot_otb'];
@@ -3841,12 +3858,19 @@ async function scanOC(matchId, home, away, competition, btn) {
 
         const bestEv = Math.max(...evTfs.map(t => parseFloat(t.ev)));
 
+        // Look up Betfair exchange price for this player
+        const bfexEntry = Object.entries(bfexByName).find(([k]) => fuzzyMatch(k, player.name));
+        const bfexPrice = bfexEntry ? (bfexEntry[1].back ?? bfexEntry[1].lastTraded ?? null) : null;
+        const bfexEv = bfexPrice ? (((bfexPrice / (market.needsAGS ? ags : sotV)) - 1) * 100) : null;
+
         evBets.push({
           player: player.name,
           market: market.label,
           bbFair: market.needsAGS ? ags : sotV,
           ocOdds: ocPrice.toFixed(2),
           bookie: ocBook,
+          bfexPrice,
+          bfexEv,
           tfs,
           bestEv,
           isConfident
@@ -3899,6 +3923,17 @@ function renderEVResults(home, away, bets) {
 
     const tr = document.createElement('tr');
     tr.style.cssText = rowStyle;
+
+    // BFEX price cell
+    let bfexCell = `<td class="r tn" style="color:var(--text3)">—</td><td class="r">—</td>`;
+    if (bet.bfexPrice) {
+      const bfexEvVal = bet.bfexEv;
+      const bfexCol = bfexEvVal > 0 ? 'var(--green)' : 'var(--red)';
+      const bfexBg  = bfexEvVal > 0 ? 'var(--green-bg)' : 'var(--surface2)';
+      bfexCell = `<td class="r tn" style="color:var(--purple);font-weight:500">${parseFloat(bet.bfexPrice).toFixed(2)}</td>` +
+        `<td class="r"><span class="badge" style="background:${bfexBg};color:${bfexCol}">${bfexEvVal > 0 ? '+' : ''}${bfexEvVal.toFixed(1)}%</span></td>`;
+    }
+
     tr.innerHTML = `
       <td style="font-weight:500">${bet.player}</td>
       <td style="font-size:12px;color:var(--text2)">${bet.market}</td>
@@ -3906,13 +3941,14 @@ function renderEVResults(home, away, bets) {
       ${tfCells}
       <td class="r tn" style="font-weight:600;color:var(--green)">${bet.ocOdds}</td>
       <td style="font-size:12px;color:var(--text2)">${bet.bookie}</td>
+      ${bfexCell}
       <td class="r"><span class="badge" style="background:${evBg};color:${evCol}">+${ev.toFixed(1)}%</span></td>`;
     tbody.appendChild(tr);
   }
 
   // Legend
   const legend = document.createElement('tr');
-  legend.innerHTML = `<td colspan="10" style="padding:10px 16px;font-size:11px;color:var(--text2);border-top:.5px solid var(--border)">
+  legend.innerHTML = `<td colspan="12" style="padding:10px 16px;font-size:11px;color:var(--text2);border-top:.5px solid var(--border)">
     <span style="display:inline-block;width:10px;height:10px;background:var(--surface);border:.5px solid var(--border);border-radius:2px;margin-right:4px"></span>High data confidence &nbsp;·&nbsp;
     <span style="display:inline-block;width:10px;height:10px;background:var(--amber-bg);border:.5px solid var(--amber-bd);border-radius:2px;margin-right:4px"></span>Low data (xG &lt;10 / shots &lt;50 / SOT &lt;20) &nbsp;·&nbsp;
     Faded fair odds = below minimum threshold
