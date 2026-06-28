@@ -339,6 +339,28 @@ input::placeholder{color:var(--text3)}
       <div class="cat" onclick="showTrackerSection('va','bettracker')"><div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-clipboard-list"></i></div><div><div class="cat-title">BB Bet Tracker</div><div class="cat-desc">BB bet tracker history and stats</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('va','casino')"><div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-diamond"></i></div><div><div class="cat-title">Casino</div><div class="cat-desc">VA casino session results</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('va','offers')"><div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-tag"></i></div><div><div class="cat-title">Offers</div><div class="cat-desc">Promotional offer results and P&amp;L</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
+      <div class="cat" onclick="showTrackerSection('va','other')"><div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-layout-grid"></i></div><div><div class="cat-title">Other</div><div class="cat-desc">Monthly P/L breakdown — L15 Horse, EW Doubles, BFEX</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
+    </div>
+  </div>
+
+  <!-- VA: OTHER -->
+  <div id="ts-va-other" class="tracker-section" style="display:none">
+    <button class="back" onclick="backToTrackerSection('va')"><i class="ti ti-arrow-left"></i> VA bets</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+      <div class="sec-title" style="margin-bottom:0">Other</div>
+      <button onclick="openVAOtherSection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+    </div>
+    <div id="va-oth-status" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="va-oth-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="va-oth-status-title">Loading...</div><div class="ph-d" id="va-oth-status-msg"></div></div></div></div>
+    <div id="va-oth-content" style="display:none">
+      <div class="card">
+        <div class="card-h">Monthly breakdown</div>
+        <div style="overflow-x:auto">
+          <table class="dt" style="min-width:560px">
+            <thead><tr><th>Month</th><th class="r">L15 Horse</th><th class="r">EW Doubles</th><th class="r">BFEX Horse</th><th class="r">BFEX Dog</th><th class="r">Total P/L</th></tr></thead>
+            <tbody id="va-oth-tbody"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -553,11 +575,11 @@ input::placeholder{color:var(--text3)}
       <button onclick="openVACasinoSection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
     </div>
     <div id="va-cas-status" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="va-cas-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="va-cas-status-title">Loading...</div><div class="ph-d" id="va-cas-status-msg"></div></div></div></div>
-    <div id="va-cas-kpi-wrap" style="display:none"><div class="kpis" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px" id="va-cas-kpis"></div></div>
+    <div id="va-cas-kpi-wrap" style="display:none"><div class="kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px" id="va-cas-kpis"></div></div>
     <div id="va-cas-table-wrap" class="card" style="display:none">
       <div style="padding:12px 20px;border-bottom:.5px solid var(--border)"><span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500">Daily summary</span></div>
       <div style="overflow-x:auto;max-height:520px;overflow-y:auto">
-        <table class="dt" style="min-width:400px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr><th>Date</th><th class="r">Offers</th><th class="r">P/L</th><th class="r">EV</th></tr></thead><tbody id="va-cas-tbody"></tbody></table>
+        <table class="dt" style="min-width:400px;table-layout:fixed;width:100%"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr><th style="width:120px">Date</th><th class="r" style="width:80px">Offers</th><th class="r" style="width:120px">P/L</th><th class="r" style="width:120px">EV</th></tr></thead><tbody id="va-cas-tbody"></tbody></table>
       </div>
     </div>
   </div>
@@ -1058,7 +1080,7 @@ function showCalc(name){document.getElementById('calc-hub').style.display='none'
 function backToCalcHub(){document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
 function showTracker(name){document.getElementById('tracker-hub').style.display='none';document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.getElementById('tracker-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='overall')openOverallSection();}
 function backToTrackerHub(){document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('tracker-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
-function showTrackerSection(parent,name){document.getElementById('tracker-'+parent).style.display='none';document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('ts-'+parent+'-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(parent==='personal'&&name==='dogs')openDogsSection();if(parent==='personal'&&name==='american')openAmericanSection();if(parent==='personal'&&name==='value')openValueSection();if(parent==='personal'&&name==='keithbot')openKeithbotSection();if(parent==='personal'&&name==='bbhorses')openBBHorseSection();if(parent==='personal'&&name==='bbgolf')openBBGolfSection();if(parent==='personal'&&name==='freeze')openFreezeSection();if(parent==='personal'&&name==='ninja')openNinjaSection();if(parent==='personal'&&name==='corners')openCornersSection();if(parent==='personal'&&name==='other')openOtherSection();if(parent==='va'&&name==='discord')openVADiscordSection();if(parent==='va'&&name==='racing')openVARacingSection();if(parent==='va'&&name==='bettracker')openVABetTrackerSection();if(parent==='va'&&name==='casino')openVACasinoSection();if(parent==='va'&&name==='offers')openVAOffersSection();}
+function showTrackerSection(parent,name){document.getElementById('tracker-'+parent).style.display='none';document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('ts-'+parent+'-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(parent==='personal'&&name==='dogs')openDogsSection();if(parent==='personal'&&name==='american')openAmericanSection();if(parent==='personal'&&name==='value')openValueSection();if(parent==='personal'&&name==='keithbot')openKeithbotSection();if(parent==='personal'&&name==='bbhorses')openBBHorseSection();if(parent==='personal'&&name==='bbgolf')openBBGolfSection();if(parent==='personal'&&name==='freeze')openFreezeSection();if(parent==='personal'&&name==='ninja')openNinjaSection();if(parent==='personal'&&name==='corners')openCornersSection();if(parent==='personal'&&name==='other')openOtherSection();if(parent==='va'&&name==='discord')openVADiscordSection();if(parent==='va'&&name==='racing')openVARacingSection();if(parent==='va'&&name==='bettracker')openVABetTrackerSection();if(parent==='va'&&name==='casino')openVACasinoSection();if(parent==='va'&&name==='offers')openVAOffersSection();if(parent==='va'&&name==='other')openVAOtherSection();}
 function backToTrackerSection(parent){document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('tracker-'+parent).style.display='block';window.scrollTo({top:0,behavior:'smooth'});}
 
 // ── GREETING ──
@@ -2040,9 +2062,11 @@ async function openVACasinoSection() {
     const s=data.summary||{};
     const plCol=s.totalPL>0?'var(--green)':s.totalPL<0?'var(--red)':'var(--text2)';
     const evCol=s.totalEV>0?'var(--green)':s.totalEV<0?'var(--red)':'var(--text2)';
+    const avgOffers=s.totalDays>0?((data.rows.reduce((a,b)=>a+(b.offers||0),0))/s.totalDays).toFixed(1):0;
+    const avgEV=s.totalDays>0?((s.totalEV||0)/s.totalDays).toFixed(2):0;
     document.getElementById('va-'+p+'-kpis').innerHTML=
-      '<div class="kpi"><div class="kpi-l">Total days</div><div class="kpi-v">'+(s.totalDays||0)+'</div></div>'+
-      '<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:'+evCol+'">'+fmtGBP(s.totalEV||0)+'</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Total days</div><div class="kpi-v">'+(s.totalDays||0)+'</div><div class="kpi-s">Avg '+avgOffers+' offers/day</div></div>'+
+      '<div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:'+evCol+'">'+fmtGBP(s.totalEV||0)+'</div><div class="kpi-s">Avg '+fmtGBP(parseFloat(avgEV),true)+'/day</div></div>'+
       '<div class="kpi"><div class="kpi-l">Total P/L</div><div class="kpi-v" style="color:'+plCol+'">'+fmtGBP(s.totalPL||0)+'</div></div>';
     document.getElementById('va-'+p+'-kpi-wrap').style.display='';
     const tbody=document.getElementById('va-'+p+'-tbody'); tbody.innerHTML='';
@@ -2102,6 +2126,58 @@ async function openVAOffersSection() {
     const noUrl = err.message==='NO_URL';
     vaStatus(p,'ti-plug-connected-x',noUrl?'No VA sheet connected':'Could not reach sheet',noUrl?'Go to Bet Tracker and paste your VA sheet URL in Data connections.':err.message);
     document.getElementById('va-'+p+'-status').style.display='';
+  }
+}
+
+
+// VA OTHER (Summary tab)
+async function openVAOtherSection() {
+  document.getElementById('va-oth-status').style.display='';
+  document.getElementById('va-oth-content').style.display='none';
+  document.getElementById('va-oth-status-ico').innerHTML='<i class="ti ti-loader"></i>';
+  document.getElementById('va-oth-status-title').textContent='Loading...';
+  document.getElementById('va-oth-status-msg').textContent='Fetching Summary data...';
+  try {
+    const url = localStorage.getItem('bb_va_url');
+    if(!url) throw new Error('NO_URL');
+    const r = await fetch('/.netlify/functions/sheets?url='+encodeURIComponent(url)+'&tab=Summary');
+    const data = await r.json();
+    document.getElementById('va-oth-status').style.display='none';
+    if(!data.ok){
+      document.getElementById('va-oth-status-ico').innerHTML='<i class="ti ti-alert-circle"></i>';
+      document.getElementById('va-oth-status-title').textContent='Error loading data';
+      document.getElementById('va-oth-status-msg').textContent=data.error||'Unknown error';
+      document.getElementById('va-oth-status').style.display='';return;
+    }
+    if(!data.rows||!data.rows.length){
+      document.getElementById('va-oth-status-ico').innerHTML='<i class="ti ti-inbox"></i>';
+      document.getElementById('va-oth-status-title').textContent='No data found';
+      document.getElementById('va-oth-status-msg').textContent='Summary tab appears empty.';
+      document.getElementById('va-oth-status').style.display='';return;
+    }
+    const tbody=document.getElementById('va-oth-tbody'); tbody.innerHTML='';
+    data.rows.forEach(row=>{
+      const l15=parseFloat(row['L15 Horse'])||0;
+      const ew=parseFloat(row['EW Doubles'])||0;
+      const bfexH=parseFloat(row['BFEX Horse'])||0;
+      const bfexD=parseFloat(row['BFEX Dog'])||0;
+      const total=l15+ew+bfexH+bfexD;
+      const cell = (v) => {
+        const c=v>0?'var(--green)':v<0?'var(--red)':'var(--text2)';
+        return '<td class="r tn" style="color:'+c+'">'+(v!==0?fmtGBP(v):'--')+'</td>';
+      };
+      const totCol=total>0?'var(--green)':total<0?'var(--red)':'var(--text2)';
+      const tr=document.createElement('tr');
+      tr.innerHTML='<td style="font-weight:500">'+row.Month+'</td>'+cell(l15)+cell(ew)+cell(bfexH)+cell(bfexD)+'<td class="r tn" style="color:'+totCol+';font-weight:600">'+(total!==0?fmtGBP(total):'--')+'</td>';
+      tbody.appendChild(tr);
+    });
+    document.getElementById('va-oth-content').style.display='';
+  } catch(err) {
+    const noUrl=err.message==='NO_URL';
+    document.getElementById('va-oth-status-ico').innerHTML='<i class="ti ti-plug-connected-x"></i>';
+    document.getElementById('va-oth-status-title').textContent=noUrl?'No VA sheet connected':'Could not reach sheet';
+    document.getElementById('va-oth-status-msg').textContent=noUrl?'Go to Bet Tracker and paste your VA sheet URL in Data connections.':err.message;
+    document.getElementById('va-oth-status').style.display='';
   }
 }
 
