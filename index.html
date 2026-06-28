@@ -739,12 +739,14 @@ input::placeholder{color:var(--text3)}
     <div style="display:flex;gap:8px">
       <button onclick="initCalcEV(0)" style="display:flex;align-items:center;gap:6px;background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Today</button>
       <button onclick="initCalcEV(1)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit" id="cev-tomorrow-btn">Tomorrow</button>
-      <button onclick="scanAllOC(this)" style="display:flex;align-items:center;gap:6px;background:var(--green);color:#fff;border:none;border-radius:var(--radius);padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit" id="cev-scan-all-btn"><i class="ti ti-bolt"></i> Scan All</button>
     </div>
   </div>
 
   <div id="cev-status"></div>
   <div id="cev-fixtures"></div>
+  <div id="cev-scan-all-wrap" style="display:none;margin-bottom:16px">
+    <button onclick="scanAllOC(this)" style="display:flex;align-items:center;gap:6px;background:var(--green);color:#fff;border:none;border-radius:var(--radius);padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-bolt"></i> Scan All</button>
+  </div>
 
   <div id="cev-results" style="display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -3493,6 +3495,7 @@ async function initCalcEV(dayOffset = 0) {
       });
     });
     renderCEVFixtures(data.leagues);
+    document.getElementById('cev-scan-all-wrap').style.display = '';
   } catch(err) {
     statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-wifi-off"></i></div><div class="ph-t">Failed to load fixtures</div><div class="ph-d">${err.message}</div></div></div>`;
   }
