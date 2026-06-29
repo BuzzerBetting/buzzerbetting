@@ -4707,8 +4707,8 @@ async function findOCFGSMarketId(home, away) {
   const cached = localStorage.getItem(cacheKey);
   if (cached) return cached;
 
-  const BATCH = 25;
-  const STEP = 5;
+  const BATCH = 50;
+  const STEP = 2;
   const normHome = home.toLowerCase().replace(/[^a-z]/g, '');
   const normAway = away.toLowerCase().replace(/[^a-z]/g, '');
 
