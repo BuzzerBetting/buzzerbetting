@@ -4619,7 +4619,7 @@ async function scanDDHH(match, btn) {
 }
 
 async function findOCFGSMarketId(home, away) {
-  const r = await fetch(`http://178.128.40.248:3000/api/oc-fgs-find?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`);
+  const r = await fetch(`/.netlify/functions/oc-fgs-find?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`);
   const d = await r.json();
   if (d.ok) return d.marketId;
   return null;
