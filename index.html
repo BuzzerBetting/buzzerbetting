@@ -4568,24 +4568,18 @@ async function scanDDHH(match, btn) {
       fetchBetfredFGSFromOC(fgsMarketId)
     ]);
 
-    // Build BFEX FGS lookup
-    const bfexFGS = {};
-    const bfexAGS = {};
+    // Build BFEX FGS and AGS lookups using full runner data for deriveBfexFair
+    const bfexFGSRunners = {};
+    const bfexAGSRunners = {};
     if (bfexData.ok && bfexData.markets) {
       for (const [mktName, mkt] of Object.entries(bfexData.markets)) {
         const name = mktName.toLowerCase();
-        const isFGS = name.includes('first') || name.includes('fgs') || name.includes('player first');
-        const isAGS = (name.includes('score') || name.includes('ags') || name.includes('anytime')) && !name.includes('first');
+        const isFGS = name.includes('first');
+        const isAGS = name.includes('to score') && !name.includes('first') && !name.includes('shot');
         for (const p of (mkt.players ?? [])) {
           const key = normDDHH(p.name);
-          const back = p.back?.[0]?.price ?? null;
-          const lpt = p.lastPriceTraded ?? null;
-          const price = back ?? lpt;
-          if (!price) continue;
-          if (isFGS && (!bfexFGS[key] || price < bfexFGS[key].price))
-            bfexFGS[key] = { name: p.name, price, totalMatched: p.totalMatched ?? 0 };
-          if (isAGS && (!bfexAGS[key] || price < bfexAGS[key].price))
-            bfexAGS[key] = { name: p.name, price, totalMatched: p.totalMatched ?? 0 };
+          if (isFGS && !bfexFGSRunners[key]) bfexFGSRunners[key] = p;
+          if (isAGS && !bfexAGSRunners[key]) bfexAGSRunners[key] = p;
         }
       }
     }
@@ -4604,14 +4598,15 @@ async function scanDDHH(match, btn) {
       const betfredFGS = p.betfred;
       if (!betfredFGS) continue;
 
-      // Find BFEX AGS for this player
-      const agsKey = Object.keys(bfexAGS).find(k => k === pKey || fuzzyMatchDDHH(k, pKey));
+      // Find BFEX AGS for this player using deriveBfexFair
+      const agsKey = Object.keys(bfexAGSRunners).find(k => k === pKey || fuzzyMatchDDHH(k, pKey));
       if (!agsKey) continue;
-      const agsBfex = bfexAGS[agsKey].price;
+      const { fair: agsBfex, confidence: agsConf } = deriveBfexFair(bfexAGSRunners[agsKey]);
+      if (!agsBfex || agsConf === 'red') continue;
 
-      // Find BFEX FGS for this player
-      const fgsKey = Object.keys(bfexFGS).find(k => k === pKey || fuzzyMatchDDHH(k, pKey));
-      const fgsBfex = fgsKey ? bfexFGS[fgsKey].price : null;
+      // Find BFEX FGS for this player using deriveBfexFair
+      const fgsKey = Object.keys(bfexFGSRunners).find(k => k === pKey || fuzzyMatchDDHH(k, pKey));
+      const { fair: fgsBfex } = fgsKey ? deriveBfexFair(bfexFGSRunners[fgsKey]) : { fair: null };
       if (!fgsBfex) continue;
 
       // DDHH formula
