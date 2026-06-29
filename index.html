@@ -1977,7 +1977,7 @@ function renderToday(bets,today){
   const plCol=settledPL>0?'var(--green)':settledPL<0?'var(--red)':'var(--text2)';
   document.getElementById('today-kpis').innerHTML=`
     <div class="kpi"><div class="kpi-l">Bets today</div><div class="kpi-v">${totalBets}</div><div class="kpi-s">${settledBets.length} settled · ${openBets.length} open</div></div>
-    <div class="kpi"><div class="kpi-l">Total staked</div><div class="kpi-v">£${totalStaked.toFixed(2)}</div></div>
+    <div class="kpi"><div class="kpi-l">Total staked</div><div class="kpi-v">£${totalStaked.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
     <div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:${evCol}">${totalEV>=0?'+':''}£${Math.abs(totalEV).toFixed(2)}</div></div>
     <div class="kpi"><div class="kpi-l">Avg EV / bet</div><div class="kpi-v" style="color:${evCol}">${avgEV>=0?'+':''}£${Math.abs(avgEV).toFixed(2)}</div></div>
     <div class="kpi"><div class="kpi-l">Settled P/L</div><div class="kpi-v" style="color:${plCol}">${settledPL>=0?'+':''}£${Math.abs(settledPL).toFixed(2)}</div><div class="kpi-s">${settledBets.length} bets</div></div>`;
@@ -2051,7 +2051,7 @@ function renderTodayPanel(elId, bets) {
       <div style="height:100%;background:${probCol};border-radius:6px;width:${probPct}%;transition:width .6s ease"></div>
     </div>
     <div style="display:flex;flex-direction:column;gap:5px">
-      <div style="display:flex;justify-content:space-between"><span style="font-size:12px;color:var(--text2)">Total staked</span><span style="font-size:12px;font-weight:600">£${totalStake.toFixed(2)}</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="font-size:12px;color:var(--text2)">Total staked</span><span style="font-size:12px;font-weight:600">£${totalStake.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>
       <div style="display:flex;justify-content:space-between"><span style="font-size:12px;color:var(--text2)">Total EV</span><span style="font-size:12px;font-weight:600;color:${evCol}">${totalEV>=0?'+':''}£${Math.abs(totalEV).toFixed(2)}</span></div>
       <div style="display:flex;justify-content:space-between"><span style="font-size:12px;color:var(--text2)">Settled P/L</span><span style="font-size:12px;font-weight:600;color:${plCol}">${settledPL>=0?'+':''}£${Math.abs(settledPL).toFixed(2)}</span></div>
     </div>`;
