@@ -4072,24 +4072,24 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
         const bfexRunner = bfexEntry ? bfexEntry[1] : null;
         const { fair: bfexPrice, confidence: bfexConfidence } = deriveBfexFair(bfexRunner);
 
-        // Only include if at least one timeframe is +EV (using BB fairs), or BFEX is available
+        // Only include if at least one timeframe is +EV (using BB fairs), or BFEX shows +EV
         const evTfs = tfs.filter(t => t.ev !== null && parseFloat(t.ev) > 0);
-        if (!evTfs.length && !bfexPrice) continue;
+        
+        // Calculate BFEX-based EV if available
+        const bfexBasedEv = bfexPrice ? ((ocPrice / bfexPrice) - 1) * 100 : null;
+        
+        // Skip if no value anywhere
+        if (!evTfs.length && (bfexBasedEv === null || bfexBasedEv <= 0)) continue;
 
-        // Use BFEX as primary fair odds if available, otherwise use BB fairs
-        const primaryFair = bfexPrice || (market.needsAGS ? ags : sotV);
+        // Use BFEX EV as the primary bestEv when available, otherwise use best BB timeframe
+        const bestEv = bfexBasedEv !== null ? bfexBasedEv : Math.max(...evTfs.map(t => parseFloat(t.ev)));
 
-        // Recalculate EV using primary fair (BFEX preferred)
-        const evTfsFinal = tfs.map(tf => {
-          if (!tf.fairOdds || !bfexPrice) return tf;
-          const ev = ((ocPrice / bfexPrice) - 1) * 100;
-          return { ...tf, ev: ev.toFixed(1), usingBfex: true };
-        });
+        // Recalculate timeframe cells — show them for reference but EV% uses BFEX when available
+        const evTfsFinal = bfexPrice
+          ? tfs.map(tf => ({ ...tf, usingBfex: true }))
+          : tfs;
 
-        const bestEv = Math.max(...evTfsFinal.map(t => parseFloat(t.ev ?? '-999')));
-        if (bestEv <= 0 && !bfexPrice) continue;
-
-        const bfexEv = bfexPrice ? (((bfexPrice / (market.needsAGS ? ags : sotV)) - 1) * 100) : null;
+        const bfexEv = bfexBasedEv;
 
         evBets.push({
           player: player.name,
