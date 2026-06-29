@@ -4650,8 +4650,9 @@ async function findOCFGSMarketId(home, away) {
       let fgsId = null;
       doc.querySelectorAll('[id^="market_"]').forEach(el => {
         const id = el.id.replace('market_', '');
-        const text = el.textContent || '';
-        if (text.includes('First Goalscorer') && !fgsId) fgsId = id;
+        if (!/^\d+$/.test(id)) return;
+        const h2 = el.querySelector('h2');
+        if (h2?.textContent?.trim() === 'First Goalscorer') fgsId = id;
       });
 
       if (fgsId) return fgsId;
