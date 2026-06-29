@@ -4661,12 +4661,12 @@ async function fetchBetfredFGSFromOC(marketId) {
   const market = data[0];
   if (!market) return [];
 
-  // Build player → betId map (one betId per player)
+  // Build player → betId map using the bets array
   const playerBetIds = {};
-  for (const odd of (market.odds || [])) {
-    const name = odd.selectionName || odd.name || '';
+  for (const bet of (market.bets || [])) {
+    const name = bet.betName || '';
     if (!name || name === 'No Goalscorer') continue;
-    if (!playerBetIds[name]) playerBetIds[name] = odd.betId;
+    if (!playerBetIds[name]) playerBetIds[name] = bet.betId;
   }
 
   // Step 2: Fetch each betId in parallel to get Betfred odds
