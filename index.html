@@ -4655,21 +4655,43 @@ async function findOCFGSMarketId(home, away) {
 }
 
 async function fetchBetfredFGSFromOC(marketId) {
+  // Step 1: Get all players and their betIds from the FGS market
   const r = await fetch(`https://www.oddschecker.com/api/markets/v2/all-odds?market-ids=${marketId}&repub=OC`);
   const data = await r.json();
   const market = data[0];
   if (!market) return [];
 
-  const players = {};
+  // Build player → betId map (one betId per player)
+  const playerBetIds = {};
   for (const odd of (market.odds || [])) {
     const name = odd.selectionName || odd.name || '';
-    const dec = parseFloat(odd.oddsDecimal || 0);
-    const code = (odd.bookmakerCode || '').toUpperCase();
-    if (!name || dec <= 1 || name === 'No Goalscorer') continue;
-    if (!players[name]) players[name] = { name, betfred: null };
-    if (code === 'FR') players[name].betfred = dec;
+    if (!name || name === 'No Goalscorer') continue;
+    if (!playerBetIds[name]) playerBetIds[name] = odd.betId;
   }
-  return Object.values(players).filter(p => p.betfred);
+
+  // Step 2: Fetch each betId in parallel to get Betfred odds
+  const OC_API_KEY = 'b1b69b4e-5233-4195-af1c-f5a0c18b1e0c';
+  const results = await Promise.allSettled(
+    Object.entries(playerBetIds).map(async ([name, betId]) => {
+      const r = await fetch(`https://api.oddschecker.com/api/v2/bets/${betId}`, {
+        headers: {
+          'api-key': OC_API_KEY,
+          'app-type': 'mapp',
+          'content-type': 'application/json',
+          'datatype': 'json'
+        }
+      });
+      const d = await r.json();
+      const bets = Array.isArray(d) ? d : [d];
+      const bet = bets[0];
+      const betfred = bet?.odds?.find(o => o.bookieCode === 'FR');
+      return { name, betfred: betfred ? parseFloat(betfred.oddsDecimal) : null };
+    })
+  );
+
+  return results
+    .filter(r => r.status === 'fulfilled' && r.value.betfred)
+    .map(r => r.value);
 }
 
 function normDDHH(n) {
