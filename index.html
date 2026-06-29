@@ -4738,17 +4738,19 @@ async function fetchBetfredFGSFromOC(marketId) {
                 const fr = b?.odds?.find(o => o.bookieCode === 'FR');
                 if (!fr) return null;
                 if (normDDHH(b.betName || '') !== baseName) return null;
-                return { name: bet.betName, betfred: parseFloat(fr.oddsDecimal) };
+                return { name: bet.betName, betfred: parseFloat(fr.oddsDecimal), betId: id, dist: Math.abs(id - bet.betId) };
               })
               .catch(() => null)
           )
         );
 
-        const found = scanResults
+        // Take the FR match closest to the original betId
+        const matches = scanResults
           .filter(r => r.status === 'fulfilled' && r.value)
-          .map(r => r.value)[0];
+          .map(r => r.value)
+          .sort((a, b) => a.dist - b.dist);
 
-        return found || null;
+        return matches[0] || null;
       })
   );
 
