@@ -959,7 +959,7 @@ input::placeholder{color:var(--text3)}
       <div class="igrid">
         <div><label class="lbl" for="kel-fair">Fair odds (decimal)</label><input id="kel-fair" type="number" placeholder="e.g. 1.95" step="0.01" min="1.01" oninput="calcKellyMain()"></div>
         <div><label class="lbl" for="kel-bookie">Bookie odds (decimal)</label><input id="kel-bookie" type="number" placeholder="e.g. 2.10" step="0.01" min="1.01" oninput="calcKellyMain()"></div>
-        <div><label class="lbl" for="kel-bank">Bankroll (£)</label><input id="kel-bank" type="number" placeholder="e.g. 5000" step="100" min="0" oninput="calcKellyMain()"></div>
+        <div><label class="lbl" for="kel-bank">Bankroll (£)</label><input id="kel-bank" type="number" placeholder="e.g. 5000" step="100" min="0" oninput="calcKellyMain()"><div id="kel-bank-note" style="font-size:11px;color:var(--text3);margin-top:4px"></div></div>
       </div>
       <div style="margin-bottom:16px">
         <div class="lbl" style="margin-bottom:10px">Kelly fraction</div>
@@ -1148,7 +1148,7 @@ function checkPin(){
 // ── NAVIGATION ──
 function goHome(){document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
 function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();}
-function showCalc(name){document.getElementById('calc-hub').style.display='none';document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='dutch')initDutch();if(name==='arb')initArb();if(name==='gsm')initGSM();}
+function showCalc(name){document.getElementById('calc-hub').style.display='none';document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='dutch')initDutch();if(name==='arb')initArb();if(name==='gsm')initGSM();if(name==='kelly')initKelly();}
 function backToCalcHub(){document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
 function showTracker(name){document.getElementById('tracker-hub').style.display='none';document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.getElementById('tracker-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='overall')openOverallSection();}
 function backToTrackerHub(){document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('tracker-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
@@ -1438,6 +1438,23 @@ function calcEvMain(){
 
 // ── 2. KELLY CRITERION ──
 let kellyFrac=0.5;
+let kellyBankrollLoaded=false;
+async function initKelly(){
+  if(kellyBankrollLoaded)return;
+  const mainUrl=localStorage.getItem('bb_main_url');
+  if(!mainUrl)return;
+  try{
+    const r=await fetch(`/.netlify/functions/sheets?url=${encodeURIComponent(mainUrl)}&tab=Value`);
+    const d=await r.json();
+    const val=parseFloat(d.summary?.kellyBank||0);
+    if(val>0){
+      document.getElementById('kel-bank').value=val.toFixed(0);
+      document.getElementById('kel-bank-note').textContent=`Auto-loaded from sheet: £${val.toLocaleString('en-GB',{minimumFractionDigits:0})}`;
+      kellyBankrollLoaded=true;
+      calcKellyMain();
+    }
+  }catch(e){}
+}
 function setKellyFrac(f,btn){kellyFrac=f;document.querySelectorAll('.frac-btn').forEach(b=>b.classList.toggle('active',parseFloat(b.dataset.frac)===f));calcKellyMain();}
 function calcKellyMain(){
   const fair=parseFloat(document.getElementById('kel-fair').value);
@@ -1860,9 +1877,9 @@ async function initToday(){
   showTodayStatus('ti-loader','Loading...','Fetching today\'s bets from your sheets.');
   const today=todayDateStr();
   let allBets=[];
-  // Tabs to check on main sheet (those with Date + Odds + Stake + EV columns)
+  // Main sheet tabs
   const mainTabs=['Value','American Props','Keithbot','BB Horse','BB Golf','Freeze','Corners'];
-  const fetches=mainTabs.map(async tab=>{
+  const mainFetches=mainTabs.map(async tab=>{
     if(!mainUrl)return;
     try{
       const r=await fetch(`/.netlify/functions/sheets?url=${encodeURIComponent(mainUrl)}&tab=${encodeURIComponent(tab)}`);
@@ -1886,7 +1903,39 @@ async function initToday(){
       }
     }catch(e){}
   });
-  await Promise.allSettled(fetches);
+  // VA sheet tabs
+  const vaTabConfigs=[
+    {tab:'Discord',   betCol:'Bet',    oddsCol:'Odds',  stakeCol:'Stake', evCol:'EV',   plCol:'P/L',    resultCol:'Result'},
+    {tab:'BB - RTP',  betCol:'Horse',  oddsCol:'Odds',  stakeCol:'Stake', evCol:'EV',   plCol:'P/L',    resultCol:'Result'},
+    {tab:'BB - BT',   betCol:'Bet',    oddsCol:'Odds',  stakeCol:'Stake', evCol:'EV',   plCol:'P/L',    resultCol:'Result'},
+    {tab:'Casino',    betCol:'Notes',  oddsCol:'',      stakeCol:'Stake', evCol:'EV',   plCol:'P/L',    resultCol:''},
+    {tab:'Offers',    betCol:'Bet',    oddsCol:'Odds',  stakeCol:'Stake', evCol:'EV',   plCol:'P/L',    resultCol:'Result'},
+  ];
+  const vaFetches=vaTabConfigs.map(async cfg=>{
+    if(!vaUrl)return;
+    try{
+      const r=await fetch(`/.netlify/functions/sheets?url=${encodeURIComponent(vaUrl)}&tab=${encodeURIComponent(cfg.tab)}`);
+      const d=await r.json();
+      if(d.ok&&d.rows){
+        d.rows.forEach(row=>{
+          const dt=parseRowDate(row['Date']);
+          if(dt===today){
+            allBets.push({
+              source:'VA: '+cfg.tab,
+              date:row['Date']||'',
+              bet:row[cfg.betCol]||'',
+              result:String(row[cfg.resultCol]||'').trim().toLowerCase(),
+              odds:parseFloat(row[cfg.oddsCol])||0,
+              stake:parseFloat(row[cfg.stakeCol])||0,
+              ev:parseFloat(row[cfg.evCol])||0,
+              pl:parseFloat(row[cfg.plCol])||0,
+            });
+          }
+        });
+      }
+    }catch(e){}
+  });
+  await Promise.allSettled([...mainFetches,...vaFetches]);
   document.getElementById('today-status').style.display='none';
   if(!allBets.length){
     showTodayStatus('ti-calendar-off','No bets found today','No bets with today\'s date ('+today+') were found across your connected sheets.');
