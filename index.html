@@ -3765,6 +3765,33 @@ const CONF_XG   = 10.0;  // confident xG threshold (green vs yellow)
 const CONF_SHOTS= 50;    // confident shots threshold
 const CONF_SOT  = 20;    // confident SOT threshold
 
+
+function deriveBfexFair(runner) {
+  if (!runner) return { fair: null, confidence: 'none' };
+  const totalMatched = runner.totalMatched ?? 0;
+  const lpm = runner.lastPriceTraded ?? null;
+  if (totalMatched < 50 || !lpm) return { fair: null, confidence: 'red' };
+  const bestBack = runner.back?.[0]?.price ?? null;
+  const bestBackSize = runner.back?.[0]?.size ?? 0;
+  const bestLay = runner.lay?.[0]?.price ?? null;
+  const bestLaySize = runner.lay?.[0]?.size ?? 0;
+  let fair = lpm;
+  if (bestBack && bestBack > lpm && bestBackSize >= 100) {
+    fair = bestBack;
+  } else if (bestBack && bestLay && bestLaySize >= 10) {
+    const spread = (bestLay - bestBack) / lpm;
+    if (spread <= 0.15) fair = parseFloat(((bestBack + bestLay) / 2).toFixed(2));
+  }
+  const wideSpread = bestBack && bestLay ? (bestLay - bestBack) / lpm > 0.15 : true;
+  let confidence;
+  if (totalMatched >= 500 && !wideSpread && bestLaySize >= 10) {
+    confidence = 'green';
+  } else {
+    confidence = 'yellow';
+  }
+  return { fair, confidence };
+}
+
 async function runScanCore(matchId, home, away, competition, idsArr) {
   const ids = idsArr.filter(Boolean).join(',');
   const hasAllIds = idsArr.filter(Boolean).length === 4;
