@@ -4626,7 +4626,7 @@ async function findOCFGSMarketId(home, away) {
   const MAX_BATCHES = 60; // scan up to 60 batches = 7500 IDs max
 
   // Use stored seed or fall back to a recent baseline
-  let seed = parseInt(localStorage.getItem('oc_last_fgs_id') || '3585000000');
+  let seed = parseInt(localStorage.getItem('oc_last_fgs_id') || '3585140000');
   // Scan backwards and forwards from seed
   const starts = [];
   for (let i = -10; i <= MAX_BATCHES; i++) starts.push(seed + i * BATCH * STEP);
