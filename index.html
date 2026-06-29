@@ -4072,24 +4072,45 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
         const bfexRunner = bfexEntry ? bfexEntry[1] : null;
         const { fair: bfexPrice, confidence: bfexConfidence } = deriveBfexFair(bfexRunner);
 
-        // Only include if at least one timeframe is +EV (using BB fairs), or BFEX shows +EV
+        // Use BFEX price as input to calcAutoGSM if available, otherwise use BB fair
+        const bfexLpmPrice = bfexPrice; // this is the derived fair from BFEX exchange data
+        const agsForCalc = (market.needsAGS && bfexLpmPrice) ? bfexLpmPrice : ags;
+        const sotForCalc = (!market.needsAGS && market.isShot && bfexLpmPrice) ? bfexLpmPrice : sotV;
+
+        // Recalculate fair odds using BFEX as input if available
+        let bfexFairOdds = null;
+        if (bfexLpmPrice) {
+          const bfexResult = calcAutoGSM(
+            statsData.timeframes?.['last2Seasons'] || statsData.timeframes?.['lastSeason'],
+            market.needsAGS ? agsForCalc : null,
+            null,
+            !market.needsAGS ? sotForCalc : null,
+            false
+          );
+          if (bfexResult) {
+            if (market.isShot) {
+              const arr = bfexResult[market.calcKey];
+              bfexFairOdds = Array.isArray(arr) ? arr[0] : null;
+            } else {
+              bfexFairOdds = bfexResult[market.calcKey];
+            }
+          }
+        }
+
+        // Calculate BFEX-based EV using the GSM output with BFEX AGS as input
+        const bfexBasedEv = (bfexFairOdds && isFinite(bfexFairOdds) && bfexFairOdds > 1)
+          ? ((ocPrice / bfexFairOdds) - 1) * 100
+          : null;
+
+        // Only include if +EV somewhere
         const evTfs = tfs.filter(t => t.ev !== null && parseFloat(t.ev) > 0);
-        
-        // Calculate BFEX-based EV if available
-        const bfexBasedEv = bfexPrice ? ((ocPrice / bfexPrice) - 1) * 100 : null;
-        
-        // Skip if no value anywhere
         if (!evTfs.length && (bfexBasedEv === null || bfexBasedEv <= 0)) continue;
 
-        // Use BFEX EV as the primary bestEv when available, otherwise use best BB timeframe
         const bestEv = bfexBasedEv !== null ? bfexBasedEv : Math.max(...evTfs.map(t => parseFloat(t.ev)));
-
-        // Recalculate timeframe cells — show them for reference but EV% uses BFEX when available
-        const evTfsFinal = bfexPrice
-          ? tfs.map(tf => ({ ...tf, usingBfex: true }))
-          : tfs;
-
+        const evTfsFinal = tfs;
         const bfexEv = bfexBasedEv;
+        // Store BFEX-derived fair for display
+        const bfexDisplayPrice = bfexFairOdds ? parseFloat(bfexFairOdds.toFixed(2)) : null;
 
         evBets.push({
           player: player.name,
@@ -4098,13 +4119,13 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
           bbFair: market.needsAGS ? ags : sotV,
           ocOdds: ocPrice.toFixed(2),
           bookie: ocBook,
-          bfexPrice,
+          bfexPrice: bfexDisplayPrice,
           bfexEv,
           bfexConfidence,
           tfs: evTfsFinal,
           bestEv,
           isConfident,
-          usingBfexFair: !!bfexPrice,
+          usingBfexFair: !!bfexDisplayPrice,
         });
       }
     }
