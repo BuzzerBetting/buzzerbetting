@@ -4619,9 +4619,38 @@ async function scanDDHH(match, btn) {
 }
 
 async function findOCFGSMarketId(home, away) {
-  const r = await fetch(`/.netlify/functions/oc-fgs-find?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`);
-  const d = await r.json();
-  if (d.ok) return d.marketId;
+  // Scan OC market IDs to find First Goalscorer for this match
+  // IDs are sequential — store last found ID in localStorage as seed
+  const BATCH = 25;
+  const STEP = 5;
+  const MAX_BATCHES = 60; // scan up to 60 batches = 7500 IDs max
+
+  // Use stored seed or fall back to a recent baseline
+  let seed = parseInt(localStorage.getItem('oc_last_fgs_id') || '3585000000');
+  // Scan backwards and forwards from seed
+  const starts = [];
+  for (let i = -10; i <= MAX_BATCHES; i++) starts.push(seed + i * BATCH * STEP);
+
+  const normHome = home.toLowerCase().replace(/[^a-z]/g, '');
+  const normAway = away.toLowerCase().replace(/[^a-z]/g, '');
+
+  for (const start of starts) {
+    const ids = Array.from({length: BATCH}, (_, i) => start + i * STEP);
+    try {
+      const r = await fetch(`https://www.oddschecker.com/api/markets/v2/all-odds?market-ids=${ids.join(',')}&repub=OC`);
+      const d = await r.json();
+      if (!Array.isArray(d)) continue;
+      const fgs = d.find(m => {
+        if (m.marketTypeName !== 'First Goalscorer') return false;
+        const sub = (m.subeventName || '').toLowerCase().replace(/[^a-z]/g, '');
+        return sub.includes(normHome) && sub.includes(normAway);
+      });
+      if (fgs) {
+        localStorage.setItem('oc_last_fgs_id', fgs.marketId.toString());
+        return fgs.marketId.toString();
+      }
+    } catch(e) { continue; }
+  }
   return null;
 }
 
