@@ -3783,15 +3783,21 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
   ]);
 
     // Build Betfair price lookup: normalised player name → full runner data
-    const bfexByName = {};
+    // Build separate BFEX lookups for goal (AGS) and shot markets
+    const bfexAGSByName = {};  // Player To Score
+    const bfexSOTByName = {};  // Player Shots on Target
     if (bfexData && bfexData.ok && bfexData.markets) {
-      for (const mkt of Object.values(bfexData.markets)) {
+      for (const [mktName, mkt] of Object.entries(bfexData.markets)) {
+        const isShot = mktName.toLowerCase().includes('shot');
+        const lookup = isShot ? bfexSOTByName : bfexAGSByName;
         for (const p of (mkt.players ?? [])) {
           const key = normName(p.name);
-          if (!bfexByName[key]) bfexByName[key] = p;
+          if (!lookup[key]) lookup[key] = p;
         }
       }
     }
+    // Keep combined for backward compat (used by BFEX column display)
+    const bfexByName = { ...bfexAGSByName, ...bfexSOTByName };
 
     // Derive fair price and confidence from runner data
     function deriveBfexFair(runner) {
@@ -4063,8 +4069,9 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
 
         const bestEv = Math.max(...evTfs.map(t => parseFloat(t.ev)));
 
-        // Look up Betfair exchange data for this player
-        const bfexEntry = Object.entries(bfexByName).find(([k]) => fuzzyMatch(k, player.name));
+        // Look up Betfair exchange data for this player — use correct market
+        const bfexLookup = market.isShot ? bfexSOTByName : bfexAGSByName;
+        const bfexEntry = Object.entries(bfexLookup).find(([k]) => fuzzyMatch(k, player.name));
         const bfexRunner = bfexEntry ? bfexEntry[1] : null;
         const { fair: bfexPrice, confidence: bfexConfidence } = deriveBfexFair(bfexRunner);
         const bfexEv = bfexPrice ? (((bfexPrice / (market.needsAGS ? ags : sotV)) - 1) * 100) : null;
