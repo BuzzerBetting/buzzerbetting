@@ -4653,20 +4653,15 @@ async function scanDDHH(match, btn) {
 }
 
 async function findOCFGSMarketId(home, away) {
-  // Scan OC market IDs to find First Goalscorer for this match
-  // IDs are sequential — store last found ID in localStorage as seed
   const BATCH = 25;
   const STEP = 5;
-  const MAX_BATCHES = 60; // scan up to 60 batches = 7500 IDs max
-
-  // Use stored seed or fall back to a recent baseline
-  let seed = parseInt(localStorage.getItem('oc_last_fgs_id') || '3585140000');
-  // Scan backwards and forwards from seed
-  const starts = [];
-  for (let i = -10; i <= MAX_BATCHES; i++) starts.push(seed + i * BATCH * STEP);
-
   const normHome = home.toLowerCase().replace(/[^a-z]/g, '');
   const normAway = away.toLowerCase().replace(/[^a-z]/g, '');
+
+  // Use stored seed or baseline — scan ±150 batches in both directions
+  const seed = parseInt(localStorage.getItem('oc_last_fgs_id') || '3585130000');
+  const starts = [];
+  for (let i = -150; i <= 150; i++) starts.push(seed + i * BATCH * STEP);
 
   for (const start of starts) {
     const ids = Array.from({length: BATCH}, (_, i) => start + i * STEP);
