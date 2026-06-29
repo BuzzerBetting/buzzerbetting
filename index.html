@@ -4563,6 +4563,9 @@ async function initDDHH(btn) {
     matchesEl.appendChild(card);
     ddhhLoaded = true;
 
+    // Pre-scan FGS market IDs for all matches in background
+    setTimeout(() => preScanDDHHMarkets(d.matches), 500);
+
   } catch (err) {
     statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-wifi-off"></i></div><div class="ph-t">Error</div><div class="ph-d">${err.message}</div></div></div>`;
   }
@@ -4681,16 +4684,37 @@ async function scanDDHH(match, btn) {
   }
 }
 
+async function preScanDDHHMarkets(matches) {
+  // Find and cache FGS market IDs for all DDHH matches
+  // This runs in background after the match list loads
+  for (const m of matches) {
+    const [home, away] = m.event.split(' v ');
+    if (!home || !away) continue;
+    const cacheKey = `ddhh_fgs_${normDDHH(home)}_${normDDHH(away)}`;
+    if (localStorage.getItem(cacheKey)) continue; // already cached
+    const id = await findOCFGSMarketId(home, away);
+    if (id) {
+      localStorage.setItem(cacheKey, id);
+      console.log(`Cached FGS ID for ${m.event}: ${id}`);
+    }
+  }
+}
+
 async function findOCFGSMarketId(home, away) {
+  // Check cache first
+  const cacheKey = `ddhh_fgs_${normDDHH(home)}_${normDDHH(away)}`;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) return cached;
+
   const BATCH = 25;
   const STEP = 5;
   const normHome = home.toLowerCase().replace(/[^a-z]/g, '');
   const normAway = away.toLowerCase().replace(/[^a-z]/g, '');
 
   // Use stored seed or baseline — scan ±150 batches in both directions
-  const seed = parseInt(localStorage.getItem('oc_last_fgs_id') || '3585130000');
+  const seed = parseInt(localStorage.getItem('oc_last_fgs_id') || '3585141000');
   const starts = [];
-  for (let i = -150; i <= 150; i++) starts.push(seed + i * BATCH * STEP);
+  for (let i = -320; i <= 320; i++) starts.push(seed + i * BATCH * STEP);
 
   for (const start of starts) {
     const ids = Array.from({length: BATCH}, (_, i) => start + i * STEP);
@@ -4705,6 +4729,7 @@ async function findOCFGSMarketId(home, away) {
       });
       if (fgs) {
         localStorage.setItem('oc_last_fgs_id', fgs.marketId.toString());
+        localStorage.setItem(cacheKey, fgs.marketId.toString());
         return fgs.marketId.toString();
       }
     } catch(e) { continue; }
