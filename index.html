@@ -4646,9 +4646,10 @@ async function scanDDHH(match, btn) {
       ) / (1 - exp1);
 
       const ddhhFair = betfredFGS / (effectiveOdds / fgsBfex);
-      const ev = ((betfredFGS / ddhhFair) - 1) * 100;
+      const ratio = (betfredFGS / ddhhFair) * 100; // 100% = fair, >100% = value
+      const ev = ratio - 100; // EV% for display
 
-      if (ev < 70) continue;
+      if (ratio < 70) continue;
 
       // Kelly stake
       const b = betfredFGS - 1;
@@ -4664,11 +4665,12 @@ async function scanDDHH(match, btn) {
         betfredFGS,
         ddhhFair: parseFloat(ddhhFair.toFixed(2)),
         ev: parseFloat(ev.toFixed(1)),
+        ratio: parseFloat(ratio.toFixed(1)),
         stake: stake ? parseFloat(stake.toFixed(2)) : null,
       });
     }
 
-    results.sort((a, b) => b.ev - a.ev);
+    results.sort((a, b) => b.ratio - a.ratio);
     renderDDHH(match.event, results);
 
   } catch (err) {
@@ -4773,15 +4775,15 @@ function renderDDHH(matchName, results) {
   tbody.innerHTML = '';
 
   if (!results.length) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:32px">No players above 70% EV — try again after team news and BFEX liquidity builds</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:32px">No players above 70% ratio — try again after team news and BFEX liquidity builds</td></tr>`;
     resultsEl.style.display = '';
     resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
     return;
   }
 
   for (const r of results) {
-    const evCol = r.ev >= 100 ? 'var(--green)' : 'var(--amber)';
-    const evBg  = r.ev >= 100 ? 'var(--green-bg)' : 'var(--amber-bg)';
+    const evCol = r.ratio >= 105 ? 'var(--green)' : r.ratio >= 100 ? 'var(--amber)' : 'var(--red)';
+    const evBg  = r.ratio >= 105 ? 'var(--green-bg)' : r.ratio >= 100 ? 'var(--amber-bg)' : 'var(--red-bg)';
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td style="font-weight:600">${r.name}</td>
@@ -4789,7 +4791,7 @@ function renderDDHH(matchName, results) {
       <td class="r tn" style="color:var(--blue)">${r.agsBfex.toFixed(2)}</td>
       <td class="r tn" style="color:var(--green);font-weight:600">${r.betfredFGS.toFixed(2)}</td>
       <td class="r tn">${r.ddhhFair.toFixed(2)}</td>
-      <td class="r"><span class="badge" style="background:${evBg};color:${evCol};font-weight:700">${r.ev >= 100 ? '+' : ''}${r.ev.toFixed(1)}%</span></td>
+      <td class="r"><span class="badge" style="background:${evBg};color:${evCol};font-weight:700">${r.ratio.toFixed(1)}%</span></td>
       <td class="r tn">${r.stake ? '£' + r.stake.toFixed(2) : '—'}</td>`;
     tbody.appendChild(tr);
   }
