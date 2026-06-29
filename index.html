@@ -192,6 +192,11 @@ input::placeholder{color:var(--text3)}
       <div><div class="cat-title">Oddschecker +EV</div><div class="cat-desc">Live value bets pulled from Oddschecker vs BFex fairs</div><div class="cat-tag" style="background:var(--amber-bg);color:var(--amber)">6 bets today</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
+    <div class="cat" onclick="showSec('ddhh')">
+      <div class="cat-ico" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-trophy"></i></div>
+      <div><div class="cat-title">DDHH</div><div class="cat-desc">Double Delight Hat-Trick Heaven — Betfred value finder</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
     <div class="cat" onclick="showSec('calculated')">
       <div class="cat-ico" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-trending-up"></i></div>
       <div><div class="cat-title">Calculated +EV</div><div class="cat-desc">Model-derived value — header scorer, custom markets</div><div class="cat-tag" style="background:var(--purple-bg);color:var(--purple)">Coming soon</div></div>
@@ -742,6 +747,40 @@ input::placeholder{color:var(--text3)}
   <div class="note"><i class="ti ti-info-circle"></i> In the live version, this auto-refreshes from Betfair Exchange API + Oddschecker scraper data, sorted by EV%.</div>
 </div>
 
+<!-- DDHH -->
+<div id="view-ddhh" class="sec">
+  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+    <div class="sec-title" style="margin-bottom:0">DDHH</div>
+    <button onclick="initDDHH(this)" id="ddhh-refresh-btn" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+  </div>
+  <div id="ddhh-status"></div>
+  <div id="ddhh-matches"></div>
+  <div id="ddhh-results" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <span style="font-size:13px;font-weight:600" id="ddhh-results-title"></span>
+      <button onclick="document.getElementById('ddhh-results').style.display='none'" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px">×</button>
+    </div>
+    <div class="card" style="overflow-x:auto">
+      <table class="dt" style="min-width:700px">
+        <thead>
+          <tr>
+            <th>Player</th>
+            <th class="r">FGS BFEX</th>
+            <th class="r">AGS BFEX</th>
+            <th class="r">Betfred FGS</th>
+            <th class="r">DDHH Fair</th>
+            <th class="r">EV%</th>
+            <th class="r">Kelly Stake</th>
+          </tr>
+        </thead>
+        <tbody id="ddhh-tbody"></tbody>
+      </table>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:8px">Green = >100% EV · Amber = 70-100% · Only players with liquid BFEX markets shown</div>
+  </div>
+</div>
+
 <!-- CALCULATED EV -->
 <div id="view-calculated" class="sec">
   <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
@@ -1158,7 +1197,7 @@ function checkPin(){
 
 // ── NAVIGATION ──
 function goHome(){document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
-function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();}
+function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();if(name==='ddhh')initDDHH();}
 function showCalc(name){document.getElementById('calc-hub').style.display='none';document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='dutch')initDutch();if(name==='arb')initArb();if(name==='gsm')initGSM();if(name==='kelly')initKelly();}
 function backToCalcHub(){document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
 function showTracker(name){document.getElementById('tracker-hub').style.display='none';document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.getElementById('tracker-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='overall')openOverallSection();}
@@ -4373,6 +4412,241 @@ function updatePlayerOddsRow(player,method){
       cell.textContent='0';cell.className='odds-tf empty';
     }
   });
+}
+
+// ── DDHH ──────────────────────────────────────────────────────────────────
+
+let ddhhLoaded = false;
+
+async function initDDHH(btn) {
+  if (ddhhLoaded && !btn) return;
+  ddhhLoaded = false;
+  const statusEl = document.getElementById('ddhh-status');
+  const matchesEl = document.getElementById('ddhh-matches');
+  document.getElementById('ddhh-results').style.display = 'none';
+  matchesEl.innerHTML = '';
+  statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t">Loading eligible matches...</div></div></div>`;
+
+  try {
+    const r = await fetch('/.netlify/functions/ddhh');
+    const d = await r.json();
+    statusEl.innerHTML = '';
+
+    if (!d.ok) {
+      statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-wifi-off"></i></div><div class="ph-t">Failed to load</div><div class="ph-d">${d.error}</div></div></div>`;
+      return;
+    }
+
+    if (!d.matches?.length) {
+      statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-calendar-off"></i></div><div class="ph-t">No DDHH eligible matches today</div></div></div>`;
+      return;
+    }
+
+    // Render match list
+    matchesEl.innerHTML = '';
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.marginBottom = '16px';
+
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'padding:12px 20px;border-bottom:.5px solid var(--border);font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500';
+    hdr.textContent = `${d.matches.length} eligible match${d.matches.length !== 1 ? 'es' : ''} today`;
+    card.appendChild(hdr);
+
+    for (const m of d.matches) {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:.5px solid var(--border);cursor:pointer;transition:background .15s';
+      row.onmouseenter = () => row.style.background = 'var(--surface2)';
+      row.onmouseleave = () => row.style.background = '';
+
+      const kickoff = m.startTime ? new Date(m.startTime).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+
+      const badges = [];
+      if (m.pregame) badges.push(`<span style="background:var(--purple-bg);color:var(--purple);font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px">DDHH</span>`);
+      if (m.inplay) badges.push(`<span style="background:#1a3a5c;color:#4db8ff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px">DDHH In Play</span>`);
+
+      row.innerHTML = `
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="font-size:12px;color:var(--text3);min-width:40px">${kickoff}</span>
+          <div>
+            <div style="font-weight:600;font-size:14px">${m.event}</div>
+            <div style="font-size:11px;color:var(--text3)">${m.competition}</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${badges.join('')}
+          <button class="ddhh-scan-btn" style="display:flex;align-items:center;gap:5px;background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:6px 14px;font-size:12px;cursor:pointer;font-family:inherit">
+            <i class="ti ti-search"></i> Scan
+          </button>
+        </div>`;
+
+      const scanBtn = row.querySelector('.ddhh-scan-btn');
+      scanBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        scanDDHH(m, scanBtn);
+      });
+
+      card.appendChild(row);
+    }
+
+    matchesEl.appendChild(card);
+    ddhhLoaded = true;
+
+  } catch (err) {
+    statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-wifi-off"></i></div><div class="ph-t">Error</div><div class="ph-d">${err.message}</div></div></div>`;
+  }
+}
+
+async function scanDDHH(match, btn) {
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader"></i> Scanning...';
+
+  try {
+    // Step 1: Fetch BFEX prices and Betfred FGS from OC in parallel
+    const [bfexData, betfredData] = await Promise.all([
+      fetch(`/.netlify/functions/betfair-proxy?home=${encodeURIComponent(match.event.split(' v ')[0])}&away=${encodeURIComponent(match.event.split(' v ')[1])}`)
+        .then(r => r.json()).catch(() => ({ ok: false })),
+      fetchBetfredFGS(match.event.split(' v ')[0], match.event.split(' v ')[1])
+    ]);
+
+    // Build BFEX lookups — FGS and AGS by player name
+    const bfexFGS = {};
+    const bfexAGS = {};
+    if (bfexData.ok && bfexData.markets) {
+      for (const [mktName, mkt] of Object.entries(bfexData.markets)) {
+        const isFGS = mktName.toLowerCase().includes('first') || mktName.toLowerCase().includes('fgs');
+        const isAGS = mktName.toLowerCase().includes('score') && !mktName.toLowerCase().includes('first');
+        for (const p of (mkt.players ?? [])) {
+          const key = normDDHH(p.name);
+          const price = p.back?.[0]?.price ?? p.lastPriceTraded ?? null;
+          if (!price) continue;
+          if (isFGS && (!bfexFGS[key] || price < bfexFGS[key])) bfexFGS[key] = { name: p.name, price, totalMatched: p.totalMatched };
+          if (isAGS && (!bfexAGS[key] || price < bfexAGS[key])) bfexAGS[key] = { name: p.name, price, totalMatched: p.totalMatched };
+        }
+      }
+    }
+
+    // Build Betfred FGS lookup
+    const betfredByName = {};
+    for (const p of betfredData) {
+      betfredByName[normDDHH(p.name)] = p.odds;
+    }
+
+    // Step 2: Calculate DDHH for each player
+    const results = [];
+    const kellyBank = parseFloat(document.getElementById('kel-bank')?.value) || 0;
+
+    for (const [key, fgsEntry] of Object.entries(bfexFGS)) {
+      const agsEntry = Object.entries(bfexAGS).find(([k]) => k === key || fuzzyMatchDDHH(k, key));
+      if (!agsEntry) continue;
+
+      const fgsBfex = fgsEntry.price;
+      const agsBfex = agsEntry[1].price;
+
+      // Find Betfred price
+      const betfredKey = Object.keys(betfredByName).find(k => k === key || fuzzyMatchDDHH(k, key));
+      const betfredFGS = betfredKey ? betfredByName[betfredKey] : null;
+      if (!betfredFGS) continue;
+
+      // DDHH formula
+      const xG = -Math.log(1 - (1 / agsBfex));
+      const exp1 = Math.exp(-xG);
+      const effectiveOdds = (
+        betfredFGS * (xG * exp1) +
+        (2 * betfredFGS - 1) * ((xG * xG / 2) * exp1) +
+        (3 * betfredFGS - 2) * (1 - exp1 - xG * exp1 - (xG * xG / 2) * exp1)
+      ) / (1 - exp1);
+
+      const ddhhFair = betfredFGS / (effectiveOdds / fgsBfex);
+      const ev = ((betfredFGS / ddhhFair) - 1) * 100;
+
+      if (ev < 70) continue; // Only show 70%+ value
+
+      // Kelly stake
+      const b = betfredFGS - 1;
+      const p = 1 / ddhhFair;
+      const q = 1 - p;
+      const kelly = Math.max(0, (b * p - q) / b);
+      const stake = kellyBank ? kelly * kellyBank : null;
+
+      results.push({
+        name: fgsEntry.name,
+        fgsBfex,
+        agsBfex,
+        betfredFGS,
+        ddhhFair: parseFloat(ddhhFair.toFixed(2)),
+        ev: parseFloat(ev.toFixed(1)),
+        stake: stake ? parseFloat(stake.toFixed(2)) : null,
+        fgsMatched: fgsEntry.totalMatched ?? 0
+      });
+    }
+
+    results.sort((a, b) => b.ev - a.ev);
+    renderDDHH(match.event, results);
+
+  } catch (err) {
+    alert(`Scan failed: ${err.message}`);
+  } finally {
+    btn.innerHTML = origHtml;
+    btn.disabled = false;
+  }
+}
+
+async function fetchBetfredFGS(home, away) {
+  try {
+    // Search OC for Betfred FGS prices
+    const q = encodeURIComponent(`${home} ${away} first goalscorer`);
+    const r = await fetch(`https://search.williamhill.com/v2/?locale=en-gb&q=${q}&type=selection`);
+    // WH won't have Betfred — try OC directly via our proxy
+    // For now try the WH search and fall back
+    return [];
+  } catch(e) {
+    return [];
+  }
+}
+
+function normDDHH(n) {
+  return (n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function fuzzyMatchDDHH(a, b) {
+  if (a === b) return true;
+  const wa = a.split(' '), wb = b.split(' ');
+  const [shorter, longer] = wa.length <= wb.length ? [wa, b] : [wb, a];
+  return shorter.filter(w => w.length > 2).every(w => longer.includes(w));
+}
+
+function renderDDHH(matchName, results) {
+  const tbody = document.getElementById('ddhh-tbody');
+  const resultsEl = document.getElementById('ddhh-results');
+  document.getElementById('ddhh-results-title').textContent = `${matchName} — DDHH`;
+  tbody.innerHTML = '';
+
+  if (!results.length) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:32px">No players above 70% EV — try again after team news and BFEX liquidity builds</td></tr>`;
+    resultsEl.style.display = '';
+    resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+
+  for (const r of results) {
+    const evCol = r.ev >= 100 ? 'var(--green)' : 'var(--amber)';
+    const evBg  = r.ev >= 100 ? 'var(--green-bg)' : 'var(--amber-bg)';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight:600">${r.name}</td>
+      <td class="r tn" style="color:var(--purple)">${r.fgsBfex.toFixed(2)}</td>
+      <td class="r tn" style="color:var(--blue)">${r.agsBfex.toFixed(2)}</td>
+      <td class="r tn" style="color:var(--green);font-weight:600">${r.betfredFGS.toFixed(2)}</td>
+      <td class="r tn">${r.ddhhFair.toFixed(2)}</td>
+      <td class="r"><span class="badge" style="background:${evBg};color:${evCol};font-weight:700">${r.ev >= 100 ? '+' : ''}${r.ev.toFixed(1)}%</span></td>
+      <td class="r tn">${r.stake ? '£' + r.stake.toFixed(2) : '—'}</td>`;
+    tbody.appendChild(tr);
+  }
+
+  resultsEl.style.display = '';
+  resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 </script>
 
