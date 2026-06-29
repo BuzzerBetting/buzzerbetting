@@ -4508,11 +4508,6 @@ async function initDDHH(btn) {
       return;
     }
 
-    // Pre-scan FGS IDs for all matches before displaying
-    statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t">Finding markets...</div></div></div>`;
-    await preScanDDHHMarkets(d.matches);
-    statusEl.innerHTML = '';
-
     // Render match list
     matchesEl.innerHTML = '';
     const card = document.createElement('div');
@@ -4538,6 +4533,11 @@ async function initDDHH(btn) {
       if (m.pregame) badges.push(`<span style="background:#7c3aed;color:#fff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px">DDHH</span>`);
       if (m.inplay) badges.push(`<span style="background:#0e7490;color:#22d3ee;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px">DDHH In Play</span>`);
 
+      const homePart = m.event.split(' v ')[0];
+      const awayPart = m.event.split(' v ')[1];
+      const cacheKey = `ddhh_fgs_${normDDHH(homePart)}_${normDDHH(awayPart)}`;
+      const isCached = !!localStorage.getItem(cacheKey);
+
       row.innerHTML = `
         <div style="display:flex;align-items:center;gap:12px">
           <div style="min-width:80px;text-align:right">
@@ -4551,6 +4551,7 @@ async function initDDHH(btn) {
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           ${badges.join('')}
+          ${!isCached ? `<span title="FGS market not yet found — first scan may be slow" style="font-size:16px">🔍</span>` : ''}
           <button class="ddhh-scan-btn" style="display:flex;align-items:center;gap:5px;background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:6px 14px;font-size:12px;cursor:pointer;font-family:inherit">
             <i class="ti ti-search"></i> Scan
           </button>
@@ -4702,7 +4703,6 @@ async function preScanDDHHMarkets(matches) {
 }
 
 async function findOCFGSMarketId(home, away) {
-  // Check cache first
   const cacheKey = `ddhh_fgs_${normDDHH(home)}_${normDDHH(away)}`;
   const cached = localStorage.getItem(cacheKey);
   if (cached) return cached;
