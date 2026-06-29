@@ -4507,52 +4507,73 @@ async function scanDDHH(match, btn) {
   btn.disabled = true;
   btn.innerHTML = '<i class="ti ti-loader"></i> Scanning...';
 
+  const headerId = document.getElementById(`ddhh-hdr-${match.eventId}`)?.value?.trim();
+  const homePart = match.event.split(' v ')[0];
+  const awayPart = match.event.split(' v ')[1];
+
   try {
     // Step 1: Fetch BFEX prices and Betfred FGS from OC in parallel
-    const [bfexData, betfredData] = await Promise.all([
-      fetch(`/.netlify/functions/betfair-proxy?home=${encodeURIComponent(match.event.split(' v ')[0])}&away=${encodeURIComponent(match.event.split(' v ')[1])}`)
-        .then(r => r.json()).catch(() => ({ ok: false })),
-      fetchBetfredFGS(match.event.split(' v ')[0], match.event.split(' v ')[1])
+    const fetchBfex = fetch(`/.netlify/functions/betfair-proxy?home=${encodeURIComponent(homePart)}&away=${encodeURIComponent(awayPart)}`)
+      .then(r => r.json()).catch(() => ({ ok: false }));
+
+    btn.innerHTML = '<i class="ti ti-loader"></i> Finding FGS market...';
+    const fgsMarketId = await findOCFGSMarketId(homePart, awayPart);
+    if (!fgsMarketId) {
+      alert(`Could not find First Goalscorer market on OddChecker for ${match.event}`);
+      return;
+    }
+
+    btn.innerHTML = '<i class="ti ti-loader"></i> Fetching odds...';
+    const [bfexData, betfredPlayers] = await Promise.all([
+      fetchBfex,
+      fetchBetfredFGSFromOC(fgsMarketId)
     ]);
 
-    // Build BFEX lookups — FGS and AGS by player name
+    // Build BFEX FGS lookup
     const bfexFGS = {};
     const bfexAGS = {};
     if (bfexData.ok && bfexData.markets) {
       for (const [mktName, mkt] of Object.entries(bfexData.markets)) {
-        const isFGS = mktName.toLowerCase().includes('first') || mktName.toLowerCase().includes('fgs');
-        const isAGS = mktName.toLowerCase().includes('score') && !mktName.toLowerCase().includes('first');
+        const name = mktName.toLowerCase();
+        const isFGS = name.includes('first') || name.includes('fgs') || name.includes('player first');
+        const isAGS = (name.includes('score') || name.includes('ags') || name.includes('anytime')) && !name.includes('first');
         for (const p of (mkt.players ?? [])) {
           const key = normDDHH(p.name);
-          const price = p.back?.[0]?.price ?? p.lastPriceTraded ?? null;
+          const back = p.back?.[0]?.price ?? null;
+          const lpt = p.lastPriceTraded ?? null;
+          const price = back ?? lpt;
           if (!price) continue;
-          if (isFGS && (!bfexFGS[key] || price < bfexFGS[key])) bfexFGS[key] = { name: p.name, price, totalMatched: p.totalMatched };
-          if (isAGS && (!bfexAGS[key] || price < bfexAGS[key])) bfexAGS[key] = { name: p.name, price, totalMatched: p.totalMatched };
+          if (isFGS && (!bfexFGS[key] || price < bfexFGS[key].price))
+            bfexFGS[key] = { name: p.name, price, totalMatched: p.totalMatched ?? 0 };
+          if (isAGS && (!bfexAGS[key] || price < bfexAGS[key].price))
+            bfexAGS[key] = { name: p.name, price, totalMatched: p.totalMatched ?? 0 };
         }
       }
     }
 
-    // Build Betfred FGS lookup
-    const betfredByName = {};
-    for (const p of betfredData) {
-      betfredByName[normDDHH(p.name)] = p.odds;
+    if (!betfredPlayers.length) {
+      alert(`No Betfred FGS odds found for ${match.event}`);
+      return;
     }
 
-    // Step 2: Calculate DDHH for each player
+    // Step 2: Calculate DDHH for each player with Betfred price
     const results = [];
     const kellyBank = parseFloat(document.getElementById('kel-bank')?.value) || 0;
 
-    for (const [key, fgsEntry] of Object.entries(bfexFGS)) {
-      const agsEntry = Object.entries(bfexAGS).find(([k]) => k === key || fuzzyMatchDDHH(k, key));
-      if (!agsEntry) continue;
-
-      const fgsBfex = fgsEntry.price;
-      const agsBfex = agsEntry[1].price;
-
-      // Find Betfred price
-      const betfredKey = Object.keys(betfredByName).find(k => k === key || fuzzyMatchDDHH(k, key));
-      const betfredFGS = betfredKey ? betfredByName[betfredKey] : null;
+    for (const p of betfredPlayers) {
+      const pKey = normDDHH(p.name);
+      const betfredFGS = p.betfred;
       if (!betfredFGS) continue;
+
+      // Find BFEX AGS for this player
+      const agsKey = Object.keys(bfexAGS).find(k => k === pKey || fuzzyMatchDDHH(k, pKey));
+      if (!agsKey) continue;
+      const agsBfex = bfexAGS[agsKey].price;
+
+      // Find BFEX FGS for this player
+      const fgsKey = Object.keys(bfexFGS).find(k => k === pKey || fuzzyMatchDDHH(k, pKey));
+      const fgsBfex = fgsKey ? bfexFGS[fgsKey].price : null;
+      if (!fgsBfex) continue;
 
       // DDHH formula
       const xG = -Math.log(1 - (1 / agsBfex));
@@ -4566,24 +4587,23 @@ async function scanDDHH(match, btn) {
       const ddhhFair = betfredFGS / (effectiveOdds / fgsBfex);
       const ev = ((betfredFGS / ddhhFair) - 1) * 100;
 
-      if (ev < 70) continue; // Only show 70%+ value
+      if (ev < 70) continue;
 
       // Kelly stake
       const b = betfredFGS - 1;
-      const p = 1 / ddhhFair;
-      const q = 1 - p;
-      const kelly = Math.max(0, (b * p - q) / b);
+      const prob = 1 / ddhhFair;
+      const q = 1 - prob;
+      const kelly = Math.max(0, (b * prob - q) / b);
       const stake = kellyBank ? kelly * kellyBank : null;
 
       results.push({
-        name: fgsEntry.name,
+        name: p.name,
         fgsBfex,
         agsBfex,
         betfredFGS,
         ddhhFair: parseFloat(ddhhFair.toFixed(2)),
         ev: parseFloat(ev.toFixed(1)),
         stake: stake ? parseFloat(stake.toFixed(2)) : null,
-        fgsMatched: fgsEntry.totalMatched ?? 0
       });
     }
 
@@ -4598,17 +4618,64 @@ async function scanDDHH(match, btn) {
   }
 }
 
-async function fetchBetfredFGS(home, away) {
-  try {
-    // Search OC for Betfred FGS prices
-    const q = encodeURIComponent(`${home} ${away} first goalscorer`);
-    const r = await fetch(`https://search.williamhill.com/v2/?locale=en-gb&q=${q}&type=selection`);
-    // WH won't have Betfred — try OC directly via our proxy
-    // For now try the WH search and fall back
-    return [];
-  } catch(e) {
-    return [];
+async function findOCFGSMarketId(home, away) {
+  // Convert team names to OC slug format
+  const slug = (s) => s.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+  const matchSlug = `${slug(home)}-v-${slug(away)}`;
+
+  // Competition slugs to try in order (most common DDHH matches)
+  const compSlugs = [
+    'football/world-cup',
+    'football/english/premier-league',
+    'football/english/championship',
+    'football/english/league-1',
+    'football/english/league-2',
+    'football/champions-league',
+    'football/europa-league',
+    'football/england',
+  ];
+
+  for (const comp of compSlugs) {
+    try {
+      const url = `https://www.oddschecker.com/${comp}/${matchSlug}/winner`;
+      const r = await fetch(url);
+      if (!r.ok) continue;
+      const t = await r.text();
+      const doc = new DOMParser().parseFromString(t, 'text/html');
+      
+      // Find First Goalscorer market ID
+      let fgsId = null;
+      doc.querySelectorAll('[id^="market_"]').forEach(el => {
+        const id = el.id.replace('market_', '');
+        const text = el.textContent || '';
+        if (text.includes('First Goalscorer') && !fgsId) fgsId = id;
+      });
+
+      if (fgsId) return fgsId;
+    } catch(e) { continue; }
   }
+  return null;
+}
+
+async function fetchBetfredFGSFromOC(marketId) {
+  const r = await fetch(`https://www.oddschecker.com/api/markets/v2/all-odds?market-ids=${marketId}&repub=OC`);
+  const data = await r.json();
+  const market = data[0];
+  if (!market) return [];
+
+  const players = {};
+  for (const odd of (market.odds || [])) {
+    const name = odd.selectionName || odd.name || '';
+    const dec = parseFloat(odd.oddsDecimal || 0);
+    const code = (odd.bookmakerCode || '').toUpperCase();
+    if (!name || dec <= 1 || name === 'No Goalscorer') continue;
+    if (!players[name]) players[name] = { name, betfred: null };
+    if (code === 'FR') players[name].betfred = dec;
+  }
+  return Object.values(players).filter(p => p.betfred);
 }
 
 function normDDHH(n) {
