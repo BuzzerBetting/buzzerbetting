@@ -4619,45 +4619,9 @@ async function scanDDHH(match, btn) {
 }
 
 async function findOCFGSMarketId(home, away) {
-  // Convert team names to OC slug format
-  const slug = (s) => s.toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-
-  const matchSlug = `${slug(home)}-v-${slug(away)}`;
-
-  // Competition slugs to try in order (most common DDHH matches)
-  const compSlugs = [
-    'football/world-cup',
-    'football/english/premier-league',
-    'football/english/championship',
-    'football/english/league-1',
-    'football/english/league-2',
-    'football/champions-league',
-    'football/europa-league',
-    'football/england',
-  ];
-
-  for (const comp of compSlugs) {
-    try {
-      const url = `https://www.oddschecker.com/${comp}/${matchSlug}/winner`;
-      const r = await fetch(url);
-      if (!r.ok) continue;
-      const t = await r.text();
-      const doc = new DOMParser().parseFromString(t, 'text/html');
-      
-      // Find First Goalscorer market ID
-      let fgsId = null;
-      doc.querySelectorAll('[id^="market_"]').forEach(el => {
-        const id = el.id.replace('market_', '');
-        if (!/^\d+$/.test(id)) return;
-        const h2 = el.querySelector('h2');
-        if (h2?.textContent?.trim() === 'First Goalscorer') fgsId = id;
-      });
-
-      if (fgsId) return fgsId;
-    } catch(e) { continue; }
-  }
+  const r = await fetch(`http://178.128.40.248:3000/api/oc-fgs-find?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`);
+  const d = await r.json();
+  if (d.ok) return d.marketId;
   return null;
 }
 
