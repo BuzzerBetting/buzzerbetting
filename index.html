@@ -4121,7 +4121,7 @@ async function scanOC(matchId, home, away, competition, btn) {
     }
     btn.innerHTML = '<i class="ti ti-loader"></i> Scanning...';
     const evBets = await runScanCore(matchId, home, away, competition, idsArr);
-    renderEVResults(`${home} v ${away} — +EV bets`, filteredBets);
+    renderEVResults(`${home} v ${away} — +EV bets`, evBets);
   } catch(err) {
     console.error('scanOC error:', err);
     alert(`Scan failed: ${err.message}`);
