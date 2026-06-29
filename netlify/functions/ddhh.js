@@ -13,6 +13,8 @@ export const handler = async (event) => {
     body: JSON.stringify({ ok: false, error: 'BB_HASH or BB_COOKIES not set' })
   };
 
+  const { date } = event.queryStringParameters || {};
+
   const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
   try {
@@ -38,9 +40,21 @@ export const handler = async (event) => {
 
     const list = JSON.parse(text);
 
-    // Filter to DDHH eligible matches only
+    // Determine target date — default to today in UK time
+    const now = new Date();
+    const ukNow = new Date(now.toLocaleString('en-GB', { timeZone: 'Europe/London' }));
+    const targetDate = date || `${ukNow.getFullYear()}-${String(ukNow.getMonth()+1).padStart(2,'0')}-${String(ukNow.getDate()).padStart(2,'0')}`;
+
+    // Filter to DDHH eligible matches on the target date
     const eligible = list
-      .filter(m => m.isDdHh || m.isInPlayDdHh)
+      .filter(m => {
+        if (!m.isDdHh && !m.isInPlayDdHh) return false;
+        if (!m.startTime) return false;
+        const d = new Date(m.startTime);
+        const ukD = new Date(d.toLocaleString('en-GB', { timeZone: 'Europe/London' }));
+        const matchDate = `${ukD.getFullYear()}-${String(ukD.getMonth()+1).padStart(2,'0')}-${String(ukD.getDate()).padStart(2,'0')}`;
+        return matchDate === targetDate;
+      })
       .map(m => ({
         eventId:     m.eventId || m.id || m._id,
         event:       m.event || m.name || m.eventName || '',
@@ -53,7 +67,7 @@ export const handler = async (event) => {
 
     return {
       statusCode: 200, headers: CORS,
-      body: JSON.stringify({ ok: true, count: eligible.length, matches: eligible })
+      body: JSON.stringify({ ok: true, count: eligible.length, date: targetDate, matches: eligible })
     };
 
   } catch (err) {
