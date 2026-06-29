@@ -957,15 +957,15 @@ input::placeholder{color:var(--text3)}
     <div class="sec-title">Kelly criterion</div>
     <div class="card"><div style="padding:20px">
       <div class="igrid">
-        <div><label class="lbl" for="kel-fair">Fair odds (decimal)</label><input id="kel-fair" type="number" placeholder="e.g. 1.95" step="0.01" min="1.01" oninput="calcKellyMain()"></div>
         <div><label class="lbl" for="kel-bookie">Bookie odds (decimal)</label><input id="kel-bookie" type="number" placeholder="e.g. 2.10" step="0.01" min="1.01" oninput="calcKellyMain()"></div>
+        <div><label class="lbl" for="kel-fair">Fair odds (decimal)</label><input id="kel-fair" type="number" placeholder="e.g. 1.95" step="0.01" min="1.01" oninput="calcKellyMain()"></div>
         <div><label class="lbl" for="kel-bank">Bankroll (£)</label><input id="kel-bank" type="number" placeholder="e.g. 5000" step="100" min="0" oninput="calcKellyMain()"><div id="kel-bank-note" style="font-size:11px;color:var(--text3);margin-top:4px"></div></div>
       </div>
       <div style="margin-bottom:16px">
         <div class="lbl" style="margin-bottom:10px">Kelly fraction</div>
         <div class="frac-group">
-          <button class="frac-btn" data-frac="1" onclick="setKellyFrac(1,this)">Full</button>
-          <button class="frac-btn active" data-frac="0.5" onclick="setKellyFrac(0.5,this)">Half</button>
+          <button class="frac-btn active" data-frac="1" onclick="setKellyFrac(1,this)">Full</button>
+          <button class="frac-btn" data-frac="0.5" onclick="setKellyFrac(0.5,this)">Half</button>
           <button class="frac-btn" data-frac="0.25" onclick="setKellyFrac(0.25,this)">Quarter</button>
           <button class="frac-btn" data-frac="0.125" onclick="setKellyFrac(0.125,this)">Eighth</button>
         </div>
@@ -983,7 +983,7 @@ input::placeholder{color:var(--text3)}
         </div>
       </div>
     </div></div>
-    <div class="note"><i class="ti ti-info-circle"></i> Half Kelly is recommended for most value bettors — it reduces variance significantly while retaining most of the growth rate.</div>
+    <div class="note" style="display:none"><i class="ti ti-info-circle"></i> Half Kelly is recommended for most value bettors — it reduces variance significantly while retaining most of the growth rate.</div>
   </div>
 
   <!-- ODDS CONVERTER -->
@@ -1437,7 +1437,7 @@ function calcEvMain(){
 }
 
 // ── 2. KELLY CRITERION ──
-let kellyFrac=0.5;
+let kellyFrac=1;
 let kellyBankrollLoaded=false;
 async function initKelly(){
   if(kellyBankrollLoaded)return;
