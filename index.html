@@ -752,10 +752,7 @@ input::placeholder{color:var(--text3)}
   <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
     <div class="sec-title" style="margin-bottom:0">DDHH</div>
-    <div style="display:flex;gap:8px">
-      <button onclick="initDDHH(this,0)" style="display:flex;align-items:center;gap:6px;background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit" id="ddhh-today-btn"><i class="ti ti-refresh"></i> Today</button>
-      <button onclick="initDDHH(this,1)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit" id="ddhh-tomorrow-btn">Tomorrow</button>
-    </div>
+    <button onclick="initDDHH(this)" id="ddhh-refresh-btn" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
   </div>
   <div id="ddhh-status"></div>
   <div id="ddhh-matches"></div>
@@ -1200,7 +1197,7 @@ function checkPin(){
 
 // ── NAVIGATION ──
 function goHome(){document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
-function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();if(name==='ddhh')initDDHH(null,0);}
+function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();if(name==='ddhh')initDDHH(null);}
 function showCalc(name){document.getElementById('calc-hub').style.display='none';document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='dutch')initDutch();if(name==='arb')initArb();if(name==='gsm')initGSM();if(name==='kelly')initKelly();}
 function backToCalcHub(){document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
 function showTracker(name){document.getElementById('tracker-hub').style.display='none';document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.getElementById('tracker-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='overall')openOverallSection();}
@@ -4421,7 +4418,8 @@ function updatePlayerOddsRow(player,method){
 
 let ddhhLoaded = false;
 
-async function initDDHH(btn, dayOffset = 0) {
+async function initDDHH(btn) {
+  if (ddhhLoaded && !btn) return;
   ddhhLoaded = false;
   const statusEl = document.getElementById('ddhh-status');
   const matchesEl = document.getElementById('ddhh-matches');
@@ -4429,12 +4427,8 @@ async function initDDHH(btn, dayOffset = 0) {
   matchesEl.innerHTML = '';
   statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t">Loading eligible matches...</div></div></div>`;
 
-  const now = new Date();
-  now.setDate(now.getDate() + dayOffset);
-  const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-
   try {
-    const r = await fetch(`/.netlify/functions/ddhh?date=${dateStr}`);
+    const r = await fetch('/.netlify/functions/ddhh');
     const d = await r.json();
     statusEl.innerHTML = '';
 
@@ -4456,7 +4450,7 @@ async function initDDHH(btn, dayOffset = 0) {
 
     const hdr = document.createElement('div');
     hdr.style.cssText = 'padding:12px 20px;border-bottom:.5px solid var(--border);font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500';
-    hdr.textContent = `${d.matches.length} eligible match${d.matches.length !== 1 ? 'es' : ''} — ${new Date(d.date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}`;
+    hdr.textContent = `${d.matches.length} eligible match${d.matches.length !== 1 ? 'es' : ''}`;
     card.appendChild(hdr);
 
     for (const m of d.matches) {
