@@ -4687,19 +4687,18 @@ async function scanDDHH(match, btn) {
 }
 
 async function preScanDDHHMarkets(matches) {
-  // Find and cache FGS market IDs for all DDHH matches
-  // This runs in background after the match list loads
-  for (const m of matches) {
+  // Find and cache FGS market IDs for all DDHH matches in parallel
+  await Promise.allSettled(matches.map(async m => {
     const [home, away] = m.event.split(' v ');
-    if (!home || !away) continue;
+    if (!home || !away) return;
     const cacheKey = `ddhh_fgs_${normDDHH(home)}_${normDDHH(away)}`;
-    if (localStorage.getItem(cacheKey)) continue; // already cached
+    if (localStorage.getItem(cacheKey)) return; // already cached
     const id = await findOCFGSMarketId(home, away);
     if (id) {
       localStorage.setItem(cacheKey, id);
       console.log(`Cached FGS ID for ${m.event}: ${id}`);
     }
-  }
+  }));
 }
 
 async function findOCFGSMarketId(home, away) {
