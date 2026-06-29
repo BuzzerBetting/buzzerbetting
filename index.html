@@ -4682,8 +4682,7 @@ async function fetchBetfredFGSFromOC(marketId) {
         }
       });
       const d = await r.json();
-      const bets = Array.isArray(d) ? d : [d];
-      const bet = bets[0];
+      const bet = (d.bets || d)[0] || d;
       const betfred = bet?.odds?.find(o => o.bookieCode === 'FR');
       return { name, betfred: betfred ? parseFloat(betfred.oddsDecimal) : null };
     })
