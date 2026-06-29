@@ -3784,11 +3784,14 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
 
     // Build Betfair price lookup: normalised player name → full runner data
     // Build separate BFEX lookups for goal (AGS) and shot markets
-    const bfexAGSByName = {};  // Player To Score
-    const bfexSOTByName = {};  // Player Shots on Target
+    const bfexAGSByName = {};  // Player To Score only
+    const bfexSOTByName = {};  // Player Shots on Target only
     if (bfexData && bfexData.ok && bfexData.markets) {
       for (const [mktName, mkt] of Object.entries(bfexData.markets)) {
-        const isShot = mktName.toLowerCase().includes('shot');
+        const name = mktName.toLowerCase();
+        const isShot = name.includes('shot');
+        const isAGS = name.includes('to score') && !name.includes('first') && !name.includes('shot');
+        if (!isShot && !isAGS) continue; // skip FGS and other markets
         const lookup = isShot ? bfexSOTByName : bfexAGSByName;
         for (const p of (mkt.players ?? [])) {
           const key = normName(p.name);
@@ -3796,8 +3799,8 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
         }
       }
     }
-    // Keep combined for backward compat (used by BFEX column display)
-    const bfexByName = { ...bfexAGSByName, ...bfexSOTByName };
+    // Combined for BFEX column display (AGS takes priority over SOT for goal markets)
+    const bfexByName = { ...bfexSOTByName, ...bfexAGSByName };
 
     // Derive fair price and confidence from runner data
     function deriveBfexFair(runner) {
