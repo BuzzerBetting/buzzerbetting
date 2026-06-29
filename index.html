@@ -3809,7 +3809,7 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
       const lpm = runner.lastPriceTraded ?? null;
 
       // Red — not enough to conclude
-      if (totalMatched < 100 || !lpm) return { fair: null, confidence: 'red' };
+      if (totalMatched < 50 || !lpm) return { fair: null, confidence: 'red' };
 
       const bestBack = runner.back?.[0]?.price ?? null;
       const bestBackSize = runner.back?.[0]?.size ?? 0;
@@ -4066,17 +4066,29 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
           tfs.push({ label: tf.label, fairOdds: fairOdds.toFixed(2), ev: ev.toFixed(1), quality });
         }
 
-        // Only include if at least one timeframe is +EV
+        // Only include if at least one timeframe is +EV (using BB fairs), or BFEX is available
         const evTfs = tfs.filter(t => t.ev !== null && parseFloat(t.ev) > 0);
-        if (!evTfs.length) continue;
-
-        const bestEv = Math.max(...evTfs.map(t => parseFloat(t.ev)));
+        if (!evTfs.length && !bfexPrice) continue;
 
         // Look up Betfair exchange data for this player — use correct market
         const bfexLookup = market.isShot ? bfexSOTByName : bfexAGSByName;
         const bfexEntry = Object.entries(bfexLookup).find(([k]) => fuzzyMatch(k, player.name));
         const bfexRunner = bfexEntry ? bfexEntry[1] : null;
         const { fair: bfexPrice, confidence: bfexConfidence } = deriveBfexFair(bfexRunner);
+
+        // Use BFEX as primary fair odds if available, otherwise use BB fairs
+        const primaryFair = bfexPrice || (market.needsAGS ? ags : sotV);
+
+        // Recalculate EV using primary fair (BFEX preferred)
+        const evTfsFinal = tfs.map(tf => {
+          if (!tf.fairOdds || !bfexPrice) return tf;
+          const ev = ((ocPrice / bfexPrice) - 1) * 100;
+          return { ...tf, ev: ev.toFixed(1), usingBfex: true };
+        });
+
+        const bestEv = Math.max(...evTfsFinal.map(t => parseFloat(t.ev ?? '-999')));
+        if (bestEv <= 0 && !bfexPrice) continue;
+
         const bfexEv = bfexPrice ? (((bfexPrice / (market.needsAGS ? ags : sotV)) - 1) * 100) : null;
 
         evBets.push({
@@ -4089,9 +4101,10 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
           bfexPrice,
           bfexEv,
           bfexConfidence,
-          tfs,
+          tfs: evTfsFinal,
           bestEv,
-          isConfident
+          isConfident,
+          usingBfexFair: !!bfexPrice,
         });
       }
     }
