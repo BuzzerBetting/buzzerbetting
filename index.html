@@ -4655,41 +4655,47 @@ async function findOCFGSMarketId(home, away) {
 }
 
 async function fetchBetfredFGSFromOC(marketId) {
-  // Step 1: Get all players and their betIds from the FGS market
   const r = await fetch(`https://www.oddschecker.com/api/markets/v2/all-odds?market-ids=${marketId}&repub=OC`);
   const data = await r.json();
   const market = data[0];
   if (!market) return [];
 
-  // Build player → betId map using the bets array
-  const playerBetIds = {};
-  for (const bet of (market.bets || [])) {
-    const name = bet.betName || '';
-    if (!name || name === 'No Goalscorer') continue;
-    if (!playerBetIds[name]) playerBetIds[name] = bet.betId;
-  }
-
-  // Step 2: Fetch each betId in parallel to get Betfred odds
   const OC_API_KEY = 'b1b69b4e-5233-4195-af1c-f5a0c18b1e0c';
+  const headers = {'api-key': OC_API_KEY, 'app-type': 'mapp', 'content-type': 'application/json', 'datatype': 'json'};
+
+  // For each player, scan ±15 betIds to find one with Betfred odds
   const results = await Promise.allSettled(
-    Object.entries(playerBetIds).map(async ([name, betId]) => {
-      const r = await fetch(`https://api.oddschecker.com/api/v2/bets/${betId}`, {
-        headers: {
-          'api-key': OC_API_KEY,
-          'app-type': 'mapp',
-          'content-type': 'application/json',
-          'datatype': 'json'
-        }
-      });
-      const d = await r.json();
-      const bet = (d.bets || d)[0] || d;
-      const betfred = bet?.odds?.find(o => o.bookieCode === 'FR');
-      return { name, betfred: betfred ? parseFloat(betfred.oddsDecimal) : null };
-    })
+    (market.bets || [])
+      .filter(b => b.betName && b.betName !== 'No Goalscorer')
+      .map(async (bet) => {
+        const baseName = normDDHH(bet.betName);
+        const scanIds = Array.from({length: 30}, (_, i) => bet.betId - 15 + i);
+
+        const scanResults = await Promise.allSettled(
+          scanIds.map(id =>
+            fetch(`https://api.oddschecker.com/api/v2/bets/${id}`, { headers })
+              .then(r => r.json())
+              .then(d => {
+                const b = (d.bets || d)[0] || d;
+                const fr = b?.odds?.find(o => o.bookieCode === 'FR');
+                if (!fr) return null;
+                if (normDDHH(b.betName || '') !== baseName) return null;
+                return { name: bet.betName, betfred: parseFloat(fr.oddsDecimal) };
+              })
+              .catch(() => null)
+          )
+        );
+
+        const found = scanResults
+          .filter(r => r.status === 'fulfilled' && r.value)
+          .map(r => r.value)[0];
+
+        return found || null;
+      })
   );
 
   return results
-    .filter(r => r.status === 'fulfilled' && r.value.betfred)
+    .filter(r => r.status === 'fulfilled' && r.value)
     .map(r => r.value);
 }
 
