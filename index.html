@@ -813,9 +813,8 @@ input::placeholder{color:var(--text3)}
             <th class="r">BB Fair</th>
             <th class="r">BFEX</th>
             <th class="r">Curr Team</th>
-            <th class="r">This Season</th>
-            <th class="r">+Last Season</th>
-            <th class="r">+2 Seasons</th>
+            <th class="r">Season</th>
+            <th class="r"></th>
             <th class="r">Odds</th>
             <th>Bookie</th>
             <th class="r">EV%</th>
@@ -4104,6 +4103,9 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
       if (!a.noCalc && b.noCalc) return -1;
       return (b.bestEv ?? 0) - (a.bestEv ?? 0);
     });
+
+    // Filter out clearly erroneous results (>500% EV)
+    const filteredBets = evBets.filter(b => b.noCalc || (b.bestEv ?? 0) <= 500);
     return evBets;
 }
 
@@ -4119,7 +4121,7 @@ async function scanOC(matchId, home, away, competition, btn) {
     }
     btn.innerHTML = '<i class="ti ti-loader"></i> Scanning...';
     const evBets = await runScanCore(matchId, home, away, competition, idsArr);
-    renderEVResults(`${home} v ${away} — +EV bets`, evBets);
+    renderEVResults(`${home} v ${away} — +EV bets`, filteredBets);
   } catch(err) {
     console.error('scanOC error:', err);
     alert(`Scan failed: ${err.message}`);
@@ -4195,14 +4197,38 @@ function renderEVResults(title, bets) {
     // Row colour: noCalc = subtle grey, confident = none, low data = amber
     const rowStyle = bet.noCalc ? 'background:var(--surface2)' : (bet.isConfident ? '' : 'background:var(--amber-bg)');
 
-    // Build 4 timeframe cells
-    const tfCells = bet.tfs.map(tf => {
-      if (tf.fairOdds === null) return `<td class="r tn" style="color:var(--text3)">—</td>`;
+    // Build 2 timeframe cells: Curr Team + best season column + flag
+    const tfByKey = {};
+    bet.tfs.forEach(tf => {
+      if (tf.label === 'Curr Team') tfByKey.currTeam = tf;
+      else if (tf.label === 'This Season') tfByKey.thisSeason = tf;
+      else if (tf.label === '+Last Season') tfByKey.lastSeason = tf;
+      else if (tf.label === '+2 Seasons') tfByKey.last2Seasons = tf;
+    });
+
+    // Determine which season column to show
+    // Use This Season if it has high quality data (≥20 matches implied by 'high' quality)
+    const useThisSeason = tfByKey.thisSeason?.quality === 'high';
+    const seasonCol = useThisSeason ? tfByKey.thisSeason : tfByKey.lastSeason;
+
+    const renderTf = (tf) => {
+      if (!tf || tf.fairOdds === null) return `<td class="r tn" style="color:var(--text3)">—</td>`;
       const tfEv = parseFloat(tf.ev);
       const col = tfEv > 0 ? 'var(--green)' : 'var(--text2)';
       const conf = tf.quality === 'high' ? '' : 'opacity:0.6;';
       return `<td class="r tn" style="color:${col};${conf}">${tf.fairOdds}</td>`;
-    }).join('');
+    };
+
+    // Flag if +2 Seasons differs by >50% from season column
+    let flagCell = `<td class="r tn"></td>`;
+    if (seasonCol?.fairOdds && tfByKey.last2Seasons?.fairOdds) {
+      const diff = Math.abs(parseFloat(tfByKey.last2Seasons.fairOdds) - parseFloat(seasonCol.fairOdds)) / parseFloat(seasonCol.fairOdds);
+      if (diff > 0.5) {
+        flagCell = `<td class="r tn" title="+2 Seasons: ${tfByKey.last2Seasons.fairOdds}"><span style="color:var(--amber);font-size:13px" title="+2 Seasons fair: ${tfByKey.last2Seasons.fairOdds}">⚠</span></td>`;
+      }
+    }
+
+    const tfCells = renderTf(tfByKey.currTeam) + renderTf(seasonCol) + flagCell;
 
     // EV% cell
     const evCell = bet.noCalc
