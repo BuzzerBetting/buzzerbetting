@@ -704,6 +704,17 @@ input::placeholder{color:var(--text3)}
         </div>
       </div>
     </div>
+    <!-- Split Personal / VA panels -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px" id="today-split-panels">
+      <div class="card">
+        <div class="card-h">Personal bets</div>
+        <div style="padding:16px" id="today-personal-content"></div>
+      </div>
+      <div class="card">
+        <div class="card-h">VA bets</div>
+        <div style="padding:16px" id="today-va-content"></div>
+      </div>
+    </div>
     <!-- Today's bets table -->
     <div class="card">
       <div style="padding:12px 20px;border-bottom:.5px solid var(--border);display:flex;justify-content:space-between;align-items:center">
@@ -2005,7 +2016,45 @@ function renderToday(bets,today){
     tbody.appendChild(tr);
   });
   document.getElementById('today-table-hdr').textContent=`${totalBets} bet${totalBets!==1?'s':''} — ${today}`;
+
+  // Split panels — Personal vs VA
+  const personalBets = bets.filter(b => !b.source.startsWith('VA:'));
+  const vaBets = bets.filter(b => b.source.startsWith('VA:'));
+  renderTodayPanel('today-personal-content', personalBets);
+  renderTodayPanel('today-va-content', vaBets);
+
   document.getElementById('today-content').style.display='';
+}
+
+function renderTodayPanel(elId, bets) {
+  const el = document.getElementById(elId);
+  if (!bets.length) {
+    el.innerHTML = `<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px">No bets</div>`;
+    return;
+  }
+  const totalStake = bets.reduce((s,b)=>s+b.stake,0);
+  const totalEV = bets.reduce((s,b)=>s+b.ev,0);
+  const settled = bets.filter(b=>b.result==='w'||b.result==='l'||b.result==='v');
+  const settledPL = settled.reduce((s,b)=>s+b.pl,0);
+  const open = bets.filter(b=>!b.result||b.result==='');
+  const prob = monteCarloProfitProb(bets, settledPL);
+  const probPct = Math.round(prob*100);
+  const probCol = probPct>=60?'var(--green)':probPct>=40?'var(--amber)':'var(--red)';
+  const evCol = totalEV>0?'var(--green)':totalEV<0?'var(--red)':'var(--text2)';
+  const plCol = settledPL>0?'var(--green)':settledPL<0?'var(--red)':'var(--text2)';
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span style="font-size:13px;color:var(--text2)">${bets.length} bets · ${open.length} open</span>
+      <span style="font-size:22px;font-weight:700;color:${probCol}">${probPct}%</span>
+    </div>
+    <div style="background:var(--surface2);border-radius:6px;height:8px;overflow:hidden;margin-bottom:12px">
+      <div style="height:100%;background:${probCol};border-radius:6px;width:${probPct}%;transition:width .6s ease"></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:5px">
+      <div style="display:flex;justify-content:space-between"><span style="font-size:12px;color:var(--text2)">Total staked</span><span style="font-size:12px;font-weight:600">£${totalStake.toFixed(2)}</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="font-size:12px;color:var(--text2)">Total EV</span><span style="font-size:12px;font-weight:600;color:${evCol}">${totalEV>=0?'+':''}£${Math.abs(totalEV).toFixed(2)}</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="font-size:12px;color:var(--text2)">Settled P/L</span><span style="font-size:12px;font-weight:600;color:${plCol}">${settledPL>=0?'+':''}£${Math.abs(settledPL).toFixed(2)}</span></div>
+    </div>`;
 }
 
 function monteCarloProfitProb(bets,settledPL){
