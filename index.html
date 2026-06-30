@@ -1659,7 +1659,7 @@ function calcKellyCorr(){
   resultEl.style.display = '';
 }
 
-
+function convertOdds(src){
   if(converting)return;converting=true;
   let dec=NaN;
   if(src==='dec'){dec=parseFloat(document.getElementById('oc-dec').value);}
