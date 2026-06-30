@@ -849,6 +849,11 @@ input::placeholder{color:var(--text3)}
         <div><div class="cat-title">Kelly criterion</div><div class="cat-desc">Mathematically optimal stake sizing</div></div>
         <i class="ti ti-arrow-right cat-arr"></i>
       </div>
+      <div class="cat" onclick="showCalc('kellycorr')">
+        <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-adjustments"></i></div>
+        <div><div class="cat-title">Kelly correction</div><div class="cat-desc">Top-up stake when odds move after your bet</div></div>
+        <i class="ti ti-arrow-right cat-arr"></i>
+      </div>
       <div class="cat" onclick="showCalc('odds')">
         <div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-arrows-right-left"></i></div>
         <div><div class="cat-title">Odds converter</div><div class="cat-desc">Decimal, fractional, American, implied %</div></div>
@@ -1035,6 +1040,67 @@ input::placeholder{color:var(--text3)}
     <div class="note" style="display:none"><i class="ti ti-info-circle"></i> Half Kelly is recommended for most value bettors — it reduces variance significantly while retaining most of the growth rate.</div>
   </div>
 
+  <!-- KELLY CORRECTION -->
+  <div id="calc-kellycorr" class="calc-view">
+    <button class="back" onclick="backToCalcHub()"><i class="ti ti-arrow-left"></i> Calculators</button>
+    <div class="sec-title">Kelly correction</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:20px;margin-top:-12px">If odds move after you've placed a bet, this works out how much more to stake at the new price to keep your overall position at full Kelly.</p>
+
+    <div class="card"><div style="padding:20px">
+      <div class="igrid">
+        <div><label class="lbl" for="kc-bank">Bankroll (£)</label><input id="kc-bank" type="number" placeholder="e.g. 8000" step="100" min="0" oninput="calcKellyCorr()"><div id="kc-bank-note" style="font-size:11px;color:var(--text3);margin-top:4px"></div></div>
+      </div>
+    </div></div>
+
+    <div class="card" style="margin-top:16px"><div style="padding:20px">
+      <div class="lbl" style="margin-bottom:12px">Bet 1</div>
+      <div class="igrid">
+        <div><label class="lbl" for="kc-back1">Back odds</label><input id="kc-back1" type="number" placeholder="e.g. 5.0" step="0.01" min="1.01" oninput="calcKellyCorr()"></div>
+        <div><label class="lbl" for="kc-fair1">Fair odds</label><input id="kc-fair1" type="number" placeholder="e.g. 4.4" step="0.01" min="1.01" oninput="calcKellyCorr()"></div>
+        <div><label class="lbl" for="kc-stake1">Stake placed (£)</label><input id="kc-stake1" type="number" placeholder="e.g. 245" step="1" min="0" oninput="calcKellyCorr()"></div>
+      </div>
+    </div></div>
+
+    <div class="card" style="margin-top:16px"><div style="padding:20px">
+      <div class="lbl" style="margin-bottom:12px">Bet 2 <span style="color:var(--text3);font-weight:400">(optional)</span></div>
+      <div class="igrid">
+        <div><label class="lbl" for="kc-back2">Back odds</label><input id="kc-back2" type="number" placeholder="e.g. 5.5" step="0.01" min="1.01" oninput="calcKellyCorr()"></div>
+        <div><label class="lbl" for="kc-fair2">Fair odds</label><input id="kc-fair2" type="number" placeholder="e.g. 4.4" step="0.01" min="1.01" oninput="calcKellyCorr()"></div>
+        <div><label class="lbl" for="kc-stake2">Stake placed (£)</label><input id="kc-stake2" type="number" placeholder="e.g. 50" step="1" min="0" oninput="calcKellyCorr()"></div>
+      </div>
+    </div></div>
+
+    <div class="card" style="margin-top:16px"><div style="padding:20px">
+      <div class="lbl" style="margin-bottom:12px">Bet 3 <span style="color:var(--text3);font-weight:400">(optional)</span></div>
+      <div class="igrid">
+        <div><label class="lbl" for="kc-back3">Back odds</label><input id="kc-back3" type="number" placeholder="e.g. 6.0" step="0.01" min="1.01" oninput="calcKellyCorr()"></div>
+        <div><label class="lbl" for="kc-fair3">Fair odds</label><input id="kc-fair3" type="number" placeholder="e.g. 4.4" step="0.01" min="1.01" oninput="calcKellyCorr()"></div>
+        <div><label class="lbl" for="kc-stake3">Stake placed (£)</label><input id="kc-stake3" type="number" placeholder="e.g. 0" step="1" min="0" oninput="calcKellyCorr()"></div>
+      </div>
+    </div></div>
+
+    <div class="card" style="margin-top:16px"><div style="padding:20px">
+      <div class="lbl" style="margin-bottom:12px;color:var(--green)">New price available now</div>
+      <div class="igrid">
+        <div><label class="lbl" for="kc-newback">New back odds</label><input id="kc-newback" type="number" placeholder="e.g. 5.75" step="0.01" min="1.01" oninput="calcKellyCorr()"></div>
+        <div><label class="lbl" for="kc-newfair">New fair odds</label><input id="kc-newfair" type="number" placeholder="e.g. 4.4" step="0.01" min="1.01" oninput="calcKellyCorr()"></div>
+      </div>
+    </div></div>
+
+    <div id="kc-result" style="display:none;margin-top:16px">
+      <div class="res-panel">
+        <div style="margin-bottom:16px"><div class="res-lbl">Top up stake</div><div class="res-big" id="kc-topup">—</div></div>
+        <div class="divider"></div>
+        <div class="res-grid" style="margin-top:16px">
+          <div class="res-item"><div class="res-lbl">Combined back odds</div><div class="res-val" id="kc-comb-back">—</div></div>
+          <div class="res-item"><div class="res-lbl">Combined fair odds</div><div class="res-val" id="kc-comb-fair">—</div></div>
+          <div class="res-item"><div class="res-lbl">Total stake so far</div><div class="res-val" id="kc-total-stake">—</div></div>
+          <div class="res-item"><div class="res-lbl">Total after top-up</div><div class="res-val" id="kc-total-after">—</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ODDS CONVERTER -->
   <div id="calc-odds" class="calc-view">
     <button class="back" onclick="backToCalcHub()"><i class="ti ti-arrow-left"></i> Calculators</button>
@@ -1197,7 +1263,7 @@ function checkPin(){
 // ── NAVIGATION ──
 function goHome(){document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
 function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();if(name==='ddhh')initDDHH(null);}
-function showCalc(name){document.getElementById('calc-hub').style.display='none';document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='dutch')initDutch();if(name==='arb')initArb();if(name==='gsm')initGSM();if(name==='kelly')initKelly();}
+function showCalc(name){document.getElementById('calc-hub').style.display='none';document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='dutch')initDutch();if(name==='arb')initArb();if(name==='gsm')initGSM();if(name==='kelly')initKelly();if(name==='kellycorr')initKellyCorr();}
 function backToCalcHub(){document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
 function showTracker(name){document.getElementById('tracker-hub').style.display='none';document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.getElementById('tracker-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='overall')openOverallSection();}
 function backToTrackerHub(){document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('tracker-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
@@ -1536,7 +1602,64 @@ let converting=false;
 function gcd(a,b){return b===0?a:gcd(b,a%b);}
 function decToFrac(d){const pr=1000;const n=Math.round((d-1)*pr);const g=gcd(Math.abs(n),pr);return(n/g)+'/'+(pr/g);}
 function decToAm(d){return d>=2?'+'+Math.round((d-1)*100):''+Math.round(-100/(d-1));}
-function convertOdds(src){
+let kellyCorrBankrollLoaded=false;
+async function initKellyCorr(){
+  if(kellyCorrBankrollLoaded)return;
+  const mainUrl=localStorage.getItem('bb_main_url');
+  if(!mainUrl)return;
+  try{
+    const r=await fetch(`/.netlify/functions/sheets?url=${encodeURIComponent(mainUrl)}&tab=Value`);
+    const d=await r.json();
+    const val=parseFloat(d.summary?.kellyBank||0);
+    if(val>0){
+      document.getElementById('kc-bank').value=val.toFixed(0);
+      document.getElementById('kc-bank-note').textContent=`Auto-loaded from sheet: £${val.toLocaleString('en-GB',{minimumFractionDigits:0})}`;
+      kellyCorrBankrollLoaded=true;
+      calcKellyCorr();
+    }
+  }catch(e){}
+}
+
+function calcKellyCorr(){
+  const bank = parseFloat(document.getElementById('kc-bank').value);
+  const bets = [1,2,3].map(i => ({
+    back: parseFloat(document.getElementById(`kc-back${i}`).value),
+    fair: parseFloat(document.getElementById(`kc-fair${i}`).value),
+    stake: parseFloat(document.getElementById(`kc-stake${i}`).value)
+  })).filter(b => !isNaN(b.back) && !isNaN(b.fair) && !isNaN(b.stake) && b.stake > 0);
+
+  const newBack = parseFloat(document.getElementById('kc-newback').value);
+  const newFair = parseFloat(document.getElementById('kc-newfair').value);
+
+  const resultEl = document.getElementById('kc-result');
+
+  if (!bets.length || isNaN(bank) || isNaN(newBack) || isNaN(newFair)) {
+    resultEl.style.display = 'none';
+    return;
+  }
+
+  // Combined back/fair odds — weighted average by stake
+  const totalStake = bets.reduce((s,b) => s + b.stake, 0);
+  const combBack = bets.reduce((s,b) => s + b.back * b.stake, 0) / totalStake;
+  const combFair = bets.reduce((s,b) => s + b.fair * b.stake, 0) / totalStake;
+
+  // Top up formula (matches sheet)
+  let topUp = 0;
+  if (newFair && totalStake && newBack && newFair) {
+    const term1 = (1/newFair) * (newBack - 1) * (bank - totalStake);
+    const term2 = (1 - 1/newFair) * (bank + totalStake * (combBack - 1));
+    topUp = Math.max(0, (term1 - term2) / (newBack - 1));
+  }
+
+  document.getElementById('kc-topup').textContent = `£${topUp.toFixed(2)}`;
+  document.getElementById('kc-comb-back').textContent = combBack.toFixed(2);
+  document.getElementById('kc-comb-fair').textContent = combFair.toFixed(2);
+  document.getElementById('kc-total-stake').textContent = `£${totalStake.toFixed(2)}`;
+  document.getElementById('kc-total-after').textContent = `£${(totalStake + topUp).toFixed(2)}`;
+  resultEl.style.display = '';
+}
+
+
   if(converting)return;converting=true;
   let dec=NaN;
   if(src==='dec'){dec=parseFloat(document.getElementById('oc-dec').value);}
@@ -4594,6 +4717,9 @@ async function scanDDHH(match, btn) {
       alert(`Could not find First Goalscorer market on OddChecker for ${match.event}`);
       return;
     }
+    // Remove the 🔍 icon now that the market is cached
+    const searchIcon = btn.closest('div[style*="display:flex"]')?.querySelector('span[title*="FGS"]');
+    if (searchIcon) searchIcon.remove();
 
     btn.innerHTML = '<i class="ti ti-loader"></i> Fetching odds...';
     const [bfexData, betfredPlayers] = await Promise.all([
