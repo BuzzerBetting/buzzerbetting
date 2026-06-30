@@ -1096,6 +1096,8 @@ input::placeholder{color:var(--text3)}
           <div class="res-item"><div class="res-lbl">Combined fair odds</div><div class="res-val" id="kc-comb-fair">—</div></div>
           <div class="res-item"><div class="res-lbl">Total stake so far</div><div class="res-val" id="kc-total-stake">—</div></div>
           <div class="res-item"><div class="res-lbl">Total after top-up</div><div class="res-val" id="kc-total-after">—</div></div>
+          <div class="res-item"><div class="res-lbl">New combined back odds</div><div class="res-val" id="kc-neutral-back">—</div></div>
+          <div class="res-item"><div class="res-lbl">New combined fair odds</div><div class="res-val" id="kc-neutral-fair">—</div></div>
         </div>
       </div>
     </div>
@@ -1656,6 +1658,15 @@ function calcKellyCorr(){
   document.getElementById('kc-comb-fair').textContent = combFair.toFixed(2);
   document.getElementById('kc-total-stake').textContent = `£${totalStake.toFixed(2)}`;
   document.getElementById('kc-total-after').textContent = `£${(totalStake + topUp).toFixed(2)}`;
+
+  // Neutral combined back/fair odds after placing the top-up stake
+  const totalAfter = totalStake + topUp;
+  if (totalAfter > 0) {
+    const neutralBack = (combBack * totalStake + newBack * topUp) / totalAfter;
+    const neutralFair = (combFair * totalStake + newFair * topUp) / totalAfter;
+    document.getElementById('kc-neutral-back').textContent = neutralBack.toFixed(2);
+    document.getElementById('kc-neutral-fair').textContent = neutralFair.toFixed(2);
+  }
   resultEl.style.display = '';
 }
 
