@@ -172,6 +172,29 @@ input::placeholder{color:var(--text3)}
     <div class="greeting-h">40 profitable months.<br><em>And counting.</em></div>
   </div>
   <div class="grid">
+    <div class="cat" onclick="showTopSec('bets')">
+      <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-receipt"></i></div>
+      <div><div class="cat-title">Bets</div><div class="cat-desc">Profit breakdown, bet tracker and today's live stats</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
+    <div class="cat" onclick="showTopSec('calc')">
+      <div class="cat-ico" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-calculator"></i></div>
+      <div><div class="cat-title">Calculations</div><div class="cat-desc">Value finders, DDHH, manual calculators and fixtures</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
+    <div class="cat" onclick="showTopSec('ledger')">
+      <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-wallet"></i></div>
+      <div><div class="cat-title">Ledger</div><div class="cat-desc">Account tracking, live balances and bet entry</div><div class="cat-tag" style="background:var(--blue-bg);color:var(--blue)">Coming soon</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
+  </div>
+</div>
+
+<!-- BETS MENU -->
+<div id="view-bets-menu" class="sec">
+  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <div class="sec-title">Bets</div>
+  <div class="grid">
     <div class="cat" onclick="showSec('profit')">
       <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-chart-bar"></i></div>
       <div><div class="cat-title">Profit breakdown</div><div class="cat-desc">Monthly P&amp;L, all-time chart and performance stats</div><div class="cat-tag" style="background:var(--green-bg);color:var(--green)">£264,716 total</div></div>
@@ -187,6 +210,14 @@ input::placeholder{color:var(--text3)}
       <div><div class="cat-title">Today's stats</div><div class="cat-desc">Live P&amp;L, active bets and today's action at a glance</div><div class="cat-tag" style="background:var(--blue-bg);color:var(--blue)">Live feed</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
+  </div>
+</div>
+
+<!-- CALCULATIONS MENU -->
+<div id="view-calc-menu" class="sec">
+  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <div class="sec-title">Calculations</div>
+  <div class="grid">
     <div class="cat" onclick="showSec('oddschecker')">
       <div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-bolt"></i></div>
       <div><div class="cat-title">Oddschecker +EV</div><div class="cat-desc">Live value bets pulled from Oddschecker vs BFex fairs</div><div class="cat-tag" style="background:var(--amber-bg);color:var(--amber)">6 bets today</div></div>
@@ -212,16 +243,19 @@ input::placeholder{color:var(--text3)}
       <div><div class="cat-title">Today's Matches</div><div class="cat-desc">Fixture list and lineup scanner — FotMob live data</div><div class="cat-tag" style="background:var(--green-bg);color:var(--green)">Live</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
-    <div class="cat off">
-      <div class="cat-ico" style="background:var(--surface2);color:var(--text3)"><i class="ti ti-plus"></i></div>
-      <div><div class="cat-title">More coming soon</div><div class="cat-desc">Casino EV offers, bet sharing, Discord integrations</div></div>
-    </div>
   </div>
+</div>
+
+<!-- LEDGER -->
+<div id="view-ledger" class="sec">
+  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <div class="sec-title">Ledger</div>
+  <div class="card"><div class="ph" style="padding:32px"><div class="ph-ico"><i class="ti ti-wallet"></i></div><div class="ph-t">Ledger coming soon</div><div class="ph-d">Account tracking, live balances and VA bet entry — in development</div></div></div>
 </div>
 
 <!-- PROFIT BREAKDOWN -->
 <div id="view-profit" class="sec">
-  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <button class="back" onclick="backToBetsMenu()"><i class="ti ti-arrow-left"></i> Menu</button>
   <div class="sec-title">Profit breakdown</div>
   <div class="kpis">
     <div class="kpi"><div class="kpi-l">Total profit</div><div class="kpi-v" style="color:var(--green)">£264,716</div><div class="kpi-s">Since Mar 2023</div></div>
@@ -237,7 +271,7 @@ input::placeholder{color:var(--text3)}
 <div id="view-tracker" class="sec">
 
   <div id="tracker-hub">
-    <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
+    <button class="back" onclick="backToBetsMenu()"><i class="ti ti-arrow-left"></i> Menu</button>
     <div class="sec-title">Bet tracker</div>
 
     <div class="card" style="margin-bottom:20px">
@@ -677,7 +711,7 @@ input::placeholder{color:var(--text3)}
 
 <!-- TODAY -->
 <div id="view-today" class="sec">
-  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <button class="back" onclick="backToBetsMenu()"><i class="ti ti-arrow-left"></i> Menu</button>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
     <div class="sec-title" style="margin-bottom:0">Today's stats</div>
     <button onclick="initToday()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'"><i class="ti ti-refresh"></i> Refresh</button>
@@ -740,7 +774,7 @@ input::placeholder{color:var(--text3)}
 
 <!-- ODDSCHECKER -->
 <div id="view-oddschecker" class="sec">
-  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <button class="back" onclick="backToCalcMenu()"><i class="ti ti-arrow-left"></i> Menu</button>
   <div class="sec-title">Oddschecker +EV</div>
   <div class="smeta"><span class="pulse"></span><strong style="color:var(--green);font-weight:500">6 value bets found</strong>&nbsp;· sample data · refreshed 14:22</div>
   <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:660px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">BFex fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th class="r">Stake</th></tr></thead><tbody id="scanner-body"></tbody></table></div></div>
@@ -749,7 +783,7 @@ input::placeholder{color:var(--text3)}
 
 <!-- DDHH -->
 <div id="view-ddhh" class="sec">
-  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <button class="back" onclick="backToCalcMenu()"><i class="ti ti-arrow-left"></i> Menu</button>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
     <div class="sec-title" style="margin-bottom:0">DDHH</div>
     <button onclick="initDDHH(this)" id="ddhh-refresh-btn" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
@@ -783,7 +817,7 @@ input::placeholder{color:var(--text3)}
 
 <!-- CALCULATED EV -->
 <div id="view-calculated" class="sec">
-  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <button class="back" onclick="backToCalcMenu()"><i class="ti ti-arrow-left"></i> Menu</button>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
     <div class="sec-title" style="margin-bottom:0">Calculated +EV</div>
     <div style="display:flex;gap:8px">
@@ -831,7 +865,7 @@ input::placeholder{color:var(--text3)}
 
   <!-- Hub -->
   <div id="calc-hub">
-    <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
+    <button class="back" onclick="backToCalcMenu()"><i class="ti ti-arrow-left"></i> Menu</button>
     <div class="sec-title">Manual calculators</div>
     <div class="ch-grid">
       <div class="cat" onclick="showCalc('gsm')">
@@ -1265,6 +1299,10 @@ function checkPin(){
 // ── NAVIGATION ──
 function goHome(){document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
 function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();if(name==='ddhh')initDDHH(null);}
+const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger'};
+function showTopSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});}
+function backToBetsMenu(){showTopSec('bets');}
+function backToCalcMenu(){showTopSec('calc');}
 function showCalc(name){document.getElementById('calc-hub').style.display='none';document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='dutch')initDutch();if(name==='arb')initArb();if(name==='gsm')initGSM();if(name==='kelly')initKelly();if(name==='kellycorr')initKellyCorr();}
 function backToCalcHub(){document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
 function showTracker(name){document.getElementById('tracker-hub').style.display='none';document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.getElementById('tracker-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='overall')openOverallSection();}
@@ -3172,7 +3210,7 @@ function renderDogsTable(rows,summary){
 </script>
 <!-- TODAY'S MATCHES -->
 <div id="view-matches" class="sec" style="display:none">
-  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <button class="back" onclick="backToCalcMenu()"><i class="ti ti-arrow-left"></i> Menu</button>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
     <div class="sec-title" style="margin-bottom:0">Today's Matches</div>
     <span style="font-size:12px;color:var(--text3)" id="matches-count"></span>
