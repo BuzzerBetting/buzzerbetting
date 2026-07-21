@@ -257,7 +257,80 @@ input::placeholder{color:var(--text3)}
 <div id="view-ledger" class="sec">
   <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
   <div class="sec-title">Ledger</div>
-  <div class="card"><div class="ph" style="padding:32px"><div class="ph-ico"><i class="ti ti-wallet"></i></div><div class="ph-t">Ledger coming soon</div><div class="ph-d">Account tracking, live balances and VA bet entry — in development</div></div></div>
+  <div class="ch-grid">
+    <div class="cat" style="--accent:var(--green)" onclick="showLedgerSec('bet-entry')">
+      <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-pencil-plus"></i></div>
+      <div><div class="cat-title">Bet entry</div><div class="cat-desc">VA-facing form for logging placed bets directly to the ledger</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
+    <div class="cat" style="--accent:var(--blue)" onclick="showLedgerSec('accounts')">
+      <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-users"></i></div>
+      <div><div class="cat-title">Accounts</div><div class="cat-desc">Every identity × bookie combination and its current status</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
+    <div class="cat" style="--accent:var(--green)" onclick="showLedgerSec('deposits')">
+      <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-arrow-down-circle"></i></div>
+      <div><div class="cat-title">Deposits</div><div class="cat-desc">Log of funds paid into each account</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
+    <div class="cat" style="--accent:var(--red)" onclick="showLedgerSec('withdrawals')">
+      <div class="cat-ico" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-arrow-up-circle"></i></div>
+      <div><div class="cat-title">Withdrawals</div><div class="cat-desc">Log of funds pulled out of each account</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
+    <div class="cat" style="--accent:var(--purple)" onclick="showLedgerSec('balances')">
+      <div class="cat-ico" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-scale"></i></div>
+      <div><div class="cat-title">Live balances</div><div class="cat-desc">Current running balance per account, computed automatically</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
+    <div class="cat" style="--accent:var(--amber)" onclick="showLedgerSec('bulk-import')">
+      <div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-table-import"></i></div>
+      <div><div class="cat-title">Bulk account entry</div><div class="cat-desc">Paste new identities in bulk, auto-sorted into the account sheet</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
+  </div>
+</div>
+
+<!-- LEDGER: BET ENTRY -->
+<div id="view-ledger-bet-entry" class="sec">
+  <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
+  <div class="sec-title">Bet entry</div>
+  <div class="card"><div class="ph"><div class="ph-ico"><i class="ti ti-pencil-plus"></i></div><div class="ph-t">Coming soon</div><div class="ph-d">A form for your VA to log each placed bet — account, stake, odds, result — straight into the ledger.</div></div></div>
+</div>
+
+<!-- LEDGER: ACCOUNTS -->
+<div id="view-ledger-accounts" class="sec">
+  <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
+  <div class="sec-title">Accounts</div>
+  <div class="card"><div class="ph"><div class="ph-ico"><i class="ti ti-users"></i></div><div class="ph-t">Coming soon</div><div class="ph-d">A live view of every identity/card × bookie account, its status, and any notes — replacing the manual tracking grid.</div></div></div>
+</div>
+
+<!-- LEDGER: DEPOSITS -->
+<div id="view-ledger-deposits" class="sec">
+  <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
+  <div class="sec-title">Deposits</div>
+  <div class="card"><div class="ph"><div class="ph-ico"><i class="ti ti-arrow-down-circle"></i></div><div class="ph-t">Coming soon</div><div class="ph-d">A running log of deposits into each account, feeding the live balance calculation.</div></div></div>
+</div>
+
+<!-- LEDGER: WITHDRAWALS -->
+<div id="view-ledger-withdrawals" class="sec">
+  <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
+  <div class="sec-title">Withdrawals</div>
+  <div class="card"><div class="ph"><div class="ph-ico"><i class="ti ti-arrow-up-circle"></i></div><div class="ph-t">Coming soon</div><div class="ph-d">A running log of withdrawals from each account, feeding the live balance calculation.</div></div></div>
+</div>
+
+<!-- LEDGER: LIVE BALANCES -->
+<div id="view-ledger-balances" class="sec">
+  <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
+  <div class="sec-title">Live balances</div>
+  <div class="card"><div class="ph"><div class="ph-ico"><i class="ti ti-scale"></i></div><div class="ph-t">Coming soon</div><div class="ph-d">Current balance per account — opening balance + deposits − withdrawals + settled P/L — at a glance across every bookie.</div></div></div>
+</div>
+
+<!-- LEDGER: BULK ACCOUNT ENTRY -->
+<div id="view-ledger-bulk-import" class="sec">
+  <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
+  <div class="sec-title">Bulk account entry</div>
+  <div class="card"><div class="ph"><div class="ph-ico"><i class="ti ti-table-import"></i></div><div class="ph-t">Coming soon</div><div class="ph-d">Paste new identity/card details in bulk — auto-sorted into the account sheet, flagging which still need accounts opened.</div></div></div>
 </div>
 
 <!-- PROFIT BREAKDOWN -->
@@ -1310,6 +1383,8 @@ const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger'};
 function showTopSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});}
 function backToBetsMenu(){showTopSec('bets');}
 function backToCalcMenu(){showTopSec('calc');}
+function showLedgerSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-ledger-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});}
+function backToLedgerHub(){showTopSec('ledger');}
 function showCalc(name){document.getElementById('calc-hub').style.display='none';document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='dutch')initDutch();if(name==='arb')initArb();if(name==='gsm')initGSM();if(name==='kelly')initKelly();if(name==='kellycorr')initKellyCorr();}
 function backToCalcHub(){document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
 function showTracker(name){document.getElementById('tracker-hub').style.display='none';document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.getElementById('tracker-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='overall')openOverallSection();}
