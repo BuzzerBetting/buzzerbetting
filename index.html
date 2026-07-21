@@ -88,6 +88,8 @@ header{background:var(--header);height:62px;display:flex;align-items:center;just
 .pulse{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);vertical-align:middle;animation:pdot 2s infinite}
 .lbl{display:block;font-size:11px;font-weight:500;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px}
 input[type=text],input[type=number]{width:100%;padding:9px 13px;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:14px;font-family:inherit;outline:none;transition:border-color .15s}
+select{width:100%;padding:9px 13px;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:14px;font-family:inherit;outline:none;transition:border-color .15s;cursor:pointer}
+select:focus{border-color:var(--brand)}
 input:focus{border-color:var(--brand)}
 input::placeholder{color:var(--text3)}
 .igrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
@@ -295,7 +297,30 @@ input::placeholder{color:var(--text3)}
 <div id="view-ledger-bet-entry" class="sec">
   <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
   <div class="sec-title">Bet entry</div>
-  <div class="card"><div class="ph"><div class="ph-ico"><i class="ti ti-pencil-plus"></i></div><div class="ph-t">Coming soon</div><div class="ph-d">A form for your VA to log each placed bet — account, stake, odds, result — straight into the ledger.</div></div></div>
+
+  <div class="card" id="bet-entry-type-picker">
+    <div class="lbl" style="margin-bottom:10px">Select bet type</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px" id="bet-type-grid"></div>
+  </div>
+
+  <div class="card" id="bet-entry-form" style="display:none;margin-top:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div class="sec-title" style="margin:0;font-size:16px" id="bet-entry-type-title"></div>
+      <button class="add-btn" onclick="resetBetEntryForm()"><i class="ti ti-x"></i> Cancel</button>
+    </div>
+
+    <div id="bet-entry-fields" style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:22px"></div>
+
+    <div class="lbl" style="margin-bottom:10px">Accounts &amp; stakes</div>
+    <div id="bet-entry-legs"></div>
+    <button class="add-btn" onclick="addBetLegRow()"><i class="ti ti-plus"></i> Add account</button>
+
+    <div style="margin-top:18px;padding-top:14px;border-top:0.5px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <div><div class="lbl" style="margin-bottom:2px">Total stake</div><div style="font-size:20px;font-weight:600" id="bet-entry-total">£0.00</div></div>
+      <button onclick="submitBetEntry()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:11px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit" id="bet-entry-submit">Log bet</button>
+    </div>
+    <div id="bet-entry-msg" style="margin-top:12px;font-size:13px"></div>
+  </div>
 </div>
 
 <!-- LEDGER: ACCOUNTS -->
@@ -1383,8 +1408,147 @@ const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger'};
 function showTopSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});}
 function backToBetsMenu(){showTopSec('bets');}
 function backToCalcMenu(){showTopSec('calc');}
-function showLedgerSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-ledger-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});}
+function showLedgerSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-ledger-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='bet-entry')initBetEntry();}
 function backToLedgerHub(){showTopSec('ledger');}
+
+// ================== LEDGER: BET ENTRY ==================
+
+const BET_TYPE_FIELDS = {
+  'Value':            [{key:'Bet',label:'Bet description',type:'text'},{key:'Odds',label:'Odds',type:'number'},{key:'Fair Odds',label:'Fair odds',type:'number'},{key:'EV',label:'EV (£)',type:'number'}],
+  'Keithbot':         [{key:'Book',label:'Book',type:'text'},{key:'Player',label:'Player',type:'text'},{key:'Bet',label:'Bet',type:'text'},{key:'Odds',label:'Odds',type:'number'},{key:'EV',label:'EV (£)',type:'number'}],
+  'American Props':   [{key:'Sport',label:'Sport',type:'text'},{key:'Bet',label:'Bet',type:'text'},{key:'Odds',label:'Odds',type:'number'},{key:'EV',label:'EV (£)',type:'number'}],
+  'Freeze':           [{key:'Book',label:'Book',type:'text'},{key:'Targeted Freeze',label:'Targeted freeze',type:'text'},{key:'Acca Odds',label:'Acca odds',type:'number'},{key:'EV',label:'EV (£)',type:'number'}],
+  'Discord':          [{key:'Bet',label:'Bet',type:'text'},{key:'Odds',label:'Odds',type:'number'},{key:'EV',label:'EV (£)',type:'number'}],
+  'BB - BT':          [{key:'Bet',label:'Bet',type:'text'},{key:'Odds',label:'Odds',type:'number'},{key:'EV',label:'EV (£)',type:'number'}],
+  'Offers':           [{key:'Bet Type',label:'Bet type',type:'text'},{key:'Bet',label:'Bet',type:'text'},{key:'Odds',label:'Odds',type:'number'},{key:'EV',label:'EV (£)',type:'number'}],
+  'BB Horse':         [{key:'Race',label:'Race',type:'text'},{key:'Horse',label:'Horse',type:'text'},{key:'Places',label:'Places',type:'text'},{key:'Odds',label:'Odds',type:'number'}],
+  'BB Golf':          [{key:'Event',label:'Event',type:'text'},{key:'Player',label:'Player',type:'text'},{key:'Places',label:'Places',type:'text'},{key:'Odds',label:'Odds',type:'number'}],
+  'BB - RTP':         [{key:'Race',label:'Race time',type:'text'},{key:'Horse',label:'Horse',type:'text'},{key:'Odds',label:'Odds',type:'number'}],
+  'Dogs + Horses':    [{key:'Race',label:'Race',type:'text'},{key:'Book',label:'Book',type:'text'},{key:'Horse/Trap',label:'Horse / trap',type:'text'},{key:'Odds',label:'Odds',type:'number'},{key:'EW?',label:'Each-way?',type:'text'}],
+  'Corners':          [{key:'Bet',label:'Bet',type:'text'},{key:'Odds',label:'Odds',type:'number'}],
+  'Ninja Golf BFEX':  [{key:'Selection',label:'Selection',type:'text'},{key:'Odds',label:'Odds',type:'number'}],
+};
+
+let LEDGER_ACCOUNTS = [];
+let betEntryLegId = 0;
+let betEntryType = null;
+
+async function ledgerApi(path, opts) {
+  const res = await fetch('/.netlify/functions/ledger?path='+encodeURIComponent(path), opts);
+  return res.json();
+}
+
+async function initBetEntry() {
+  const grid = document.getElementById('bet-type-grid');
+  grid.innerHTML = Object.keys(BET_TYPE_FIELDS).map(t =>
+    `<button class="msel-btn" onclick="selectBetType('${t.replace(/'/g,"\\'")}')">${t}</button>`
+  ).join('');
+  resetBetEntryForm();
+  try {
+    const d = await ledgerApi('accounts');
+    LEDGER_ACCOUNTS = (d.ok && d.accounts) ? d.accounts : [];
+  } catch(e) { LEDGER_ACCOUNTS = []; }
+}
+
+function selectBetType(type) {
+  betEntryType = type;
+  document.getElementById('bet-entry-type-picker').style.display = 'none';
+  document.getElementById('bet-entry-form').style.display = 'block';
+  document.getElementById('bet-entry-type-title').textContent = type;
+
+  const fieldsWrap = document.getElementById('bet-entry-fields');
+  fieldsWrap.innerHTML = BET_TYPE_FIELDS[type].map(f =>
+    `<div><label class="lbl">${f.label}</label><input type="${f.type}" id="bef-${f.key.replace(/[^a-zA-Z0-9]/g,'_')}" ${f.type==='number'?'step="0.01"':''}></div>`
+  ).join('');
+
+  document.getElementById('bet-entry-legs').innerHTML = '';
+  betEntryLegId = 0;
+  addBetLegRow();
+}
+
+function accountOptionsHtml(selectedId) {
+  if (!LEDGER_ACCOUNTS.length) return `<option value="">No accounts set up yet</option>`;
+  return `<option value="">Select account…</option>` + LEDGER_ACCOUNTS.map(a =>
+    `<option value="${a.id}" ${String(a.id)===String(selectedId)?'selected':''}>${a.profile} — ${a.bookie}</option>`
+  ).join('');
+}
+
+function addBetLegRow() {
+  const id = ++betEntryLegId;
+  const wrap = document.getElementById('bet-entry-legs');
+  const row = document.createElement('div');
+  row.className = 'leg-row';
+  row.dataset.leg = id;
+  row.style.cssText = 'display:grid;grid-template-columns:1fr 140px 32px;gap:10px;margin-bottom:8px;align-items:center';
+  row.innerHTML = `
+    <select class="leg-account" onchange="updateBetEntryTotal()">${accountOptionsHtml()}</select>
+    <input type="number" class="leg-stake" placeholder="Stake £" step="0.01" min="0" oninput="updateBetEntryTotal()">
+    <button class="rm-btn" onclick="removeBetLegRow(${id})" title="Remove">×</button>`;
+  wrap.appendChild(row);
+  updateBetEntryTotal();
+}
+
+function removeBetLegRow(id) {
+  const wrap = document.getElementById('bet-entry-legs');
+  if (wrap.children.length <= 1) return; // always keep at least one row
+  const row = wrap.querySelector(`[data-leg="${id}"]`);
+  if (row) row.remove();
+  updateBetEntryTotal();
+}
+
+function updateBetEntryTotal() {
+  const stakes = [...document.querySelectorAll('#bet-entry-legs .leg-stake')].map(i => parseFloat(i.value) || 0);
+  const total = stakes.reduce((a,b) => a+b, 0);
+  document.getElementById('bet-entry-total').textContent = '£' + total.toLocaleString('en-GB', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function resetBetEntryForm() {
+  betEntryType = null;
+  document.getElementById('bet-entry-type-picker').style.display = 'block';
+  document.getElementById('bet-entry-form').style.display = 'none';
+  document.getElementById('bet-entry-msg').innerHTML = '';
+}
+
+async function submitBetEntry() {
+  const msgEl = document.getElementById('bet-entry-msg');
+  const btn = document.getElementById('bet-entry-submit');
+  if (!betEntryType) return;
+
+  const fields = {};
+  BET_TYPE_FIELDS[betEntryType].forEach(f => {
+    const el = document.getElementById('bef-'+f.key.replace(/[^a-zA-Z0-9]/g,'_'));
+    fields[f.key] = f.type==='number' ? (parseFloat(el.value)||0) : el.value.trim();
+  });
+
+  const legRows = [...document.querySelectorAll('#bet-entry-legs .leg-row')];
+  const legs = legRows.map(r => ({
+    account_id: r.querySelector('.leg-account').value,
+    stake: parseFloat(r.querySelector('.leg-stake').value) || 0
+  }));
+
+  if (legs.some(l => !l.account_id)) { msgEl.innerHTML = '<span style="color:var(--red)">Every row needs an account selected.</span>'; return; }
+  if (legs.some(l => !(l.stake > 0))) { msgEl.innerHTML = '<span style="color:var(--red)">Every row needs a stake greater than £0.</span>'; return; }
+
+  btn.disabled = true; btn.textContent = 'Logging…';
+  msgEl.innerHTML = '';
+  try {
+    const d = await ledgerApi('bets', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ bet_type: betEntryType, fields, legs })
+    });
+    if (d.ok) {
+      msgEl.innerHTML = `<span style="color:var(--green)"><i class="ti ti-check"></i> Bet logged — total stake £${d.bet.total_stake.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`;
+      setTimeout(resetBetEntryForm, 1400);
+    } else {
+      msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Something went wrong'}</span>`;
+    }
+  } catch(e) {
+    msgEl.innerHTML = `<span style="color:var(--red)">Network error — could not reach the ledger.</span>`;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Log bet';
+  }
+}
 function showCalc(name){document.getElementById('calc-hub').style.display='none';document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='dutch')initDutch();if(name==='arb')initArb();if(name==='gsm')initGSM();if(name==='kelly')initKelly();if(name==='kellycorr')initKellyCorr();}
 function backToCalcHub(){document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
 function showTracker(name){document.getElementById('tracker-hub').style.display='none';document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.getElementById('tracker-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='overall')openOverallSection();}
