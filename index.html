@@ -45,11 +45,14 @@ header{background:var(--header);height:62px;display:flex;align-items:center;just
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
 @media(max-width:680px){.grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:440px){.grid{grid-template-columns:1fr}}
-.cat{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:22px 20px 20px;cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s;display:flex;flex-direction:column;gap:14px;position:relative;user-select:none}
+.cat{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:22px 20px 20px;cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s;display:flex;flex-direction:column;gap:14px;position:relative;user-select:none;overflow:hidden}
+.cat::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent,transparent);transform:scaleX(0);transform-origin:left;transition:transform .25s ease}
+.cat:hover::before{transform:scaleX(1)}
 .cat:hover{transform:translateY(-3px);box-shadow:0 10px 28px rgba(0,0,0,0.09);border-color:rgba(0,0,0,0.14)}
 @media(prefers-color-scheme:dark){.cat:hover{box-shadow:0 10px 28px rgba(0,0,0,0.45);border-color:rgba(255,255,255,0.14)}}
 .cat.off{opacity:.42;cursor:default;pointer-events:none}
-.cat-ico{width:46px;height:46px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:21px}
+.cat-ico{width:46px;height:46px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:21px;transition:transform .2s ease}
+.cat:hover .cat-ico{transform:scale(1.08) rotate(-4deg)}
 .cat-title{font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px}
 .cat-desc{font-size:12px;color:var(--text2);line-height:1.55}
 .cat-tag{display:inline-block;margin-top:6px;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:500}
@@ -170,19 +173,23 @@ input::placeholder{color:var(--text3)}
   <div class="greeting">
     <div class="greeting-sub" id="greet-sub"></div>
     <div class="greeting-h">40 profitable months.<br><em>And counting.</em></div>
+    <div style="margin-top:10px;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);background:var(--surface);border:0.5px solid var(--border);border-radius:20px;padding:5px 12px">
+      <i class="ti ti-list-check" style="font-size:14px;color:var(--brand)"></i>
+      <span id="total-bets-stat">— bets placed</span>
+    </div>
   </div>
   <div class="grid">
-    <div class="cat" onclick="showTopSec('bets')">
+    <div class="cat" style="--accent:var(--green)" onclick="showTopSec('bets')">
       <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-receipt"></i></div>
       <div><div class="cat-title">Bets</div><div class="cat-desc">Profit breakdown, bet tracker and today's live stats</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
-    <div class="cat" onclick="showTopSec('calc')">
+    <div class="cat" style="--accent:var(--purple)" onclick="showTopSec('calc')">
       <div class="cat-ico" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-calculator"></i></div>
       <div><div class="cat-title">Calculations</div><div class="cat-desc">Value finders, DDHH, manual calculators and fixtures</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
-    <div class="cat" onclick="showTopSec('ledger')">
+    <div class="cat" style="--accent:var(--blue)" onclick="showTopSec('ledger')">
       <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-wallet"></i></div>
       <div><div class="cat-title">Ledger</div><div class="cat-desc">Account tracking, live balances and bet entry</div><div class="cat-tag" style="background:var(--blue-bg);color:var(--blue)">Coming soon</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
@@ -1312,6 +1319,27 @@ function backToTrackerSection(parent){document.querySelectorAll('.tracker-sectio
 
 // ── GREETING ──
 (function(){const now=new Date();const h=now.getHours();const g=h<12?'Good morning':h<17?'Good afternoon':'Good evening';document.getElementById('greet-sub').textContent=g+' \u2014 '+now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});document.getElementById('hdr-date').textContent=now.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});})();
+
+async function loadTotalBetsStat(){
+  const statEl = document.getElementById('total-bets-stat');
+  if(!statEl) return;
+  const mainUrl = localStorage.getItem('bb_main_url');
+  const vaUrl = localStorage.getItem('bb_va_url');
+  if(!mainUrl && !vaUrl){ statEl.textContent='Connect a sheet to see bets placed'; return; }
+  const personalTabs = ['Value','Keithbot','Dogs + Horses','BB Horse','BB Golf','American Props','Freeze','Ninja Golf BFEX','Corners'];
+  const vaTabs = ['Discord','BB - RTP','BB - BT','Offers'];
+  const jobs = [
+    ...(mainUrl ? personalTabs.map(t => fetch('/.netlify/functions/sheets?url='+encodeURIComponent(mainUrl)+'&tab='+encodeURIComponent(t)).then(r=>r.json()).catch(()=>null)) : []),
+    ...(vaUrl ? vaTabs.map(t => fetch('/.netlify/functions/sheets?url='+encodeURIComponent(vaUrl)+'&tab='+encodeURIComponent(t)).then(r=>r.json()).catch(()=>null)) : []),
+  ];
+  const results = await Promise.allSettled(jobs);
+  let total = 0;
+  results.forEach(r => {
+    if(r.status==='fulfilled' && r.value && r.value.ok && r.value.summary) total += r.value.summary.totalBets||0;
+  });
+  statEl.textContent = total.toLocaleString()+' bets placed';
+}
+loadTotalBetsStat();
 
 // ── MONTHLY TABLE ──
 (function(){const tb=document.getElementById('monthly-tbody');[...monthly].reverse().forEach(([m,p])=>{const vs=((p-avgP)/avgP*100),pos=vs>=0;const tr=document.createElement('tr');tr.innerHTML=`<td>${m}</td><td class="r tn" style="color:var(--green)">£${p.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="r" style="color:var(--${pos?'green':'red'})">${pos?'+':''}${vs.toFixed(1)}%</td>`;tb.appendChild(tr);});})();
