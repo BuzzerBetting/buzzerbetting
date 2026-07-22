@@ -340,8 +340,10 @@ input::placeholder{color:var(--text3)}
 
     <div id="bet-entry-computed" style="display:none;margin-bottom:22px;padding:14px 16px;background:var(--surface2);border-radius:var(--radius)">
       <div style="display:flex;gap:28px;flex-wrap:wrap">
-        <div><div class="lbl" style="margin-bottom:3px">EV (£)</div><div style="font-size:18px;font-weight:600" id="bet-entry-ev">—</div></div>
+        <div id="bet-entry-ev-wrap"><div class="lbl" style="margin-bottom:3px">EV (£)</div><div style="font-size:18px;font-weight:600" id="bet-entry-ev">—</div></div>
         <div id="bet-entry-profit-wrap"><div class="lbl" style="margin-bottom:3px">Potential profit (£)</div><div style="font-size:18px;font-weight:600" id="bet-entry-profit">—</div></div>
+        <div id="bet-entry-profit-win-wrap" style="display:none"><div class="lbl" style="margin-bottom:3px">Potential profit — win (£)</div><div style="font-size:18px;font-weight:600" id="bet-entry-profit-win">—</div></div>
+        <div id="bet-entry-profit-place-wrap" style="display:none"><div class="lbl" style="margin-bottom:3px">Potential profit — place only (£)</div><div style="font-size:18px;font-weight:600" id="bet-entry-profit-place">—</div></div>
       </div>
     </div>
 
@@ -349,7 +351,7 @@ input::placeholder{color:var(--text3)}
     <div id="bet-entry-legs-section">
       <div class="lbl" style="margin-bottom:10px">Accounts &amp; stakes</div>
       <div id="bet-entry-legs"></div>
-      <button class="add-btn" onclick="addBetLegRow()"><i class="ti ti-plus"></i> Add account</button>
+      <button class="add-btn" id="bet-entry-add-leg-btn" onclick="addBetLegRow()"><i class="ti ti-plus"></i> Add account</button>
     </div>
 
     <!-- Single-account balance layout (Casino / Offers) -->
@@ -1479,29 +1481,43 @@ function backToLedgerHub(){showTopSec('ledger');}
 // ================== LEDGER: BET ENTRY ==================
 //
 // Each bet type has a `layout`:
-//   'standard' — text fields + optional blended odds (from per-leg odds) + optional Fair Odds/EV
-//   'paste'    — paste box auto-fills fields from a BookieBashing row (EV comes from the paste itself)
+//   'standard' — text fields + odds handling per `oddsMode` below
+//   'paste'    — paste box auto-fills fields from a BookieBashing row
 //   'balance'  — single account, no multi-leg Accounts & Stakes (Casino / Offers)
 //
+// oddsMode values:
+//   'none'                     — no odds captured at entry (Dogs + Horses' fair odds specifically)
+//   'blendedProfit'            — blended odds from leg stakes/odds + potential profit, no EV (no fair odds available)
+//   'blendedProfitCommission'  — same, with potential profit reduced by Ninja Golf's 2% commission
+//   'pairedBlended'            — blended odds + manual fair odds + EV + potential profit
+//   'pairedBlendedFromPasteFair' — blended odds + EV/profit, fair odds read from a pasted column (BB Bet Tracker)
+//   'pairedSingle'             — single account's own odds + fair odds + EV + potential profit (Offers)
+//   'eachWay'                  — paste-only: EV + separate win/place-only potential profit from each-way terms
+//
 // Paste-column guesses (bbhorse/bbgolf/bbbt) are a best-effort based on the screenshots supplied —
-// they have NOT been tested against a real clipboard paste from BookieBashing, so the column split
-// may need adjusting once tried for real. Fields stay editable after autofill either way.
+// untested against a real clipboard paste from BookieBashing, so the column split may need
+// adjusting once tried for real. Fields stay editable after autofill either way.
+//
+// Each-way EV model (BB Horse / BB Racing Tracker / BB Golf) assumes a standard 50/50 stake split
+// between the win part and the place part, place probability inclusive of the win scenario, and
+// the each-way fraction parsed from the pasted "Terms" column (e.g. "1/5" -> 0.2). Worth checking
+// this matches how you actually think about each-way value before relying on it.
 
 const BET_TYPE_CONFIG = {
   'Value':            { layout:'standard', bookie:true,  fields:[{key:'Bet',label:'Bet description',type:'text'}], oddsMode:'pairedBlended' },
   'Keithbot':         { layout:'standard', bookie:true,  fields:[{key:'Player',label:'Player',type:'text'},{key:'Bet',label:'Bet',type:'text'}], oddsMode:'pairedBlended' },
   'American Props':   { layout:'standard', bookie:true,  fields:[{key:'Sport',label:'Sport',type:'text'},{key:'Bet',label:'Bet',type:'text'}], oddsMode:'pairedBlended' },
-  'Freeze':           { layout:'standard', bookie:true,  fields:[{key:'Targeted Freeze',label:'Targeted freeze',type:'text'}], oddsMode:'pairedBlended', oddsLabel:'Acca odds' },
+  'Freeze':           { layout:'standard', bookie:true,  fields:[{key:'Targeted Freeze',label:'Targeted freeze',type:'text'}], oddsMode:'pairedBlended', oddsLabel:'Acca odds', singleLegOnly:true },
   'Discord':          { layout:'standard', bookie:true,  fields:[{key:'Bet',label:'Bet',type:'text'}], oddsMode:'pairedBlended' },
-  'Dogs + Horses':    { layout:'standard', bookie:true,  fields:[{key:'Race',label:'Race',type:'text'},{key:'Horse/Trap',label:'Horse / trap',type:'text'},{key:'EW?',label:'Each-way?',type:'text'}], oddsMode:'none',
-                        note:'No odds captured here — this bet is priced at the off (BFEX SP). EV will be calculated at settlement, not at entry.' },
-  'Corners':          { layout:'standard', bookie:true,  fields:[{key:'Team',label:'Team',type:'text'},{key:'Player Assist',label:'Player assist',type:'text'},{key:'Goalscorer',label:'Goalscorer',type:'text'}], oddsMode:'blendedOnly' },
-  'Ninja Golf BFEX':  { layout:'standard', bookie:false, fields:[{key:'Selection',label:'Selection',type:'text'}], oddsMode:'blendedOnly',
-                        note:'Remember: settled winning bets on this market carry a 2% commission — apply at settlement, not here.' },
-  'BB Horse':         { layout:'paste', pasteSpec:'bbhorse', bookie:false },
-  'BB - RTP':         { layout:'paste', pasteSpec:'bbhorse', bookie:false },
-  'BB Golf':          { layout:'paste', pasteSpec:'bbgolf',  bookie:true },
-  'BB - BT':          { layout:'paste', pasteSpec:'bbbt',    bookie:false },
+  'Dogs + Horses':    { layout:'standard', bookie:true,  fields:[{key:'Race',label:'Race',type:'text'},{key:'Horse/Trap',label:'Horse / trap',type:'text'},{key:'EW?',label:'Each-way?',type:'text'}], oddsMode:'blendedProfit',
+                        note:'Fair odds aren\u2019t captured here — this bet is priced at the off (BFEX SP), so EV is calculated at settlement, not at entry.' },
+  'Corners':          { layout:'standard', bookie:true,  fields:[{key:'Team',label:'Team',type:'text'},{key:'Player Assist',label:'Player assist',type:'text'},{key:'Goalscorer',label:'Goalscorer',type:'text'}], oddsMode:'blendedProfit' },
+  'Ninja Golf BFEX':  { layout:'standard', bookie:false, fields:[{key:'Selection',label:'Selection',type:'text'}], oddsMode:'blendedProfitCommission',
+                        note:'The potential profit above already accounts for the 2% commission on this market — apply the same 2% again at settlement.' },
+  'BB Horse':         { layout:'paste', pasteSpec:'bbhorse', bookie:false, oddsMode:'eachWay' },
+  'BB - RTP':         { layout:'paste', pasteSpec:'bbhorse', bookie:false, oddsMode:'eachWay' },
+  'BB Golf':          { layout:'paste', pasteSpec:'bbgolf',  bookie:true,  oddsMode:'eachWay' },
+  'BB - BT':          { layout:'paste', pasteSpec:'bbbt',    bookie:false, oddsMode:'pairedBlendedFromPasteFair' },
   'Offers':           { layout:'balance', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet description',type:'text'}], oddsMode:'pairedSingle', hasStake:true, hasBalanceBoxes:false },
   'Casino':           { layout:'balance', bookie:true, hasBetKind:false, fields:[{key:'Offer',label:'Offer',type:'text'}], oddsMode:'none', hasStake:false, hasBalanceBoxes:true },
 };
@@ -1511,7 +1527,7 @@ const PASTE_SPECS = {
   bbhorse: {
     columns: [
       {key:'Runner',label:'Runner',numeric:false},
-      {key:'EV',label:'EV',numeric:true},
+      {key:'EV',label:'EV (BookieBashing)',numeric:true},
       {key:'Odds',label:'Odds',numeric:true},
       {key:'N.Odds',label:'N.Odds',numeric:true},
       {key:'Win F.Odds',label:'Win fair odds',numeric:true},
@@ -1526,7 +1542,7 @@ const PASTE_SPECS = {
   bbgolf: {
     columns: [
       {key:'Runner',label:'Runner',numeric:false},
-      {key:'EV',label:'EV',numeric:true},
+      {key:'EV',label:'EV (BookieBashing)',numeric:true},
       {key:'Odds',label:'Odds',numeric:true},
       {key:'N.Odds',label:'N.Odds',numeric:true},
       {key:'Win F.Odds',label:'Win fair odds',numeric:true},
@@ -1542,14 +1558,13 @@ const PASTE_SPECS = {
       {key:'Name',label:'Name',numeric:false},
       {key:'Book Odds',label:'Book odds',numeric:true},
       {key:'Fair Odds',label:'Fair odds',numeric:true},
-      {key:'EV',label:'EV',numeric:true},
+      {key:'EV',label:'EV (BookieBashing)',numeric:true},
     ],
     example: 'Betfred\tVirtual Double - ASHLAND (19:17 SD) and MERYNS BOY (19:11 PP)\t9.00\t7.89\t114.07',
   },
 };
 
-// Maps each picker group to its bet types. `key` matches BET_TYPE_CONFIG and
-// is what gets stored as bet_type; `label` is the friendly display name.
+// Maps each picker group to its bet types.
 const BET_TYPE_GROUPS = {
   buzzer: [
     {key:'Value', label:'Value'},
@@ -1578,6 +1593,7 @@ let betEntryTypeLabel = null;
 let betEntryLastGroup = null;
 
 const BETTYPE_COLORS = ['var(--green)','var(--blue)','var(--purple)','var(--amber)','var(--red)'];
+const NINJA_GOLF_COMMISSION = 0.02;
 
 async function ledgerApi(path, opts) {
   const res = await fetch('/.netlify/functions/ledger?path='+encodeURIComponent(path), opts);
@@ -1609,8 +1625,6 @@ function backToBetGroupStep() {
   document.getElementById('bet-group-step').style.display = 'block';
 }
 
-// Returns to the type list within whichever group was last used (Cancel / after logging a bet)
-// rather than all the way back to the Buzzer/Assistant choice.
 function backToTypeSelection() {
   document.getElementById('bet-entry-form').style.display = 'none';
   document.getElementById('bet-entry-msg').innerHTML = '';
@@ -1625,7 +1639,7 @@ function backToTypeSelection() {
 }
 
 function fieldInputHtml(f) {
-  return `<div><label class="lbl">${f.label}</label><input type="${f.type}" id="bef-${f.key.replace(/[^a-zA-Z0-9]/g,'_')}" ${f.type==='number'?'step="0.01"':''} oninput="onStandardFieldInput()"></div>`;
+  return `<div><label class="lbl">${f.label}</label><input type="${f.type}" id="bef-${f.key.replace(/[^a-zA-Z0-9]/g,'_')}" ${f.type==='number'?'step="0.01"':''}></div>`;
 }
 
 function selectBetType(type, label) {
@@ -1655,44 +1669,52 @@ function selectBetType(type, label) {
 
   if (cfg.layout === 'paste') {
     PASTE_SPECS[cfg.pasteSpec].columns.forEach(c => {
-      html += `<div><label class="lbl">${c.label}</label><input type="${c.numeric?'number':'text'}" id="bef-paste-${c.key.replace(/[^a-zA-Z0-9]/g,'_')}" ${c.numeric?'step="0.01"':''}></div>`;
+      html += `<div><label class="lbl">${c.label}</label><input type="${c.numeric?'number':'text'}" id="bef-paste-${c.key.replace(/[^a-zA-Z0-9]/g,'_')}" ${c.numeric?'step="0.01"':''} oninput="recalcBetEntryEV()"></div>`;
     });
   } else {
-    (cfg.fields||[]).forEach(f => { html += fieldInputHtml(f); });
     if (cfg.hasBetKind) {
       html += `<div><label class="lbl">Bet type</label><select id="bef-betkind"><option value="Normal">Normal</option><option value="Free Bet">Free Bet</option></select></div>`;
     }
+    (cfg.fields||[]).forEach(f => { html += fieldInputHtml(f); });
   }
   fieldsWrap.innerHTML = html;
 
-  // Odds / Fair Odds handling
+  // ---- Odds / EV / profit display, driven by oddsMode ----
   const computedWrap = document.getElementById('bet-entry-computed');
+  const evWrap = document.getElementById('bet-entry-ev-wrap');
   const profitWrap = document.getElementById('bet-entry-profit-wrap');
-  if (cfg.oddsMode === 'pairedBlended' || cfg.oddsMode === 'blendedOnly') {
+  const profitWinWrap = document.getElementById('bet-entry-profit-win-wrap');
+  const profitPlaceWrap = document.getElementById('bet-entry-profit-place-wrap');
+  evWrap.style.display = 'none'; profitWrap.style.display = 'none';
+  profitWinWrap.style.display = 'none'; profitPlaceWrap.style.display = 'none';
+  computedWrap.style.display = 'none';
+
+  if (cfg.oddsMode === 'blendedProfit' || cfg.oddsMode === 'blendedProfitCommission') {
     fieldsWrap.insertAdjacentHTML('beforeend',
-      `<div id="bet-entry-blended-odds-wrap" style="padding:10px 14px;background:var(--surface2);border-radius:var(--radius)"><div class="lbl" style="margin-bottom:2px">${cfg.oddsLabel||'Odds'} (blended across accounts)</div><div style="font-size:16px;font-weight:600" id="bet-entry-blended-odds">—</div></div>`
-    );
-    if (cfg.oddsMode === 'pairedBlended') {
-      fieldsWrap.insertAdjacentHTML('beforeend',
-        `<div><label class="lbl">Fair odds</label><input type="number" step="0.01" id="bef-fair-odds" oninput="recalcBetEntryEV()"></div>`);
-      computedWrap.style.display = 'block';
-      profitWrap.style.display = 'block';
-    } else {
-      computedWrap.style.display = 'none';
-    }
+      `<div id="bet-entry-blended-odds-wrap" style="padding:10px 14px;background:var(--surface2);border-radius:var(--radius)"><div class="lbl" style="margin-bottom:2px">Odds (blended across accounts)</div><div style="font-size:16px;font-weight:600" id="bet-entry-blended-odds">—</div></div>`);
+    computedWrap.style.display = 'block'; profitWrap.style.display = 'block';
+  } else if (cfg.oddsMode === 'pairedBlended') {
+    fieldsWrap.insertAdjacentHTML('beforeend',
+      `<div id="bet-entry-blended-odds-wrap" style="padding:10px 14px;background:var(--surface2);border-radius:var(--radius)"><div class="lbl" style="margin-bottom:2px">${cfg.oddsLabel||'Odds'} (blended across accounts)</div><div style="font-size:16px;font-weight:600" id="bet-entry-blended-odds">—</div></div>
+       <div><label class="lbl">Fair odds</label><input type="number" step="0.01" id="bef-fair-odds" oninput="recalcBetEntryEV()"></div>`);
+    computedWrap.style.display = 'block'; evWrap.style.display = 'block'; profitWrap.style.display = 'block';
+  } else if (cfg.oddsMode === 'pairedBlendedFromPasteFair') {
+    fieldsWrap.insertAdjacentHTML('beforeend',
+      `<div id="bet-entry-blended-odds-wrap" style="padding:10px 14px;background:var(--surface2);border-radius:var(--radius)"><div class="lbl" style="margin-bottom:2px">Odds (blended across accounts)</div><div style="font-size:16px;font-weight:600" id="bet-entry-blended-odds">—</div></div>`);
+    computedWrap.style.display = 'block'; evWrap.style.display = 'block'; profitWrap.style.display = 'block';
   } else if (cfg.oddsMode === 'pairedSingle') {
     fieldsWrap.insertAdjacentHTML('beforeend', `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
         <div><label class="lbl">Odds</label><input type="number" step="0.01" id="bef-single-odds" oninput="recalcBetEntryEV()"></div>
         <div><label class="lbl">Fair odds</label><input type="number" step="0.01" id="bef-fair-odds" oninput="recalcBetEntryEV()"></div>
       </div>`);
-    computedWrap.style.display = 'block';
-    profitWrap.style.display = 'block';
-  } else {
-    computedWrap.style.display = 'none';
+    computedWrap.style.display = 'block'; evWrap.style.display = 'block'; profitWrap.style.display = 'block';
+  } else if (cfg.oddsMode === 'eachWay') {
+    computedWrap.style.display = 'block'; evWrap.style.display = 'block';
+    profitWinWrap.style.display = 'block'; profitPlaceWrap.style.display = 'block';
   }
 
-  // Balance layout: account dropdown, stake, wagering/bonus boxes
+  // ---- Balance layout: account dropdown, stake, wagering/bonus boxes ----
   if (cfg.layout === 'balance') {
     document.getElementById('bef-single-account').innerHTML = accountOptionsHtml();
     document.getElementById('bef-single-stake-wrap').style.display = cfg.hasStake ? 'block' : 'none';
@@ -1706,19 +1728,16 @@ function selectBetType(type, label) {
     document.getElementById('bet-entry-legs').innerHTML = '';
     betEntryLegId = 0;
     addBetLegRow();
+    document.getElementById('bet-entry-add-leg-btn').style.display = cfg.singleLegOnly ? 'none' : 'inline-flex';
   }
 
   recalcBetEntryEV();
 }
 
-function onStandardFieldInput() { /* placeholder hook if per-field validation is added later */ }
-
 // ---- Paste-to-autofill ----
 function splitPasteRow(text, columns) {
   let parts = text.split('\t').map(s => s.trim()).filter(s => s !== '');
   if (parts.length === columns.length) return parts;
-  // Fallback for non-tab-separated input (e.g. typed rather than pasted from a table):
-  // collapse whitespace and assume the first column absorbs any extra leading words.
   parts = text.trim().split(/\s+/);
   const trailing = columns.length - 1;
   if (parts.length > columns.length) {
@@ -1739,6 +1758,7 @@ function handlePasteInput() {
     const el = document.getElementById('bef-paste-'+c.key.replace(/[^a-zA-Z0-9]/g,'_'));
     if (el && parts[i] !== undefined) el.value = c.numeric ? (parseFloat(parts[i])||'') : parts[i];
   });
+  recalcBetEntryEV();
 }
 
 function accountOptionsHtml(selectedId) {
@@ -1751,6 +1771,8 @@ function accountOptionsHtml(selectedId) {
 function addBetLegRow() {
   const id = ++betEntryLegId;
   const wrap = document.getElementById('bet-entry-legs');
+  const cfg = BET_TYPE_CONFIG[betEntryType];
+  const showRemove = !(cfg && cfg.singleLegOnly);
   const row = document.createElement('div');
   row.className = 'leg-row';
   row.dataset.leg = id;
@@ -1759,14 +1781,14 @@ function addBetLegRow() {
     <select class="leg-account" onchange="updateBetEntryTotal()">${accountOptionsHtml()}</select>
     <input type="number" class="leg-stake" placeholder="Stake £" step="0.01" min="0" oninput="updateBetEntryTotal()">
     <input type="number" class="leg-odds" placeholder="Odds" step="0.01" min="1.01" oninput="updateBetEntryTotal()">
-    <button class="rm-btn" onclick="removeBetLegRow(${id})" title="Remove">×</button>`;
+    ${showRemove ? `<button class="rm-btn" onclick="removeBetLegRow(${id})" title="Remove">×</button>` : `<span></span>`}`;
   wrap.appendChild(row);
   updateBetEntryTotal();
 }
 
 function removeBetLegRow(id) {
   const wrap = document.getElementById('bet-entry-legs');
-  if (wrap.children.length <= 1) return; // always keep at least one row
+  if (wrap.children.length <= 1) return;
   const row = wrap.querySelector(`[data-leg="${id}"]`);
   if (row) row.remove();
   updateBetEntryTotal();
@@ -1799,41 +1821,96 @@ function updateBetEntryTotal() {
   recalcBetEntryEV();
 }
 
-// EV formula matches the site's existing EV calculator: (bookieOdds/fairOdds - 1).
-// Potential profit is the straightforward payout profit if the bet wins outright.
+function parseTermsFraction(t) {
+  if (!t) return null;
+  const m = String(t).match(/(\d+)\s*\/\s*(\d+)/);
+  if (!m) return null;
+  return parseInt(m[1],10)/parseInt(m[2],10);
+}
+
+// Standard each-way model: 50/50 stake split between win and place parts, place probability
+// inclusive of the win scenario. See module header comment for the full assumption list.
+function calcEachWay(odds, winFair, placeFair, terms, totalStake) {
+  const ew = parseTermsFraction(terms);
+  if (!(odds>1) || !(winFair>1) || !(placeFair>1) || !ew || !(totalStake>0)) return null;
+  const winStake = totalStake/2, placeStake = totalStake/2;
+  const placeUnitProfit = (odds-1)*ew;
+  const profitIfWin = winStake*(odds-1) + placeStake*placeUnitProfit;
+  const profitIfPlaceOnly = placeStake*placeUnitProfit - winStake;
+  const pWin = 1/winFair;
+  const pPlace = 1/placeFair;
+  const pPlaceOnly = Math.max(0, pPlace - pWin);
+  const pNeither = Math.max(0, 1 - pPlace);
+  const ev = pWin*profitIfWin + pPlaceOnly*profitIfPlaceOnly + pNeither*(-totalStake);
+  return { profitIfWin, profitIfPlaceOnly, ev };
+}
+
+function setMoneyEl(el, val, colorPositiveOnly) {
+  if (val === null || isNaN(val)) { el.textContent = '—'; el.style.color = ''; return; }
+  el.textContent = (val>=0?'+£':'-£') + Math.abs(val).toFixed(2);
+  el.style.color = val>=0 ? 'var(--green)' : 'var(--red)';
+}
+
 function recalcBetEntryEV() {
   const cfg = BET_TYPE_CONFIG[betEntryType];
   if (!cfg) return;
   const evEl = document.getElementById('bet-entry-ev');
   const profitEl = document.getElementById('bet-entry-profit');
+  const profitWinEl = document.getElementById('bet-entry-profit-win');
+  const profitPlaceEl = document.getElementById('bet-entry-profit-place');
   const blendedEl = document.getElementById('bet-entry-blended-odds');
+  const stake = currentBetEntryTotal();
 
-  let odds = null;
-  if (cfg.oddsMode === 'pairedBlended' || cfg.oddsMode === 'blendedOnly') {
+  if (cfg.oddsMode === 'eachWay') {
+    const spec = PASTE_SPECS[cfg.pasteSpec];
+    const get = key => parseFloat(document.getElementById('bef-paste-'+key.replace(/[^a-zA-Z0-9]/g,'_'))?.value);
+    const terms = document.getElementById('bef-paste-Terms')?.value;
+    const result = calcEachWay(get('Odds'), get('Win F.Odds'), get('Place F.Odds'), terms, stake);
+    if (!result) {
+      if (evEl) setMoneyEl(evEl, null);
+      if (profitWinEl) setMoneyEl(profitWinEl, null);
+      if (profitPlaceEl) setMoneyEl(profitPlaceEl, null);
+      return;
+    }
+    if (evEl) setMoneyEl(evEl, result.ev);
+    if (profitWinEl) setMoneyEl(profitWinEl, result.profitIfWin);
+    if (profitPlaceEl) setMoneyEl(profitPlaceEl, result.profitIfPlaceOnly);
+    return;
+  }
+
+  let odds = null, fair = null;
+  if (cfg.oddsMode === 'blendedProfit' || cfg.oddsMode === 'blendedProfitCommission' || cfg.oddsMode === 'pairedBlended' || cfg.oddsMode === 'pairedBlendedFromPasteFair') {
     odds = currentBlendedOdds();
     if (blendedEl) blendedEl.textContent = odds ? odds.toFixed(2) : '—';
   } else if (cfg.oddsMode === 'pairedSingle') {
     odds = parseFloat(document.getElementById('bef-single-odds')?.value) || null;
   }
 
-  if (cfg.oddsMode !== 'pairedBlended' && cfg.oddsMode !== 'pairedSingle') return;
-  if (!evEl || !profitEl) return;
+  if (cfg.oddsMode === 'pairedBlended' || cfg.oddsMode === 'pairedSingle') {
+    fair = parseFloat(document.getElementById('bef-fair-odds')?.value) || null;
+  } else if (cfg.oddsMode === 'pairedBlendedFromPasteFair') {
+    fair = parseFloat(document.getElementById('bef-paste-Fair_Odds')?.value) || null;
+  }
 
-  const fairEl = document.getElementById('bef-fair-odds');
-  const fair = fairEl ? parseFloat(fairEl.value) : null;
-  const stake = currentBetEntryTotal();
-
-  if (!(odds > 1) || !(fair > 1) || !(stake > 0)) {
-    evEl.textContent = '—'; evEl.style.color = '';
-    profitEl.textContent = '—'; profitEl.style.color = '';
+  if (cfg.oddsMode === 'blendedProfit' || cfg.oddsMode === 'blendedProfitCommission') {
+    if (!(odds > 1) || !(stake > 0)) { if(profitEl) setMoneyEl(profitEl, null); return; }
+    let profit = stake * (odds - 1);
+    if (cfg.oddsMode === 'blendedProfitCommission') profit = profit * (1 - NINJA_GOLF_COMMISSION);
+    if (profitEl) setMoneyEl(profitEl, profit);
     return;
   }
-  const ev = stake * (odds/fair - 1);
-  const profit = stake * (odds - 1);
-  evEl.textContent = (ev>=0?'+£':'-£') + Math.abs(ev).toFixed(2);
-  evEl.style.color = ev>=0 ? 'var(--green)' : 'var(--red)';
-  profitEl.textContent = '+£' + profit.toFixed(2);
-  profitEl.style.color = 'var(--green)';
+
+  if (cfg.oddsMode === 'pairedBlended' || cfg.oddsMode === 'pairedSingle' || cfg.oddsMode === 'pairedBlendedFromPasteFair') {
+    if (!(odds > 1) || !(fair > 1) || !(stake > 0)) {
+      if (evEl) setMoneyEl(evEl, null);
+      if (profitEl) setMoneyEl(profitEl, null);
+      return;
+    }
+    const ev = stake * (odds/fair - 1);
+    const profit = stake * (odds - 1);
+    if (evEl) setMoneyEl(evEl, ev);
+    if (profitEl) setMoneyEl(profitEl, profit);
+  }
 }
 
 // Casino: P/L derived from the change in wagering + bonus balances, not from stake/odds.
@@ -1850,9 +1927,7 @@ function recalcBalanceDelta() {
   if (!isNaN(ws) && !isNaN(we)) parts.push(we-ws);
   if (!isNaN(bs) && !isNaN(be)) parts.push(be-bs);
   if (!parts.length) { plEl.textContent = '—'; plEl.style.color = ''; return; }
-  const pl = parts.reduce((a,b)=>a+b,0);
-  plEl.textContent = (pl>=0?'+£':'-£') + Math.abs(pl).toFixed(2);
-  plEl.style.color = pl>=0 ? 'var(--green)' : 'var(--red)';
+  setMoneyEl(plEl, parts.reduce((a,b)=>a+b,0));
 }
 
 function resetBetEntryForm() {
@@ -1879,33 +1954,44 @@ async function submitBetEntry() {
       fields[c.key] = c.numeric ? (parseFloat(el.value)||0) : (el.value||'').trim();
     });
   } else {
+    if (cfg.hasBetKind) fields['Bet Type'] = document.getElementById('bef-betkind').value;
     (cfg.fields||[]).forEach(f => {
       const el = document.getElementById('bef-'+f.key.replace(/[^a-zA-Z0-9]/g,'_'));
       fields[f.key] = f.type==='number' ? (parseFloat(el.value)||0) : (el.value||'').trim();
     });
-    if (cfg.hasBetKind) fields['Bet Type'] = document.getElementById('bef-betkind').value;
   }
 
-  if (cfg.oddsMode === 'pairedBlended' || cfg.oddsMode === 'blendedOnly') {
+  if (cfg.oddsMode === 'blendedProfit' || cfg.oddsMode === 'blendedProfitCommission' || cfg.oddsMode === 'pairedBlended' || cfg.oddsMode === 'pairedBlendedFromPasteFair') {
     const blended = currentBlendedOdds();
     fields['Odds'] = blended ? +blended.toFixed(3) : 0;
-    if (cfg.oddsLabel) fields[cfg.oddsLabel.replace('Odds','Odds')] = fields['Odds'];
   }
   if (cfg.oddsMode === 'pairedSingle') {
     fields['Odds'] = parseFloat(document.getElementById('bef-single-odds')?.value) || 0;
   }
   if (cfg.oddsMode === 'pairedBlended' || cfg.oddsMode === 'pairedSingle') {
     fields['Fair Odds'] = parseFloat(document.getElementById('bef-fair-odds')?.value) || 0;
-    const evText = document.getElementById('bet-entry-ev').textContent;
-    const evNum = parseFloat(evText.replace(/[£,]/g,''));
+  }
+  if (cfg.oddsMode === 'pairedBlended' || cfg.oddsMode === 'pairedSingle' || cfg.oddsMode === 'pairedBlendedFromPasteFair') {
+    const evNum = parseFloat((document.getElementById('bet-entry-ev').textContent||'').replace(/[£,]/g,''));
     fields['EV'] = isNaN(evNum) ? 0 : evNum;
+  }
+  if (cfg.oddsMode === 'blendedProfit' || cfg.oddsMode === 'blendedProfitCommission') {
+    const pNum = parseFloat((document.getElementById('bet-entry-profit').textContent||'').replace(/[£,]/g,''));
+    fields['Potential Profit'] = isNaN(pNum) ? 0 : pNum;
+  }
+  if (cfg.oddsMode === 'eachWay') {
+    const evNum = parseFloat((document.getElementById('bet-entry-ev').textContent||'').replace(/[£,]/g,''));
+    const winNum = parseFloat((document.getElementById('bet-entry-profit-win').textContent||'').replace(/[£,]/g,''));
+    const placeNum = parseFloat((document.getElementById('bet-entry-profit-place').textContent||'').replace(/[£,]/g,''));
+    fields['EV'] = isNaN(evNum) ? 0 : evNum;
+    fields['Potential Profit (Win)'] = isNaN(winNum) ? 0 : winNum;
+    fields['Potential Profit (Place)'] = isNaN(placeNum) ? 0 : placeNum;
   }
   if (cfg.hasBalanceBoxes) {
     ['bef-wager-start','bef-wager-end','bef-bonus-start','bef-bonus-end'].forEach(id => {
       fields[id] = parseFloat(document.getElementById(id)?.value) || 0;
     });
-    const plText = document.getElementById('bet-entry-balance-pl-value').textContent;
-    const plNum = parseFloat(plText.replace(/[£,]/g,''));
+    const plNum = parseFloat((document.getElementById('bet-entry-balance-pl-value').textContent||'').replace(/[£,]/g,''));
     fields['Balance P/L'] = isNaN(plNum) ? 0 : plNum;
   }
 
@@ -1915,7 +2001,6 @@ async function submitBetEntry() {
     const stake = cfg.hasStake ? (parseFloat(document.getElementById('bef-single-stake').value) || 0) : 0;
     if (!accountId) { msgEl.innerHTML = '<span style="color:var(--red)">Select an account.</span>'; return; }
     if (cfg.hasStake && !(stake > 0)) { msgEl.innerHTML = '<span style="color:var(--red)">Enter a stake greater than £0.</span>'; return; }
-    // Casino has no traditional stake — record a zero-stake leg purely to attach the bet to the account.
     legs = [{ account_id: accountId, stake: cfg.hasStake ? stake : 0.01 }];
   } else {
     const legRows = [...document.querySelectorAll('#bet-entry-legs .leg-row')];
