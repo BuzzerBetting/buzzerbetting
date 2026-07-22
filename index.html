@@ -299,8 +299,24 @@ input::placeholder{color:var(--text3)}
   <div class="sec-title">Bet entry</div>
 
   <div class="card" id="bet-entry-type-picker">
-    <div class="lbl" style="margin-bottom:10px">Select bet type</div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px" id="bet-type-grid"></div>
+    <div id="bet-group-step">
+      <div class="lbl" style="margin-bottom:10px">Who's this bet for?</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px">
+        <button class="cat" style="--accent:var(--green);flex:1;min-width:180px;padding:18px 20px;text-align:left;font-family:inherit;color:inherit" onclick="selectBetGroup('buzzer')">
+          <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-user"></i></div>
+          <div><div class="cat-title">Buzzer</div><div class="cat-desc">Value, Keithbot, BB Horse, BB Golf, American Props, Freeze, Dogs + Horses DogBot, Ninja Golf BFEX, Corners</div></div>
+        </button>
+        <button class="cat" style="--accent:var(--blue);flex:1;min-width:180px;padding:18px 20px;text-align:left;font-family:inherit;color:inherit" onclick="selectBetGroup('assistant')">
+          <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-headset"></i></div>
+          <div><div class="cat-title">Assistant</div><div class="cat-desc">Discord, BB Racing Tracker, BB Bet Tracker, Casino, Offers</div></div>
+        </button>
+      </div>
+    </div>
+    <div id="bet-type-step" style="display:none">
+      <button class="add-btn" style="margin-bottom:14px" onclick="backToBetGroupStep()"><i class="ti ti-arrow-left"></i> Back</button>
+      <div class="lbl" style="margin-bottom:10px">Select bet type</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px" id="bet-type-grid"></div>
+    </div>
   </div>
 
   <div class="card" id="bet-entry-form" style="display:none;margin-top:16px">
@@ -1427,11 +1443,36 @@ const BET_TYPE_FIELDS = {
   'Dogs + Horses':    [{key:'Race',label:'Race',type:'text'},{key:'Book',label:'Book',type:'text'},{key:'Horse/Trap',label:'Horse / trap',type:'text'},{key:'Odds',label:'Odds',type:'number'},{key:'EW?',label:'Each-way?',type:'text'}],
   'Corners':          [{key:'Bet',label:'Bet',type:'text'},{key:'Odds',label:'Odds',type:'number'}],
   'Ninja Golf BFEX':  [{key:'Selection',label:'Selection',type:'text'},{key:'Odds',label:'Odds',type:'number'}],
+  'Casino':           [{key:'Offer',label:'Offer / session',type:'text'},{key:'EV',label:'EV (£)',type:'number'}],
+};
+
+// Maps each picker group to its bet types. `key` matches BET_TYPE_FIELDS and
+// is what gets stored as bet_type; `label` is the friendly display name.
+const BET_TYPE_GROUPS = {
+  buzzer: [
+    {key:'Value', label:'Value'},
+    {key:'Keithbot', label:'Keithbot'},
+    {key:'Dogs + Horses', label:'Dogs + Horses DogBot'},
+    {key:'BB Horse', label:'BB Horses'},
+    {key:'BB Golf', label:'BB Golf'},
+    {key:'American Props', label:'American Props'},
+    {key:'Freeze', label:'Freeze'},
+    {key:'Ninja Golf BFEX', label:'Ninja Golf BFEX'},
+    {key:'Corners', label:'Corners'},
+  ],
+  assistant: [
+    {key:'Discord', label:'Discord'},
+    {key:'BB - RTP', label:'BB Racing Tracker'},
+    {key:'BB - BT', label:'BB Bet Tracker'},
+    {key:'Casino', label:'Casino'},
+    {key:'Offers', label:'Offers'},
+  ],
 };
 
 let LEDGER_ACCOUNTS = [];
 let betEntryLegId = 0;
 let betEntryType = null;
+let betEntryTypeLabel = null;
 
 async function ledgerApi(path, opts) {
   const res = await fetch('/.netlify/functions/ledger?path='+encodeURIComponent(path), opts);
@@ -1439,10 +1480,6 @@ async function ledgerApi(path, opts) {
 }
 
 async function initBetEntry() {
-  const grid = document.getElementById('bet-type-grid');
-  grid.innerHTML = Object.keys(BET_TYPE_FIELDS).map(t =>
-    `<button class="msel-btn" onclick="selectBetType('${t.replace(/'/g,"\\'")}')">${t}</button>`
-  ).join('');
   resetBetEntryForm();
   try {
     const d = await ledgerApi('accounts');
@@ -1450,11 +1487,26 @@ async function initBetEntry() {
   } catch(e) { LEDGER_ACCOUNTS = []; }
 }
 
-function selectBetType(type) {
+function selectBetGroup(group) {
+  const grid = document.getElementById('bet-type-grid');
+  grid.innerHTML = BET_TYPE_GROUPS[group].map(t =>
+    `<button class="msel-btn" onclick="selectBetType('${t.key.replace(/'/g,"\\'")}','${t.label.replace(/'/g,"\\'")}')">${t.label}</button>`
+  ).join('');
+  document.getElementById('bet-group-step').style.display = 'none';
+  document.getElementById('bet-type-step').style.display = 'block';
+}
+
+function backToBetGroupStep() {
+  document.getElementById('bet-type-step').style.display = 'none';
+  document.getElementById('bet-group-step').style.display = 'block';
+}
+
+function selectBetType(type, label) {
   betEntryType = type;
+  betEntryTypeLabel = label || type;
   document.getElementById('bet-entry-type-picker').style.display = 'none';
   document.getElementById('bet-entry-form').style.display = 'block';
-  document.getElementById('bet-entry-type-title').textContent = type;
+  document.getElementById('bet-entry-type-title').textContent = betEntryTypeLabel;
 
   const fieldsWrap = document.getElementById('bet-entry-fields');
   fieldsWrap.innerHTML = BET_TYPE_FIELDS[type].map(f =>
@@ -1504,9 +1556,11 @@ function updateBetEntryTotal() {
 
 function resetBetEntryForm() {
   betEntryType = null;
+  betEntryTypeLabel = null;
   document.getElementById('bet-entry-type-picker').style.display = 'block';
   document.getElementById('bet-entry-form').style.display = 'none';
   document.getElementById('bet-entry-msg').innerHTML = '';
+  backToBetGroupStep();
 }
 
 async function submitBetEntry() {
