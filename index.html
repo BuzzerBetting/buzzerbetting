@@ -424,7 +424,11 @@ input::placeholder{color:var(--text3)}
   <div class="sec-title">Bulk account entry</div>
 
   <div class="card">
-    <div style="margin-bottom:16px"><label class="lbl">Bookie</label><input type="text" id="bulk-bookie" placeholder="e.g. PaddyPower"></div>
+    <div style="margin-bottom:10px"><label class="lbl">Bookie</label><input type="text" id="bulk-bookie" placeholder="e.g. PaddyPower"></div>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;font-size:13px;cursor:pointer">
+      <input type="checkbox" id="bulk-any-autofill" onchange="onBulkAnyAutofillChange()" style="width:16px;height:16px">
+      No specific book — autofill wherever enabled on the Accounts sheet
+    </label>
     <div style="margin-bottom:16px">
       <label class="lbl">Names (one per line)</label>
       <textarea id="bulk-names" rows="6" placeholder="James Parker&#10;Alex Wood" style="width:100%;padding:10px 13px;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit;resize:vertical"></textarea>
@@ -1492,13 +1496,22 @@ function backToLedgerHub(){showTopSec('ledger');}
 
 // ================== LEDGER: BULK ACCOUNT ENTRY ==================
 
+function onBulkAnyAutofillChange() {
+  const checked = document.getElementById('bulk-any-autofill').checked;
+  const bookieInput = document.getElementById('bulk-bookie');
+  bookieInput.disabled = checked;
+  bookieInput.style.opacity = checked ? '0.5' : '1';
+  if (checked) bookieInput.value = '';
+}
+
 async function submitBulkEntry() {
-  const bookie = document.getElementById('bulk-bookie').value.trim();
+  const anyAutofill = document.getElementById('bulk-any-autofill').checked;
+  const bookie = anyAutofill ? '' : document.getElementById('bulk-bookie').value.trim();
   const names = document.getElementById('bulk-names').value.split('\n').map(n=>n.trim()).filter(n=>n);
   const resultsEl = document.getElementById('bulk-entry-results');
   const btn = document.getElementById('bulk-submit-btn');
 
-  if (!bookie) { resultsEl.innerHTML = '<div style="color:var(--red);font-size:13px">Enter a bookie.</div>'; return; }
+  if (!anyAutofill && !bookie) { resultsEl.innerHTML = '<div style="color:var(--red);font-size:13px">Enter a bookie, or tick "no specific book".</div>'; return; }
   if (!names.length) { resultsEl.innerHTML = '<div style="color:var(--red);font-size:13px">Enter at least one name.</div>'; return; }
 
   btn.disabled = true; btn.textContent = 'Submitting…';
@@ -1509,7 +1522,7 @@ async function submitBulkEntry() {
     const res = await fetch('/.netlify/functions/accounts-sheet', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ bookie, names })
+      body: JSON.stringify({ bookie, anyAutofill, names })
     });
     sheetData = await res.json();
   } catch (e) {
@@ -1525,11 +1538,13 @@ async function submitBulkEntry() {
   }
 
   // Sheet write done — now mirror each success into the Ledger accounts table.
-  // These are two separate systems, so each row's two steps are reported independently.
+  // Each result carries its own bookie (a single name can land in several columns
+  // when "no specific book" spreads it across every autofill-enabled bookie), and these
+  // are two separate systems, so each row's two steps are reported independently.
   const rows = [];
   for (const r of sheetData.results) {
     if (!r.ok) {
-      rows.push({ name: r.name, sheet: false, sheetMsg: r.error, ledger: null });
+      rows.push({ name: r.name, bookie: r.bookie, sheet: false, sheetMsg: r.error, ledger: null });
       continue;
     }
     let ledgerOk = false, ledgerMsg = '';
@@ -1537,24 +1552,24 @@ async function submitBulkEntry() {
       const ld = await ledgerApi('accounts', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ profile: r.profile, bookie, status: 'untested' })
+        body: JSON.stringify({ profile: r.profile, bookie: r.bookie, status: 'untested' })
       });
       ledgerOk = !!ld.ok;
       ledgerMsg = ld.ok ? '' : (ld.error || 'Ledger write failed');
     } catch (e) {
       ledgerMsg = 'Network error reaching Ledger';
     }
-    rows.push({ name: r.name, profile: r.profile, row: r.row, sheet: true, ledger: ledgerOk, ledgerMsg });
+    rows.push({ name: r.name, bookie: r.bookie, profile: r.profile, row: r.row, sheet: true, ledger: ledgerOk, ledgerMsg });
   }
 
   resultsEl.innerHTML = rows.map(r => {
     if (!r.sheet) {
-      return `<div style="padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px"><span style="color:var(--red)"><i class="ti ti-x"></i> ${r.name}</span> — ${r.sheetMsg}</div>`;
+      return `<div style="padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px"><span style="color:var(--red)"><i class="ti ti-x"></i> ${r.name} — ${r.bookie}</span> — ${r.sheetMsg}</div>`;
     }
     const ledgerBit = r.ledger
       ? `<span style="color:var(--green)">Ledger record created</span>`
       : `<span style="color:var(--amber)">Sheet updated, but Ledger record failed (${r.ledgerMsg}) — add it manually via Accounts once built</span>`;
-    return `<div style="padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px"><span style="color:var(--green)"><i class="ti ti-check"></i> ${r.name}</span> → ${r.profile} (row ${r.row}) — ${ledgerBit}</div>`;
+    return `<div style="padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px"><span style="color:var(--green)"><i class="ti ti-check"></i> ${r.name} — ${r.bookie}</span> → ${r.profile} (row ${r.row}) — ${ledgerBit}</div>`;
   }).join('');
 
   btn.disabled = false; btn.textContent = 'Submit';
