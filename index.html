@@ -422,7 +422,19 @@ input::placeholder{color:var(--text3)}
 <div id="view-ledger-bulk-import" class="sec">
   <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
   <div class="sec-title">Bulk account entry</div>
-  <div class="card"><div class="ph"><div class="ph-ico"><i class="ti ti-table-import"></i></div><div class="ph-t">Coming soon</div><div class="ph-d">Paste new identity/card details in bulk — auto-sorted into the account sheet, flagging which still need accounts opened.</div></div></div>
+
+  <div class="card">
+    <div style="margin-bottom:16px"><label class="lbl">Bookie</label><input type="text" id="bulk-bookie" placeholder="e.g. PaddyPower"></div>
+    <div style="margin-bottom:16px">
+      <label class="lbl">Names (one per line)</label>
+      <textarea id="bulk-names" rows="6" placeholder="James Parker&#10;Alex Wood" style="width:100%;padding:10px 13px;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit;resize:vertical"></textarea>
+    </div>
+    <div style="font-size:12.5px;color:var(--text2);margin-bottom:16px">
+      Each name fills the next blank slot in that bookie's column on the Accounts sheet, top to bottom, and gets marked orange (untested). A matching account record is also created here in Ledger so it shows up once Accounts is built.
+    </div>
+    <button onclick="submitBulkEntry()" id="bulk-submit-btn" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:11px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Submit</button>
+    <div id="bulk-entry-results" style="margin-top:18px"></div>
+  </div>
 </div>
 
 <!-- PROFIT BREAKDOWN -->
@@ -1477,6 +1489,78 @@ function backToBetsMenu(){showTopSec('bets');}
 function backToCalcMenu(){showTopSec('calc');}
 function showLedgerSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-ledger-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='bet-entry')initBetEntry();}
 function backToLedgerHub(){showTopSec('ledger');}
+
+// ================== LEDGER: BULK ACCOUNT ENTRY ==================
+
+async function submitBulkEntry() {
+  const bookie = document.getElementById('bulk-bookie').value.trim();
+  const names = document.getElementById('bulk-names').value.split('\n').map(n=>n.trim()).filter(n=>n);
+  const resultsEl = document.getElementById('bulk-entry-results');
+  const btn = document.getElementById('bulk-submit-btn');
+
+  if (!bookie) { resultsEl.innerHTML = '<div style="color:var(--red);font-size:13px">Enter a bookie.</div>'; return; }
+  if (!names.length) { resultsEl.innerHTML = '<div style="color:var(--red);font-size:13px">Enter at least one name.</div>'; return; }
+
+  btn.disabled = true; btn.textContent = 'Submitting…';
+  resultsEl.innerHTML = '<div style="font-size:13px;color:var(--text2)">Writing to the Accounts sheet…</div>';
+
+  let sheetData;
+  try {
+    const res = await fetch('/.netlify/functions/accounts-sheet', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ bookie, names })
+    });
+    sheetData = await res.json();
+  } catch (e) {
+    resultsEl.innerHTML = '<div style="color:var(--red);font-size:13px">Network error — could not reach the Accounts sheet.</div>';
+    btn.disabled = false; btn.textContent = 'Submit';
+    return;
+  }
+
+  if (!sheetData.ok) {
+    resultsEl.innerHTML = `<div style="color:var(--red);font-size:13px">${sheetData.error || 'Something went wrong writing to the sheet.'}</div>`;
+    btn.disabled = false; btn.textContent = 'Submit';
+    return;
+  }
+
+  // Sheet write done — now mirror each success into the Ledger accounts table.
+  // These are two separate systems, so each row's two steps are reported independently.
+  const rows = [];
+  for (const r of sheetData.results) {
+    if (!r.ok) {
+      rows.push({ name: r.name, sheet: false, sheetMsg: r.error, ledger: null });
+      continue;
+    }
+    let ledgerOk = false, ledgerMsg = '';
+    try {
+      const ld = await ledgerApi('accounts', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ profile: r.profile, bookie, status: 'untested' })
+      });
+      ledgerOk = !!ld.ok;
+      ledgerMsg = ld.ok ? '' : (ld.error || 'Ledger write failed');
+    } catch (e) {
+      ledgerMsg = 'Network error reaching Ledger';
+    }
+    rows.push({ name: r.name, profile: r.profile, row: r.row, sheet: true, ledger: ledgerOk, ledgerMsg });
+  }
+
+  resultsEl.innerHTML = rows.map(r => {
+    if (!r.sheet) {
+      return `<div style="padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px"><span style="color:var(--red)"><i class="ti ti-x"></i> ${r.name}</span> — ${r.sheetMsg}</div>`;
+    }
+    const ledgerBit = r.ledger
+      ? `<span style="color:var(--green)">Ledger record created</span>`
+      : `<span style="color:var(--amber)">Sheet updated, but Ledger record failed (${r.ledgerMsg}) — add it manually via Accounts once built</span>`;
+    return `<div style="padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px"><span style="color:var(--green)"><i class="ti ti-check"></i> ${r.name}</span> → ${r.profile} (row ${r.row}) — ${ledgerBit}</div>`;
+  }).join('');
+
+  btn.disabled = false; btn.textContent = 'Submit';
+  document.getElementById('bulk-names').value = '';
+}
+
 
 // ================== LEDGER: BET ENTRY ==================
 //
