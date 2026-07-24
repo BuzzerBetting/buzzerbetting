@@ -1,88 +1,68 @@
-/*** CONFIG ***/
-const SHEET_NAME = 'Accounts';   // tab name — change if yours differs
-const AUTOFILL_ROW = 1;          // row of tickboxes: TRUE = this bookie participates in "no specific book" autofill
-const HEADER_ROW = 2;            // row containing bookie names (col A = "Account", B.. = bookies)
-const FIRST_DATA_ROW = 3;        // first row containing a profile name
+// netlify/functions/accounts-sheet.js
+//
+// Proxies Bulk Account Entry requests to the dedicated Accounts Google Sheet
+// Apps Script, injecting the ACCOUNTS_API_KEY secret server-side so it never
+// reaches the browser.
+//
+// Set ACCOUNTS_API_KEY as an environment variable in Netlify's site settings
+// (Site configuration → Environment variables) — it must match the Script
+// Property of the same name set on the Accounts Apps Script.
+//
+// Frontend usage:
+//   fetch('/.netlify/functions/accounts-sheet', {
+//     method: 'POST',
+//     headers: {'Content-Type':'application/json'},
+//     body: JSON.stringify({ bookie: 'PaddyPower', names: ['James Parker', 'Alex Wood'] })
+//   })
 
-const COLOR_UNTESTED = '#fce8b2'; // orange — matches your existing "In Progress" convention
+const https = require('https');
 
-/*** SECURITY ***
- * Set the secret once via: Project Settings (gear icon) -> Script Properties -> Add property
- *   Property: ACCOUNTS_API_KEY
- *   Value:    <a long random string, share only with the Netlify function>
- * Every request must include a matching "secret" field in the POST body.
- */
-function getSecret_() {
-  return PropertiesService.getScriptProperties().getProperty('ACCOUNTS_API_KEY');
-}
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Content-Type': 'application/json'
+};
 
-function doPost(e) {
+const ACCOUNTS_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzQN4KVRPjYn1om8tprGzNMB-RTTSKk0SuhChBBlK1fTvCxGyxnsgeO8PnicCXxP48BNw/exec';
+
+exports.handler = async (event) => {
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
+  if (event.httpMethod !== 'POST') return { statusCode: 405, headers: CORS, body: JSON.stringify({ ok:false, error:'POST only' }) };
+
+  if (!process.env.ACCOUNTS_API_KEY) {
+    return { statusCode: 500, headers: CORS, body: JSON.stringify({ ok: false, error: 'ACCOUNTS_API_KEY not configured in Netlify env vars' }) };
+  }
+
+  let payload;
   try {
-    const body = JSON.parse(e.postData.contents || '{}');
-    const expected = getSecret_();
-    if (!expected) return respond({ ok: false, error: 'ACCOUNTS_API_KEY not set in Script Properties' });
-    if (body.secret !== expected) return respond({ ok: false, error: 'Unauthorized' });
+    payload = JSON.parse(event.body || '{}');
+  } catch (e) {
+    return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok:false, error:'Invalid JSON body' }) };
+  }
+  payload.secret = process.env.ACCOUNTS_API_KEY; // injected server-side, never sent by the browser
 
-    const bookie = (body.bookie || '').trim();
-    const anyAutofill = !!body.anyAutofill;
-    const names = Array.isArray(body.names) ? body.names.map(n => String(n).trim()).filter(n => n) : [];
-    if (!names.length) return respond({ ok: false, error: 'at least one name is required' });
-    if (!bookie && !anyAutofill) return respond({ ok: false, error: 'either specify a bookie, or tick "no specific book"' });
+  return new Promise((resolve) => {
+    const bodyStr = JSON.stringify(payload);
 
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
-    if (!sheet) return respond({ ok: false, error: 'Sheet "' + SHEET_NAME + '" not found' });
-
-    const lastCol = sheet.getLastColumn();
-    const headers = sheet.getRange(HEADER_ROW, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
-    const autofillFlags = sheet.getRange(AUTOFILL_ROW, 1, 1, lastCol).getValues()[0];
-
-    let targetCols; // array of { col, bookieName }
-    if (bookie) {
-      // A specific bookie was named — this always wins, regardless of its autofill tickbox state.
-      const col = headers.findIndex(h => h.toLowerCase() === bookie.toLowerCase()) + 1;
-      if (col < 1) return respond({ ok: false, error: 'Bookie column "' + bookie + '" not found on the Accounts sheet' });
-      targetCols = [{ col: col, bookieName: headers[col-1] }];
-    } else {
-      // "No specific book" — every bookie column whose tickbox is TRUE.
-      targetCols = [];
-      for (let c = 2; c <= lastCol; c++) { // column A is the profile column, bookies start at B
-        if (autofillFlags[c-1] === true && headers[c-1]) targetCols.push({ col: c, bookieName: headers[c-1] });
-      }
-      if (!targetCols.length) return respond({ ok: false, error: 'No bookie columns are ticked for autofill' });
+    function doRequest(url, remainingRedirects) {
+      const req = https.request(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(bodyStr) }
+      }, (res) => {
+        if ([301,302,303,307,308].includes(res.statusCode) && res.headers.location && remainingRedirects > 0) {
+          res.resume(); // discard this response body, follow the redirect instead
+          return doRequest(res.headers.location, remainingRedirects - 1);
+        }
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => resolve({ statusCode: res.statusCode || 200, headers: CORS, body: data }));
+      });
+      req.on('error', (err) => resolve({ statusCode: 200, headers: CORS, body: JSON.stringify({ ok:false, error: err.message }) }));
+      req.write(bodyStr);
+      req.end();
     }
 
-    const lastRow = sheet.getLastRow();
-    const profileCol = 1;
-    const results = [];
-
-    targetCols.forEach(({ col, bookieName }) => {
-      let searchRow = FIRST_DATA_ROW;
-      names.forEach(name => {
-        let filled = false;
-        while (searchRow <= lastRow) {
-          const profileVal = sheet.getRange(searchRow, profileCol).getValue();
-          const bookieVal = sheet.getRange(searchRow, col).getValue();
-          if (profileVal && (!bookieVal || String(bookieVal).trim() === '')) {
-            sheet.getRange(searchRow, col).setValue(name).setBackground(COLOR_UNTESTED);
-            results.push({ ok: true, name: name, bookie: bookieName, profile: String(profileVal).trim(), row: searchRow });
-            filled = true;
-            searchRow++;
-            break;
-          }
-          searchRow++;
-        }
-        if (!filled) {
-          results.push({ ok: false, name: name, bookie: bookieName, error: 'No blank ' + bookieName + ' slots left' });
-        }
-      });
-    });
-
-    return respond({ ok: true, results: results });
-  } catch (err) {
-    return respond({ ok: false, error: err.toString() });
-  }
-}
-
-function respond(data) {
-  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
-}
+    doRequest(ACCOUNTS_SHEET_URL, 3);
+  });
+};
