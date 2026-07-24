@@ -30,7 +30,8 @@ const DO_HOST = '178.128.40.248';
 const DO_PORT = 3000;
 
 exports.handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
+  const method = event.httpMethod || (event.requestContext && event.requestContext.http && event.requestContext.http.method) || 'GET';
+  if (method === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
 
   const subPath = (event.queryStringParameters && event.queryStringParameters.path) || '';
   if (!subPath) {
@@ -46,7 +47,7 @@ exports.handler = async (event) => {
       hostname: DO_HOST,
       port: DO_PORT,
       path: '/api/ledger/' + subPath,
-      method: event.httpMethod,
+      method: method,
       headers: {
         'Content-Type': 'application/json',
         'x-ledger-key': process.env.LEDGER_API_KEY,
