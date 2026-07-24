@@ -1668,16 +1668,11 @@ async function submitBulkEntry() {
   btn.disabled = true; btn.textContent = 'Submitting…';
   resultsEl.innerHTML = '<div style="font-size:13px;color:var(--text2)">Writing to the Accounts sheet…</div>';
 
-  const payload = anyAutofill ? { bookies, names } : { bookie, names };
+  const payload = anyAutofill ? { action:'fill_account', bookies, names } : { action:'fill_account', bookie, names };
 
   let sheetData;
   try {
-    const res = await fetch('/.netlify/functions/accounts-sheet?_='+Date.now(), {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(payload)
-    });
-    sheetData = await res.json();
+    sheetData = await accountsSheetApi(payload);
   } catch (e) {
     resultsEl.innerHTML = '<div style="color:var(--red);font-size:13px">Network error — could not reach the Accounts sheet.</div>';
     btn.disabled = false; btn.textContent = 'Submit';
@@ -2315,11 +2310,19 @@ let PENDING_ACCOUNT_CELL = null; // { profile, bookie } when creating a brand ne
 
 function acctKey(profile, bookie) { return profile + '|' + bookie; }
 
+// Sheet writes now go through the Ledger backend (direct Google Sheets API, no Apps
+// Script) — same interface as before so every caller (Bulk Entry, deposit/withdraw,
+// blank-cell create, withdrawal confirm) needed zero changes.
+const SHEET_ACTION_PATHS = {
+  fill_account: 'sheet/fill-account',
+  add_deposit: 'sheet/add-deposit',
+  add_withdrawal: 'sheet/add-withdrawal',
+  confirm_withdrawal: 'sheet/confirm-withdrawal',
+};
 async function accountsSheetApi(payload) {
-  const res = await fetch('/.netlify/functions/accounts-sheet?_='+Date.now(), {
-    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
-  });
-  return res.json();
+  const { action, ...body } = payload;
+  const path = SHEET_ACTION_PATHS[action] || 'sheet/fill-account';
+  return ledgerApi(path, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
 }
 
 // Keeps the site's bookie-autofill registry in sync with the canonical bookie list,
