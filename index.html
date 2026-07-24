@@ -500,7 +500,7 @@ input::placeholder{color:var(--text3)}
     <div style="font-size:12.5px;color:var(--text2);margin-bottom:12px">
       Managed here on the site only — the Accounts sheet itself is never read, just written to. Toggle a bookie on to include it in "no specific book" fills below.
     </div>
-    <div id="bookie-settings-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+    <div id="bookie-settings-list" style="display:flex;flex-direction:column;gap:2px;margin-bottom:12px;max-height:220px;overflow-y:auto;border:0.5px solid var(--border);border-radius:var(--radius);padding:4px 8px"></div>
     <div style="display:flex;gap:8px">
       <input type="text" id="bookie-settings-new" placeholder="Add a bookie…" style="flex:1">
       <button class="add-btn" onclick="addBookieSetting()"><i class="ti ti-plus"></i> Add</button>
@@ -1599,6 +1599,12 @@ async function loadBookieSettings() {
     const d = await ledgerApi('bookie-settings');
     BOOKIE_SETTINGS = (d.ok && d.bookies) ? d.bookies : [];
   } catch (e) { BOOKIE_SETTINGS = []; }
+  // Match the Accounts page's column order rather than the backend's alphabetical order;
+  // anything not in BOOKIES_LIST (e.g. a manually-added extra) falls to the end.
+  BOOKIE_SETTINGS.sort((a, b) => {
+    const ia = BOOKIES_LIST.indexOf(a.bookie); const ib = BOOKIES_LIST.indexOf(b.bookie);
+    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+  });
   renderBookieSettingsList();
 }
 
