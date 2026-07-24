@@ -21,7 +21,8 @@ const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
-  'Content-Type': 'application/json'
+  'Content-Type': 'application/json',
+  'Cache-Control': 'no-store'
 };
 
 const ACCOUNTS_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzQN4KVRPjYn1om8tprGzNMB-RTTSKk0SuhChBBlK1fTvCxGyxnsgeO8PnicCXxP48BNw/exec';
