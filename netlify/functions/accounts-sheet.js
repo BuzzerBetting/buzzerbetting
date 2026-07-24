@@ -28,9 +28,10 @@ const CORS = {
 const ACCOUNTS_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzQN4KVRPjYn1om8tprGzNMB-RTTSKk0SuhChBBlK1fTvCxGyxnsgeO8PnicCXxP48BNw/exec';
 
 exports.handler = async (event) => {
-  console.log('DIAGNOSTIC: httpMethod =', JSON.stringify(event.httpMethod), '| requestContext.http.method =', JSON.stringify(event.requestContext && event.requestContext.http && event.requestContext.http.method));
-  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
-  if (event.httpMethod !== 'POST') return { statusCode: 405, headers: CORS, body: JSON.stringify({ ok:false, error:'POST only' }) };
+  const method = event.httpMethod || (event.requestContext && event.requestContext.http && event.requestContext.http.method);
+  console.log('DIAGNOSTIC: resolved method =', JSON.stringify(method), '| httpMethod =', JSON.stringify(event.httpMethod), '| requestContext.http.method =', JSON.stringify(event.requestContext && event.requestContext.http && event.requestContext.http.method));
+  if (method === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
+  if (method !== 'POST') return { statusCode: 405, headers: CORS, body: JSON.stringify({ ok:false, error:'POST only', receivedMethod: method }) };
 
   if (!process.env.ACCOUNTS_API_KEY) {
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ ok: false, error: 'ACCOUNTS_API_KEY not configured in Netlify env vars' }) };
