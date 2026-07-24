@@ -431,9 +431,17 @@ input::placeholder{color:var(--text3)}
 <div id="view-ledger-withdrawals" class="sec">
   <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
   <div class="sec-title">Withdrawals</div>
-  <div class="card">
-    <div style="font-size:12.5px;color:var(--text2);margin-bottom:14px">Pending withdrawals — tick once confirmed as landed in the bank. This moves the row from Pending to Processed on the sheet.</div>
-    <div id="withdrawals-pending-list">Loading…</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">
+    <div class="card">
+      <div class="sec-title" style="margin:0 0 4px;font-size:15px">Pending</div>
+      <div style="font-size:12.5px;color:var(--text2);margin-bottom:14px">Tick once confirmed as landed in the bank — moves the row to Processed, here and on the sheet.</div>
+      <div id="withdrawals-pending-list">Loading…</div>
+    </div>
+    <div class="card">
+      <div class="sec-title" style="margin:0 0 4px;font-size:15px">Processed</div>
+      <div style="font-size:12.5px;color:var(--text2);margin-bottom:14px">Confirmed withdrawals.</div>
+      <div id="withdrawals-processed-list">Loading…</div>
+    </div>
   </div>
 </div>
 
@@ -465,9 +473,21 @@ input::placeholder{color:var(--text3)}
     <div class="lbl" style="margin-bottom:8px">Status</div>
     <div id="account-modal-status-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:18px"></div>
 
-    <div style="padding:12px 14px;background:var(--surface2);border-radius:var(--radius);margin-bottom:18px">
+    <div style="padding:12px 14px;background:var(--surface2);border-radius:var(--radius);margin-bottom:8px">
       <div class="lbl" style="margin-bottom:3px">Live balance</div>
       <div style="font-size:20px;font-weight:600" id="account-modal-balance">—</div>
+    </div>
+
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:18px;font-size:12.5px;color:var(--text2);cursor:pointer">
+      <input type="checkbox" id="account-balance-override-toggle" onchange="onBalanceOverrideToggle()" style="width:15px;height:15px">
+      Manual override
+    </label>
+    <div id="account-balance-override-box" style="display:none;margin:-10px 0 18px;padding:12px 14px;background:var(--surface2);border-radius:var(--radius)">
+      <label class="lbl">Set live balance to £</label>
+      <div style="display:flex;gap:8px">
+        <input type="number" id="account-balance-override-amount" step="0.01">
+        <button onclick="submitBalanceOverride()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:0 16px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Save</button>
+      </div>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">
@@ -496,7 +516,7 @@ input::placeholder{color:var(--text3)}
   <div class="sec-title">Bulk account entry</div>
 
   <div class="card" style="margin-bottom:16px">
-    <div class="lbl" style="margin-bottom:10px">Autofill-enabled bookies</div>
+    <div class="sec-title" style="margin:0 0 4px;font-size:15px">Add a new bookie</div>
     <div style="font-size:12.5px;color:var(--text2);margin-bottom:12px">
       Managed here on the site only — the Accounts sheet itself is never read, just written to. Toggle a bookie on to include it in "no specific book" fills below.
     </div>
@@ -508,6 +528,7 @@ input::placeholder{color:var(--text3)}
   </div>
 
   <div class="card">
+    <div class="sec-title" style="margin:0 0 14px;font-size:15px">New Account Entry</div>
     <div style="margin-bottom:10px"><label class="lbl">Bookie</label><input type="text" id="bulk-bookie" placeholder="e.g. PaddyPower"></div>
     <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;font-size:13px;cursor:pointer">
       <input type="checkbox" id="bulk-any-autofill" onchange="onBulkAnyAutofillChange()" style="width:16px;height:16px">
@@ -2479,6 +2500,8 @@ function openAccountModal(accountId) {
   }).join('');
 
   document.getElementById('account-money-prompt').style.display = 'none';
+  document.getElementById('account-balance-override-toggle').checked = false;
+  document.getElementById('account-balance-override-box').style.display = 'none';
   document.getElementById('account-modal-msg').innerHTML = '';
   document.getElementById('account-modal-overlay').style.display = 'flex';
 }
@@ -2499,6 +2522,33 @@ async function setAccountStatus(status) {
     if (idx>-1) ALL_ACCOUNTS[idx].status = status;
     openAccountModal(ACTIVE_ACCOUNT.id); // refresh the modal's status list highlighting
     if (document.getElementById('view-ledger-accounts').style.display !== 'none') renderAccountsGrid();
+  } catch (e) { msgEl.innerHTML = `<span style="color:var(--red)">Network error</span>`; }
+}
+
+function onBalanceOverrideToggle() {
+  const checked = document.getElementById('account-balance-override-toggle').checked;
+  const box = document.getElementById('account-balance-override-box');
+  box.style.display = checked ? 'block' : 'none';
+  if (checked && ACTIVE_ACCOUNT) document.getElementById('account-balance-override-amount').value = ACTIVE_ACCOUNT.balance || 0;
+}
+
+async function submitBalanceOverride() {
+  if (!ACTIVE_ACCOUNT) return;
+  const amount = parseFloat(document.getElementById('account-balance-override-amount').value);
+  const msgEl = document.getElementById('account-modal-msg');
+  if (isNaN(amount)) { msgEl.innerHTML = '<span style="color:var(--red)">Enter a valid amount.</span>'; return; }
+  try {
+    const d = await ledgerApi('accounts/'+ACTIVE_ACCOUNT.id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ balance: amount }) });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to set balance'}</span>`; return; }
+    ACTIVE_ACCOUNT.balance = amount;
+    const idx = ALL_ACCOUNTS.findIndex(a=>a.id===ACTIVE_ACCOUNT.id);
+    if (idx>-1) ALL_ACCOUNTS[idx].balance = amount;
+    document.getElementById('account-modal-balance').textContent = '£' + amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+    document.getElementById('account-balance-override-toggle').checked = false;
+    document.getElementById('account-balance-override-box').style.display = 'none';
+    msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Balance updated.</span>';
+    if (document.getElementById('view-ledger-accounts').style.display !== 'none') renderAccountsGrid();
+    if (document.getElementById('view-ledger-balances').style.display !== 'none') renderBalancesGrid();
   } catch (e) { msgEl.innerHTML = `<span style="color:var(--red)">Network error</span>`; }
 }
 
@@ -2556,8 +2606,8 @@ async function submitMoneyPrompt() {
     const sheetAction = ACTIVE_MONEY_TYPE === 'deposit' ? 'add_deposit' : 'add_withdrawal';
     const sd = await accountsSheetApi({ action: sheetAction, bookie: acc.bookie, profile: acc.profile, accountName, amount });
 
-    if (ACTIVE_MONEY_TYPE === 'withdraw' && sd.ok && sd.row) {
-      await ledgerApi(`withdrawals/${ld.id}/sheet-row`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sheet_row: sd.row }) });
+    if (sd.ok && sd.row) {
+      await ledgerApi(`${ACTIVE_MONEY_TYPE === 'deposit' ? 'deposits' : 'withdrawals'}/${ld.id}/sheet-row`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sheet_row: sd.row }) });
     }
 
     if (sd.ok) {
@@ -2583,27 +2633,55 @@ async function initDepositsLog() {
     const rows = (d.ok && d.deposits) ? d.deposits : [];
     if (!rows.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No deposits logged yet.</div>'; return; }
     el.innerHTML = rows.map(r => `
-      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px">
-        <div>${r.profile} — ${r.bookie}</div>
-        <div style="color:var(--green);font-weight:600">+£${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+        <div>${r.account_name || r.profile} — ${r.bookie} <span style="color:var(--green);font-weight:600;margin-left:6px">+£${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>
+        <button class="rm-btn" onclick="deleteDeposit(${r.id})" title="Delete">×</button>
       </div>`).join('');
   } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load deposits.</div>'; }
 }
 
-// ---- WITHDRAWALS: PENDING CONFIRM QUEUE ----
+async function deleteDeposit(id) {
+  if (!confirm('Delete this deposit? This removes it from Ledger and the Deposits sheet.')) return;
+  try {
+    const d = await ledgerApi('deposits/'+id, { method:'DELETE' });
+    if (!d.ok) { alert('Failed to delete: ' + (d.error||'unknown error')); return; }
+    if (!d.sheetOk) alert('Deleted from Ledger, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
+  } catch (e) { alert('Network error deleting deposit.'); return; }
+  initDepositsLog();
+}
+
+// ---- WITHDRAWALS: PENDING / PROCESSED ----
 async function initWithdrawalsPending() {
-  const el = document.getElementById('withdrawals-pending-list');
+  loadWithdrawalsList('pending', 'withdrawals-pending-list', renderPendingWithdrawalRow);
+  loadWithdrawalsList('confirmed', 'withdrawals-processed-list', renderProcessedWithdrawalRow);
+}
+
+async function loadWithdrawalsList(status, elId, rowRenderer) {
+  const el = document.getElementById(elId);
   el.innerHTML = 'Loading…';
   try {
-    const d = await ledgerApi('withdrawals?status=pending');
+    const d = await ledgerApi('withdrawals?status='+status);
     const rows = (d.ok && d.withdrawals) ? d.withdrawals : [];
-    if (!rows.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No pending withdrawals.</div>'; return; }
-    el.innerHTML = rows.map(r => `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:0.5px solid var(--border);font-size:13px">
-        <div>${r.profile} — ${r.bookie} <span style="color:var(--text3)">£${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>${!r.sheet_row?' <span style="color:var(--amber)">(not linked to sheet)</span>':''}</div>
-        <button class="add-btn" onclick="confirmWithdrawal(${r.id}, ${r.sheet_row||'null'})"><i class="ti ti-check"></i> Confirm</button>
-      </div>`).join('');
+    if (!rows.length) { el.innerHTML = `<div style="color:var(--text3);font-size:13px">No ${status} withdrawals.</div>`; return; }
+    el.innerHTML = rows.map(rowRenderer).join('');
   } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load withdrawals.</div>'; }
+}
+
+function renderPendingWithdrawalRow(r) {
+  return `<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+    <div>${r.account_name || r.profile} — ${r.bookie} <span style="color:var(--text3)">£${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>${!r.sheet_row?' <span style="color:var(--amber)">(not linked)</span>':''}</div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <button class="add-btn" onclick="confirmWithdrawal(${r.id}, ${r.sheet_row||'null'})"><i class="ti ti-check"></i> Confirm</button>
+      <button class="rm-btn" onclick="deleteWithdrawal(${r.id})" title="Delete">×</button>
+    </div>
+  </div>`;
+}
+
+function renderProcessedWithdrawalRow(r) {
+  return `<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+    <div>${r.account_name || r.profile} — ${r.bookie} <span style="color:var(--text3)">£${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>
+    <button class="rm-btn" onclick="deleteWithdrawal(${r.id})" title="Delete">×</button>
+  </div>`;
 }
 
 async function confirmWithdrawal(id, sheetRow) {
@@ -2612,11 +2690,24 @@ async function confirmWithdrawal(id, sheetRow) {
     if (!ld.ok) { alert('Failed to confirm: ' + (ld.error||'unknown error')); return; }
     if (sheetRow) {
       const sd = await accountsSheetApi({ action:'confirm_withdrawal', row: sheetRow });
+      if (sd.ok && sd.processedRow) {
+        await ledgerApi(`withdrawals/${id}/processed-sheet-row`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ processed_sheet_row: sd.processedRow }) });
+      }
       if (!sd.ok) alert('Confirmed in Ledger, but moving the sheet row failed (' + (sd.error||'unknown error') + ') — move it manually.');
     } else {
       alert('Confirmed in Ledger. This withdrawal was never linked to a sheet row, so nothing to move there.');
     }
   } catch (e) { alert('Network error confirming withdrawal.'); return; }
+  initWithdrawalsPending();
+}
+
+async function deleteWithdrawal(id) {
+  if (!confirm('Delete this withdrawal? This removes it from Ledger and its sheet row (Pending or Processed).')) return;
+  try {
+    const d = await ledgerApi('withdrawals/'+id, { method:'DELETE' });
+    if (!d.ok) { alert('Failed to delete: ' + (d.error||'unknown error')); return; }
+    if (!d.sheetOk) alert('Deleted from Ledger, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
+  } catch (e) { alert('Network error deleting withdrawal.'); return; }
   initWithdrawalsPending();
 }
 function showCalc(name){document.getElementById('calc-hub').style.display='none';document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='dutch')initDutch();if(name==='arb')initArb();if(name==='gsm')initGSM();if(name==='kelly')initKelly();if(name==='kellycorr')initKellyCorr();}
