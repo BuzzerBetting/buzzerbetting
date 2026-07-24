@@ -2319,6 +2319,7 @@ function acctKey(profile, bookie) { return profile + '|' + bookie; }
 // blank-cell create, withdrawal confirm) needed zero changes.
 const SHEET_ACTION_PATHS = {
   fill_account: 'sheet/fill-account',
+  set_cell: 'sheet/set-cell',
   add_deposit: 'sheet/add-deposit',
   add_withdrawal: 'sheet/add-withdrawal',
   confirm_withdrawal: 'sheet/confirm-withdrawal',
@@ -2436,13 +2437,14 @@ function openBlankCell(profile, bookie) {
 }
 
 async function createAccountFromCell(profile, bookie, name) {
-  // Mirrors the Bulk Entry flow for a single name, so the Sheet and Ledger never diverge
-  // depending on which screen was used to create the account.
+  // Uses set_cell (exact profile+bookie target), NOT fill_account (which fills whatever the
+  // uppermost blank slot happens to be) — clicking a specific cell must never disturb which
+  // slot Bulk Entry's "next available" logic would pick for other names.
   let sheetOk = false, sheetMsg = '';
   try {
-    const sd = await accountsSheetApi({ action:'fill_account', bookie, names:[name] });
-    if (sd.ok && sd.results && sd.results[0] && sd.results[0].ok) sheetOk = true;
-    else sheetMsg = (sd.results && sd.results[0] && sd.results[0].error) || sd.error || 'Sheet write failed';
+    const sd = await accountsSheetApi({ action:'set_cell', bookie, profile, name });
+    if (sd.ok) sheetOk = true;
+    else sheetMsg = sd.error || 'Sheet write failed';
   } catch (e) { sheetMsg = 'Network error reaching the Accounts sheet'; }
 
   try {
@@ -2502,17 +2504,22 @@ async function deleteAccount() {
 
   const msgEl = document.getElementById('account-modal-msg');
   msgEl.innerHTML = '<span style="color:var(--text2)">Deleting…</span>';
+  const targetId = ACTIVE_ACCOUNT.id;
+  const targetProfile = ACTIVE_ACCOUNT.profile;
+  const targetBookie = ACTIVE_ACCOUNT.bookie;
   try {
-    const d = await ledgerApi('accounts/'+ACTIVE_ACCOUNT.id, { method:'DELETE' });
+    const d = await ledgerApi('accounts/'+targetId, { method:'DELETE' });
     if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to delete'}</span>`; return; }
+
+    ALL_ACCOUNTS = ALL_ACCOUNTS.filter(a => a.id !== targetId);
+    delete ACCOUNTS_BY_KEY[acctKey(targetProfile, targetBookie)];
+    closeAccountModal();
+    if (document.getElementById('view-ledger-accounts').style.display !== 'none') renderAccountsGrid();
+    if (document.getElementById('view-ledger-balances').style.display !== 'none') renderBalancesGrid();
+
     if (!d.sheetOk) {
       alert(`Deleted from Ledger, but clearing the sheet cell failed (${d.sheetError||'unknown error'}) — clear it there manually.`);
     }
-    closeAccountModal();
-    ALL_ACCOUNTS = ALL_ACCOUNTS.filter(a => a.id !== ACTIVE_ACCOUNT.id);
-    delete ACCOUNTS_BY_KEY[acctKey(ACTIVE_ACCOUNT.profile, ACTIVE_ACCOUNT.bookie)];
-    if (document.getElementById('view-ledger-accounts').style.display !== 'none') renderAccountsGrid();
-    if (document.getElementById('view-ledger-balances').style.display !== 'none') renderBalancesGrid();
   } catch (e) { msgEl.innerHTML = `<span style="color:var(--red)">Network error</span>`; }
 }
 
