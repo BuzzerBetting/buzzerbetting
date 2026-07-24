@@ -1672,7 +1672,7 @@ async function submitBulkEntry() {
 
   let sheetData;
   try {
-    const res = await fetch('/.netlify/functions/accounts-sheet', {
+    const res = await fetch('/.netlify/functions/accounts-sheet?_='+Date.now(), {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify(payload)
@@ -1848,7 +1848,7 @@ const BETTYPE_COLORS = ['var(--green)','var(--blue)','var(--purple)','var(--ambe
 const NINJA_GOLF_COMMISSION = 0.02;
 
 async function ledgerApi(path, opts) {
-  const res = await fetch('/.netlify/functions/ledger?path='+encodeURIComponent(path), opts);
+  const res = await fetch('/.netlify/functions/ledger?path='+encodeURIComponent(path)+'&_='+Date.now(), opts);
   return res.json();
 }
 
@@ -2316,7 +2316,7 @@ let PENDING_ACCOUNT_CELL = null; // { profile, bookie } when creating a brand ne
 function acctKey(profile, bookie) { return profile + '|' + bookie; }
 
 async function accountsSheetApi(payload) {
-  const res = await fetch('/.netlify/functions/accounts-sheet', {
+  const res = await fetch('/.netlify/functions/accounts-sheet?_='+Date.now(), {
     method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
   });
   return res.json();
