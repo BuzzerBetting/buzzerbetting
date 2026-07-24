@@ -121,6 +121,17 @@ input::placeholder{color:var(--text3)}
 .bettype-btn{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:var(--surface2);border:0.5px solid var(--border);border-left:3px solid var(--c,var(--border));border-radius:var(--radius);padding:13px 15px;font-size:14px;font-weight:500;font-family:inherit;color:var(--text);cursor:pointer;transition:all .15s}
 .bettype-btn:hover{border-color:var(--c,var(--brand));background:var(--surface);transform:translateX(2px)}
 .bettype-btn .dot{width:9px;height:9px;border-radius:50%;background:var(--c,var(--brand));flex-shrink:0}
+.grid-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.ledger-grid-wrap{overflow-x:auto;max-height:70vh;overflow-y:auto}
+.ledger-grid{border-collapse:collapse;font-size:12.5px;white-space:nowrap}
+.ledger-grid th,.ledger-grid td{border:0.5px solid var(--border);padding:0}
+.ledger-grid th{background:var(--surface2);color:var(--text2);font-weight:600;font-size:11.5px;padding:8px 10px;position:sticky;top:0;z-index:2;text-align:left}
+.ledger-grid td.profile-cell,.ledger-grid th.profile-th{position:sticky;left:0;z-index:3;background:var(--surface);font-weight:600;padding:8px 12px;color:var(--text)}
+.ledger-grid th.profile-th{z-index:4;background:var(--surface2)}
+.ledger-grid td.acct-cell{padding:8px 10px;cursor:pointer;transition:filter .12s;min-width:110px}
+.ledger-grid td.acct-cell:hover{filter:brightness(0.94)}
+.ledger-grid td.bal-cell{padding:8px 10px;min-width:90px;text-align:right;font-weight:600}
+@media(prefers-color-scheme:dark){.ledger-grid td.acct-cell:hover{filter:brightness(1.15)}}
 .divider{height:0.5px;background:var(--border);margin:20px 0}
 .gsm-inp{width:70px;padding:5px 6px;border:0.5px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);font-size:12px;font-family:inherit;text-align:right;-moz-appearance:textfield}
 .gsm-inp:focus{border-color:var(--brand);outline:none}
@@ -394,47 +405,116 @@ input::placeholder{color:var(--text3)}
 <div id="view-ledger-accounts" class="sec">
   <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
   <div class="sec-title">Accounts</div>
-  <div class="card"><div class="ph"><div class="ph-ico"><i class="ti ti-users"></i></div><div class="ph-t">Coming soon</div><div class="ph-d">A live view of every identity/card × bookie account, its status, and any notes — replacing the manual tracking grid.</div></div></div>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;font-size:12px;color:var(--text2)">
+    <span><span class="grid-dot" style="background:#f59e0b"></span> Pending</span>
+    <span><span class="grid-dot" style="background:#16a34a"></span> Good</span>
+    <span><span class="grid-dot" style="background:#eab308"></span> Restricted</span>
+    <span><span class="grid-dot" style="background:#dc2626"></span> Closed / Unusable</span>
+    <span><span class="grid-dot" style="background:#9333ea"></span> Needs replaced</span>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <div id="accounts-grid-wrap" class="ledger-grid-wrap"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
+  </div>
 </div>
 
 <!-- LEDGER: DEPOSITS -->
 <div id="view-ledger-deposits" class="sec">
   <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
   <div class="sec-title">Deposits</div>
-  <div class="card"><div class="ph"><div class="ph-ico"><i class="ti ti-arrow-down-circle"></i></div><div class="ph-t">Coming soon</div><div class="ph-d">A running log of deposits into each account, feeding the live balance calculation.</div></div></div>
+  <div class="card">
+    <div style="font-size:12.5px;color:var(--text2);margin-bottom:14px">Log of deposits made through the site (also written to the Deposits sheet).</div>
+    <div id="deposits-log">Loading…</div>
+  </div>
 </div>
 
 <!-- LEDGER: WITHDRAWALS -->
 <div id="view-ledger-withdrawals" class="sec">
   <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
   <div class="sec-title">Withdrawals</div>
-  <div class="card"><div class="ph"><div class="ph-ico"><i class="ti ti-arrow-up-circle"></i></div><div class="ph-t">Coming soon</div><div class="ph-d">A running log of withdrawals from each account, feeding the live balance calculation.</div></div></div>
+  <div class="card">
+    <div style="font-size:12.5px;color:var(--text2);margin-bottom:14px">Pending withdrawals — tick once confirmed as landed in the bank. This moves the row from Pending to Processed on the sheet.</div>
+    <div id="withdrawals-pending-list">Loading…</div>
+  </div>
 </div>
 
 <!-- LEDGER: LIVE BALANCES -->
 <div id="view-ledger-balances" class="sec">
   <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
   <div class="sec-title">Live balances</div>
-  <div class="card"><div class="ph"><div class="ph-ico"><i class="ti ti-scale"></i></div><div class="ph-t">Coming soon</div><div class="ph-d">Current balance per account — opening balance + deposits − withdrawals + settled P/L — at a glance across every bookie.</div></div></div>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;font-size:12px;color:var(--text2)">
+    <span><span class="grid-dot" style="background:#dc2626"></span> £0</span>
+    <span><span class="grid-dot" style="background:#f59e0b"></span> Under £100</span>
+    <span><span class="grid-dot" style="background:#16a34a"></span> £100–£499</span>
+    <span><span class="grid-dot" style="background:#15803d"></span> £500+</span>
+    <span><span class="grid-dot" style="background:#3b82f6"></span> In open bets</span>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <div id="balances-grid-wrap" class="ledger-grid-wrap"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
+  </div>
 </div>
 
-<!-- LEDGER: BULK ACCOUNT ENTRY -->
+<!-- LEDGER: ACCOUNT DETAIL MODAL -->
+<div id="account-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;padding:16px">
+  <div class="card" style="max-width:420px;width:100%;max-height:85vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div class="sec-title" style="margin:0;font-size:16px" id="account-modal-title"></div>
+      <button class="add-btn" onclick="closeAccountModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div style="font-size:12.5px;color:var(--text2);margin-bottom:16px" id="account-modal-subtitle"></div>
+
+    <div class="lbl" style="margin-bottom:8px">Status</div>
+    <div id="account-modal-status-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:18px"></div>
+
+    <div style="padding:12px 14px;background:var(--surface2);border-radius:var(--radius);margin-bottom:18px">
+      <div class="lbl" style="margin-bottom:3px">Live balance</div>
+      <div style="font-size:20px;font-weight:600" id="account-modal-balance">—</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">
+      <button onclick="openMoneyPrompt('deposit')" style="background:var(--green);color:#fff;border:none;border-radius:var(--radius);padding:11px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Deposit</button>
+      <button onclick="openMoneyPrompt('withdraw')" style="background:var(--red);color:#fff;border:none;border-radius:var(--radius);padding:11px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Withdraw</button>
+    </div>
+
+    <div id="account-money-prompt" style="display:none;margin-top:12px;padding:12px 14px;background:var(--surface2);border-radius:var(--radius)">
+      <label class="lbl" id="account-money-prompt-label">Amount £</label>
+      <div style="display:flex;gap:8px">
+        <input type="number" id="account-money-amount" step="0.01" min="0" style="flex:1">
+        <button onclick="submitMoneyPrompt()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:0 16px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Confirm</button>
+      </div>
+    </div>
+
+    <div id="account-modal-msg" style="margin-top:12px;font-size:13px"></div>
+  </div>
+</div>
+
 <div id="view-ledger-bulk-import" class="sec">
   <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
   <div class="sec-title">Bulk account entry</div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="lbl" style="margin-bottom:10px">Autofill-enabled bookies</div>
+    <div style="font-size:12.5px;color:var(--text2);margin-bottom:12px">
+      Managed here on the site only — the Accounts sheet itself is never read, just written to. Toggle a bookie on to include it in "no specific book" fills below.
+    </div>
+    <div id="bookie-settings-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+    <div style="display:flex;gap:8px">
+      <input type="text" id="bookie-settings-new" placeholder="Add a bookie…" style="flex:1">
+      <button class="add-btn" onclick="addBookieSetting()"><i class="ti ti-plus"></i> Add</button>
+    </div>
+  </div>
 
   <div class="card">
     <div style="margin-bottom:10px"><label class="lbl">Bookie</label><input type="text" id="bulk-bookie" placeholder="e.g. PaddyPower"></div>
     <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;font-size:13px;cursor:pointer">
       <input type="checkbox" id="bulk-any-autofill" onchange="onBulkAnyAutofillChange()" style="width:16px;height:16px">
-      No specific book — autofill wherever enabled on the Accounts sheet
+      No specific book — autofill every bookie ticked above
     </label>
     <div style="margin-bottom:16px">
       <label class="lbl">Names (one per line)</label>
       <textarea id="bulk-names" rows="6" placeholder="James Parker&#10;Alex Wood" style="width:100%;padding:10px 13px;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit;resize:vertical"></textarea>
     </div>
     <div style="font-size:12.5px;color:var(--text2);margin-bottom:16px">
-      Each name fills the next blank slot in that bookie's column on the Accounts sheet, top to bottom, and gets marked orange (untested). A matching account record is also created here in Ledger so it shows up once Accounts is built.
+      Each name fills the next blank slot in the target bookie's column on the Accounts sheet, top to bottom, and gets marked orange (untested). A matching account record is also created here in Ledger so it shows up once Accounts is built.
     </div>
     <button onclick="submitBulkEntry()" id="bulk-submit-btn" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:11px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Submit</button>
     <div id="bulk-entry-results" style="margin-top:18px"></div>
@@ -1491,10 +1571,75 @@ const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger'};
 function showTopSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});}
 function backToBetsMenu(){showTopSec('bets');}
 function backToCalcMenu(){showTopSec('calc');}
-function showLedgerSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-ledger-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='bet-entry')initBetEntry();}
+function showLedgerSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-ledger-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='bet-entry')initBetEntry();if(name==='bulk-import')initBulkEntry();if(name==='accounts')initAccountsGrid();if(name==='balances')initBalancesGrid();if(name==='deposits')initDepositsLog();if(name==='withdrawals')initWithdrawalsPending();}
 function backToLedgerHub(){showTopSec('ledger');}
 
 // ================== LEDGER: BULK ACCOUNT ENTRY ==================
+// The Accounts Google Sheet is write-only from this app's side — it's never read back.
+// Which bookies count as "autofill-enabled" for the "no specific book" mode is a
+// setting stored here in Ledger, decided by the site, and sent explicitly to the
+// Sheet script as a list of target bookies — the script itself doesn't read any flags.
+
+let BOOKIE_SETTINGS = [];
+
+async function initBulkEntry() {
+  document.getElementById('bulk-any-autofill').checked = false;
+  onBulkAnyAutofillChange();
+  await loadBookieSettings();
+}
+
+async function loadBookieSettings() {
+  const listEl = document.getElementById('bookie-settings-list');
+  listEl.innerHTML = '<div style="font-size:13px;color:var(--text2)">Loading…</div>';
+  try {
+    const d = await ledgerApi('bookie-settings');
+    BOOKIE_SETTINGS = (d.ok && d.bookies) ? d.bookies : [];
+  } catch (e) { BOOKIE_SETTINGS = []; }
+  renderBookieSettingsList();
+}
+
+function renderBookieSettingsList() {
+  const listEl = document.getElementById('bookie-settings-list');
+  if (!BOOKIE_SETTINGS.length) {
+    listEl.innerHTML = '<div style="font-size:13px;color:var(--text3)">No bookies added yet — add one below.</div>';
+    return;
+  }
+  listEl.innerHTML = BOOKIE_SETTINGS.map(b => `
+    <label style="display:flex;align-items:center;gap:10px;padding:7px 0;font-size:13px;cursor:pointer">
+      <input type="checkbox" ${b.autofill_enabled?'checked':''} onchange="toggleBookieSetting('${b.bookie.replace(/'/g,"\\'")}', this.checked)" style="width:16px;height:16px">
+      ${b.bookie}
+    </label>`).join('');
+}
+
+async function addBookieSetting() {
+  const input = document.getElementById('bookie-settings-new');
+  const bookie = input.value.trim();
+  if (!bookie) return;
+  if (BOOKIE_SETTINGS.some(b => b.bookie.toLowerCase() === bookie.toLowerCase())) { input.value=''; return; }
+  try {
+    await ledgerApi('bookie-settings', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ bookie, autofill_enabled: false })
+    });
+  } catch (e) { /* fall through to reload regardless */ }
+  input.value = '';
+  await loadBookieSettings();
+}
+
+async function toggleBookieSetting(bookie, checked) {
+  const entry = BOOKIE_SETTINGS.find(b => b.bookie === bookie);
+  if (entry) entry.autofill_enabled = checked; // optimistic update
+  try {
+    await ledgerApi('bookie-settings/'+encodeURIComponent(bookie), {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ autofill_enabled: checked })
+    });
+  } catch (e) {
+    // revert on failure
+    if (entry) entry.autofill_enabled = !checked;
+    renderBookieSettingsList();
+  }
+}
 
 function onBulkAnyAutofillChange() {
   const checked = document.getElementById('bulk-any-autofill').checked;
@@ -1511,18 +1656,26 @@ async function submitBulkEntry() {
   const resultsEl = document.getElementById('bulk-entry-results');
   const btn = document.getElementById('bulk-submit-btn');
 
-  if (!anyAutofill && !bookie) { resultsEl.innerHTML = '<div style="color:var(--red);font-size:13px">Enter a bookie, or tick "no specific book".</div>'; return; }
+  let bookies = [];
+  if (anyAutofill) {
+    bookies = BOOKIE_SETTINGS.filter(b => b.autofill_enabled).map(b => b.bookie);
+    if (!bookies.length) { resultsEl.innerHTML = '<div style="color:var(--red);font-size:13px">No bookies are ticked for autofill above.</div>'; return; }
+  } else {
+    if (!bookie) { resultsEl.innerHTML = '<div style="color:var(--red);font-size:13px">Enter a bookie, or tick "no specific book".</div>'; return; }
+  }
   if (!names.length) { resultsEl.innerHTML = '<div style="color:var(--red);font-size:13px">Enter at least one name.</div>'; return; }
 
   btn.disabled = true; btn.textContent = 'Submitting…';
   resultsEl.innerHTML = '<div style="font-size:13px;color:var(--text2)">Writing to the Accounts sheet…</div>';
+
+  const payload = anyAutofill ? { bookies, names } : { bookie, names };
 
   let sheetData;
   try {
     const res = await fetch('/.netlify/functions/accounts-sheet', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ bookie, anyAutofill, names })
+      body: JSON.stringify(payload)
     });
     sheetData = await res.json();
   } catch (e) {
@@ -1552,7 +1705,7 @@ async function submitBulkEntry() {
       const ld = await ledgerApi('accounts', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ profile: r.profile, bookie: r.bookie, status: 'untested' })
+        body: JSON.stringify({ profile: r.profile, bookie: r.bookie, status: 'pending', account_name: r.name })
       });
       ledgerOk = !!ld.ok;
       ledgerMsg = ld.ok ? '' : (ld.error || 'Ledger write failed');
@@ -2130,6 +2283,299 @@ async function submitBetEntry() {
   } finally {
     btn.disabled = false; btn.textContent = 'Log bet';
   }
+}
+// ================== LEDGER: ACCOUNTS / LIVE BALANCES / DEPOSITS / WITHDRAWALS ==================
+
+const PROFILES_LIST = [
+  'Santander','Virgin','Revolut Physical',
+  'Rev Virtual 1','Rev Virtual 2','Rev Virtual 3','Rev Virtual 4','Rev Virtual 5','Rev Virtual 6','Rev Virtual 7','Rev Virtual 8','Rev Virtual 9','Rev Virtual 10','Rev Virtual 11','Rev Virtual 12','Rev Virtual 13','Rev Virtual 14','Rev Virtual 15','Rev Virtual 16','Rev Virtual 17','Rev Virtual 18','Rev Virtual 19','Rev Virtual 20',
+  'Monzo Physical','Monzo Virt 1','Monzo Virt 2','Monzo Virt 3','Monzo Virt 4','Monzo Virt 5',
+  'A Rev Physical','A Rev Virtual 1','A Rev Virtual 2','A Rev Virtual 3','A Rev Virtual 4','A Rev Virtual 5','A Rev Virtual 6','A Rev Virtual 7','A Rev Virtual 8','A Rev Virtual 9','A Rev Virtual 10','A Rev Virtual 11','A Rev Virtual 12','A Rev Virtual 13',
+  'A Monzo Physical','A Monzo Virt 1','A Monzo Virt 2','A Monzo Virt 3','A Monzo Virt 4','A Monzo Virt 5',
+  'B Rev Physical','B Rev Virt 1','B Rev Virt 2','B Rev Virt 3','B Rev Virt 4','B Rev Virt 5','B Rev Virt 6','B Rev Virt 7','B Rev Virt 8','B Rev Virt 9','B Rev Virt 10','B Rev Virt 11','B Rev Virt 12','B Rev Virt 13','B Rev Virt 14','B Rev Virt 15','B Rev Virt 16',
+];
+
+const BOOKIES_LIST = [
+  'PricedUp','StarSportsBet','Bet StGeorge','Bet365','SkyBet','PaddyPower','Betfair','Betfred','SportingBet','PlanetSportBet','DragonBet','BestOdds','NRGBet','Betway','888Sport','HotStreak','Midnite','NetBet','32Red','DaznBet','Fitzdares','Matchbook','Kwiff','MrQ','Lottoland','HighBet','ArrowBet','FairPlay','247Bet','DreamVegas','WilliamHill',
+];
+
+const STATUS_CONFIG = {
+  pending:        { label:'Pending',                     color:'#f59e0b', bg:'#fef3c7' },
+  good:           { label:'Good',                        color:'#16a34a', bg:'#dcfce7' },
+  restricted:     { label:'Restricted',                  color:'#eab308', bg:'#fef9c3' },
+  closed:         { label:'Closed / Unusable',           color:'#dc2626', bg:'#fee2e2' },
+  needs_replaced: { label:'Needs replaced (card not used)', color:'#9333ea', bg:'#f3e8ff' },
+};
+
+let ALL_ACCOUNTS = [];         // flat list from Ledger
+let ACCOUNTS_BY_KEY = {};      // "profile|bookie" -> account
+let ACTIVE_ACCOUNT = null;     // account currently open in the modal
+let ACTIVE_MONEY_TYPE = null;  // 'deposit' | 'withdraw'
+let PENDING_ACCOUNT_CELL = null; // { profile, bookie } when creating a brand new account from a blank cell
+
+function acctKey(profile, bookie) { return profile + '|' + bookie; }
+
+async function accountsSheetApi(payload) {
+  const res = await fetch('/.netlify/functions/accounts-sheet', {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
+  });
+  return res.json();
+}
+
+// Keeps the site's bookie-autofill registry in sync with the canonical bookie list,
+// so every column has a toggle available without manual one-by-one adding.
+async function seedBookieSettings() {
+  try {
+    const d = await ledgerApi('bookie-settings');
+    const existing = new Set((d.ok && d.bookies ? d.bookies : []).map(b => b.bookie));
+    const missing = BOOKIES_LIST.filter(b => !existing.has(b));
+    for (const bookie of missing) {
+      await ledgerApi('bookie-settings', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ bookie, autofill_enabled:false }) });
+    }
+  } catch (e) { /* non-fatal — settings panel will just be incomplete until retried */ }
+}
+
+async function loadAllAccounts() {
+  try {
+    const d = await ledgerApi('accounts');
+    ALL_ACCOUNTS = (d.ok && d.accounts) ? d.accounts : [];
+  } catch (e) { ALL_ACCOUNTS = []; }
+  ACCOUNTS_BY_KEY = {};
+  ALL_ACCOUNTS.forEach(a => { ACCOUNTS_BY_KEY[acctKey(a.profile, a.bookie)] = a; });
+}
+
+function buildGridHeaderRow() {
+  return `<tr><th class="profile-th">Account</th>${BOOKIES_LIST.map(b=>`<th>${b}</th>`).join('')}</tr>`;
+}
+
+// ---- ACCOUNTS GRID ----
+async function initAccountsGrid() {
+  const wrap = document.getElementById('accounts-grid-wrap');
+  wrap.innerHTML = '<div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div>';
+  await Promise.all([loadAllAccounts(), seedBookieSettings()]);
+  renderAccountsGrid();
+}
+
+function renderAccountsGrid() {
+  const wrap = document.getElementById('accounts-grid-wrap');
+  let html = `<table class="ledger-grid">${buildGridHeaderRow()}`;
+  PROFILES_LIST.forEach(profile => {
+    html += `<tr><td class="profile-cell">${profile}</td>`;
+    BOOKIES_LIST.forEach(bookie => {
+      const acc = ACCOUNTS_BY_KEY[acctKey(profile, bookie)];
+      if (acc) {
+        const cfg = STATUS_CONFIG[acc.status] || STATUS_CONFIG.pending;
+        html += `<td class="acct-cell" style="background:${cfg.bg};color:${cfg.color}" onclick="openAccountModal(${acc.id})">${acc.label ? acc.label+' — ' : ''}${escapeHtml(getAccountDisplayName(acc))}</td>`;
+      } else {
+        html += `<td class="acct-cell" style="color:var(--text3)" onclick="openBlankCell('${profile.replace(/'/g,"\\'")}','${bookie.replace(/'/g,"\\'")}')">—</td>`;
+      }
+    });
+    html += `</tr>`;
+  });
+  html += `</table>`;
+  wrap.innerHTML = html;
+}
+
+// The identity name written on the account (captured via Bulk Entry or manual creation);
+// falls back to the profile name if nothing more specific was recorded.
+function getAccountDisplayName(acc) {
+  return acc.account_name && acc.account_name.trim() ? acc.account_name.trim() : acc.profile;
+}
+
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ---- LIVE BALANCES GRID ----
+async function initBalancesGrid() {
+  const wrap = document.getElementById('balances-grid-wrap');
+  wrap.innerHTML = '<div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div>';
+  await loadAllAccounts();
+  renderBalancesGrid();
+}
+
+function balanceColor(balance) {
+  if (balance <= 0) return '#dc2626';
+  if (balance < 100) return '#f59e0b';
+  if (balance < 500) return '#16a34a';
+  return '#15803d';
+}
+
+function renderBalancesGrid() {
+  const wrap = document.getElementById('balances-grid-wrap');
+  let html = `<table class="ledger-grid">${buildGridHeaderRow()}`;
+  PROFILES_LIST.forEach(profile => {
+    html += `<tr><td class="profile-cell">${profile}</td>`;
+    BOOKIES_LIST.forEach(bookie => {
+      const acc = ACCOUNTS_BY_KEY[acctKey(profile, bookie)];
+      if (acc) {
+        const bal = acc.balance || 0;
+        const openStake = acc.open_stake || 0;
+        html += `<td class="bal-cell" style="color:${balanceColor(bal)}" onclick="openAccountModal(${acc.id})">£${bal.toLocaleString('en-GB',{minimumFractionDigits:0,maximumFractionDigits:2})}${openStake>0?`<div style="font-size:10.5px;color:#3b82f6;font-weight:500">+£${openStake.toLocaleString('en-GB',{maximumFractionDigits:2})} in play</div>`:''}</td>`;
+      } else {
+        html += `<td class="bal-cell" style="color:var(--text3)">—</td>`;
+      }
+    });
+    html += `</tr>`;
+  });
+  html += `</table>`;
+  wrap.innerHTML = html;
+}
+
+// ---- BLANK CELL: create a new account directly from the grid ----
+function openBlankCell(profile, bookie) {
+  PENDING_ACCOUNT_CELL = { profile, bookie };
+  const name = prompt(`New account name for ${profile} — ${bookie}:`);
+  if (!name || !name.trim()) { PENDING_ACCOUNT_CELL = null; return; }
+  createAccountFromCell(profile, bookie, name.trim());
+}
+
+async function createAccountFromCell(profile, bookie, name) {
+  // Mirrors the Bulk Entry flow for a single name, so the Sheet and Ledger never diverge
+  // depending on which screen was used to create the account.
+  let sheetOk = false, sheetMsg = '';
+  try {
+    const sd = await accountsSheetApi({ action:'fill_account', bookie, names:[name] });
+    if (sd.ok && sd.results && sd.results[0] && sd.results[0].ok) sheetOk = true;
+    else sheetMsg = (sd.results && sd.results[0] && sd.results[0].error) || sd.error || 'Sheet write failed';
+  } catch (e) { sheetMsg = 'Network error reaching the Accounts sheet'; }
+
+  try {
+    const ld = await ledgerApi('accounts', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ profile, bookie, status:'pending', account_name: name }) });
+    if (!ld.ok) { alert('Sheet: ' + (sheetOk?'updated':sheetMsg) + '\nLedger record failed: ' + (ld.error||'unknown error')); return; }
+  } catch (e) { alert('Sheet: ' + (sheetOk?'updated':sheetMsg) + '\nLedger record failed: network error'); return; }
+
+  if (!sheetOk) alert('Ledger record created, but the Sheet write failed (' + sheetMsg + ') — add it there manually.');
+  await loadAllAccounts();
+  renderAccountsGrid();
+}
+
+// ---- ACCOUNT DETAIL MODAL ----
+function openAccountModal(accountId) {
+  const acc = ALL_ACCOUNTS.find(a => a.id === accountId);
+  if (!acc) return;
+  ACTIVE_ACCOUNT = acc;
+  document.getElementById('account-modal-title').textContent = getAccountDisplayName(acc);
+  document.getElementById('account-modal-subtitle').textContent = `${acc.profile} — ${acc.bookie}`;
+  document.getElementById('account-modal-balance').textContent = '£' + (acc.balance||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  document.getElementById('account-modal-status-list').innerHTML = Object.keys(STATUS_CONFIG).map(key => {
+    const cfg = STATUS_CONFIG[key];
+    const active = acc.status === key;
+    return `<button onclick="setAccountStatus('${key}')" style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:var(--radius);border:1px solid ${active?cfg.color:'var(--border)'};background:${active?cfg.bg:'transparent'};color:var(--text);font-size:13px;font-family:inherit;cursor:pointer;text-align:left"><span class="grid-dot" style="background:${cfg.color}"></span>${cfg.label}${active?' <i class="ti ti-check" style="margin-left:auto"></i>':''}</button>`;
+  }).join('');
+
+  document.getElementById('account-money-prompt').style.display = 'none';
+  document.getElementById('account-modal-msg').innerHTML = '';
+  document.getElementById('account-modal-overlay').style.display = 'flex';
+}
+
+function closeAccountModal() {
+  document.getElementById('account-modal-overlay').style.display = 'none';
+  ACTIVE_ACCOUNT = null;
+}
+
+async function setAccountStatus(status) {
+  if (!ACTIVE_ACCOUNT) return;
+  const msgEl = document.getElementById('account-modal-msg');
+  try {
+    const d = await ledgerApi('accounts/'+ACTIVE_ACCOUNT.id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ status }) });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to update status'}</span>`; return; }
+    ACTIVE_ACCOUNT.status = status;
+    const idx = ALL_ACCOUNTS.findIndex(a=>a.id===ACTIVE_ACCOUNT.id);
+    if (idx>-1) ALL_ACCOUNTS[idx].status = status;
+    openAccountModal(ACTIVE_ACCOUNT.id); // refresh the modal's status list highlighting
+    if (document.getElementById('view-ledger-accounts').style.display !== 'none') renderAccountsGrid();
+  } catch (e) { msgEl.innerHTML = `<span style="color:var(--red)">Network error</span>`; }
+}
+
+function openMoneyPrompt(type) {
+  ACTIVE_MONEY_TYPE = type;
+  document.getElementById('account-money-prompt-label').textContent = (type==='deposit'?'Deposit amount £':'Withdrawal amount £');
+  document.getElementById('account-money-amount').value = '';
+  document.getElementById('account-money-prompt').style.display = 'block';
+}
+
+async function submitMoneyPrompt() {
+  if (!ACTIVE_ACCOUNT || !ACTIVE_MONEY_TYPE) return;
+  const amount = parseFloat(document.getElementById('account-money-amount').value);
+  const msgEl = document.getElementById('account-modal-msg');
+  if (!(amount > 0)) { msgEl.innerHTML = '<span style="color:var(--red)">Enter an amount greater than £0.</span>'; return; }
+
+  msgEl.innerHTML = '<span style="color:var(--text2)">Processing…</span>';
+  const acc = ACTIVE_ACCOUNT;
+  const accountName = getAccountDisplayName(acc);
+
+  try {
+    const ld = await ledgerApi(`accounts/${acc.id}/${ACTIVE_MONEY_TYPE}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ amount }) });
+    if (!ld.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${ld.error||'Failed'}</span>`; return; }
+
+    acc.balance = ld.balance;
+    document.getElementById('account-modal-balance').textContent = '£' + ld.balance.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+    const sheetAction = ACTIVE_MONEY_TYPE === 'deposit' ? 'add_deposit' : 'add_withdrawal';
+    const sd = await accountsSheetApi({ action: sheetAction, bookie: acc.bookie, profile: acc.profile, accountName, amount });
+
+    if (ACTIVE_MONEY_TYPE === 'withdraw' && sd.ok && sd.row) {
+      await ledgerApi(`withdrawals/${ld.id}/sheet-row`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sheet_row: sd.row }) });
+    }
+
+    if (sd.ok) {
+      msgEl.innerHTML = `<span style="color:var(--green)"><i class="ti ti-check"></i> ${ACTIVE_MONEY_TYPE==='deposit'?'Deposit':'Withdrawal'} recorded — sheet updated.</span>`;
+    } else {
+      msgEl.innerHTML = `<span style="color:var(--amber)">Ledger updated, but the sheet write failed (${sd.error||'unknown error'}) — add it there manually.</span>`;
+    }
+
+    document.getElementById('account-money-prompt').style.display = 'none';
+    if (document.getElementById('view-ledger-accounts').style.display !== 'none') renderAccountsGrid();
+    if (document.getElementById('view-ledger-balances').style.display !== 'none') renderBalancesGrid();
+  } catch (e) {
+    msgEl.innerHTML = '<span style="color:var(--red)">Network error.</span>';
+  }
+}
+
+// ---- DEPOSITS LOG ----
+async function initDepositsLog() {
+  const el = document.getElementById('deposits-log');
+  el.innerHTML = 'Loading…';
+  try {
+    const d = await ledgerApi('deposits');
+    const rows = (d.ok && d.deposits) ? d.deposits : [];
+    if (!rows.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No deposits logged yet.</div>'; return; }
+    el.innerHTML = rows.map(r => `
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+        <div>${r.profile} — ${r.bookie}</div>
+        <div style="color:var(--green);font-weight:600">+£${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+      </div>`).join('');
+  } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load deposits.</div>'; }
+}
+
+// ---- WITHDRAWALS: PENDING CONFIRM QUEUE ----
+async function initWithdrawalsPending() {
+  const el = document.getElementById('withdrawals-pending-list');
+  el.innerHTML = 'Loading…';
+  try {
+    const d = await ledgerApi('withdrawals?status=pending');
+    const rows = (d.ok && d.withdrawals) ? d.withdrawals : [];
+    if (!rows.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No pending withdrawals.</div>'; return; }
+    el.innerHTML = rows.map(r => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+        <div>${r.profile} — ${r.bookie} <span style="color:var(--text3)">£${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>${!r.sheet_row?' <span style="color:var(--amber)">(not linked to sheet)</span>':''}</div>
+        <button class="add-btn" onclick="confirmWithdrawal(${r.id}, ${r.sheet_row||'null'})"><i class="ti ti-check"></i> Confirm</button>
+      </div>`).join('');
+  } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load withdrawals.</div>'; }
+}
+
+async function confirmWithdrawal(id, sheetRow) {
+  try {
+    const ld = await ledgerApi(`withdrawals/${id}/confirm`, { method:'PATCH' });
+    if (!ld.ok) { alert('Failed to confirm: ' + (ld.error||'unknown error')); return; }
+    if (sheetRow) {
+      const sd = await accountsSheetApi({ action:'confirm_withdrawal', row: sheetRow });
+      if (!sd.ok) alert('Confirmed in Ledger, but moving the sheet row failed (' + (sd.error||'unknown error') + ') — move it manually.');
+    } else {
+      alert('Confirmed in Ledger. This withdrawal was never linked to a sheet row, so nothing to move there.');
+    }
+  } catch (e) { alert('Network error confirming withdrawal.'); return; }
+  initWithdrawalsPending();
 }
 function showCalc(name){document.getElementById('calc-hub').style.display='none';document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='dutch')initDutch();if(name==='arb')initArb();if(name==='gsm')initGSM();if(name==='kelly')initKelly();if(name==='kellycorr')initKellyCorr();}
 function backToCalcHub(){document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
