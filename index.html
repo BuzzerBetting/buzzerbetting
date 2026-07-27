@@ -516,8 +516,9 @@ input::placeholder{color:var(--text3)}
       </div>
     </div>
 
-    <div style="margin-top:18px;padding-top:14px;border-top:0.5px solid var(--border)">
+    <div style="margin-top:18px;padding-top:14px;border-top:0.5px solid var(--border);display:flex;flex-direction:column;gap:8px">
       <button onclick="markAccountFinished()" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:var(--radius);padding:9px 14px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;width:100%"><i class="ti ti-flag"></i> Mark as Finished</button>
+      <button onclick="deleteAccountMistake()" style="background:none;border:none;color:var(--text3);border-radius:var(--radius);padding:6px 14px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;width:100%"><i class="ti ti-trash"></i> Delete (entered in error)</button>
     </div>
 
     <div id="account-modal-msg" style="margin-top:12px;font-size:13px"></div>
@@ -535,8 +536,18 @@ input::placeholder{color:var(--text3)}
     <div style="margin-bottom:16px"><label class="lbl">Bookie</label><input type="text" id="entry-bookie" placeholder="e.g. PaddyPower"></div>
 
     <div class="lbl" style="margin-bottom:10px">Accounts to publish</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 110px 32px;gap:10px;margin-bottom:6px">
+      <div class="lbl" style="margin-bottom:0">ID</div>
+      <div class="lbl" style="margin-bottom:0">Bank</div>
+      <div class="lbl" style="margin-bottom:0">Starting £</div>
+      <div></div>
+    </div>
     <div id="entry-rows"></div>
-    <button class="add-btn" id="entry-add-row-btn" onclick="addEntryRow()"><i class="ti ti-plus"></i> Add another</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="add-btn" id="entry-add-row-btn" onclick="addEntryRow()"><i class="ti ti-plus"></i> Add another</button>
+      <button class="add-btn" onclick="addEntryRowWithNextId('C')"><i class="ti ti-user"></i> Client</button>
+      <button class="add-btn" onclick="addEntryRowWithNextId('D')"><i class="ti ti-trash-x"></i> Disposable</button>
+    </div>
 
     <div style="margin-top:18px;padding-top:14px;border-top:0.5px solid var(--border)">
       <button onclick="submitAccountEntry()" id="entry-submit-btn" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:11px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Publish</button>
@@ -1640,6 +1651,28 @@ function addEntryRow() {
     <input type="number" class="entry-balance" placeholder="Start £" step="0.01" value="0">
     <button class="rm-btn" onclick="removeEntryRow(${id})" title="Remove">×</button>`;
   wrap.appendChild(row);
+  return row;
+}
+
+// Adds a new row with the next unused C/D-series ID pre-filled (fully editable afterward).
+// Checks both the database (via the backend) and any IDs already staged in this unsaved
+// batch, so clicking twice in a row never suggests the same ID before either is submitted.
+async function addEntryRowWithNextId(prefix) {
+  let nextNum = 0;
+  try {
+    const d = await ledgerApi('accounts/next-id?prefix='+prefix);
+    if (d.ok && d.next_id) nextNum = parseInt(d.next_id.slice(1), 10);
+  } catch (e) { /* fall back to just the local scan below */ }
+
+  const stagedIds = [...document.querySelectorAll('#entry-rows .entry-id')].map(i => i.value.trim().toUpperCase());
+  let candidate;
+  do {
+    candidate = prefix + String(nextNum).padStart(3, '0');
+    nextNum++;
+  } while (stagedIds.includes(candidate));
+
+  const row = addEntryRow();
+  row.querySelector('.entry-id').value = candidate;
 }
 
 function removeEntryRow(id) {
@@ -2515,7 +2548,7 @@ async function submitBalanceOverride() {
     document.getElementById('account-balance-override-toggle').checked = false;
     document.getElementById('account-balance-override-box').style.display = 'none';
     msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Balance updated.</span>';
-    if (document.getElementById('view-ledger-accounts').style.display !== 'none') renderAccountsGrid();
+    if (document.getElementById('view-ledger-accounts').style.display !== 'none') { renderAccountsGrid(); renderBankBalancesBox(); }
     if (document.getElementById('view-ledger-balances').style.display !== 'none') renderBalancesGrid();
   } catch (e) { msgEl.innerHTML = `<span style="color:var(--red)">Network error</span>`; }
 }
@@ -2532,6 +2565,29 @@ async function markAccountFinished() {
   try {
     const d = await ledgerApi('accounts/'+targetId, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ status:'closed' }) });
     if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to update'}</span>`; return; }
+
+    ALL_ACCOUNTS = ALL_ACCOUNTS.filter(a => a.id !== targetId);
+    closeAccountModal();
+    if (document.getElementById('view-ledger-accounts').style.display !== 'none') { renderAccountsGrid(); renderBankBalancesBox(); }
+    if (document.getElementById('view-ledger-balances').style.display !== 'none') renderBalancesGrid();
+  } catch (e) { msgEl.innerHTML = `<span style="color:var(--red)">Network error</span>`; }
+}
+
+// True hard delete — for correcting a mistaken entry (wrong ID/bookie/bank typed in),
+// not for a real account reaching end of life (use Mark as Finished for that instead).
+// The row is gone entirely; its ID becomes reusable since it was never really "used".
+async function deleteAccountMistake() {
+  if (!ACTIVE_ACCOUNT) return;
+  const name = getAccountDisplayName(ACTIVE_ACCOUNT);
+  const confirmed = confirm(`Delete ${name} (${ACTIVE_ACCOUNT.bookie}) entirely?\n\nUse this only to correct a mistaken entry — the record is fully removed and its ID becomes reusable. For a real account reaching end of life, use "Mark as Finished" instead. This can't be undone.`);
+  if (!confirmed) return;
+
+  const msgEl = document.getElementById('account-modal-msg');
+  msgEl.innerHTML = '<span style="color:var(--text2)">Deleting…</span>';
+  const targetId = ACTIVE_ACCOUNT.id;
+  try {
+    const d = await ledgerApi('accounts/'+targetId, { method:'DELETE' });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to delete'}</span>`; return; }
 
     ALL_ACCOUNTS = ALL_ACCOUNTS.filter(a => a.id !== targetId);
     closeAccountModal();
@@ -2578,7 +2634,7 @@ async function submitMoneyPrompt() {
     }
 
     document.getElementById('account-money-prompt').style.display = 'none';
-    if (document.getElementById('view-ledger-accounts').style.display !== 'none') renderAccountsGrid();
+    if (document.getElementById('view-ledger-accounts').style.display !== 'none') { renderAccountsGrid(); renderBankBalancesBox(); }
     if (document.getElementById('view-ledger-balances').style.display !== 'none') renderBalancesGrid();
   } catch (e) {
     msgEl.innerHTML = '<span style="color:var(--red)">Network error.</span>';
