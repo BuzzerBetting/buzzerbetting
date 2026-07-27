@@ -63,6 +63,7 @@ header{background:var(--header);height:62px;display:flex;align-items:center;just
 .back:hover{color:var(--text)}
 .sec-title{font-family:'Space Grotesk',sans-serif;font-size:25px;font-weight:700;color:var(--text);letter-spacing:-0.02em;margin-bottom:24px}
 .card{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:16px}
+.card-pad{padding:22px}
 .card-h{padding:13px 20px;border-bottom:0.5px solid var(--border);font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
 @media(max-width:680px){.kpis{grid-template-columns:repeat(2,1fr)}}
@@ -321,6 +322,11 @@ input::placeholder{color:var(--text3)}
       <div><div class="cat-title">Recently Archived</div><div class="cat-desc">Accounts finished in the last 7 days — undo if needed</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
+    <div class="cat" style="--accent:var(--green)" onclick="showLedgerSec('bank-transactions')">
+      <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-building-bank"></i></div>
+      <div><div class="cat-title">Bank Transactions</div><div class="cat-desc">Money moved directly in/out of a bank, affecting its live balance</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
   </div>
 </div>
 
@@ -423,14 +429,30 @@ input::placeholder{color:var(--text3)}
   <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
   <div class="sec-title">Live Accounts</div>
 
-  <div class="card" style="margin-bottom:16px">
-    <div class="lbl" style="margin-bottom:10px">Live bank balances</div>
-    <div id="bank-balances-box" style="display:flex;flex-wrap:wrap;gap:10px">Loading…</div>
+  <div style="display:grid;grid-template-columns:1fr 220px;gap:16px;margin-bottom:16px">
+    <div class="card card-pad">
+      <div class="lbl" style="margin-bottom:10px">Live bank balances</div>
+      <div id="bank-balances-box" style="display:flex;flex-wrap:wrap;gap:10px">Loading…</div>
+    </div>
+    <div class="card card-pad">
+      <div class="lbl" style="margin-bottom:10px">Locked Funds</div>
+      <div style="font-size:22px;font-weight:600;color:var(--red)" id="live-accounts-locked-total">£0.00</div>
+    </div>
   </div>
 
-  <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;font-size:12px;color:var(--text2)">
-    <span><span class="grid-dot" style="background:#16a34a"></span> Good</span>
-    <span><span class="grid-dot" style="background:#f59e0b"></span> Restricted</span>
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+    <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text2)">
+      <span><span class="grid-dot" style="background:#16a34a"></span> Good</span>
+      <span><span class="grid-dot" style="background:#f59e0b"></span> Restricted</span>
+    </div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);cursor:pointer">
+        <input type="checkbox" id="toggle-show-balance" checked onchange="renderAccountsGrid()"> Show balances
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);cursor:pointer">
+        <input type="checkbox" id="toggle-show-openstake" onchange="renderAccountsGrid()"> Show open bet stakes
+      </label>
+    </div>
   </div>
   <div id="live-accounts-wrap" style="overflow-x:auto"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
 </div>
@@ -439,7 +461,7 @@ input::placeholder{color:var(--text3)}
 <div id="view-ledger-deposits" class="sec">
   <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
   <div class="sec-title">Deposits</div>
-  <div class="card">
+  <div class="card card-pad">
     <div style="font-size:12.5px;color:var(--text2);margin-bottom:14px">Log of deposits made through the site (also written to the Deposits sheet).</div>
     <div id="deposits-log">Loading…</div>
   </div>
@@ -450,12 +472,12 @@ input::placeholder{color:var(--text3)}
   <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
   <div class="sec-title">Withdrawals</div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">
-    <div class="card">
+    <div class="card card-pad">
       <div class="sec-title" style="margin:0 0 4px;font-size:15px">Pending</div>
       <div style="font-size:12.5px;color:var(--text2);margin-bottom:14px">Tick once confirmed as landed in the bank — moves the row to Processed, here and on the sheet.</div>
       <div id="withdrawals-pending-list">Loading…</div>
     </div>
-    <div class="card">
+    <div class="card card-pad">
       <div class="sec-title" style="margin:0 0 4px;font-size:15px">Processed</div>
       <div style="font-size:12.5px;color:var(--text2);margin-bottom:14px">Confirmed withdrawals.</div>
       <div id="withdrawals-processed-list">Loading…</div>
@@ -470,7 +492,13 @@ input::placeholder{color:var(--text3)}
   <div style="font-size:12.5px;color:var(--text2);margin-bottom:16px">
     Money moved out of live tracking — either a withdrawal the bookie refused to pay (confiscated), or a balance manually locked on an account. How to deal with these will be decided separately.
   </div>
-  <div class="card">
+  <div class="card card-pad" style="margin-bottom:16px">
+    <div class="lbl" style="margin-bottom:6px">Total locked</div>
+    <div style="font-size:24px;font-weight:600;color:var(--red);margin-bottom:14px" id="locked-funds-total">£0.00</div>
+    <div class="lbl" style="margin-bottom:8px">By bank</div>
+    <div id="locked-funds-by-bank" style="display:flex;flex-wrap:wrap;gap:10px"></div>
+  </div>
+  <div class="card card-pad">
     <div id="locked-funds-list">Loading…</div>
   </div>
 </div>
@@ -482,8 +510,40 @@ input::placeholder{color:var(--text3)}
   <div style="font-size:12.5px;color:var(--text2);margin-bottom:16px">
     Accounts marked Finished in the last 7 days. Undo restores an account to Live Accounts — useful if one was archived by mistake, or a bad account turns out good again.
   </div>
-  <div class="card">
+  <div class="card card-pad">
     <div id="archived-list">Loading…</div>
+  </div>
+</div>
+
+<!-- LEDGER: BANK TRANSACTIONS -->
+<div id="view-ledger-bank-transactions" class="sec">
+  <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
+  <div class="sec-title">Bank Transactions</div>
+  <div style="font-size:12.5px;color:var(--text2);margin-bottom:16px">
+    Money moved directly in or out of a bank's own pool — not via any betting account. Affects that bank's live balance on Live Accounts straight away.
+  </div>
+
+  <div class="card card-pad" style="margin-bottom:16px">
+    <div style="display:grid;grid-template-columns:1fr 110px 1fr auto;gap:10px;align-items:end">
+      <div><label class="lbl">Bank</label><select id="txn-bank"><option value="">Select bank…</option></select></div>
+      <div><label class="lbl">Amount £</label><input type="number" id="txn-amount" step="0.01" min="0"></div>
+      <div><label class="lbl">Reason</label><input type="text" id="txn-reason" placeholder="e.g. Topped up from personal savings"></div>
+      <button onclick="submitBankTransaction()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:9px 16px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Log</button>
+    </div>
+    <div style="display:flex;gap:14px;margin-top:12px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+        <input type="radio" name="txn-direction" value="in" checked> Money in
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+        <input type="radio" name="txn-direction" value="out"> Money out
+      </label>
+    </div>
+    <div id="txn-msg" style="margin-top:12px;font-size:13px"></div>
+  </div>
+
+  <div class="card card-pad">
+    <div class="lbl" style="margin-bottom:10px">Transaction list</div>
+    <div id="txn-list">Loading…</div>
   </div>
 </div>
 
@@ -548,7 +608,7 @@ input::placeholder{color:var(--text3)}
     Publishes an account straight onto Live Accounts. No Google Sheet writes happen here — the Account Bank sheet is managed by you separately; this is just the final "make it live" step once an ID's ready.
   </div>
 
-  <div class="card" style="margin-bottom:16px">
+  <div class="card card-pad" style="margin-bottom:16px">
     <div class="sec-title" style="margin:0 0 14px;font-size:15px">New Account</div>
     <div style="margin-bottom:16px"><label class="lbl">Bookie</label><input type="text" id="entry-bookie" placeholder="e.g. PaddyPower"></div>
 
@@ -571,7 +631,7 @@ input::placeholder{color:var(--text3)}
     <div id="entry-results" style="margin-top:18px"></div>
   </div>
 
-  <div class="card">
+  <div class="card card-pad">
     <div class="sec-title" style="margin:0 0 4px;font-size:15px">New Bank</div>
     <div style="font-size:12.5px;color:var(--text2);margin-bottom:14px">
       A bank's starting balance is the pool new accounts draw from. A starting balance entered on a New Account above is existing float, not a new deposit, so it won't reduce this figure.
@@ -589,7 +649,7 @@ input::placeholder{color:var(--text3)}
 <div id="view-ledger-account-summary" class="sec">
   <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
   <div class="sec-title">Account Summary</div>
-  <div class="card" style="margin-bottom:16px">
+  <div class="card card-pad" style="margin-bottom:16px">
     <label class="lbl">Filter by bookmaker</label>
     <select id="summary-bookie-filter" onchange="loadAccountSummary()"><option value="">All bookies</option></select>
   </div>
@@ -1647,7 +1707,7 @@ const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger'};
 function showTopSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});}
 function backToBetsMenu(){showTopSec('bets');}
 function backToCalcMenu(){showTopSec('calc');}
-function showLedgerSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-ledger-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='bet-entry')initBetEntry();if(name==='bulk-import')initAccountEntry();if(name==='accounts')initAccountsGrid();if(name==='deposits')initDepositsLog();if(name==='withdrawals')initWithdrawalsPending();if(name==='account-summary')initAccountSummary();if(name==='locked-funds')initLockedFunds();if(name==='archived')initArchived();}
+function showLedgerSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-ledger-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='bet-entry')initBetEntry();if(name==='bulk-import')initAccountEntry();if(name==='accounts')initAccountsGrid();if(name==='deposits')initDepositsLog();if(name==='withdrawals')initWithdrawalsPending();if(name==='account-summary')initAccountSummary();if(name==='locked-funds')initLockedFunds();if(name==='archived')initArchived();if(name==='bank-transactions')initBankTransactions();}
 function backToLedgerHub(){showTopSec('ledger');}
 
 
@@ -1810,7 +1870,7 @@ async function loadAccountSummary() {
     const rows = (d.ok && d.summary) ? d.summary : [];
     if (!rows.length) { el.innerHTML = '<div class="card"><div style="color:var(--text3);font-size:13px">No accounts recorded yet.</div></div>'; return; }
     el.innerHTML = rows.map(r => `
-      <div class="card" style="margin-bottom:12px">
+      <div class="card card-pad" style="margin-bottom:12px">
         <div class="sec-title" style="margin:0 0 12px;font-size:15px">${r.bookie}</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:14px">
           <div><div class="lbl" style="margin-bottom:3px">Accounts used</div><div style="font-size:18px;font-weight:600">${r.accountsUsed}</div></div>
@@ -2465,13 +2525,17 @@ async function initAccountsGrid() {
   await loadAllAccounts(true); // excludeClosed (also excludes locked)
   renderAccountsGrid();
   renderBankBalancesBox();
+  renderLiveAccountsLockedTotal();
 }
 
-// Groups live accounts into one column per bookie, each showing every account's ID and
-// live balance. Replaces the old fixed profile×bookie matrix — accounts no longer sit in
-// fixed row slots, each ID is its own thing, so columns are simply as long as they need to be.
+// Groups live accounts into one column per bookie, each showing every account's ID and,
+// depending on the two toggles above the grid, its live balance and/or open bet stake.
+// Replaces the old fixed profile×bookie matrix — accounts no longer sit in fixed row
+// slots, each ID is its own thing, so columns are simply as long as they need to be.
 function renderAccountsGrid() {
   const wrap = document.getElementById('live-accounts-wrap');
+  const showBalance = document.getElementById('toggle-show-balance')?.checked;
+  const showOpenStake = document.getElementById('toggle-show-openstake')?.checked;
   const byBookie = {};
   ALL_ACCOUNTS.forEach(a => { (byBookie[a.bookie] = byBookie[a.bookie] || []).push(a); });
   const bookies = Object.keys(byBookie).sort();
@@ -2479,12 +2543,13 @@ function renderAccountsGrid() {
   if (!bookies.length) { wrap.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:24px">No live accounts yet — publish some via Account Entry.</div>'; return; }
 
   wrap.innerHTML = `<div style="display:flex;gap:12px;align-items:flex-start">${bookies.map(bookie => {
-    const cfg1 = null;
     const cells = byBookie[bookie].map(a => {
       const cfg = STATUS_CONFIG[a.status] || STATUS_CONFIG.good;
+      const openStake = a.open_stake || 0;
       return `<div class="live-accts-cell" style="background:${cfg.bg};color:${cfg.color}" onclick="openAccountModal(${a.id})">
         <div class="id">${escapeHtml(a.account_id || '—')}</div>
-        <div class="bal">£${(a.balance||0).toLocaleString('en-GB',{minimumFractionDigits:0,maximumFractionDigits:2})}</div>
+        ${showBalance ? `<div class="bal">£${(a.balance||0).toLocaleString('en-GB',{minimumFractionDigits:0,maximumFractionDigits:2})}</div>` : ''}
+        ${showOpenStake && openStake>0 ? `<div style="font-size:10px;color:#3b82f6;font-weight:600">+£${openStake.toLocaleString('en-GB',{maximumFractionDigits:2})} open</div>` : ''}
       </div>`;
     }).join('');
     return `<div class="live-accts-col"><div class="live-accts-col-header">${escapeHtml(bookie)}</div>${cells}</div>`;
@@ -2493,7 +2558,8 @@ function renderAccountsGrid() {
 
 // Bank figures come from the server (GET /banks), not summed client-side from account
 // balances — "remaining" already accounts for starting-balance-at-publish being excluded,
-// per the rule that pre-existing float doesn't count as money drawn from the bank.
+// per the rule that pre-existing float doesn't count as money drawn from the bank. Locked
+// funds are shown as a separate total elsewhere, not folded into any bank's own figure.
 async function renderBankBalancesBox() {
   const el = document.getElementById('bank-balances-box');
   try {
@@ -2504,9 +2570,18 @@ async function renderBankBalancesBox() {
       <div style="padding:8px 14px;background:var(--surface2);border-radius:var(--radius);font-size:13px">
         <div style="font-weight:600">${escapeHtml(b.name)}</div>
         <div style="color:${balanceColor(b.remaining)}">£${b.remaining.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
-        ${b.locked_total>0?`<div style="font-size:10.5px;color:var(--red);font-weight:500">£${b.locked_total.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})} locked</div>`:''}
       </div>`).join('');
   } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load bank balances.</div>'; }
+}
+
+async function renderLiveAccountsLockedTotal() {
+  const el = document.getElementById('live-accounts-locked-total');
+  try {
+    const d = await ledgerApi('locked-funds');
+    const rows = (d.ok && d.locked) ? d.locked : [];
+    const total = rows.reduce((s,r) => s + r.amount, 0);
+    el.textContent = '£' + total.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+  } catch (e) { el.textContent = '—'; }
 }
 
 // The identity name written on the account — legacy field, no longer collected at entry
@@ -2831,17 +2906,31 @@ async function initLockedFunds() {
   try {
     const d = await ledgerApi('locked-funds');
     const rows = (d.ok && d.locked) ? d.locked : [];
+
+    const total = rows.reduce((s,r) => s + r.amount, 0);
+    document.getElementById('locked-funds-total').textContent = '£' + total.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const byBank = {};
+    rows.forEach(r => { byBank[r.bank || 'Unknown'] = (byBank[r.bank || 'Unknown'] || 0) + r.amount; });
+    const bankEl = document.getElementById('locked-funds-by-bank');
+    const bankNames = Object.keys(byBank).sort();
+    bankEl.innerHTML = bankNames.length ? bankNames.map(b => `
+      <div style="padding:8px 14px;background:var(--surface2);border-radius:var(--radius);font-size:13px">
+        <div style="font-weight:600">${escapeHtml(b)}</div>
+        <div style="color:var(--red)">£${byBank[b].toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+      </div>`).join('') : '<div style="color:var(--text3);font-size:13px">—</div>';
+
     if (!rows.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No locked funds.</div>'; return; }
-    el.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr 100px 160px;gap:10px;margin-bottom:8px;font-size:11px;color:var(--text2);font-weight:600;text-transform:uppercase">
+    el.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr 100px 220px;gap:10px;margin-bottom:8px;font-size:11px;color:var(--text2);font-weight:600;text-transform:uppercase">
       <div>ID</div><div>Bookie</div><div>Bank</div><div style="text-align:right">Amount</div><div></div>
     </div>` + rows.map(r => `
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 100px 160px;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px;align-items:center">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 100px 220px;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px;align-items:center">
         <div>${r.account_code || '—'}</div>
         <div>${r.bookie || '—'}</div>
         <div>${r.bank || '—'}</div>
         <div style="text-align:right;font-weight:600;color:var(--red)">£${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
-        <div style="display:flex;gap:6px;justify-content:flex-end">
+        <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
           ${r.source==='account_locked' && r.linked_account_id ? `<button class="add-btn" onclick="unlockFunds(${r.id})"><i class="ti ti-lock-open"></i> Unlock</button>` : ''}
+          ${r.source==='confiscated_withdrawal' && r.linked_account_id ? `<button class="add-btn" onclick="recoverFunds(${r.id})"><i class="ti ti-rotate"></i> Funds recovered</button>` : ''}
           <button class="rm-btn" onclick="clearLockedFunds(${r.id})" title="Clear">×</button>
         </div>
       </div>`).join('');
@@ -2854,6 +2943,15 @@ async function unlockFunds(id) {
     const d = await ledgerApi('locked-funds/'+id+'/unlock', { method:'POST' });
     if (!d.ok) { alert('Failed to unlock: ' + (d.error||'unknown error')); return; }
   } catch (e) { alert('Network error unlocking funds.'); return; }
+  initLockedFunds();
+}
+
+async function recoverFunds(id) {
+  if (!confirm('Mark these funds as recovered? The bookie is paying out after all — this moves it back to Pending Withdrawals, ready to Confirm once it lands.')) return;
+  try {
+    const d = await ledgerApi('locked-funds/'+id+'/recover', { method:'POST' });
+    if (!d.ok) { alert('Failed to recover: ' + (d.error||'unknown error')); return; }
+  } catch (e) { alert('Network error recovering funds.'); return; }
   initLockedFunds();
 }
 
@@ -2892,6 +2990,71 @@ async function undoArchive(id) {
     if (!d.ok) { alert('Failed to restore: ' + (d.error||'unknown error')); return; }
   } catch (e) { alert('Network error restoring account.'); return; }
   initArchived();
+}
+
+// ================== LEDGER: BANK TRANSACTIONS ==================
+async function initBankTransactions() {
+  const bankSel = document.getElementById('txn-bank');
+  bankSel.innerHTML = '<option value="">Loading…</option>';
+  document.getElementById('txn-amount').value = '';
+  document.getElementById('txn-reason').value = '';
+  document.getElementById('txn-msg').innerHTML = '';
+  try {
+    const d = await ledgerApi('banks');
+    const banks = (d.ok && d.banks) ? d.banks : [];
+    bankSel.innerHTML = banks.length
+      ? '<option value="">Select bank…</option>' + banks.map(b => `<option value="${escapeHtml(b.name)}">${escapeHtml(b.name)} — £${b.remaining.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</option>`).join('')
+      : '<option value="">No banks yet — add one via Account Entry</option>';
+  } catch (e) { bankSel.innerHTML = '<option value="">Could not load banks</option>'; }
+  loadBankTransactions();
+}
+
+async function loadBankTransactions() {
+  const el = document.getElementById('txn-list');
+  el.innerHTML = 'Loading…';
+  try {
+    const d = await ledgerApi('bank-transactions');
+    const rows = (d.ok && d.transactions) ? d.transactions : [];
+    if (!rows.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No transactions logged yet.</div>'; return; }
+    el.innerHTML = `<div style="display:grid;grid-template-columns:150px 1fr 110px 1fr;gap:10px;margin-bottom:8px;font-size:11px;color:var(--text2);font-weight:600;text-transform:uppercase">
+      <div>Date</div><div>Bank</div><div style="text-align:right">Amount</div><div>Reason</div>
+    </div>` + rows.map(r => `
+      <div style="display:grid;grid-template-columns:150px 1fr 110px 1fr;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px;align-items:center">
+        <div style="color:var(--text3);font-size:11px">${formatLedgerDate(r.date)}</div>
+        <div>${escapeHtml(r.bank)}</div>
+        <div style="text-align:right;font-weight:600;color:${r.direction==='in'?'var(--green)':'var(--red)'}">${r.direction==='in'?'+':'-'}£${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+        <div style="color:var(--text2)">${escapeHtml(r.reason||'—')}</div>
+      </div>`).join('');
+  } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load transactions.</div>'; }
+}
+
+async function submitBankTransaction() {
+  const bank = document.getElementById('txn-bank').value;
+  const amount = parseFloat(document.getElementById('txn-amount').value);
+  const reason = document.getElementById('txn-reason').value.trim();
+  const direction = document.querySelector('input[name="txn-direction"]:checked').value;
+  const msgEl = document.getElementById('txn-msg');
+
+  if (!bank) { msgEl.innerHTML = '<span style="color:var(--red)">Select a bank.</span>'; return; }
+  if (!(amount > 0)) { msgEl.innerHTML = '<span style="color:var(--red)">Enter an amount greater than £0.</span>'; return; }
+
+  msgEl.innerHTML = '<span style="color:var(--text2)">Logging…</span>';
+  try {
+    const d = await ledgerApi('bank-transactions', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ bank, amount, direction, reason }) });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to log transaction'}</span>`; return; }
+    msgEl.innerHTML = `<span style="color:var(--green)"><i class="ti ti-check"></i> Logged.</span>`;
+    document.getElementById('txn-amount').value = '';
+    document.getElementById('txn-reason').value = '';
+    // Refresh the bank dropdown so its shown balance reflects the new transaction immediately.
+    const bd = await ledgerApi('banks');
+    const banks = (bd.ok && bd.banks) ? bd.banks : [];
+    const bankSel = document.getElementById('txn-bank');
+    const prevSelected = bankSel.value;
+    bankSel.innerHTML = banks.length
+      ? '<option value="">Select bank…</option>' + banks.map(b => `<option value="${escapeHtml(b.name)}" ${b.name===prevSelected?'selected':''}>${escapeHtml(b.name)} — £${b.remaining.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</option>`).join('')
+      : '<option value="">No banks yet — add one via Account Entry</option>';
+    loadBankTransactions();
+  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error.</span>'; }
 }
 
 function showCalc(name){document.getElementById('calc-hub').style.display='none';document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='dutch')initDutch();if(name==='arb')initArb();if(name==='gsm')initGSM();if(name==='kelly')initKelly();if(name==='kellycorr')initKellyCorr();}
