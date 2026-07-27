@@ -3263,55 +3263,56 @@ async function openBetTrackingDetail(betType, label) {
   await loadBetTrackingDetail();
 }
 
-let BT_DETAIL_STATE = { bets: [], fieldKeys: [], page: 0 };
+let BT_DETAIL_STATE = { page: 0, totalCount: 0, fieldKeys: [] };
 const BT_PAGE_SIZE = 200;
 
 async function loadBetTrackingDetail() {
+  BT_DETAIL_STATE = { page: 0, totalCount: 0, fieldKeys: [] };
+  await fetchBtDetailPage();
+}
+
+async function fetchBtDetailPage() {
   const tableWrap = document.getElementById('bt-detail-table-wrap');
   tableWrap.innerHTML = '<div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div>';
   try {
-    const d = await ledgerApi('bets?type='+encodeURIComponent(btDetailType));
+    const offset = BT_DETAIL_STATE.page * BT_PAGE_SIZE;
+    const d = await ledgerApi(`bets?type=${encodeURIComponent(btDetailType)}&limit=${BT_PAGE_SIZE}&offset=${offset}`);
     if (!d.ok) { tableWrap.innerHTML = `<div style="padding:24px;color:var(--red);font-size:13px">Could not load bets: ${d.error||'unknown error'}</div>`; return; }
     const bets = d.bets || [];
+    const s = d.summary || { count:0, open:0, wins:0, losses:0, totalStake:0, totalPl:0 };
+    BT_DETAIL_STATE.totalCount = s.count;
 
-    const count = bets.length;
-    const open = bets.filter(b=>b.result==='open').length;
-    const wins = bets.filter(b=>b.result==='won').length;
-    const losses = bets.filter(b=>b.result==='lost').length;
-    const totalStake = bets.reduce((s,b)=>s+(b.total_stake||0),0);
-    const totalPl = bets.reduce((s,b)=>s+(b.pl||0),0);
-
-    document.getElementById('bt-detail-count').textContent = count.toLocaleString('en-GB');
-    document.getElementById('bt-detail-open').textContent = open.toLocaleString('en-GB');
-    document.getElementById('bt-detail-wins').textContent = wins.toLocaleString('en-GB');
-    document.getElementById('bt-detail-losses').textContent = losses.toLocaleString('en-GB');
-    document.getElementById('bt-detail-stake').textContent = '£'+totalStake.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+    document.getElementById('bt-detail-count').textContent = s.count.toLocaleString('en-GB');
+    document.getElementById('bt-detail-open').textContent = s.open.toLocaleString('en-GB');
+    document.getElementById('bt-detail-wins').textContent = s.wins.toLocaleString('en-GB');
+    document.getElementById('bt-detail-losses').textContent = s.losses.toLocaleString('en-GB');
+    document.getElementById('bt-detail-stake').textContent = '£'+s.totalStake.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
     const plEl = document.getElementById('bt-detail-pl');
-    plEl.textContent = (totalPl>=0?'+':'-')+'£'+Math.abs(totalPl).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
-    plEl.style.color = totalPl>=0?'var(--green)':'var(--red)';
+    plEl.textContent = (s.totalPl>=0?'+':'-')+'£'+Math.abs(s.totalPl).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+    plEl.style.color = s.totalPl>=0?'var(--green)':'var(--red)';
 
-    if (!bets.length) { tableWrap.innerHTML = '<div style="padding:24px;color:var(--text3);font-size:13px">No bets recorded yet for this type.</div>'; return; }
+    if (!s.count) { tableWrap.innerHTML = '<div style="padding:24px;color:var(--text3);font-size:13px">No bets recorded yet for this type.</div>'; return; }
+    if (!bets.length) { tableWrap.innerHTML = '<div style="padding:24px;color:var(--text3);font-size:13px">No bets on this page.</div>'; return; }
 
-    // Columns are built dynamically from the union of every bet's `fields` keys, since each
+    // Columns are built dynamically from the union of this page's `fields` keys, since each
     // bet type has a different shape — mirrors how the old generic tab handlers worked.
     const fieldKeys = [];
     bets.forEach(b => { Object.keys(b.fields||{}).forEach(k => { if (!fieldKeys.includes(k)) fieldKeys.push(k); }); });
+    BT_DETAIL_STATE.fieldKeys = fieldKeys;
 
-    BT_DETAIL_STATE = { bets, fieldKeys, page: 0 };
-    renderBtDetailPage();
+    renderBtDetailTable(bets);
   } catch (e) { tableWrap.innerHTML = '<div style="padding:24px;color:var(--red);font-size:13px">Could not load bets.</div>'; }
 }
 
-function renderBtDetailPage() {
+function renderBtDetailTable(bets) {
   const tableWrap = document.getElementById('bt-detail-table-wrap');
-  const { bets, fieldKeys, page } = BT_DETAIL_STATE;
-  const totalPages = Math.max(1, Math.ceil(bets.length / BT_PAGE_SIZE));
-  const pageBets = bets.slice(page * BT_PAGE_SIZE, (page + 1) * BT_PAGE_SIZE);
+  const { fieldKeys, page, totalCount } = BT_DETAIL_STATE;
+  const totalPages = Math.max(1, Math.ceil(totalCount / BT_PAGE_SIZE));
 
   let html = `<table class="dt" style="min-width:720px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr>
     <th>Date</th><th>Result</th>${fieldKeys.map(k=>`<th>${escapeHtml(k)}</th>`).join('')}<th class="r">Stake</th><th class="r">P/L</th><th></th>
   </tr></thead><tbody>`;
-  pageBets.forEach(b => {
+  bets.forEach(b => {
     const resColor = b.result==='won'?'var(--green)':b.result==='lost'?'var(--red)':b.result==='void'?'var(--text3)':'var(--amber)';
     html += `<tr>
       <td>${formatLedgerDate(b.date)}</td>
@@ -3327,7 +3328,7 @@ function renderBtDetailPage() {
   if (totalPages > 1) {
     html += `<div style="display:flex;justify-content:center;align-items:center;gap:14px;padding:14px;border-top:0.5px solid var(--border)">
       <button class="add-btn" onclick="btChangePage(-1)" ${page<=0?'disabled':''}><i class="ti ti-chevron-left"></i> Prev</button>
-      <span style="font-size:13px;color:var(--text2)">Page ${page+1} of ${totalPages} (${bets.length.toLocaleString('en-GB')} bets)</span>
+      <span style="font-size:13px;color:var(--text2)">Page ${page+1} of ${totalPages} (${totalCount.toLocaleString('en-GB')} bets)</span>
       <button class="add-btn" onclick="btChangePage(1)" ${page>=totalPages-1?'disabled':''}>Next <i class="ti ti-chevron-right"></i></button>
     </div>`;
   }
@@ -3335,10 +3336,10 @@ function renderBtDetailPage() {
   tableWrap.innerHTML = html;
 }
 
-function btChangePage(delta) {
-  const totalPages = Math.max(1, Math.ceil(BT_DETAIL_STATE.bets.length / BT_PAGE_SIZE));
+async function btChangePage(delta) {
+  const totalPages = Math.max(1, Math.ceil(BT_DETAIL_STATE.totalCount / BT_PAGE_SIZE));
   BT_DETAIL_STATE.page = Math.min(totalPages - 1, Math.max(0, BT_DETAIL_STATE.page + delta));
-  renderBtDetailPage();
+  await fetchBtDetailPage();
   document.getElementById('bt-detail-table-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
