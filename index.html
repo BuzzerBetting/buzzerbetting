@@ -215,7 +215,12 @@ input::placeholder{color:var(--text3)}
     </div>
     <div class="cat" style="--accent:var(--blue)" onclick="showTopSec('ledger')">
       <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-wallet"></i></div>
-      <div><div class="cat-title">Ledger</div><div class="cat-desc">Account tracking, live balances and bet entry</div><div class="cat-tag" style="background:var(--blue-bg);color:var(--blue)">Coming soon</div></div>
+      <div><div class="cat-title">Ledger</div><div class="cat-desc">Account tracking, live balances and bet entry</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
+    <div class="cat" style="--accent:var(--amber)" onclick="showTopSec('bettracking')">
+      <div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-history"></i></div>
+      <div><div class="cat-title">Bet Tracking</div><div class="cat-desc">Full history, now stored on the site instead of Google Sheets</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
   </div>
@@ -327,6 +332,71 @@ input::placeholder{color:var(--text3)}
       <div><div class="cat-title">Bank Transactions</div><div class="cat-desc">Money moved directly in/out of a bank, affecting its live balance</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
+  </div>
+</div>
+
+<!-- BET TRACKING -->
+<div id="view-bettracking" class="sec">
+  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <div class="sec-title">Bet Tracking</div>
+  <div style="font-size:12.5px;color:var(--text2);margin-bottom:16px">
+    Full bet history stored on the site. Once fully migrated from Google Sheets, this replaces the old Bets → Bet tracker screens.
+  </div>
+  <div class="grid">
+    <div class="cat" style="--accent:var(--green)" onclick="showBetTrackingGroup('personal')">
+      <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-user"></i></div>
+      <div><div class="cat-title">Personal Bets</div><div class="cat-desc">Value, Keithbot, BB Horse, BB Golf and more</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
+    <div class="cat" style="--accent:var(--blue)" onclick="showBetTrackingGroup('va')">
+      <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-headset"></i></div>
+      <div><div class="cat-title">VA Bets</div><div class="cat-desc">Discord, BB Racing Tracker Pro, BB Bet Tracker and more</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
+  </div>
+</div>
+
+<!-- BET TRACKING: GROUP LIST (Personal or VA) -->
+<div id="view-bettracking-group" class="sec">
+  <button class="back" onclick="showTopSec('bettracking')"><i class="ti ti-arrow-left"></i> Bet Tracking</button>
+  <div class="sec-title" id="bettracking-group-title"></div>
+  <div class="ch-grid" id="bettracking-group-list"></div>
+</div>
+
+<!-- BET TRACKING: DETAIL (one generic view, reused for every bet type) -->
+<div id="view-bettracking-detail" class="sec">
+  <button class="back" onclick="backToBetTrackingGroup()"><i class="ti ti-arrow-left"></i> Back</button>
+  <div class="sec-title" id="bettracking-detail-title"></div>
+
+  <div class="card card-pad" style="margin-bottom:16px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:14px">
+      <div><div class="lbl" style="margin-bottom:3px">Bets</div><div style="font-size:18px;font-weight:600" id="bt-detail-count">—</div></div>
+      <div><div class="lbl" style="margin-bottom:3px">Open</div><div style="font-size:18px;font-weight:600" id="bt-detail-open">—</div></div>
+      <div><div class="lbl" style="margin-bottom:3px">Wins</div><div style="font-size:18px;font-weight:600;color:var(--green)" id="bt-detail-wins">—</div></div>
+      <div><div class="lbl" style="margin-bottom:3px">Losses</div><div style="font-size:18px;font-weight:600;color:var(--red)" id="bt-detail-losses">—</div></div>
+      <div><div class="lbl" style="margin-bottom:3px">Total stake</div><div style="font-size:18px;font-weight:600" id="bt-detail-stake">—</div></div>
+      <div><div class="lbl" style="margin-bottom:3px">P/L</div><div style="font-size:18px;font-weight:600" id="bt-detail-pl">—</div></div>
+    </div>
+  </div>
+
+  <div class="card" style="padding:0;overflow:hidden">
+    <div class="scroll" id="bt-detail-table-wrap"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
+  </div>
+</div>
+
+<!-- BET TRACKING: LINK ACCOUNT MODAL (for open bets migrated with no account attached yet) -->
+<div id="bt-link-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;padding:16px">
+  <div class="card card-pad" style="max-width:400px;width:100%">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="sec-title" style="margin:0;font-size:16px">Link account</div>
+      <button class="add-btn" onclick="closeBtLinkModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <label class="lbl">Account</label>
+    <select id="bt-link-account" style="margin-bottom:14px"></select>
+    <label class="lbl">Stake £</label>
+    <input type="number" id="bt-link-stake" step="0.01" style="margin-bottom:16px">
+    <button onclick="submitBtLink()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:11px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;width:100%">Link</button>
+    <div id="bt-link-msg" style="margin-top:12px;font-size:13px"></div>
   </div>
 </div>
 
@@ -1722,7 +1792,7 @@ function checkPin(){
 // ── NAVIGATION ──
 function goHome(){document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
 function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();if(name==='ddhh')initDDHH(null);}
-const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger'};
+const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger',bettracking:'bettracking'};
 function showTopSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});}
 function backToBetsMenu(){showTopSec('bets');}
 function backToCalcMenu(){showTopSec('calc');}
@@ -3127,6 +3197,159 @@ async function submitBankTransaction() {
       : '<option value="">No banks yet — add one via Account Entry</option>';
     loadBankTransactions();
   } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error.</span>'; }
+}
+
+// ================== BET TRACKING ==================
+// "Offers" appears on both sides but needs distinct bet_type keys internally so personal
+// and VA offers don't get mixed together — the label shown to the user is just "Offers" either way.
+const BET_TRACKING_GROUPS = {
+  personal: [
+    {key:'Value', label:'Value'},
+    {key:'Keithbot', label:'KeithBot'},
+    {key:'Dogs + Horses', label:'Dogs + Horses DogBot'},
+    {key:'BB Horse', label:'BB Horses'},
+    {key:'BB Golf', label:'BB Golf'},
+    {key:'American Props', label:'American Props'},
+    {key:'Freeze', label:'Freeze'},
+    {key:'Ninja Golf BFEX', label:'Ninja Golf BFEX'},
+    {key:'Corners', label:'Corners'},
+    {key:'Offers (Personal)', label:'Offers'},
+    {key:'Other Bets', label:'Other Bets'},
+  ],
+  va: [
+    {key:'Discord', label:'Discord'},
+    {key:'BB - RTP', label:'BB Racing Tracker Pro'},
+    {key:'BB - BT', label:'BB Bet Tracker'},
+    {key:'Casino', label:'Casino'},
+    {key:'Offers (VA)', label:'Offers'},
+    {key:'Other', label:'Other'},
+  ],
+};
+
+let betTrackingLastGroup = null;
+
+function showBetTrackingGroup(group) {
+  betTrackingLastGroup = group;
+  document.getElementById('bettracking-group-title').textContent = group==='personal' ? 'Personal Bets' : 'VA Bets';
+  const list = BET_TRACKING_GROUPS[group];
+  const colors = ['var(--green)','var(--blue)','var(--purple)','var(--amber)','var(--red)'];
+  document.getElementById('bettracking-group-list').innerHTML = list.map((t,i) => `
+    <div class="cat" style="--accent:${colors[i%colors.length]}" onclick="openBetTrackingDetail('${t.key.replace(/'/g,"\\'")}','${t.label.replace(/'/g,"\\'")}')">
+      <div class="cat-ico" style="background:var(--surface2);color:var(--text2)"><i class="ti ti-list"></i></div>
+      <div><div class="cat-title">${t.label}</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>`).join('');
+  document.getElementById('view-home').style.display='none';
+  document.querySelectorAll('.sec').forEach(s=>s.style.display='none');
+  document.getElementById('view-bettracking-group').style.display='block';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function backToBetTrackingGroup() {
+  if (betTrackingLastGroup) showBetTrackingGroup(betTrackingLastGroup);
+  else showTopSec('bettracking');
+}
+
+let btDetailType = null;
+
+async function openBetTrackingDetail(betType, label) {
+  btDetailType = betType;
+  document.getElementById('bettracking-detail-title').textContent = label;
+  document.getElementById('view-home').style.display='none';
+  document.querySelectorAll('.sec').forEach(s=>s.style.display='none');
+  document.getElementById('view-bettracking-detail').style.display='block';
+  window.scrollTo({top:0,behavior:'smooth'});
+  await loadBetTrackingDetail();
+}
+
+async function loadBetTrackingDetail() {
+  const tableWrap = document.getElementById('bt-detail-table-wrap');
+  tableWrap.innerHTML = '<div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div>';
+  try {
+    const d = await ledgerApi('bets?type='+encodeURIComponent(btDetailType));
+    const bets = (d.ok && d.bets) ? d.bets : [];
+
+    const count = bets.length;
+    const open = bets.filter(b=>b.result==='open').length;
+    const wins = bets.filter(b=>b.result==='won').length;
+    const losses = bets.filter(b=>b.result==='lost').length;
+    const totalStake = bets.reduce((s,b)=>s+(b.total_stake||0),0);
+    const totalPl = bets.reduce((s,b)=>s+(b.pl||0),0);
+
+    document.getElementById('bt-detail-count').textContent = count;
+    document.getElementById('bt-detail-open').textContent = open;
+    document.getElementById('bt-detail-wins').textContent = wins;
+    document.getElementById('bt-detail-losses').textContent = losses;
+    document.getElementById('bt-detail-stake').textContent = '£'+totalStake.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const plEl = document.getElementById('bt-detail-pl');
+    plEl.textContent = (totalPl>=0?'+':'-')+'£'+Math.abs(totalPl).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+    plEl.style.color = totalPl>=0?'var(--green)':'var(--red)';
+
+    if (!bets.length) { tableWrap.innerHTML = '<div style="padding:24px;color:var(--text3);font-size:13px">No bets recorded yet for this type.</div>'; return; }
+
+    // Columns are built dynamically from the union of every bet's `fields` keys, since each
+    // bet type has a different shape — mirrors how the old generic tab handlers worked.
+    const fieldKeys = [];
+    bets.forEach(b => { Object.keys(b.fields||{}).forEach(k => { if (!fieldKeys.includes(k)) fieldKeys.push(k); }); });
+
+    let html = `<table class="dt" style="min-width:720px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr>
+      <th>Date</th><th>Result</th>${fieldKeys.map(k=>`<th>${escapeHtml(k)}</th>`).join('')}<th class="r">Stake</th><th class="r">P/L</th><th></th>
+    </tr></thead><tbody>`;
+    bets.forEach(b => {
+      const resColor = b.result==='won'?'var(--green)':b.result==='lost'?'var(--red)':b.result==='void'?'var(--text3)':'var(--amber)';
+      html += `<tr>
+        <td>${formatLedgerDate(b.date)}</td>
+        <td style="color:${resColor};font-weight:600;text-transform:capitalize">${b.result}</td>
+        ${fieldKeys.map(k=>`<td>${escapeHtml(b.fields[k]!==undefined&&b.fields[k]!==null?b.fields[k]:'')}</td>`).join('')}
+        <td class="r">£${(b.total_stake||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+        <td class="r" style="color:${(b.pl||0)>=0?'var(--green)':'var(--red)'}">${(b.pl||0)>=0?'+':'-'}£${Math.abs(b.pl||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+        <td>${b.result==='open' && !b.leg_count ? `<button class="add-btn" onclick="openBtLinkModal(${b.id})">Link account</button>` : ''}</td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    tableWrap.innerHTML = html;
+  } catch (e) { tableWrap.innerHTML = '<div style="padding:24px;color:var(--red);font-size:13px">Could not load bets.</div>'; }
+}
+
+let btLinkBetId = null;
+
+// Only ever needed for historical open bets migrated without an account attached —
+// lets you attach one case-by-case, exactly as agreed for the migration.
+async function openBtLinkModal(betId) {
+  btLinkBetId = betId;
+  document.getElementById('bt-link-msg').innerHTML = '';
+  document.getElementById('bt-link-stake').value = '';
+  const sel = document.getElementById('bt-link-account');
+  sel.innerHTML = '<option value="">Loading…</option>';
+  try {
+    const d = await ledgerApi('accounts?excludeClosed=1');
+    const accounts = (d.ok && d.accounts) ? d.accounts : [];
+    sel.innerHTML = accounts.length
+      ? '<option value="">Select account…</option>' + accounts.map(a=>`<option value="${a.id}">${a.account_id||a.profile} (${a.bookie})</option>`).join('')
+      : '<option value="">No live accounts</option>';
+  } catch (e) { sel.innerHTML = '<option value="">Could not load accounts</option>'; }
+  document.getElementById('bt-link-modal-overlay').style.display = 'flex';
+}
+
+function closeBtLinkModal() {
+  document.getElementById('bt-link-modal-overlay').style.display = 'none';
+  btLinkBetId = null;
+}
+
+async function submitBtLink() {
+  if (!btLinkBetId) return;
+  const accountId = document.getElementById('bt-link-account').value;
+  const stake = parseFloat(document.getElementById('bt-link-stake').value);
+  const msgEl = document.getElementById('bt-link-msg');
+  if (!accountId) { msgEl.innerHTML = '<span style="color:var(--red)">Select an account.</span>'; return; }
+  if (!(stake>0)) { msgEl.innerHTML = '<span style="color:var(--red)">Enter a stake greater than £0.</span>'; return; }
+  msgEl.innerHTML = '<span style="color:var(--text2)">Linking…</span>';
+  try {
+    const d = await ledgerApi('bets/'+btLinkBetId+'/legs', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ account_id: accountId, stake }) });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to link'}</span>`; return; }
+    closeBtLinkModal();
+    loadBetTrackingDetail();
+  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error</span>'; }
 }
 
 function showCalc(name){document.getElementById('calc-hub').style.display='none';document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='dutch')initDutch();if(name==='arb')initArb();if(name==='gsm')initGSM();if(name==='kelly')initKelly();if(name==='kellycorr')initKellyCorr();}
