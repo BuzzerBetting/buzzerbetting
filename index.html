@@ -3271,7 +3271,8 @@ async function loadBetTrackingDetail() {
   tableWrap.innerHTML = '<div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div>';
   try {
     const d = await ledgerApi('bets?type='+encodeURIComponent(btDetailType));
-    const bets = (d.ok && d.bets) ? d.bets : [];
+    if (!d.ok) { tableWrap.innerHTML = `<div style="padding:24px;color:var(--red);font-size:13px">Could not load bets: ${d.error||'unknown error'}</div>`; return; }
+    const bets = d.bets || [];
 
     const count = bets.length;
     const open = bets.filter(b=>b.result==='open').length;
