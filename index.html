@@ -3263,6 +3263,9 @@ async function openBetTrackingDetail(betType, label) {
   await loadBetTrackingDetail();
 }
 
+let BT_DETAIL_STATE = { bets: [], fieldKeys: [], page: 0 };
+const BT_PAGE_SIZE = 200;
+
 async function loadBetTrackingDetail() {
   const tableWrap = document.getElementById('bt-detail-table-wrap');
   tableWrap.innerHTML = '<div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div>';
@@ -3277,10 +3280,10 @@ async function loadBetTrackingDetail() {
     const totalStake = bets.reduce((s,b)=>s+(b.total_stake||0),0);
     const totalPl = bets.reduce((s,b)=>s+(b.pl||0),0);
 
-    document.getElementById('bt-detail-count').textContent = count;
-    document.getElementById('bt-detail-open').textContent = open;
-    document.getElementById('bt-detail-wins').textContent = wins;
-    document.getElementById('bt-detail-losses').textContent = losses;
+    document.getElementById('bt-detail-count').textContent = count.toLocaleString('en-GB');
+    document.getElementById('bt-detail-open').textContent = open.toLocaleString('en-GB');
+    document.getElementById('bt-detail-wins').textContent = wins.toLocaleString('en-GB');
+    document.getElementById('bt-detail-losses').textContent = losses.toLocaleString('en-GB');
     document.getElementById('bt-detail-stake').textContent = '£'+totalStake.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
     const plEl = document.getElementById('bt-detail-pl');
     plEl.textContent = (totalPl>=0?'+':'-')+'£'+Math.abs(totalPl).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -3293,23 +3296,49 @@ async function loadBetTrackingDetail() {
     const fieldKeys = [];
     bets.forEach(b => { Object.keys(b.fields||{}).forEach(k => { if (!fieldKeys.includes(k)) fieldKeys.push(k); }); });
 
-    let html = `<table class="dt" style="min-width:720px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr>
-      <th>Date</th><th>Result</th>${fieldKeys.map(k=>`<th>${escapeHtml(k)}</th>`).join('')}<th class="r">Stake</th><th class="r">P/L</th><th></th>
-    </tr></thead><tbody>`;
-    bets.forEach(b => {
-      const resColor = b.result==='won'?'var(--green)':b.result==='lost'?'var(--red)':b.result==='void'?'var(--text3)':'var(--amber)';
-      html += `<tr>
-        <td>${formatLedgerDate(b.date)}</td>
-        <td style="color:${resColor};font-weight:600;text-transform:capitalize">${b.result}</td>
-        ${fieldKeys.map(k=>`<td>${escapeHtml(b.fields[k]!==undefined&&b.fields[k]!==null?b.fields[k]:'')}</td>`).join('')}
-        <td class="r">£${(b.total_stake||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-        <td class="r" style="color:${(b.pl||0)>=0?'var(--green)':'var(--red)'}">${(b.pl||0)>=0?'+':'-'}£${Math.abs(b.pl||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-        <td>${b.result==='open' && !b.leg_count ? `<button class="add-btn" onclick="openBtLinkModal(${b.id})">Link account</button>` : ''}</td>
-      </tr>`;
-    });
-    html += '</tbody></table>';
-    tableWrap.innerHTML = html;
+    BT_DETAIL_STATE = { bets, fieldKeys, page: 0 };
+    renderBtDetailPage();
   } catch (e) { tableWrap.innerHTML = '<div style="padding:24px;color:var(--red);font-size:13px">Could not load bets.</div>'; }
+}
+
+function renderBtDetailPage() {
+  const tableWrap = document.getElementById('bt-detail-table-wrap');
+  const { bets, fieldKeys, page } = BT_DETAIL_STATE;
+  const totalPages = Math.max(1, Math.ceil(bets.length / BT_PAGE_SIZE));
+  const pageBets = bets.slice(page * BT_PAGE_SIZE, (page + 1) * BT_PAGE_SIZE);
+
+  let html = `<table class="dt" style="min-width:720px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr>
+    <th>Date</th><th>Result</th>${fieldKeys.map(k=>`<th>${escapeHtml(k)}</th>`).join('')}<th class="r">Stake</th><th class="r">P/L</th><th></th>
+  </tr></thead><tbody>`;
+  pageBets.forEach(b => {
+    const resColor = b.result==='won'?'var(--green)':b.result==='lost'?'var(--red)':b.result==='void'?'var(--text3)':'var(--amber)';
+    html += `<tr>
+      <td>${formatLedgerDate(b.date)}</td>
+      <td style="color:${resColor};font-weight:600;text-transform:capitalize">${b.result}</td>
+      ${fieldKeys.map(k=>`<td>${escapeHtml(b.fields[k]!==undefined&&b.fields[k]!==null?b.fields[k]:'')}</td>`).join('')}
+      <td class="r">£${(b.total_stake||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td class="r" style="color:${(b.pl||0)>=0?'var(--green)':'var(--red)'}">${(b.pl||0)>=0?'+':'-'}£${Math.abs(b.pl||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td>${b.result==='open' && !b.leg_count ? `<button class="add-btn" onclick="openBtLinkModal(${b.id})">Link account</button>` : ''}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+
+  if (totalPages > 1) {
+    html += `<div style="display:flex;justify-content:center;align-items:center;gap:14px;padding:14px;border-top:0.5px solid var(--border)">
+      <button class="add-btn" onclick="btChangePage(-1)" ${page<=0?'disabled':''}><i class="ti ti-chevron-left"></i> Prev</button>
+      <span style="font-size:13px;color:var(--text2)">Page ${page+1} of ${totalPages} (${bets.length.toLocaleString('en-GB')} bets)</span>
+      <button class="add-btn" onclick="btChangePage(1)" ${page>=totalPages-1?'disabled':''}>Next <i class="ti ti-chevron-right"></i></button>
+    </div>`;
+  }
+
+  tableWrap.innerHTML = html;
+}
+
+function btChangePage(delta) {
+  const totalPages = Math.max(1, Math.ceil(BT_DETAIL_STATE.bets.length / BT_PAGE_SIZE));
+  BT_DETAIL_STATE.page = Math.min(totalPages - 1, Math.max(0, BT_DETAIL_STATE.page + delta));
+  renderBtDetailPage();
+  document.getElementById('bt-detail-table-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 let btLinkBetId = null;
