@@ -548,6 +548,25 @@ input::placeholder{color:var(--text3)}
 </div>
 
 <!-- LEDGER: ACCOUNT DETAIL MODAL -->
+<div id="bank-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;padding:16px">
+  <div class="card card-pad" style="max-width:380px;width:100%">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div class="sec-title" style="margin:0;font-size:16px" id="bank-modal-title"></div>
+      <button class="add-btn" onclick="closeBankModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div style="font-size:12.5px;color:var(--text2);margin-bottom:16px">Remaining balance: <span id="bank-modal-remaining" style="font-weight:600"></span></div>
+
+    <label class="lbl">Adjust starting balance to £</label>
+    <div style="display:flex;gap:8px;margin-bottom:18px">
+      <input type="number" id="bank-modal-balance" step="0.01">
+      <button onclick="submitBankAdjustment()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:0 16px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Save</button>
+    </div>
+
+    <button onclick="deleteBank()" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:var(--radius);padding:9px 14px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;width:100%"><i class="ti ti-trash"></i> Delete bank</button>
+    <div id="bank-modal-msg" style="margin-top:12px;font-size:13px"></div>
+  </div>
+</div>
+
 <div id="account-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;padding:16px">
   <div class="card" style="max-width:420px;width:100%;max-height:85vh;overflow-y:auto">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
@@ -2567,11 +2586,54 @@ async function renderBankBalancesBox() {
     const banks = (d.ok && d.banks) ? d.banks : [];
     if (!banks.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No banks set up yet — add one via Account Entry.</div>'; return; }
     el.innerHTML = banks.map(b => `
-      <div style="padding:8px 14px;background:var(--surface2);border-radius:var(--radius);font-size:13px">
+      <div style="padding:8px 14px;background:var(--surface2);border-radius:var(--radius);font-size:13px;cursor:pointer" onclick="openBankModal('${b.name.replace(/'/g,"\\'")}', ${b.remaining}, ${b.starting_balance})">
         <div style="font-weight:600">${escapeHtml(b.name)}</div>
         <div style="color:${balanceColor(b.remaining)}">£${b.remaining.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
       </div>`).join('');
   } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load bank balances.</div>'; }
+}
+
+let ACTIVE_BANK = null;
+
+function openBankModal(name, remaining, startingBalance) {
+  ACTIVE_BANK = name;
+  document.getElementById('bank-modal-title').textContent = name;
+  document.getElementById('bank-modal-remaining').textContent = '£' + remaining.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('bank-modal-balance').value = startingBalance;
+  document.getElementById('bank-modal-msg').innerHTML = '';
+  document.getElementById('bank-modal-overlay').style.display = 'flex';
+}
+
+function closeBankModal() {
+  document.getElementById('bank-modal-overlay').style.display = 'none';
+  ACTIVE_BANK = null;
+}
+
+async function submitBankAdjustment() {
+  if (!ACTIVE_BANK) return;
+  const balance = parseFloat(document.getElementById('bank-modal-balance').value);
+  const msgEl = document.getElementById('bank-modal-msg');
+  if (isNaN(balance)) { msgEl.innerHTML = '<span style="color:var(--red)">Enter a valid amount.</span>'; return; }
+  msgEl.innerHTML = '<span style="color:var(--text2)">Saving…</span>';
+  try {
+    const d = await ledgerApi('banks', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: ACTIVE_BANK, starting_balance: balance }) });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to save'}</span>`; return; }
+    msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Saved.</span>';
+    renderBankBalancesBox();
+  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error</span>'; }
+}
+
+async function deleteBank() {
+  if (!ACTIVE_BANK) return;
+  if (!confirm(`Delete ${ACTIVE_BANK}? This can't be undone.`)) return;
+  const msgEl = document.getElementById('bank-modal-msg');
+  msgEl.innerHTML = '<span style="color:var(--text2)">Deleting…</span>';
+  try {
+    const d = await ledgerApi('banks/'+encodeURIComponent(ACTIVE_BANK), { method:'DELETE' });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to delete'}</span>`; return; }
+    closeBankModal();
+    renderBankBalancesBox();
+  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error</span>'; }
 }
 
 async function renderLiveAccountsLockedTotal() {
