@@ -3016,16 +3016,26 @@ async function loadBankTransactions() {
     const d = await ledgerApi('bank-transactions');
     const rows = (d.ok && d.transactions) ? d.transactions : [];
     if (!rows.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No transactions logged yet.</div>'; return; }
-    el.innerHTML = `<div style="display:grid;grid-template-columns:150px 1fr 110px 1fr;gap:10px;margin-bottom:8px;font-size:11px;color:var(--text2);font-weight:600;text-transform:uppercase">
-      <div>Date</div><div>Bank</div><div style="text-align:right">Amount</div><div>Reason</div>
+    el.innerHTML = `<div style="display:grid;grid-template-columns:150px 1fr 110px 1fr 90px;gap:10px;margin-bottom:8px;font-size:11px;color:var(--text2);font-weight:600;text-transform:uppercase">
+      <div>Date</div><div>Bank</div><div style="text-align:right">Amount</div><div>Reason</div><div></div>
     </div>` + rows.map(r => `
-      <div style="display:grid;grid-template-columns:150px 1fr 110px 1fr;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px;align-items:center">
+      <div style="display:grid;grid-template-columns:150px 1fr 110px 1fr 90px;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px;align-items:center">
         <div style="color:var(--text3);font-size:11px">${formatLedgerDate(r.date)}</div>
         <div>${escapeHtml(r.bank)}</div>
         <div style="text-align:right;font-weight:600;color:${r.direction==='in'?'var(--green)':'var(--red)'}">${r.direction==='in'?'+':'-'}£${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
         <div style="color:var(--text2)">${escapeHtml(r.reason||'—')}</div>
+        <div style="text-align:right"><button class="add-btn" onclick="undoBankTransaction(${r.id})"><i class="ti ti-arrow-back-up"></i> Undo</button></div>
       </div>`).join('');
   } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load transactions.</div>'; }
+}
+
+async function undoBankTransaction(id) {
+  if (!confirm('Undo this transaction? This reverses its effect on the bank balance and removes the record.')) return;
+  try {
+    const d = await ledgerApi('bank-transactions/'+id, { method:'DELETE' });
+    if (!d.ok) { alert('Failed to undo: ' + (d.error||'unknown error')); return; }
+  } catch (e) { alert('Network error undoing transaction.'); return; }
+  initBankTransactions();
 }
 
 async function submitBankTransaction() {
