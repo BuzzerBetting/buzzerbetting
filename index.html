@@ -536,18 +536,17 @@ input::placeholder{color:var(--text3)}
     <div style="margin-bottom:16px"><label class="lbl">Bookie</label><input type="text" id="entry-bookie" placeholder="e.g. PaddyPower"></div>
 
     <div class="lbl" style="margin-bottom:10px">Accounts to publish</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 110px 32px;gap:10px;margin-bottom:6px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <button class="add-btn" onclick="addEntryRowWithNextId('C')"><i class="ti ti-user"></i> Client</button>
+      <button class="add-btn" onclick="addEntryRowWithNextId('D')"><i class="ti ti-trash-x"></i> Disposable</button>
+    </div>
+    <div id="entry-rows-header" style="display:none;grid-template-columns:1fr 1fr 110px 32px;gap:10px;margin-bottom:6px">
       <div class="lbl" style="margin-bottom:0">ID</div>
       <div class="lbl" style="margin-bottom:0">Bank</div>
       <div class="lbl" style="margin-bottom:0">Starting £</div>
       <div></div>
     </div>
     <div id="entry-rows"></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="add-btn" id="entry-add-row-btn" onclick="addEntryRow()"><i class="ti ti-plus"></i> Add another</button>
-      <button class="add-btn" onclick="addEntryRowWithNextId('C')"><i class="ti ti-user"></i> Client</button>
-      <button class="add-btn" onclick="addEntryRowWithNextId('D')"><i class="ti ti-trash-x"></i> Disposable</button>
-    </div>
 
     <div style="margin-top:18px;padding-top:14px;border-top:0.5px solid var(--border)">
       <button onclick="submitAccountEntry()" id="entry-submit-btn" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:11px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Publish</button>
@@ -1633,14 +1632,15 @@ let entryRowId = 0;
 function initAccountEntry() {
   document.getElementById('entry-bookie').value = '';
   document.getElementById('entry-rows').innerHTML = '';
+  document.getElementById('entry-rows-header').style.display = 'none';
   document.getElementById('entry-results').innerHTML = '';
   entryRowId = 0;
-  addEntryRow();
 }
 
 function addEntryRow() {
   const id = ++entryRowId;
   const wrap = document.getElementById('entry-rows');
+  document.getElementById('entry-rows-header').style.display = 'grid';
   const row = document.createElement('div');
   row.className = 'entry-row';
   row.dataset.row = id;
@@ -1677,9 +1677,9 @@ async function addEntryRowWithNextId(prefix) {
 
 function removeEntryRow(id) {
   const wrap = document.getElementById('entry-rows');
-  if (wrap.children.length <= 1) return;
   const row = wrap.querySelector(`[data-row="${id}"]`);
   if (row) row.remove();
+  if (!wrap.children.length) document.getElementById('entry-rows-header').style.display = 'none';
 }
 
 async function submitAccountEntry() {
@@ -1693,6 +1693,7 @@ async function submitAccountEntry() {
     bank: r.querySelector('.entry-bank').value.trim(),
     balance: parseFloat(r.querySelector('.entry-balance').value) || 0
   }));
+  if (!rows.length) { resultsEl.innerHTML = '<div style="color:var(--red);font-size:13px">Add at least one account — click Client or Disposable.</div>'; return; }
   if (rows.some(r => !r.account_id || !r.bank)) { resultsEl.innerHTML = '<div style="color:var(--red);font-size:13px">Every row needs an ID and a bank.</div>'; return; }
 
   btn.disabled = true; btn.textContent = 'Publishing…';
@@ -1709,11 +1710,11 @@ async function submitAccountEntry() {
       : `<div style="padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px;color:var(--red)"><i class="ti ti-x"></i> ${r.account_id||'(blank)'} — ${r.error}</div>`
     ).join('');
     if (d.results.some(r => r.ok)) {
-      // Reset the input rows for the next batch without wiping the results message we just showed.
+      // Reset back to the empty state (no rows, header hidden) without wiping the results message.
       document.getElementById('entry-bookie').value = '';
       document.getElementById('entry-rows').innerHTML = '';
+      document.getElementById('entry-rows-header').style.display = 'none';
       entryRowId = 0;
-      addEntryRow();
     }
   } catch (e) {
     resultsEl.innerHTML = '<div style="color:var(--red);font-size:13px">Network error — could not reach Ledger.</div>';
