@@ -548,7 +548,8 @@ input::placeholder{color:var(--text3)}
     Publishes an account straight onto Live Accounts. No Google Sheet writes happen here — the Account Bank sheet is managed by you separately; this is just the final "make it live" step once an ID's ready.
   </div>
 
-  <div class="card">
+  <div class="card" style="margin-bottom:16px">
+    <div class="sec-title" style="margin:0 0 14px;font-size:15px">New Account</div>
     <div style="margin-bottom:16px"><label class="lbl">Bookie</label><input type="text" id="entry-bookie" placeholder="e.g. PaddyPower"></div>
 
     <div class="lbl" style="margin-bottom:10px">Accounts to publish</div>
@@ -568,6 +569,19 @@ input::placeholder{color:var(--text3)}
       <button onclick="submitAccountEntry()" id="entry-submit-btn" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:11px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Publish</button>
     </div>
     <div id="entry-results" style="margin-top:18px"></div>
+  </div>
+
+  <div class="card">
+    <div class="sec-title" style="margin:0 0 4px;font-size:15px">New Bank</div>
+    <div style="font-size:12.5px;color:var(--text2);margin-bottom:14px">
+      A bank's starting balance is the pool new accounts draw from. A starting balance entered on a New Account above is existing float, not a new deposit, so it won't reduce this figure.
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 140px 100px;gap:10px;align-items:end">
+      <div><label class="lbl">Bank name</label><input type="text" id="new-bank-name" placeholder="e.g. Rev 1"></div>
+      <div><label class="lbl">Starting £</label><input type="number" id="new-bank-balance" step="0.01" value="0"></div>
+      <button onclick="createBank()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:9px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Create</button>
+    </div>
+    <div id="new-bank-msg" style="margin-top:12px;font-size:13px"></div>
   </div>
 </div>
 
@@ -1645,12 +1659,46 @@ function backToLedgerHub(){showTopSec('ledger');}
 
 let entryRowId = 0;
 
-function initAccountEntry() {
+let KNOWN_BANKS = [];
+
+async function initAccountEntry() {
   document.getElementById('entry-bookie').value = '';
   document.getElementById('entry-rows').innerHTML = '';
   document.getElementById('entry-rows-header').style.display = 'none';
   document.getElementById('entry-results').innerHTML = '';
+  document.getElementById('new-bank-name').value = '';
+  document.getElementById('new-bank-balance').value = '0';
+  document.getElementById('new-bank-msg').innerHTML = '';
   entryRowId = 0;
+  try {
+    const d = await ledgerApi('banks');
+    KNOWN_BANKS = (d.ok && d.banks) ? d.banks : [];
+  } catch (e) { KNOWN_BANKS = []; }
+}
+
+function bankOptionsHtml(selected) {
+  if (!KNOWN_BANKS.length) return `<option value="">No banks yet — add one below</option>`;
+  return `<option value="">Select bank…</option>` + KNOWN_BANKS.map(b =>
+    `<option value="${escapeHtml(b.name)}" ${b.name===selected?'selected':''}>${escapeHtml(b.name)} — £${b.remaining.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</option>`
+  ).join('');
+}
+
+async function createBank() {
+  const name = document.getElementById('new-bank-name').value.trim();
+  const balance = parseFloat(document.getElementById('new-bank-balance').value) || 0;
+  const msgEl = document.getElementById('new-bank-msg');
+  if (!name) { msgEl.innerHTML = '<span style="color:var(--red)">Enter a bank name.</span>'; return; }
+  msgEl.innerHTML = '<span style="color:var(--text2)">Creating…</span>';
+  try {
+    const d = await ledgerApi('banks', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, starting_balance: balance }) });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to create bank'}</span>`; return; }
+    msgEl.innerHTML = `<span style="color:var(--green)"><i class="ti ti-check"></i> ${name} created.</span>`;
+    document.getElementById('new-bank-name').value = '';
+    document.getElementById('new-bank-balance').value = '0';
+    const bd = await ledgerApi('banks');
+    KNOWN_BANKS = (bd.ok && bd.banks) ? bd.banks : [];
+    document.querySelectorAll('#entry-rows .entry-bank').forEach(sel => { sel.innerHTML = bankOptionsHtml(sel.value); });
+  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error.</span>'; }
 }
 
 function addEntryRow() {
@@ -1663,7 +1711,7 @@ function addEntryRow() {
   row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 110px 32px;gap:10px;margin-bottom:8px;align-items:center';
   row.innerHTML = `
     <input type="text" class="entry-id" placeholder="ID (e.g. D014)">
-    <input type="text" class="entry-bank" placeholder="Bank (e.g. Rev 1)">
+    <select class="entry-bank">${bankOptionsHtml()}</select>
     <input type="number" class="entry-balance" placeholder="Start £" step="0.01" value="0">
     <button class="rm-btn" onclick="removeEntryRow(${id})" title="Remove">×</button>`;
   wrap.appendChild(row);
@@ -2414,7 +2462,7 @@ async function initAccountsGrid() {
   const wrap = document.getElementById('live-accounts-wrap');
   wrap.innerHTML = '<div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div>';
   document.getElementById('bank-balances-box').innerHTML = 'Loading…';
-  await loadAllAccounts(true); // excludeClosed
+  await loadAllAccounts(true); // excludeClosed (also excludes locked)
   renderAccountsGrid();
   renderBankBalancesBox();
 }
@@ -2443,17 +2491,22 @@ function renderAccountsGrid() {
   }).join('')}</div>`;
 }
 
-function renderBankBalancesBox() {
+// Bank figures come from the server (GET /banks), not summed client-side from account
+// balances — "remaining" already accounts for starting-balance-at-publish being excluded,
+// per the rule that pre-existing float doesn't count as money drawn from the bank.
+async function renderBankBalancesBox() {
   const el = document.getElementById('bank-balances-box');
-  const byBank = {};
-  ALL_ACCOUNTS.forEach(a => { byBank[a.profile] = (byBank[a.profile] || 0) + (a.balance || 0); });
-  const banks = Object.keys(byBank).sort();
-  if (!banks.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No live accounts yet.</div>'; return; }
-  el.innerHTML = banks.map(bank => `
-    <div style="padding:8px 14px;background:var(--surface2);border-radius:var(--radius);font-size:13px">
-      <div style="font-weight:600">${escapeHtml(bank)}</div>
-      <div style="color:${balanceColor(byBank[bank])}">£${byBank[bank].toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
-    </div>`).join('');
+  try {
+    const d = await ledgerApi('banks');
+    const banks = (d.ok && d.banks) ? d.banks : [];
+    if (!banks.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No banks set up yet — add one via Account Entry.</div>'; return; }
+    el.innerHTML = banks.map(b => `
+      <div style="padding:8px 14px;background:var(--surface2);border-radius:var(--radius);font-size:13px">
+        <div style="font-weight:600">${escapeHtml(b.name)}</div>
+        <div style="color:${balanceColor(b.remaining)}">£${b.remaining.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+        ${b.locked_total>0?`<div style="font-size:10.5px;color:var(--red);font-weight:500">£${b.locked_total.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})} locked</div>`:''}
+      </div>`).join('');
+  } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load bank balances.</div>'; }
 }
 
 // The identity name written on the account — legacy field, no longer collected at entry
@@ -2779,16 +2832,38 @@ async function initLockedFunds() {
     const d = await ledgerApi('locked-funds');
     const rows = (d.ok && d.locked) ? d.locked : [];
     if (!rows.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No locked funds.</div>'; return; }
-    el.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr 100px;gap:10px;margin-bottom:8px;font-size:11px;color:var(--text2);font-weight:600;text-transform:uppercase">
-      <div>ID</div><div>Bookie</div><div>Bank</div><div style="text-align:right">Amount</div>
+    el.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr 100px 160px;gap:10px;margin-bottom:8px;font-size:11px;color:var(--text2);font-weight:600;text-transform:uppercase">
+      <div>ID</div><div>Bookie</div><div>Bank</div><div style="text-align:right">Amount</div><div></div>
     </div>` + rows.map(r => `
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 100px;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px;align-items:center">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 100px 160px;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px;align-items:center">
         <div>${r.account_code || '—'}</div>
         <div>${r.bookie || '—'}</div>
         <div>${r.bank || '—'}</div>
         <div style="text-align:right;font-weight:600;color:var(--red)">£${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+        <div style="display:flex;gap:6px;justify-content:flex-end">
+          ${r.source==='account_locked' && r.linked_account_id ? `<button class="add-btn" onclick="unlockFunds(${r.id})"><i class="ti ti-lock-open"></i> Unlock</button>` : ''}
+          <button class="rm-btn" onclick="clearLockedFunds(${r.id})" title="Clear">×</button>
+        </div>
       </div>`).join('');
   } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load locked funds.</div>'; }
+}
+
+async function unlockFunds(id) {
+  if (!confirm('Unlock these funds? This restores the balance to the original account and brings it back onto Live Accounts.')) return;
+  try {
+    const d = await ledgerApi('locked-funds/'+id+'/unlock', { method:'POST' });
+    if (!d.ok) { alert('Failed to unlock: ' + (d.error||'unknown error')); return; }
+  } catch (e) { alert('Network error unlocking funds.'); return; }
+  initLockedFunds();
+}
+
+async function clearLockedFunds(id) {
+  if (!confirm('Clear this locked funds entry? This just removes the record — it does not affect any account balance.')) return;
+  try {
+    const d = await ledgerApi('locked-funds/'+id, { method:'DELETE' });
+    if (!d.ok) { alert('Failed to clear: ' + (d.error||'unknown error')); return; }
+  } catch (e) { alert('Network error clearing entry.'); return; }
+  initLockedFunds();
 }
 
 // ================== LEDGER: RECENTLY ARCHIVED (7-day undo) ==================
