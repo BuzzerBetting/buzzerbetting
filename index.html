@@ -2767,6 +2767,14 @@ function getAccountDisplayName(acc) {
 
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+// Rounds any numeric bet-detail field to 2 decimal places for display — raw stored values
+// keep full precision, this only affects how they're shown in Bet Tracking tables.
+function formatFieldValue(val) {
+  if (val === undefined || val === null) return '';
+  if (typeof val === 'number') return val.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return escapeHtml(val);
+}
+
 function balanceColor(balance) {
   if (balance <= 0) return '#dc2626';
   if (balance < 100) return '#f59e0b';
@@ -3359,7 +3367,7 @@ function renderBtDetailTable(bets) {
     html += `<tr>
       <td>${formatLedgerDate(b.date)}</td>
       <td style="color:${resColor};font-weight:600;text-transform:capitalize">${b.result}</td>
-      ${fieldKeys.map(k=>`<td>${escapeHtml(b.fields[k]!==undefined&&b.fields[k]!==null?b.fields[k]:'')}</td>`).join('')}
+      ${fieldKeys.map(k=>`<td>${formatFieldValue(b.fields[k])}</td>`).join('')}
       <td class="r">£${(b.total_stake||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td class="r" style="color:${(b.pl||0)>=0?'var(--green)':'var(--red)'}">${(b.pl||0)>=0?'+':'-'}£${Math.abs(b.pl||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td style="white-space:nowrap;display:flex;gap:6px">
@@ -3535,7 +3543,7 @@ async function loadBtOpenTable() {
     bets.forEach(b => {
       html += `<tr>
         <td>${formatLedgerDate(b.date)}</td>
-        ${fieldKeys.map(k=>`<td>${escapeHtml(b.fields[k]!==undefined&&b.fields[k]!==null?b.fields[k]:'')}</td>`).join('')}
+        ${fieldKeys.map(k=>`<td>${formatFieldValue(b.fields[k])}</td>`).join('')}
         <td class="r">£${(b.total_stake||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
         <td><button class="add-btn" onclick="openBtSettleModal(${b.id}, 'open', ${b.total_stake||0}, loadBtOpenTabs)">Settle</button></td>
       </tr>`;
