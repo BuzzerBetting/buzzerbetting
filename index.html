@@ -353,6 +353,16 @@ input::placeholder{color:var(--text3)}
       <div><div class="cat-title">VA Bets</div><div class="cat-desc">Discord, BB Racing Tracker Pro, BB Bet Tracker and more</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
+    <div class="cat" style="--accent:var(--amber)" onclick="openBtOpenBets('personal')">
+      <div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-clock"></i></div>
+      <div><div class="cat-title">Open Bets (Personal)</div><div class="cat-desc">Everything still unsettled, filterable by tracker</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
+    <div class="cat" style="--accent:var(--amber)" onclick="openBtOpenBets('va')">
+      <div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-clock"></i></div>
+      <div><div class="cat-title">Open Bets (VA)</div><div class="cat-desc">Everything still unsettled, filterable by tracker</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
   </div>
 </div>
 
@@ -397,6 +407,36 @@ input::placeholder{color:var(--text3)}
     <input type="number" id="bt-link-stake" step="0.01" style="margin-bottom:16px">
     <button onclick="submitBtLink()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:11px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;width:100%">Link</button>
     <div id="bt-link-msg" style="margin-top:12px;font-size:13px"></div>
+  </div>
+</div>
+
+<!-- BET TRACKING: SETTLE MODAL (shared — used for open bets, and to override an already-settled result) -->
+<div id="bt-settle-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;padding:16px">
+  <div class="card card-pad" style="max-width:380px;width:100%">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="sec-title" style="margin:0;font-size:16px" id="bt-settle-title">Settle bet</div>
+      <button class="add-btn" onclick="closeBtSettleModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="lbl" style="margin-bottom:8px">Result</div>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <button class="add-btn" id="bt-settle-won" onclick="setBtSettleResult('won')" style="flex:1">Win</button>
+      <button class="add-btn" id="bt-settle-lost" onclick="setBtSettleResult('lost')" style="flex:1">Loss</button>
+      <button class="add-btn" id="bt-settle-void" onclick="setBtSettleResult('void')" style="flex:1">Void</button>
+    </div>
+    <label class="lbl">P/L £ (positive for a win, negative for a loss)</label>
+    <input type="number" id="bt-settle-pl" step="0.01" style="margin-bottom:16px">
+    <button onclick="submitBtSettle()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:11px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;width:100%">Save</button>
+    <div id="bt-settle-msg" style="margin-top:12px;font-size:13px"></div>
+  </div>
+</div>
+
+<!-- BET TRACKING: OPEN BETS (Personal / VA) -->
+<div id="view-bettracking-open" class="sec">
+  <button class="back" onclick="showTopSec('bettracking')"><i class="ti ti-arrow-left"></i> Bet Tracking</button>
+  <div class="sec-title" id="bt-open-title">Open Bets</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px" id="bt-open-tabs"></div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <div class="scroll" id="bt-open-table-wrap"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
   </div>
 </div>
 
@@ -3320,7 +3360,10 @@ function renderBtDetailTable(bets) {
       ${fieldKeys.map(k=>`<td>${escapeHtml(b.fields[k]!==undefined&&b.fields[k]!==null?b.fields[k]:'')}</td>`).join('')}
       <td class="r">£${(b.total_stake||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td class="r" style="color:${(b.pl||0)>=0?'var(--green)':'var(--red)'}">${(b.pl||0)>=0?'+':'-'}£${Math.abs(b.pl||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-      <td>${b.result==='open' && !b.leg_count ? `<button class="add-btn" onclick="openBtLinkModal(${b.id})">Link account</button>` : ''}</td>
+      <td style="white-space:nowrap;display:flex;gap:6px">
+        <button class="add-btn" onclick="openBtSettleModal(${b.id}, '${b.result}', ${b.pl||0}, fetchBtDetailPage)">${b.result==='open'?'Settle':'Override'}</button>
+        ${b.result==='open' && !b.leg_count ? `<button class="add-btn" onclick="openBtLinkModal(${b.id})">Link account</button>` : ''}
+      </td>
     </tr>`;
   });
   html += '</tbody></table>';
@@ -3382,6 +3425,123 @@ async function submitBtLink() {
     closeBtLinkModal();
     loadBetTrackingDetail();
   } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error</span>'; }
+}
+
+// ---- SETTLE MODAL (shared: settling an open bet, or overriding an already-settled one) ----
+let btSettleContext = null; // { betId, refreshFn }
+let btSettleResult = null;
+
+function openBtSettleModal(betId, currentResult, currentPl, refreshFn) {
+  btSettleContext = { betId, refreshFn };
+  document.getElementById('bt-settle-pl').value = (currentPl !== undefined && currentPl !== null) ? currentPl : '';
+  document.getElementById('bt-settle-msg').innerHTML = '';
+  setBtSettleResult(currentResult && currentResult !== 'open' ? currentResult : null);
+  document.getElementById('bt-settle-modal-overlay').style.display = 'flex';
+}
+
+function setBtSettleResult(result) {
+  btSettleResult = result;
+  ['won','lost','void'].forEach(r => {
+    const btn = document.getElementById('bt-settle-'+r);
+    if (r === result) { btn.style.background = 'var(--brand)'; btn.style.color = '#fff'; btn.style.borderColor='var(--brand)'; }
+    else { btn.style.background = ''; btn.style.color = ''; btn.style.borderColor=''; }
+  });
+}
+
+function closeBtSettleModal() {
+  document.getElementById('bt-settle-modal-overlay').style.display = 'none';
+  btSettleContext = null;
+  btSettleResult = null;
+}
+
+async function submitBtSettle() {
+  if (!btSettleContext) return;
+  const pl = parseFloat(document.getElementById('bt-settle-pl').value);
+  const msgEl = document.getElementById('bt-settle-msg');
+  if (!btSettleResult) { msgEl.innerHTML = '<span style="color:var(--red)">Pick a result.</span>'; return; }
+  if (isNaN(pl)) { msgEl.innerHTML = '<span style="color:var(--red)">Enter a P/L amount (0 is fine for a void).</span>'; return; }
+  msgEl.innerHTML = '<span style="color:var(--text2)">Saving…</span>';
+  try {
+    const d = await ledgerApi('bets/'+btSettleContext.betId+'/settle', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ result: btSettleResult, pl }) });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to settle'}</span>`; return; }
+    const refreshFn = btSettleContext.refreshFn;
+    closeBtSettleModal();
+    if (refreshFn) refreshFn();
+  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error</span>'; }
+}
+
+// ---- OPEN BETS (Personal / VA) ----
+let btOpenState = { group: null, betType: null };
+
+async function openBtOpenBets(group) {
+  btOpenState = { group, betType: null };
+  document.getElementById('bt-open-title').textContent = 'Open Bets — ' + (group==='personal' ? 'Personal' : 'VA');
+  document.getElementById('view-home').style.display='none';
+  document.querySelectorAll('.sec').forEach(s=>s.style.display='none');
+  document.getElementById('view-bettracking-open').style.display='block';
+  window.scrollTo({top:0,behavior:'smooth'});
+  await loadBtOpenTabs();
+}
+
+async function loadBtOpenTabs() {
+  const tabsEl = document.getElementById('bt-open-tabs');
+  tabsEl.innerHTML = 'Loading…';
+  try {
+    const d = await ledgerApi('bets/open-summary');
+    const openCounts = {};
+    (d.ok && d.types ? d.types : []).forEach(t => { openCounts[t.bet_type] = t.c; });
+
+    const groupList = BET_TRACKING_GROUPS[btOpenState.group];
+    const available = groupList.filter(t => openCounts[t.key] > 0);
+
+    if (!available.length) {
+      tabsEl.innerHTML = '';
+      document.getElementById('bt-open-table-wrap').innerHTML = '<div style="padding:24px;color:var(--text3);font-size:13px">No open bets in this section.</div>';
+      return;
+    }
+
+    if (!btOpenState.betType || !available.some(t=>t.key===btOpenState.betType)) btOpenState.betType = available[0].key;
+
+    tabsEl.innerHTML = available.map(t => `
+      <button class="add-btn" onclick="selectBtOpenTab('${t.key.replace(/'/g,"\\'")}')" style="${t.key===btOpenState.betType?'background:var(--brand);color:#fff;border-color:var(--brand)':''}">${escapeHtml(t.label)} <span style="opacity:0.75">(${openCounts[t.key]})</span></button>
+    `).join('');
+
+    loadBtOpenTable();
+  } catch (e) { tabsEl.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load open bets.</div>'; }
+}
+
+function selectBtOpenTab(betType) {
+  btOpenState.betType = betType;
+  loadBtOpenTabs(); // rebuilds tab highlighting + counts, then loads the table
+}
+
+async function loadBtOpenTable() {
+  const tableWrap = document.getElementById('bt-open-table-wrap');
+  tableWrap.innerHTML = '<div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div>';
+  try {
+    const d = await ledgerApi(`bets?type=${encodeURIComponent(btOpenState.betType)}&status=open&limit=200&offset=0`);
+    if (!d.ok) { tableWrap.innerHTML = `<div style="padding:24px;color:var(--red);font-size:13px">Could not load: ${d.error||'unknown error'}</div>`; return; }
+    const bets = d.bets || [];
+    if (!bets.length) { tableWrap.innerHTML = '<div style="padding:24px;color:var(--text3);font-size:13px">No open bets here.</div>'; return; }
+
+    const fieldKeys = [];
+    bets.forEach(b => { Object.keys(b.fields||{}).forEach(k => { if (!fieldKeys.includes(k)) fieldKeys.push(k); }); });
+
+    let html = `<table class="dt" style="min-width:720px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr>
+      <th>Date</th>${fieldKeys.map(k=>`<th>${escapeHtml(k)}</th>`).join('')}<th class="r">Stake</th><th></th>
+    </tr></thead><tbody>`;
+    bets.forEach(b => {
+      html += `<tr>
+        <td>${formatLedgerDate(b.date)}</td>
+        ${fieldKeys.map(k=>`<td>${escapeHtml(b.fields[k]!==undefined&&b.fields[k]!==null?b.fields[k]:'')}</td>`).join('')}
+        <td class="r">£${(b.total_stake||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+        <td><button class="add-btn" onclick="openBtSettleModal(${b.id}, 'open', ${b.total_stake||0}, loadBtOpenTabs)">Settle</button></td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    if (bets.length >= 200) html += `<div style="padding:14px;text-align:center;font-size:12.5px;color:var(--text2)">Showing the first 200 — settle some and refresh to see more.</div>`;
+    tableWrap.innerHTML = html;
+  } catch (e) { tableWrap.innerHTML = '<div style="padding:24px;color:var(--red);font-size:13px">Could not load open bets.</div>'; }
 }
 
 function showCalc(name){document.getElementById('calc-hub').style.display='none';document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='dutch')initDutch();if(name==='arb')initArb();if(name==='gsm')initGSM();if(name==='kelly')initKelly();if(name==='kellycorr')initKellyCorr();}
