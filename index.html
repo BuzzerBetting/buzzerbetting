@@ -81,6 +81,7 @@ header{background:var(--header);height:62px;display:flex;align-items:center;just
 .r{text-align:right}.tn{font-variant-numeric:tabular-nums}
 .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500}
 .scroll{max-height:340px;overflow-y:auto}
+.scroll-tall{max-height:1020px;overflow-y:auto}
 .scroll::-webkit-scrollbar{width:3px}
 .scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 .ph{padding:64px 32px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px}
@@ -392,7 +393,7 @@ input::placeholder{color:var(--text3)}
   </div>
 
   <div class="card wide" style="padding:0;overflow:hidden">
-    <div class="scroll" id="bt-detail-table-wrap"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
+    <div class="scroll-tall" id="bt-detail-table-wrap"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
   </div>
 </div>
 
@@ -438,7 +439,7 @@ input::placeholder{color:var(--text3)}
   <div class="sec-title" id="bt-open-title">Open Bets</div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px" id="bt-open-tabs"></div>
   <div class="card wide" style="padding:0;overflow:hidden">
-    <div class="scroll" id="bt-open-table-wrap"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
+    <div class="scroll-tall" id="bt-open-table-wrap"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
   </div>
 </div>
 
