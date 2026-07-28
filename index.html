@@ -2770,9 +2770,13 @@ function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;'
 
 // Rounds any numeric bet-detail field to 2 decimal places for display — raw stored values
 // keep full precision, this only affects how they're shown in Bet Tracking tables.
+// Rounds any FRACTIONAL bet-detail field to 2 decimal places for display — a value that's
+// already a whole number (e.g. a client ID) shows as a plain integer, not "16.00".
 function formatFieldValue(val) {
   if (val === undefined || val === null) return '';
-  if (typeof val === 'number') return val.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (typeof val === 'number') {
+    return Number.isInteger(val) ? val.toLocaleString('en-GB') : val.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
   return escapeHtml(val);
 }
 
@@ -3360,16 +3364,19 @@ function renderBtDetailTable(bets) {
   const { fieldKeys, page, totalCount } = BT_DETAIL_STATE;
   const totalPages = Math.max(1, Math.ceil(totalCount / BT_PAGE_SIZE));
 
+  // A column is right-aligned if its value is numeric on the first bet that has it —
+  // keeps numeric columns (Odds, EV, Stake, etc) visually consistent with Stake/P&L.
+  const colClass = k => { const b = bets.find(x => x.fields[k] !== undefined); return (b && typeof b.fields[k] === 'number') ? ' class="r"' : ''; };
+
   let html = `<table class="dt" style="min-width:720px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr>
-    <th>Date</th><th>Result</th>${fieldKeys.map(k=>`<th>${escapeHtml(k)}</th>`).join('')}<th class="r">Stake</th><th class="r">P/L</th><th></th>
+    <th>Date</th><th>Result</th>${fieldKeys.map(k=>`<th${colClass(k)}>${escapeHtml(k)}</th>`).join('')}<th class="r">P/L</th><th></th>
   </tr></thead><tbody>`;
   bets.forEach(b => {
     const resColor = b.result==='won'?'var(--green)':b.result==='lost'?'var(--red)':b.result==='void'?'var(--text3)':'var(--amber)';
     html += `<tr>
       <td>${formatLedgerDate(b.date)}</td>
       <td style="color:${resColor};font-weight:600;text-transform:capitalize">${b.result}</td>
-      ${fieldKeys.map(k=>`<td>${formatFieldValue(b.fields[k])}</td>`).join('')}
-      <td class="r">£${(b.total_stake||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      ${fieldKeys.map(k=>`<td${typeof b.fields[k]==='number'?' class="r"':''}>${formatFieldValue(b.fields[k])}</td>`).join('')}
       <td class="r" style="color:${(b.pl||0)>=0?'var(--green)':'var(--red)'}">${(b.pl||0)>=0?'+':'-'}£${Math.abs(b.pl||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td style="white-space:nowrap;display:flex;gap:6px">
         <button class="add-btn" onclick="openBtSettleModal(${b.id}, '${b.result}', ${b.pl||0}, fetchBtDetailPage)">${b.result==='open'?'Settle':'Override'}</button>
@@ -3537,15 +3544,15 @@ async function loadBtOpenTable() {
 
     const fieldKeys = [];
     bets.forEach(b => { Object.keys(b.fields||{}).forEach(k => { if (!fieldKeys.includes(k)) fieldKeys.push(k); }); });
+    const colClass = k => { const b = bets.find(x => x.fields[k] !== undefined); return (b && typeof b.fields[k] === 'number') ? ' class="r"' : ''; };
 
     let html = `<table class="dt" style="min-width:720px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr>
-      <th>Date</th>${fieldKeys.map(k=>`<th>${escapeHtml(k)}</th>`).join('')}<th class="r">Stake</th><th></th>
+      <th>Date</th>${fieldKeys.map(k=>`<th${colClass(k)}>${escapeHtml(k)}</th>`).join('')}<th></th>
     </tr></thead><tbody>`;
     bets.forEach(b => {
       html += `<tr>
         <td>${formatLedgerDate(b.date)}</td>
-        ${fieldKeys.map(k=>`<td>${formatFieldValue(b.fields[k])}</td>`).join('')}
-        <td class="r">£${(b.total_stake||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+        ${fieldKeys.map(k=>`<td${typeof b.fields[k]==='number'?' class="r"':''}>${formatFieldValue(b.fields[k])}</td>`).join('')}
         <td><button class="add-btn" onclick="openBtSettleModal(${b.id}, 'open', ${b.total_stake||0}, loadBtOpenTabs)">Settle</button></td>
       </tr>`;
     });
