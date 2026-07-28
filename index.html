@@ -2780,6 +2780,14 @@ function formatFieldValue(val) {
   return escapeHtml(val);
 }
 
+// EV represents an expected-value figure in £ on virtually every tab — shown with a £
+// prefix universally, same treatment as Stake/P&L already get.
+function formatBetField(key, val) {
+  const formatted = formatFieldValue(val);
+  if (typeof val === 'number' && key.trim().toUpperCase() === 'EV') return '£' + formatted;
+  return formatted;
+}
+
 function balanceColor(balance) {
   if (balance <= 0) return '#dc2626';
   if (balance < 100) return '#f59e0b';
@@ -3369,14 +3377,15 @@ function renderBtDetailTable(bets) {
   const colClass = k => { const b = bets.find(x => x.fields[k] !== undefined); return (b && typeof b.fields[k] === 'number') ? ' class="r"' : ''; };
 
   let html = `<table class="dt" style="min-width:720px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr>
-    <th>Date</th><th>Result</th>${fieldKeys.map(k=>`<th${colClass(k)}>${escapeHtml(k)}</th>`).join('')}<th class="r">P/L</th><th></th>
+    <th>Date</th><th>Result</th><th>Account ID</th>${fieldKeys.map(k=>`<th${colClass(k)}>${escapeHtml(k)}</th>`).join('')}<th class="r">P/L</th><th></th>
   </tr></thead><tbody>`;
   bets.forEach(b => {
     const resColor = b.result==='won'?'var(--green)':b.result==='lost'?'var(--red)':b.result==='void'?'var(--text3)':'var(--amber)';
     html += `<tr>
       <td>${formatLedgerDate(b.date)}</td>
       <td style="color:${resColor};font-weight:600;text-transform:capitalize">${b.result}</td>
-      ${fieldKeys.map(k=>`<td${typeof b.fields[k]==='number'?' class="r"':''}>${formatFieldValue(b.fields[k])}</td>`).join('')}
+      <td>${b.account_code ? escapeHtml(b.account_code) : '<span style="color:var(--text3)">—</span>'}</td>
+      ${fieldKeys.map(k=>`<td${typeof b.fields[k]==='number'?' class="r"':''}>${formatBetField(k, b.fields[k])}</td>`).join('')}
       <td class="r" style="color:${(b.pl||0)>=0?'var(--green)':'var(--red)'}">${(b.pl||0)>=0?'+':'-'}£${Math.abs(b.pl||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td style="white-space:nowrap;display:flex;gap:6px">
         <button class="add-btn" onclick="openBtSettleModal(${b.id}, '${b.result}', ${b.pl||0}, fetchBtDetailPage)">${b.result==='open'?'Settle':'Override'}</button>
@@ -3547,12 +3556,13 @@ async function loadBtOpenTable() {
     const colClass = k => { const b = bets.find(x => x.fields[k] !== undefined); return (b && typeof b.fields[k] === 'number') ? ' class="r"' : ''; };
 
     let html = `<table class="dt" style="min-width:720px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr>
-      <th>Date</th>${fieldKeys.map(k=>`<th${colClass(k)}>${escapeHtml(k)}</th>`).join('')}<th></th>
+      <th>Date</th><th>Account ID</th>${fieldKeys.map(k=>`<th${colClass(k)}>${escapeHtml(k)}</th>`).join('')}<th></th>
     </tr></thead><tbody>`;
     bets.forEach(b => {
       html += `<tr>
         <td>${formatLedgerDate(b.date)}</td>
-        ${fieldKeys.map(k=>`<td${typeof b.fields[k]==='number'?' class="r"':''}>${formatFieldValue(b.fields[k])}</td>`).join('')}
+        <td>${b.account_code ? escapeHtml(b.account_code) : '<span style="color:var(--text3)">—</span>'}</td>
+        ${fieldKeys.map(k=>`<td${typeof b.fields[k]==='number'?' class="r"':''}>${formatBetField(k, b.fields[k])}</td>`).join('')}
         <td><button class="add-btn" onclick="openBtSettleModal(${b.id}, 'open', ${b.total_stake||0}, loadBtOpenTabs)">Settle</button></td>
       </tr>`;
     });
