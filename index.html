@@ -378,16 +378,17 @@ input::placeholder{color:var(--text3)}
 
 <!-- BET TRACKING: DETAIL (one generic view, reused for every bet type) -->
 <div id="view-bettracking-detail" class="sec">
-  <button class="back" onclick="backToBetTrackingGroup()"><i class="ti ti-arrow-left"></i> Back</button>
-  <div class="sec-title" id="bettracking-detail-title"></div>
+  <button class="back wide" onclick="backToBetTrackingGroup()"><i class="ti ti-arrow-left"></i> Back</button>
+  <div class="sec-title wide" id="bettracking-detail-title"></div>
 
-  <div class="card card-pad" style="margin-bottom:16px">
+  <div class="card wide card-pad" style="margin-bottom:16px">
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:14px">
       <div><div class="lbl" style="margin-bottom:3px">Bets</div><div style="font-size:18px;font-weight:600" id="bt-detail-count">—</div></div>
       <div><div class="lbl" style="margin-bottom:3px">Open</div><div style="font-size:18px;font-weight:600" id="bt-detail-open">—</div></div>
       <div><div class="lbl" style="margin-bottom:3px">Wins</div><div style="font-size:18px;font-weight:600;color:var(--green)" id="bt-detail-wins">—</div></div>
       <div><div class="lbl" style="margin-bottom:3px">Losses</div><div style="font-size:18px;font-weight:600;color:var(--red)" id="bt-detail-losses">—</div></div>
       <div><div class="lbl" style="margin-bottom:3px">Total stake</div><div style="font-size:18px;font-weight:600" id="bt-detail-stake">—</div></div>
+      <div><div class="lbl" style="margin-bottom:3px">Total EV</div><div style="font-size:18px;font-weight:600" id="bt-detail-ev">—</div></div>
       <div><div class="lbl" style="margin-bottom:3px">P/L</div><div style="font-size:18px;font-weight:600" id="bt-detail-pl">—</div></div>
     </div>
   </div>
@@ -3292,6 +3293,10 @@ const BET_TRACKING_GROUPS = {
 
 let betTrackingLastGroup = null;
 
+// Manually maintained — add a bet_type key here once you've finished reviewing/fixing its
+// columns, so the list shows which tabs are done vs still need checking.
+const BET_TRACKING_REVIEWED = ['Value'];
+
 function showBetTrackingGroup(group) {
   betTrackingLastGroup = group;
   document.getElementById('bettracking-group-title').textContent = group==='personal' ? 'Personal Bets' : 'VA Bets';
@@ -3300,7 +3305,7 @@ function showBetTrackingGroup(group) {
   document.getElementById('bettracking-group-list').innerHTML = list.map((t,i) => `
     <div class="cat" style="--accent:${colors[i%colors.length]}" onclick="openBetTrackingDetail('${t.key.replace(/'/g,"\\'")}','${t.label.replace(/'/g,"\\'")}')">
       <div class="cat-ico" style="background:var(--surface2);color:var(--text2)"><i class="ti ti-list"></i></div>
-      <div><div class="cat-title">${t.label}</div></div>
+      <div><div class="cat-title">${t.label}</div>${BET_TRACKING_REVIEWED.includes(t.key) ? `<div style="font-size:11px;color:var(--green);font-weight:600;margin-top:2px"><i class="ti ti-check"></i> Completed</div>` : ''}</div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>`).join('');
   document.getElementById('view-home').style.display='none';
@@ -3342,7 +3347,7 @@ async function fetchBtDetailPage() {
     const d = await ledgerApi(`bets?type=${encodeURIComponent(btDetailType)}&limit=${BT_PAGE_SIZE}&offset=${offset}`);
     if (!d.ok) { tableWrap.innerHTML = `<div style="padding:24px;color:var(--red);font-size:13px">Could not load bets: ${d.error||'unknown error'}</div>`; return; }
     const bets = d.bets || [];
-    const s = d.summary || { count:0, open:0, wins:0, losses:0, totalStake:0, totalPl:0 };
+    const s = d.summary || { count:0, open:0, wins:0, losses:0, totalStake:0, totalPl:0, totalEV:0 };
     BT_DETAIL_STATE.totalCount = s.count;
 
     document.getElementById('bt-detail-count').textContent = s.count.toLocaleString('en-GB');
@@ -3350,6 +3355,7 @@ async function fetchBtDetailPage() {
     document.getElementById('bt-detail-wins').textContent = s.wins.toLocaleString('en-GB');
     document.getElementById('bt-detail-losses').textContent = s.losses.toLocaleString('en-GB');
     document.getElementById('bt-detail-stake').textContent = '£'+s.totalStake.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+    document.getElementById('bt-detail-ev').textContent = '£'+(s.totalEV||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
     const plEl = document.getElementById('bt-detail-pl');
     plEl.textContent = (s.totalPl>=0?'+':'-')+'£'+Math.abs(s.totalPl).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
     plEl.style.color = s.totalPl>=0?'var(--green)':'var(--red)';
