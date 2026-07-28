@@ -63,6 +63,8 @@ header{background:var(--header);height:62px;display:flex;align-items:center;just
 .back:hover{color:var(--text)}
 .sec-title{font-family:'Space Grotesk',sans-serif;font-size:25px;font-weight:700;color:var(--text);letter-spacing:-0.02em;margin-bottom:24px}
 .card{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:16px}
+.wide{width:100vw;position:relative;left:50%;right:50%;margin-left:-50vw;margin-right:-50vw;padding-left:24px;padding-right:24px;box-sizing:border-box}
+@media(max-width:680px){.wide{padding-left:12px;padding-right:12px}}
 .card-pad{padding:22px}
 .card-h{padding:13px 20px;border-bottom:0.5px solid var(--border);font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
@@ -389,7 +391,7 @@ input::placeholder{color:var(--text3)}
     </div>
   </div>
 
-  <div class="card" style="padding:0;overflow:hidden">
+  <div class="card wide" style="padding:0;overflow:hidden">
     <div class="scroll" id="bt-detail-table-wrap"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
   </div>
 </div>
@@ -435,7 +437,7 @@ input::placeholder{color:var(--text3)}
   <button class="back" onclick="showTopSec('bettracking')"><i class="ti ti-arrow-left"></i> Bet Tracking</button>
   <div class="sec-title" id="bt-open-title">Open Bets</div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px" id="bt-open-tabs"></div>
-  <div class="card" style="padding:0;overflow:hidden">
+  <div class="card wide" style="padding:0;overflow:hidden">
     <div class="scroll" id="bt-open-table-wrap"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
   </div>
 </div>
@@ -564,7 +566,7 @@ input::placeholder{color:var(--text3)}
       </label>
     </div>
   </div>
-  <div id="live-accounts-wrap" style="overflow-x:auto"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
+  <div id="live-accounts-wrap" class="wide" style="overflow-x:auto"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
 </div>
 
 <!-- LEDGER: DEPOSITS -->
