@@ -431,6 +431,10 @@ input::placeholder{color:var(--text3)}
     <input type="number" id="bt-settle-pl" step="0.01" style="margin-bottom:16px">
     <button onclick="submitBtSettle()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:11px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;width:100%">Save</button>
     <div id="bt-settle-msg" style="margin-top:12px;font-size:13px"></div>
+    <div style="margin-top:18px;padding-top:14px;border-top:0.5px solid var(--border)">
+      <button id="bt-delete-btn" onclick="handleBtDeleteClick()" style="background:none;border:0.5px solid var(--red);color:var(--red);border-radius:var(--radius);padding:9px 16px;font-size:13px;cursor:pointer;font-family:inherit;width:100%">Delete bet</button>
+      <div id="bt-delete-msg" style="margin-top:8px;font-size:12px"></div>
+    </div>
   </div>
 </div>
 
@@ -2041,19 +2045,19 @@ async function loadAccountSummary() {
 // this matches how you actually think about each-way value before relying on it.
 
 const BET_TYPE_CONFIG = {
-  'Value':            { layout:'standard', bookie:true,  fields:[{key:'Bet',label:'Bet description',type:'text'}], oddsMode:'pairedBlended' },
+  'Value':            { layout:'standard', bookie:true,  fields:[{key:'Bet Description',label:'Bet description',type:'text'}], oddsMode:'pairedBlended' },
   'Keithbot':         { layout:'standard', bookie:true,  fields:[{key:'Player',label:'Player',type:'text'},{key:'Bet',label:'Bet',type:'text'}], oddsMode:'pairedBlended' },
   'American Props':   { layout:'standard', bookie:true,  fields:[{key:'Sport',label:'Sport',type:'text'},{key:'Bet',label:'Bet',type:'text'}], oddsMode:'pairedBlended' },
-  'Freeze':           { layout:'standard', bookie:true,  fields:[{key:'Targeted Freeze',label:'Targeted freeze',type:'text'}], oddsMode:'pairedBlended', oddsLabel:'Acca odds', singleLegOnly:true },
+  'Freeze':           { layout:'standard', bookie:true,  fields:[{key:'Targeted Freeze',label:'Targeted Freeze',type:'text'}], oddsMode:'pairedBlended', oddsLabel:'Acca odds', singleLegOnly:true },
   'Discord':          { layout:'standard', bookie:true,  fields:[{key:'Bet',label:'Bet',type:'text'}], oddsMode:'pairedBlended' },
-  'Dogs + Horses':    { layout:'standard', bookie:true,  fields:[{key:'Race',label:'Race',type:'text'},{key:'Horse/Trap',label:'Horse / trap',type:'text'},{key:'EW?',label:'Each-way?',type:'text'}], oddsMode:'blendedProfit',
+  'Dogs + Horses':    { layout:'standard', bookie:true,  fields:[{key:'Race',label:'Race',type:'text'},{key:'Horse/Trap',label:'Horse / trap',type:'text'},{key:'Each-Way',label:'Each-way?',type:'text'}], oddsMode:'blendedProfit',
                         note:'Fair odds aren\u2019t captured here — this bet is priced at the off (BFEX SP), so EV is calculated at settlement, not at entry.' },
-  'Corners':          { layout:'standard', bookie:true,  fields:[{key:'Team',label:'Team',type:'text'},{key:'Player Assist',label:'Player assist',type:'text'},{key:'Goalscorer',label:'Goalscorer',type:'text'}], oddsMode:'blendedProfit' },
-  'Ninja Golf BFEX':  { layout:'standard', bookie:false, fields:[{key:'Selection',label:'Selection',type:'text'}], oddsMode:'blendedProfitCommission',
+  'Corners':          { layout:'standard', bookie:true,  fields:[{key:'Team',label:'Team',type:'text'},{key:'Assist',label:'Assist',type:'text'},{key:'Scorer',label:'Scorer',type:'text'}], oddsMode:'blendedProfit' },
+  'Ninja Golf BFEX':  { layout:'standard', bookie:false, fields:[{key:'Player',label:'Player',type:'text'}], oddsMode:'blendedProfitCommission',
                         note:'The potential profit above already accounts for the 2% commission on this market — apply the same 2% again at settlement.' },
-  'BB Horse':         { layout:'paste', pasteSpec:'bbhorse', bookie:false, oddsMode:'eachWay' },
-  'BB - RTP':         { layout:'paste', pasteSpec:'bbhorse', bookie:false, oddsMode:'eachWay' },
-  'BB Golf':          { layout:'paste', pasteSpec:'bbgolf',  bookie:true,  oddsMode:'eachWay' },
+  'BB Horse':         { layout:'paste', pasteSpec:'bbhorse', bookie:true, oddsMode:'eachWay' },
+  'BB - RTP':         { layout:'paste', pasteSpec:'bbrtp',   bookie:true, oddsMode:'eachWay', hideProfitBreakdown:true },
+  'BB Golf':          { layout:'paste', pasteSpec:'bbgolf',  bookie:true, event:true, oddsMode:'eachWay' },
   'BB - BT':          { layout:'paste', pasteSpec:'bbbt',    bookie:false, oddsMode:'pairedBlendedFromPasteFair' },
   'Offers':           { layout:'balance', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet description',type:'text'}], oddsMode:'pairedSingle', hasStake:true, hasBalanceBoxes:false },
   'Casino':           { layout:'balance', bookie:true, hasBetKind:false, fields:[{key:'Offer',label:'Offer',type:'text'}], oddsMode:'none', hasStake:false, hasBalanceBoxes:true },
@@ -2063,8 +2067,8 @@ const BET_TYPE_CONFIG = {
 const PASTE_SPECS = {
   bbhorse: {
     columns: [
-      {key:'Runner',label:'Runner',numeric:false},
-      {key:'EV',label:'EV (BookieBashing)',numeric:true},
+      {key:'Horse',label:'Horse',numeric:false},
+      {key:'Value %',label:'EV (BookieBashing)',numeric:true},
       {key:'Odds',label:'Odds',numeric:true},
       {key:'N.Odds',label:'N.Odds',numeric:true},
       {key:'Win F.Odds',label:'Win fair odds',numeric:true},
@@ -2076,16 +2080,36 @@ const PASTE_SPECS = {
     ],
     example: 'Targa\t122.24\t26.00\t20.85\t27.00\t4.05\t3\t1/5\t19:10 Lingfield\t7',
   },
+  // Win/Place Fair Odds and Runners still get pasted in (BookieBashing's line includes
+  // them) and still feed the EV calculation same as before — they just aren't shown as
+  // boxes or saved as their own columns, since they're not part of the finalized schema.
+  bbrtp: {
+    columns: [
+      {key:'Horse',label:'Horse',numeric:false},
+      {key:'EV%',label:'EV (BookieBashing)',numeric:true},
+      {key:'Odds',label:'Odds',numeric:true},
+      {key:'N.Odds',label:'N.Odds',numeric:true},
+      {key:'Win F.Odds',label:'Win fair odds',numeric:true,hidden:true},
+      {key:'Place F.Odds',label:'Place fair odds',numeric:true,hidden:true},
+      {key:'Places',label:'Places',numeric:false},
+      {key:'Terms',label:'Terms',numeric:false},
+      {key:'Race',label:'Race',numeric:false},
+      {key:'Runners',label:'Runners',numeric:true,hidden:true},
+      {key:'Place Odds',label:'Place odds',numeric:true,calculated:true},
+    ],
+    example: 'Targa\t122.24\t26.00\t20.85\t27.00\t4.05\t3\t1/5\t19:10 Lingfield\t7',
+  },
   bbgolf: {
     columns: [
-      {key:'Runner',label:'Runner',numeric:false},
-      {key:'EV',label:'EV (BookieBashing)',numeric:true},
+      {key:'Player',label:'Player',numeric:false},
+      {key:'Value %',label:'EV (BookieBashing)',numeric:true},
       {key:'Odds',label:'Odds',numeric:true},
       {key:'N.Odds',label:'N.Odds',numeric:true},
       {key:'Win F.Odds',label:'Win fair odds',numeric:true},
       {key:'Place F.Odds',label:'Place fair odds',numeric:true},
       {key:'Places',label:'Places',numeric:false},
       {key:'Terms',label:'Terms',numeric:false},
+      {key:'Place Odds',label:'Place odds',numeric:true,calculated:true},
     ],
     example: 'Joel Dahmen\t137.90\t181.00\t130.44\t255.00\t18.06\t8\t1/5',
   },
@@ -2202,10 +2226,13 @@ function selectBetType(type, label) {
   const fieldsWrap = document.getElementById('bet-entry-fields');
   let html = '';
 
+  if (cfg.event) html += `<div><label class="lbl">Event</label><input type="text" id="bef-Event"></div>`;
   if (cfg.bookie) html += `<div><label class="lbl">Bookie</label><input type="text" id="bef-Book" oninput="refreshLegAccountDropdowns()"></div>`;
 
   if (cfg.layout === 'paste') {
     PASTE_SPECS[cfg.pasteSpec].columns.forEach(c => {
+      if (c.hidden) { html += `<input type="hidden" id="bef-paste-${c.key.replace(/[^a-zA-Z0-9]/g,'_')}">`; return; }
+      if (c.calculated) { html += `<div><label class="lbl">${c.label}</label><input type="number" id="bef-paste-${c.key.replace(/[^a-zA-Z0-9]/g,'_')}" step="0.01" oninput="recalcBetEntryEV()"></div>`; return; }
       html += `<div><label class="lbl">${c.label}</label><input type="${c.numeric?'number':'text'}" id="bef-paste-${c.key.replace(/[^a-zA-Z0-9]/g,'_')}" ${c.numeric?'step="0.01"':''} oninput="recalcBetEntryEV()"></div>`;
     });
   } else {
@@ -2248,7 +2275,7 @@ function selectBetType(type, label) {
     computedWrap.style.display = 'block'; evWrap.style.display = 'block'; profitWrap.style.display = 'block';
   } else if (cfg.oddsMode === 'eachWay') {
     computedWrap.style.display = 'block'; evWrap.style.display = 'block';
-    profitWinWrap.style.display = 'block'; profitPlaceWrap.style.display = 'block';
+    if (!cfg.hideProfitBreakdown) { profitWinWrap.style.display = 'block'; profitPlaceWrap.style.display = 'block'; }
   }
 
   // ---- Balance layout: account dropdown, stake, wagering/bonus boxes ----
@@ -2290,8 +2317,9 @@ function handlePasteInput() {
   const raw = document.getElementById('bet-entry-paste-input').value;
   if (!raw.trim()) return;
   const spec = PASTE_SPECS[cfg.pasteSpec];
-  const parts = splitPasteRow(raw, spec.columns);
-  spec.columns.forEach((c, i) => {
+  const pasteCols = spec.columns.filter(c => !c.calculated); // calculated columns never occupy a real paste position
+  const parts = splitPasteRow(raw, pasteCols);
+  pasteCols.forEach((c, i) => {
     const el = document.getElementById('bef-paste-'+c.key.replace(/[^a-zA-Z0-9]/g,'_'));
     if (el && parts[i] !== undefined) el.value = c.numeric ? (parseFloat(parts[i])||'') : parts[i];
   });
@@ -2415,9 +2443,30 @@ function setMoneyEl(el, val, colorPositiveOnly) {
   el.style.color = val>=0 ? 'var(--green)' : 'var(--red)';
 }
 
+// Auto-fills a calculated Place Odds box from Odds + Terms whenever either changes —
+// ((Back Odds - 1) / terms denominator) + 1, e.g. divided by 5 for "1/5". Stays a normal
+// editable input afterward, so a manually pasted/typed value isn't fought with — this only
+// runs on Odds/Terms changing, not on editing the Place Odds box itself.
+function recalcCalculatedPasteFields() {
+  const cfg = BET_TYPE_CONFIG[betEntryType];
+  if (!cfg || cfg.layout !== 'paste') return;
+  const spec = PASTE_SPECS[cfg.pasteSpec];
+  const placeOddsCol = (spec.columns || []).find(c => c.calculated && c.key === 'Place Odds');
+  if (!placeOddsCol) return;
+  const odds = parseFloat(document.getElementById('bef-paste-Odds')?.value);
+  const termsStr = document.getElementById('bef-paste-Terms')?.value;
+  const denomMatch = String(termsStr || '').match(/\/(\d+)/);
+  const denom = denomMatch ? parseInt(denomMatch[1], 10) : null;
+  const el = document.getElementById('bef-paste-Place_Odds');
+  if (el && odds > 0 && denom > 0) {
+    el.value = (((odds - 1) / denom) + 1).toFixed(2);
+  }
+}
+
 function recalcBetEntryEV() {
   const cfg = BET_TYPE_CONFIG[betEntryType];
   if (!cfg) return;
+  recalcCalculatedPasteFields();
   const evEl = document.getElementById('bet-entry-ev');
   const profitEl = document.getElementById('bet-entry-profit');
   const profitWinEl = document.getElementById('bet-entry-profit-win');
@@ -2510,10 +2559,12 @@ async function submitBetEntry() {
   const cfg = BET_TYPE_CONFIG[betEntryType];
 
   const fields = {};
+  if (cfg.event) fields['Event'] = (document.getElementById('bef-Event')?.value || '').trim();
   if (cfg.bookie) fields['Book'] = (document.getElementById('bef-Book')?.value || '').trim();
 
   if (cfg.layout === 'paste') {
     PASTE_SPECS[cfg.pasteSpec].columns.forEach(c => {
+      if (c.hidden) return; // used for calculation only — not a real stored column
       const el = document.getElementById('bef-paste-'+c.key.replace(/[^a-zA-Z0-9]/g,'_'));
       fields[c.key] = c.numeric ? (parseFloat(el.value)||0) : (el.value||'').trim();
     });
@@ -2545,11 +2596,13 @@ async function submitBetEntry() {
   }
   if (cfg.oddsMode === 'eachWay') {
     const evNum = parseFloat((document.getElementById('bet-entry-ev').textContent||'').replace(/[£,]/g,''));
-    const winNum = parseFloat((document.getElementById('bet-entry-profit-win').textContent||'').replace(/[£,]/g,''));
-    const placeNum = parseFloat((document.getElementById('bet-entry-profit-place').textContent||'').replace(/[£,]/g,''));
     fields['EV'] = isNaN(evNum) ? 0 : evNum;
-    fields['Potential Profit (Win)'] = isNaN(winNum) ? 0 : winNum;
-    fields['Potential Profit (Place)'] = isNaN(placeNum) ? 0 : placeNum;
+    if (!cfg.hideProfitBreakdown) {
+      const winNum = parseFloat((document.getElementById('bet-entry-profit-win').textContent||'').replace(/[£,]/g,''));
+      const placeNum = parseFloat((document.getElementById('bet-entry-profit-place').textContent||'').replace(/[£,]/g,''));
+      fields['Potential Profit (Win)'] = isNaN(winNum) ? 0 : winNum;
+      fields['Potential Profit (Place)'] = isNaN(placeNum) ? 0 : placeNum;
+    }
   }
   if (cfg.hasBalanceBoxes) {
     ['bef-wager-start','bef-wager-end','bef-bonus-start','bef-bonus-end'].forEach(id => {
@@ -3474,6 +3527,8 @@ function openBtSettleModal(betId, currentResult, currentPl, refreshFn) {
   btSettleContext = { betId, refreshFn };
   document.getElementById('bt-settle-pl').value = (currentPl !== undefined && currentPl !== null) ? currentPl : '';
   document.getElementById('bt-settle-msg').innerHTML = '';
+  document.getElementById('bt-delete-msg').innerHTML = '';
+  resetBtDeleteButton();
   setBtSettleResult(currentResult && currentResult !== 'open' ? currentResult : null);
   document.getElementById('bt-settle-modal-overlay').style.display = 'flex';
 }
@@ -3491,6 +3546,38 @@ function closeBtSettleModal() {
   document.getElementById('bt-settle-modal-overlay').style.display = 'none';
   btSettleContext = null;
   btSettleResult = null;
+  resetBtDeleteButton();
+}
+
+let btDeleteConfirming = false;
+
+function resetBtDeleteButton() {
+  btDeleteConfirming = false;
+  const btn = document.getElementById('bt-delete-btn');
+  if (btn) btn.textContent = 'Delete bet';
+}
+
+// Two-step delete — first click asks for confirmation, second click (within the same modal
+// session) actually deletes. Reverses whatever balance effect the bet currently has on any
+// linked account, removes it from open bets, and removes it from the sheet entirely.
+async function handleBtDeleteClick() {
+  if (!btSettleContext) return;
+  const btn = document.getElementById('bt-delete-btn');
+  const msgEl = document.getElementById('bt-delete-msg');
+  if (!btDeleteConfirming) {
+    btDeleteConfirming = true;
+    btn.textContent = 'Click again to confirm delete';
+    msgEl.innerHTML = '<span style="color:var(--red)">This permanently removes the bet and reverses any linked account balance. Cannot be undone.</span>';
+    return;
+  }
+  btn.textContent = 'Deleting…';
+  try {
+    const d = await ledgerApi('bets/'+btSettleContext.betId, { method: 'DELETE' });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to delete'}</span>`; resetBtDeleteButton(); return; }
+    const refreshFn = btSettleContext.refreshFn;
+    closeBtSettleModal();
+    if (refreshFn) refreshFn();
+  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error</span>'; resetBtDeleteButton(); }
 }
 
 async function submitBtSettle() {
