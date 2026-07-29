@@ -521,15 +521,15 @@ input::placeholder{color:var(--text3)}
         <div>
           <div class="lbl" style="margin-bottom:8px">Wagering</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div><label class="lbl" style="font-size:10px">Starting balance</label><input type="number" id="bef-wager-start" step="0.01" oninput="recalcBalanceDelta()"></div>
-            <div><label class="lbl" style="font-size:10px">Ending balance</label><input type="number" id="bef-wager-end" step="0.01" oninput="recalcBalanceDelta()"></div>
+            <div><label class="lbl" style="font-size:10px" id="bef-wager-start-lbl">Starting balance</label><input type="number" id="bef-wager-start" step="0.01" oninput="recalcBalanceDelta()"></div>
+            <div><label class="lbl" style="font-size:10px" id="bef-wager-end-lbl">Ending balance</label><input type="number" id="bef-wager-end" step="0.01" oninput="recalcBalanceDelta()"></div>
           </div>
         </div>
         <div>
           <div class="lbl" style="margin-bottom:8px">Bonus</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div><label class="lbl" style="font-size:10px">Starting balance</label><input type="number" id="bef-bonus-start" step="0.01" oninput="recalcBalanceDelta()"></div>
-            <div><label class="lbl" style="font-size:10px">Ending balance</label><input type="number" id="bef-bonus-end" step="0.01" oninput="recalcBalanceDelta()"></div>
+            <div><label class="lbl" style="font-size:10px" id="bef-bonus-start-lbl">Starting balance</label><input type="number" id="bef-bonus-start" step="0.01" oninput="recalcBalanceDelta()"></div>
+            <div><label class="lbl" style="font-size:10px" id="bef-bonus-end-lbl">Ending balance</label><input type="number" id="bef-bonus-end" step="0.01" oninput="recalcBalanceDelta()"></div>
           </div>
         </div>
       </div>
@@ -2064,8 +2064,11 @@ const BET_TYPE_CONFIG = {
   'BB - RTP':         { layout:'paste', pasteSpec:'bbrtp',   bookie:true, bookieFieldKey:'Bookie', oddsMode:'eachWay', hideProfitBreakdown:true, stakeFieldKey:'Total Stake' },
   'BB Golf':          { layout:'paste', pasteSpec:'bbgolf',  bookie:true, bookieFieldKey:'Bookie', event:true, oddsMode:'eachWay', stakeFieldKey:'Total Stake' },
   'BB - BT':          { layout:'paste', pasteSpec:'bbbt',    bookie:false, oddsMode:'pairedBlendedFromPasteFair' },
-  'Offers':           { layout:'balance', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet description',type:'text'}], oddsMode:'pairedSingle', hasStake:true, hasBalanceBoxes:false },
+  'Offers (VA)':      { layout:'balance', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet description',type:'text'}], oddsMode:'pairedSingle', hasStake:true, hasBalanceBoxes:false },
   'Casino':           { layout:'balance', bookie:true, bookieFieldKey:'Bookie', hasBetKind:false, fields:[{key:'Offer',label:'Offer',type:'text'}], oddsMode:'none', hasStake:false, hasBalanceBoxes:true },
+  'Offers (Personal)': { layout:'balance', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet description',type:'text'}], oddsMode:'pairedSingle', hasStake:true, hasBalanceBoxes:false },
+  'Other Bets':       { layout:'standard', bookie:true, fields:[{key:'Bet',label:'Bet',type:'text'},{key:'Back Odds',label:'Back odds',type:'number'}] },
+  'Casino (Personal)': { layout:'balance', bookie:true, bookieFieldKey:'Bookie', hasBetKind:false, fields:[{key:'Offer',label:'Offer',type:'text'}], oddsMode:'none', hasStake:false, hasBalanceBoxes:true, balanceBoxStyle:'directPL' },
 };
 
 // Column layout guesses for paste-to-autofill types. `key` becomes the stored field name.
@@ -2142,13 +2145,16 @@ const BET_TYPE_GROUPS = {
     {key:'Freeze', label:'Freeze'},
     {key:'Ninja Golf BFEX', label:'Ninja Golf BFEX'},
     {key:'Corners', label:'Corners'},
+    {key:'Offers (Personal)', label:'Offers'},
+    {key:'Other Bets', label:'Other Bets'},
+    {key:'Casino (Personal)', label:'Casino'},
   ],
   assistant: [
     {key:'Discord', label:'Discord'},
     {key:'BB - RTP', label:'BB Racing Tracker'},
     {key:'BB - BT', label:'BB Bet Tracker'},
     {key:'Casino', label:'Casino'},
-    {key:'Offers', label:'Offers'},
+    {key:'Offers (VA)', label:'Offers'},
   ],
 };
 
@@ -2304,6 +2310,18 @@ function selectBetType(type, label) {
     boxesEl.style.display = cfg.hasBalanceBoxes ? 'grid' : 'none';
     document.getElementById('bet-entry-balance-pl').style.display = cfg.hasBalanceBoxes ? 'block' : 'none';
     ['bef-wager-start','bef-wager-end','bef-bonus-start','bef-bonus-end'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+    // directPL style: these same 4 boxes get relabeled as Game name (text) + P/L (number)
+    // instead of Starting/Ending balance — used for Personal Casino, which tracks P/L
+    // directly per game rather than via a balance delta like VA Casino does.
+    if (cfg.hasBalanceBoxes) {
+      const isDirectPL = cfg.balanceBoxStyle === 'directPL';
+      document.getElementById('bef-wager-start-lbl').textContent = isDirectPL ? 'Game' : 'Starting balance';
+      document.getElementById('bef-wager-end-lbl').textContent = isDirectPL ? 'P/L' : 'Ending balance';
+      document.getElementById('bef-bonus-start-lbl').textContent = isDirectPL ? 'Game' : 'Starting balance';
+      document.getElementById('bef-bonus-end-lbl').textContent = isDirectPL ? 'P/L' : 'Ending balance';
+      document.getElementById('bef-wager-start').type = isDirectPL ? 'text' : 'number';
+      document.getElementById('bef-bonus-start').type = isDirectPL ? 'text' : 'number';
+    }
     recalcBalanceDelta();
   } else {
     document.getElementById('bet-entry-legs').innerHTML = '';
@@ -2555,16 +2573,25 @@ function recalcBetEntryEV() {
   }
 }
 
-// Casino: P/L derived from the change in wagering + bonus balances, not from stake/odds.
+// Casino: P/L derived from the change in wagering + bonus balances (default), or directly
+// summed from Wager P/L + Bonus P/L (Personal Casino's directPL style).
 function recalcBalanceDelta() {
   const cfg = BET_TYPE_CONFIG[betEntryType];
   if (!cfg || !cfg.hasBalanceBoxes) return;
+  const plEl = document.getElementById('bet-entry-balance-pl-value');
+  if (!plEl) return;
+  if (cfg.balanceBoxStyle === 'directPL') {
+    const wagerPL = parseFloat(document.getElementById('bef-wager-end')?.value);
+    const bonusPL = parseFloat(document.getElementById('bef-bonus-end')?.value);
+    const parts = [wagerPL, bonusPL].filter(v => !isNaN(v));
+    if (!parts.length) { plEl.textContent = '—'; plEl.style.color = ''; return; }
+    setMoneyEl(plEl, parts.reduce((a,b)=>a+b,0));
+    return;
+  }
   const ws = parseFloat(document.getElementById('bef-wager-start')?.value);
   const we = parseFloat(document.getElementById('bef-wager-end')?.value);
   const bs = parseFloat(document.getElementById('bef-bonus-start')?.value);
   const be = parseFloat(document.getElementById('bef-bonus-end')?.value);
-  const plEl = document.getElementById('bet-entry-balance-pl-value');
-  if (!plEl) return;
   const parts = [];
   if (!isNaN(ws) && !isNaN(we)) parts.push(we-ws);
   if (!isNaN(bs) && !isNaN(be)) parts.push(be-bs);
@@ -2628,10 +2655,8 @@ async function submitBetEntry() {
     const evNum = parseFloat((document.getElementById('bet-entry-ev').textContent||'').replace(/[£,]/g,''));
     fields[cfg.evPercentInput ? 'EV £' : 'EV'] = isNaN(evNum) ? 0 : evNum;
   }
-  if (cfg.oddsMode === 'blendedProfit' || cfg.oddsMode === 'blendedProfitCommission') {
-    const pNum = parseFloat((document.getElementById('bet-entry-profit').textContent||'').replace(/[£,]/g,''));
-    fields['Potential Profit'] = isNaN(pNum) ? 0 : pNum;
-  }
+  // Potential Profit is a live estimate shown only during entry — no bet type using this
+  // oddsMode actually wants it saved as a stored column.
   if (cfg.oddsMode === 'eachWay') {
     const evNum = parseFloat((document.getElementById('bet-entry-ev').textContent||'').replace(/[£,]/g,''));
     fields['EV'] = isNaN(evNum) ? 0 : evNum;
@@ -2643,11 +2668,23 @@ async function submitBetEntry() {
     }
   }
   if (cfg.hasBalanceBoxes) {
-    ['bef-wager-start','bef-wager-end','bef-bonus-start','bef-bonus-end'].forEach(id => {
-      fields[id] = parseFloat(document.getElementById(id)?.value) || 0;
-    });
-    const plNum = parseFloat((document.getElementById('bet-entry-balance-pl-value').textContent||'').replace(/[£,]/g,''));
-    fields['Balance P/L'] = isNaN(plNum) ? 0 : plNum;
+    if (cfg.balanceBoxStyle === 'directPL') {
+      const wagerGame = (document.getElementById('bef-wager-start')?.value || '').trim();
+      const wagerPL = parseFloat(document.getElementById('bef-wager-end')?.value) || 0;
+      const bonusGame = (document.getElementById('bef-bonus-start')?.value || '').trim();
+      const bonusPL = parseFloat(document.getElementById('bef-bonus-end')?.value) || 0;
+      fields['Wager Game'] = wagerGame;
+      fields['Wager P/L'] = wagerPL;
+      fields['Bonus Game'] = bonusGame;
+      fields['Bonus P/L'] = bonusPL;
+      fields['Total P/L'] = +(wagerPL + bonusPL).toFixed(2);
+    } else {
+      ['bef-wager-start','bef-wager-end','bef-bonus-start','bef-bonus-end'].forEach(id => {
+        fields[id] = parseFloat(document.getElementById(id)?.value) || 0;
+      });
+      const plNum = parseFloat((document.getElementById('bet-entry-balance-pl-value').textContent||'').replace(/[£,]/g,''));
+      fields['Balance P/L'] = isNaN(plNum) ? 0 : plNum;
+    }
   }
 
   let legs;
