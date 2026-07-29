@@ -3458,7 +3458,7 @@ function renderBtDetailTable(bets) {
       ${fieldKeys.map(k=>`<td${colClass(k)}>${formatBetField(k, b.fields[k])}</td>`).join('')}
       <td class="r" style="color:${(b.pl||0)>=0?'var(--green)':'var(--red)'}">${(b.pl||0)>=0?'+':'-'}£${Math.abs(b.pl||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td style="white-space:nowrap;display:flex;gap:6px">
-        <button class="add-btn" onclick="openBtSettleModal(${b.id}, '${b.result}', ${b.pl||0}, fetchBtDetailPage)">${b.result==='open'?'Settle':'Override'}</button>
+        <button class="add-btn" onclick="openBtSettleModal(${b.id}, '${b.result}', ${b.pl||0}, fetchBtDetailPage, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'})">${b.result==='open'?'Settle':'Override'}</button>
         ${b.result==='open' && !b.leg_count ? `<button class="add-btn" onclick="openBtLinkModal(${b.id})">Link account</button>` : ''}
       </td>
     </tr>`;
@@ -3528,23 +3528,32 @@ async function submitBtLink() {
 let btSettleContext = null; // { betId, refreshFn }
 let btSettleResult = null;
 
-function openBtSettleModal(betId, currentResult, currentPl, refreshFn) {
-  btSettleContext = { betId, refreshFn };
+function openBtSettleModal(betId, currentResult, currentPl, refreshFn, stake, odds) {
+  btSettleContext = { betId, refreshFn, stake: stake || 0, odds: odds || null };
   document.getElementById('bt-settle-pl').value = (currentPl !== undefined && currentPl !== null) ? currentPl : '';
   document.getElementById('bt-settle-msg').innerHTML = '';
   document.getElementById('bt-delete-msg').innerHTML = '';
   resetBtDeleteButton();
-  setBtSettleResult(currentResult && currentResult !== 'open' ? currentResult : null);
+  setBtSettleResult(currentResult && currentResult !== 'open' ? currentResult : null, true);
   document.getElementById('bt-settle-modal-overlay').style.display = 'flex';
 }
 
-function setBtSettleResult(result) {
+// Auto-calculates a starting P/L suggestion from the bet's real Stake and Odds whenever a
+// result is picked: Win = Stake × (Odds - 1), Loss = -Stake, Void = 0. Stays a normal
+// editable box afterward — this is a suggested starting point, not locked in.
+function setBtSettleResult(result, skipCalc) {
   btSettleResult = result;
   ['won','lost','void'].forEach(r => {
     const btn = document.getElementById('bt-settle-'+r);
     if (r === result) { btn.style.background = 'var(--brand)'; btn.style.color = '#fff'; btn.style.borderColor='var(--brand)'; }
     else { btn.style.background = ''; btn.style.color = ''; btn.style.borderColor=''; }
   });
+  if (skipCalc || !btSettleContext) return;
+  const { stake, odds } = btSettleContext;
+  const plEl = document.getElementById('bt-settle-pl');
+  if (result === 'won' && stake && odds) plEl.value = (stake * (odds - 1)).toFixed(2);
+  else if (result === 'lost' && stake) plEl.value = (-stake).toFixed(2);
+  else if (result === 'void') plEl.value = '0';
 }
 
 function closeBtSettleModal() {
@@ -3675,7 +3684,7 @@ async function loadBtOpenTable() {
         <td>${formatLedgerDate(b.date)}</td>
         <td>${b.account_code ? escapeHtml(b.account_code) : '<span style="color:var(--text3)">—</span>'}</td>
         ${fieldKeys.map(k=>`<td${colClass(k)}>${formatBetField(k, b.fields[k])}</td>`).join('')}
-        <td><button class="add-btn" onclick="openBtSettleModal(${b.id}, 'open', ${b.total_stake||0}, loadBtOpenTabs)">Settle</button></td>
+        <td><button class="add-btn" onclick="openBtSettleModal(${b.id}, 'open', null, loadBtOpenTabs, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'})">Settle</button></td>
       </tr>`;
     });
     html += '</tbody></table>';
