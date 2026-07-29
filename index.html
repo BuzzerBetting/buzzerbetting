@@ -2058,7 +2058,7 @@ const BET_TYPE_CONFIG = {
   'Dogs + Horses':    { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Race',label:'Race',type:'text'},{key:'Horse/Trap',label:'Horse / trap',type:'text'},{key:'Each-Way',label:'Each-way?',type:'checkbox',revealsField:'Terms'},{key:'Terms',label:'Each-way terms (e.g. 1/5)',type:'text',hiddenUnless:'Each-Way'}], oddsMode:'blendedProfit',
                         note:'Fair odds aren\u2019t captured here — this bet is priced at the off (BFEX SP), so EV is calculated at settlement, not at entry.' },
   'Corners':          { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Team',label:'Team',type:'text'},{key:'Assist',label:'Assist',type:'text'},{key:'Scorer',label:'Scorer',type:'text'}], oddsMode:'blendedProfit' },
-  'Ninja Golf BFEX':  { layout:'standard', bookie:false, stakeFieldKey:'Total Stake', fields:[{key:'Player',label:'Player',type:'text'}], oddsMode:'blendedProfitCommission',
+  'Ninja Golf BFEX':  { layout:'standard', bookie:true, bookieFieldKey:'Bookie', bookieDefault:'Betfair', stakeFieldKey:'Total Stake', fields:[{key:'Comp',label:'Competition',type:'text'},{key:'Player',label:'Player',type:'text'},{key:'Points Advised',label:'Points advised',type:'number'}], oddsMode:'blendedProfitCommission',
                         note:'The potential profit above already accounts for the 2% commission on this market — apply the same 2% again at settlement.' },
   'BB Horse':         { layout:'paste', pasteSpec:'bbhorse', bookie:true, bookieFieldKey:'Bookie', oddsMode:'eachWay', hideProfitBreakdown:true, stakeFieldKey:'Total Stake' },
   'BB - RTP':         { layout:'paste', pasteSpec:'bbrtp',   bookie:true, bookieFieldKey:'Bookie', oddsMode:'eachWay', hideProfitBreakdown:true, stakeFieldKey:'Total Stake' },
@@ -2081,7 +2081,7 @@ const PASTE_SPECS = {
       {key:'Places',label:'Places',numeric:false},
       {key:'Terms',label:'Terms',numeric:false},
       {key:'Race',label:'Race',numeric:false},
-      {key:'Runners',label:'Runners',numeric:true},
+      {key:'Runners',label:'Runners',numeric:true,hidden:true},
     ],
     example: 'Targa\t122.24\t26.00\t20.85\t27.00\t4.05\t3\t1/5\t19:10 Lingfield\t7',
   },
@@ -2244,7 +2244,7 @@ function selectBetType(type, label) {
   let html = '';
 
   if (cfg.event) html += `<div><label class="lbl">Event</label><input type="text" id="bef-Event"></div>`;
-  if (cfg.bookie) html += `<div><label class="lbl">Bookie</label><input type="text" id="bef-Book" oninput="refreshLegAccountDropdowns()"></div>`;
+  if (cfg.bookie) html += `<div><label class="lbl">Bookie</label><input type="text" id="bef-Book" value="${cfg.bookieDefault||''}" oninput="refreshLegAccountDropdowns()"></div>`;
 
   if (cfg.layout === 'paste') {
     PASTE_SPECS[cfg.pasteSpec].columns.forEach(c => {
@@ -3493,7 +3493,13 @@ function renderBtDetailTable(bets) {
       <td>${formatLedgerDate(b.date)}</td>
       <td style="color:${resColor};font-weight:600;text-transform:capitalize">${b.result}</td>
       <td>${b.account_code ? escapeHtml(b.account_code) : '<span style="color:var(--text3)">—</span>'}</td>
-      ${fieldKeys.map(k=>`<td${colClass(k)}>${formatBetField(k, b.fields[k])}</td>`).join('')}
+      ${fieldKeys.map(k=>{
+        const cellContent = formatBetField(k, b.fields[k]);
+        if (b.bet_type === 'Ninja Golf BFEX' && k === 'Total Stake') {
+          return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetStake(${b.id}, ${b.fields[k]||0}, fetchBtDetailPage)" title="Click to correct the stake">${cellContent}</span></td>`;
+        }
+        return `<td${colClass(k)}>${cellContent}</td>`;
+      }).join('')}
       <td class="r" style="color:${(b.pl||0)>=0?'var(--green)':'var(--red)'}">${(b.pl||0)>=0?'+':'-'}£${Math.abs(b.pl||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td style="white-space:nowrap;display:flex;gap:6px">
         <button class="add-btn" onclick="openBtSettleModal(${b.id}, '${b.result}', ${b.pl||0}, fetchBtDetailPage, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${b.bet_type.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'})">${b.result==='open'?'Settle':'Override'}</button>
@@ -3655,6 +3661,21 @@ async function handleBtDeleteClick() {
   } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error</span>'; resetBtDeleteButton(); }
 }
 
+// Quick inline stake correction (e.g. the actual BFEX-matched amount didn't match what was
+// logged) — P/L rescales proportionally on the backend, and any linked account balance is
+// properly adjusted to match.
+async function editBetStake(betId, currentStake, refreshFn) {
+  const input = prompt('Correct the stake for this bet — P/L will be proportionally rescaled to match:', currentStake);
+  if (input === null) return;
+  const newStake = parseFloat(input);
+  if (!(newStake > 0)) { alert('Enter a valid positive stake amount.'); return; }
+  try {
+    const d = await ledgerApi('bets/'+betId+'/stake', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ stake: newStake }) });
+    if (!d.ok) { alert(d.error || 'Failed to update stake'); return; }
+    if (refreshFn) refreshFn();
+  } catch (e) { alert('Network error — please try again.'); }
+}
+
 async function submitBtSettle() {
   if (!btSettleContext) return;
   const pl = parseFloat(document.getElementById('bt-settle-pl').value);
@@ -3749,7 +3770,13 @@ async function loadBtOpenTable() {
       html += `<tr>
         <td>${formatLedgerDate(b.date)}</td>
         <td>${b.account_code ? escapeHtml(b.account_code) : '<span style="color:var(--text3)">—</span>'}</td>
-        ${fieldKeys.map(k=>`<td${colClass(k)}>${formatBetField(k, b.fields[k])}</td>`).join('')}
+        ${fieldKeys.map(k=>{
+          const cellContent = formatBetField(k, b.fields[k]);
+          if (btOpenState.betType === 'Ninja Golf BFEX' && k === 'Total Stake') {
+            return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetStake(${b.id}, ${b.fields[k]||0}, loadBtOpenTabs)" title="Click to correct the stake">${cellContent}</span></td>`;
+          }
+          return `<td${colClass(k)}>${cellContent}</td>`;
+        }).join('')}
         <td><button class="add-btn" onclick="openBtSettleModal(${b.id}, 'open', null, loadBtOpenTabs, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${btOpenState.betType.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'})">Settle</button></td>
       </tr>`;
     });
