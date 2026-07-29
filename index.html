@@ -2053,11 +2053,11 @@ const BET_TYPE_CONFIG = {
   'Dogs + Horses':    { layout:'standard', bookie:true,  fields:[{key:'Race',label:'Race',type:'text'},{key:'Horse/Trap',label:'Horse / trap',type:'text'},{key:'Each-Way',label:'Each-way?',type:'text'}], oddsMode:'blendedProfit',
                         note:'Fair odds aren\u2019t captured here — this bet is priced at the off (BFEX SP), so EV is calculated at settlement, not at entry.' },
   'Corners':          { layout:'standard', bookie:true,  fields:[{key:'Team',label:'Team',type:'text'},{key:'Assist',label:'Assist',type:'text'},{key:'Scorer',label:'Scorer',type:'text'}], oddsMode:'blendedProfit' },
-  'Ninja Golf BFEX':  { layout:'standard', bookie:false, fields:[{key:'Player',label:'Player',type:'text'}], oddsMode:'blendedProfitCommission',
+  'Ninja Golf BFEX':  { layout:'standard', bookie:false, stakeFieldKey:'Total Stake', fields:[{key:'Player',label:'Player',type:'text'}], oddsMode:'blendedProfitCommission',
                         note:'The potential profit above already accounts for the 2% commission on this market — apply the same 2% again at settlement.' },
-  'BB Horse':         { layout:'paste', pasteSpec:'bbhorse', bookie:true, oddsMode:'eachWay' },
-  'BB - RTP':         { layout:'paste', pasteSpec:'bbrtp',   bookie:true, oddsMode:'eachWay', hideProfitBreakdown:true },
-  'BB Golf':          { layout:'paste', pasteSpec:'bbgolf',  bookie:true, event:true, oddsMode:'eachWay' },
+  'BB Horse':         { layout:'paste', pasteSpec:'bbhorse', bookie:true, oddsMode:'eachWay', stakeFieldKey:'Total Stake' },
+  'BB - RTP':         { layout:'paste', pasteSpec:'bbrtp',   bookie:true, oddsMode:'eachWay', hideProfitBreakdown:true, stakeFieldKey:'Total Stake' },
+  'BB Golf':          { layout:'paste', pasteSpec:'bbgolf',  bookie:true, event:true, oddsMode:'eachWay', stakeFieldKey:'Total Stake' },
   'BB - BT':          { layout:'paste', pasteSpec:'bbbt',    bookie:false, oddsMode:'pairedBlendedFromPasteFair' },
   'Offers':           { layout:'balance', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet description',type:'text'}], oddsMode:'pairedSingle', hasStake:true, hasBalanceBoxes:false },
   'Casino':           { layout:'balance', bookie:true, hasBetKind:false, fields:[{key:'Offer',label:'Offer',type:'text'}], oddsMode:'none', hasStake:false, hasBalanceBoxes:true },
@@ -2627,6 +2627,11 @@ async function submitBetEntry() {
     }));
     if (legs.some(l => !l.account_id)) { msgEl.innerHTML = '<span style="color:var(--red)">Every row needs an account selected.</span>'; return; }
     if (legs.some(l => !(l.stake > 0))) { msgEl.innerHTML = '<span style="color:var(--red)">Every row needs a stake greater than £0.</span>'; return; }
+  }
+  if (cfg.hasStake !== false && cfg.layout !== 'balance') {
+    fields[cfg.stakeFieldKey || 'Stake'] = legs.reduce((s, l) => s + (l.stake || 0), 0);
+  } else if (cfg.layout === 'balance' && cfg.hasStake) {
+    fields['Stake'] = legs[0]?.stake || 0;
   }
 
   btn.disabled = true; btn.textContent = 'Logging…';
