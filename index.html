@@ -2052,7 +2052,7 @@ async function loadAccountSummary() {
 const BET_TYPE_CONFIG = {
   'Value':            { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Bet Description',label:'Bet description',type:'text'}], oddsMode:'pairedBlended' },
   'Keithbot':         { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Player',label:'Player',type:'text'},{key:'Bet',label:'Bet',type:'text'}], oddsMode:'pairedBlended' },
-  'American Props':   { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Sport',label:'Sport',type:'text'},{key:'Bet',label:'Bet',type:'text'}], oddsMode:'pairedBlended' },
+  'American Props':   { layout:'standard', bookie:true, bookieFieldKey:'Bookie', evPercentInput:true, fields:[{key:'Sport',label:'Sport',type:'text'},{key:'Bet',label:'Bet',type:'text'}], oddsMode:'pairedBlended' },
   'Freeze':           { layout:'standard', bookie:true,  fields:[{key:'Targeted Freeze',label:'Targeted Freeze',type:'text'}], oddsMode:'pairedBlended', oddsLabel:'Acca odds', singleLegOnly:true },
   'Discord':          { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Bet',label:'Bet',type:'text'}], oddsMode:'pairedBlended' },
   'Dogs + Horses':    { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Race',label:'Race',type:'text'},{key:'Horse/Trap',label:'Horse / trap',type:'text'},{key:'Each-Way',label:'Each-way?',type:'checkbox',revealsField:'Terms'},{key:'Terms',label:'Each-way terms (e.g. 1/5)',type:'text',hiddenUnless:'Each-Way'}], oddsMode:'blendedProfit',
@@ -2060,7 +2060,7 @@ const BET_TYPE_CONFIG = {
   'Corners':          { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Team',label:'Team',type:'text'},{key:'Assist',label:'Assist',type:'text'},{key:'Scorer',label:'Scorer',type:'text'}], oddsMode:'blendedProfit' },
   'Ninja Golf BFEX':  { layout:'standard', bookie:false, stakeFieldKey:'Total Stake', fields:[{key:'Player',label:'Player',type:'text'}], oddsMode:'blendedProfitCommission',
                         note:'The potential profit above already accounts for the 2% commission on this market — apply the same 2% again at settlement.' },
-  'BB Horse':         { layout:'paste', pasteSpec:'bbhorse', bookie:true, bookieFieldKey:'Bookie', oddsMode:'eachWay', stakeFieldKey:'Total Stake' },
+  'BB Horse':         { layout:'paste', pasteSpec:'bbhorse', bookie:true, bookieFieldKey:'Bookie', oddsMode:'eachWay', hideProfitBreakdown:true, stakeFieldKey:'Total Stake' },
   'BB - RTP':         { layout:'paste', pasteSpec:'bbrtp',   bookie:true, bookieFieldKey:'Bookie', oddsMode:'eachWay', hideProfitBreakdown:true, stakeFieldKey:'Total Stake' },
   'BB Golf':          { layout:'paste', pasteSpec:'bbgolf',  bookie:true, bookieFieldKey:'Bookie', event:true, oddsMode:'eachWay', stakeFieldKey:'Total Stake' },
   'BB - BT':          { layout:'paste', pasteSpec:'bbbt',    bookie:false, oddsMode:'pairedBlendedFromPasteFair' },
@@ -2076,8 +2076,8 @@ const PASTE_SPECS = {
       {key:'Value %',label:'EV (BookieBashing)',numeric:true},
       {key:'Odds',label:'Odds',numeric:true},
       {key:'N.Odds',label:'N.Odds',numeric:true},
-      {key:'Win F.Odds',label:'Win fair odds',numeric:true},
-      {key:'Place F.Odds',label:'Place fair odds',numeric:true},
+      {key:'Win F.Odds',label:'Win fair odds',numeric:true,hidden:true},
+      {key:'Place F.Odds',label:'Place fair odds',numeric:true,hidden:true},
       {key:'Places',label:'Places',numeric:false},
       {key:'Terms',label:'Terms',numeric:false},
       {key:'Race',label:'Race',numeric:false},
@@ -2277,7 +2277,7 @@ function selectBetType(type, label) {
   } else if (cfg.oddsMode === 'pairedBlended') {
     fieldsWrap.insertAdjacentHTML('beforeend',
       `<div id="bet-entry-blended-odds-wrap" style="padding:10px 14px;background:var(--surface2);border-radius:var(--radius)"><div class="lbl" style="margin-bottom:2px">${cfg.oddsLabel||'Odds'} (blended across accounts)</div><div style="font-size:16px;font-weight:600" id="bet-entry-blended-odds">—</div></div>
-       <div><label class="lbl">Fair odds</label><input type="number" step="0.01" id="bef-fair-odds" oninput="recalcBetEntryEV()"></div>`);
+       <div><label class="lbl">${cfg.evPercentInput ? 'EV %' : 'Fair odds'}</label><input type="number" step="0.01" id="bef-fair-odds" oninput="recalcBetEntryEV()"></div>`);
     computedWrap.style.display = 'block'; evWrap.style.display = 'block'; profitWrap.style.display = 'block';
   } else if (cfg.oddsMode === 'pairedBlendedFromPasteFair') {
     fieldsWrap.insertAdjacentHTML('beforeend',
@@ -2531,6 +2531,18 @@ function recalcBetEntryEV() {
   }
 
   if (cfg.oddsMode === 'pairedBlended' || cfg.oddsMode === 'pairedSingle' || cfg.oddsMode === 'pairedBlendedFromPasteFair') {
+    if (cfg.evPercentInput) {
+      const evPercent = parseFloat(document.getElementById('bef-fair-odds')?.value);
+      if (!(stake > 0) || isNaN(evPercent)) {
+        if (evEl) setMoneyEl(evEl, null);
+        if (profitEl) setMoneyEl(profitEl, null);
+        return;
+      }
+      const ev = stake * (evPercent / 100);
+      if (evEl) setMoneyEl(evEl, ev);
+      if (profitEl && odds > 1) setMoneyEl(profitEl, stake * (odds - 1));
+      return;
+    }
     if (!(odds > 1) || !(fair > 1) || !(stake > 0)) {
       if (evEl) setMoneyEl(evEl, null);
       if (profitEl) setMoneyEl(profitEl, null);
@@ -2606,11 +2618,15 @@ async function submitBetEntry() {
     fields['Odds'] = parseFloat(document.getElementById('bef-single-odds')?.value) || 0;
   }
   if (cfg.oddsMode === 'pairedBlended' || cfg.oddsMode === 'pairedSingle') {
-    fields['Fair Odds'] = parseFloat(document.getElementById('bef-fair-odds')?.value) || 0;
+    if (cfg.evPercentInput) {
+      fields['EV %'] = parseFloat(document.getElementById('bef-fair-odds')?.value) || 0;
+    } else {
+      fields['Fair Odds'] = parseFloat(document.getElementById('bef-fair-odds')?.value) || 0;
+    }
   }
   if (cfg.oddsMode === 'pairedBlended' || cfg.oddsMode === 'pairedSingle' || cfg.oddsMode === 'pairedBlendedFromPasteFair') {
     const evNum = parseFloat((document.getElementById('bet-entry-ev').textContent||'').replace(/[£,]/g,''));
-    fields['EV'] = isNaN(evNum) ? 0 : evNum;
+    fields[cfg.evPercentInput ? 'EV £' : 'EV'] = isNaN(evNum) ? 0 : evNum;
   }
   if (cfg.oddsMode === 'blendedProfit' || cfg.oddsMode === 'blendedProfitCommission') {
     const pNum = parseFloat((document.getElementById('bet-entry-profit').textContent||'').replace(/[£,]/g,''));
