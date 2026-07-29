@@ -3591,6 +3591,9 @@ async function submitBtSettle() {
   const msgEl = document.getElementById('bt-settle-msg');
   if (!btSettleResult) { msgEl.innerHTML = '<span style="color:var(--red)">Pick a result.</span>'; return; }
   if (isNaN(pl)) { msgEl.innerHTML = '<span style="color:var(--red)">Enter a P/L amount (0 is fine for a void).</span>'; return; }
+  if (pl === 0 && (btSettleResult === 'won' || btSettleResult === 'lost')) {
+    if (!confirm(`Saving this as a ${btSettleResult === 'won' ? 'Win' : 'Loss'} with £0 P/L — that's almost never intentional. Did you mean to enter a real amount? Click OK to save as £0 anyway.`)) return;
+  }
   msgEl.innerHTML = '<span style="color:var(--text2)">Saving…</span>';
   try {
     const d = await ledgerApi('bets/'+btSettleContext.betId+'/settle', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ result: btSettleResult, pl }) });
