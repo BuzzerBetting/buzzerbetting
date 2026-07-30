@@ -221,11 +221,6 @@ input::placeholder{color:var(--text3)}
       <div><div class="cat-title">Ledger</div><div class="cat-desc">Account tracking, live balances and bet entry</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
-    <div class="cat" style="--accent:var(--amber)" onclick="showTopSec('bettracking')">
-      <div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-history"></i></div>
-      <div><div class="cat-title">Bet Tracking</div><div class="cat-desc">Full history, now stored on the site instead of Google Sheets</div></div>
-      <i class="ti ti-arrow-right cat-arr"></i>
-    </div>
   </div>
 </div>
 
@@ -239,9 +234,9 @@ input::placeholder{color:var(--text3)}
       <div><div class="cat-title">Profit breakdown</div><div class="cat-desc">Monthly P&amp;L, all-time chart and performance stats</div><div class="cat-tag" style="background:var(--green-bg);color:var(--green)">£264,716 total</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
-    <div class="cat" onclick="showSec('tracker')">
+    <div class="cat" onclick="showSec('bets-combined')">
       <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-clipboard-list"></i></div>
-      <div><div class="cat-title">Bet tracker</div><div class="cat-desc">Personal and VA bet history, results and P&amp;L</div></div>
+      <div><div class="cat-title">Bet tracker</div><div class="cat-desc">Add new bets and view recent history — Buzzer and Assistant, any tracker</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
     <div class="cat" onclick="showSec('today')">
@@ -290,11 +285,6 @@ input::placeholder{color:var(--text3)}
   <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
   <div class="sec-title">Ledger</div>
   <div class="ch-grid">
-    <div class="cat" style="--accent:var(--green)" onclick="showLedgerSec('bet-entry')">
-      <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-pencil-plus"></i></div>
-      <div><div class="cat-title">Bet entry</div><div class="cat-desc">VA-facing form for logging placed bets directly to the ledger</div></div>
-      <i class="ti ti-arrow-right cat-arr"></i>
-    </div>
     <div class="cat" style="--accent:var(--blue)" onclick="showLedgerSec('accounts')">
       <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-users"></i></div>
       <div><div class="cat-title">Live Accounts</div><div class="cat-desc">Every currently-live account by bookie, with live balances</div></div>
@@ -381,6 +371,7 @@ input::placeholder{color:var(--text3)}
   <button class="back wide" onclick="backToBetTrackingGroup()"><i class="ti ti-arrow-left"></i> Back</button>
   <div class="sec-title wide" id="bettracking-detail-title"></div>
 
+  <div id="bt-detail-content-wrap">
   <div class="card wide card-pad" style="margin-bottom:16px">
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:14px">
       <div><div class="lbl" style="margin-bottom:3px">Bets</div><div style="font-size:18px;font-weight:600" id="bt-detail-count">—</div></div>
@@ -400,6 +391,7 @@ input::placeholder{color:var(--text3)}
 
   <div class="card wide" style="padding:0;overflow:hidden">
     <div class="scroll-tall" id="bt-detail-table-wrap"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
+  </div>
   </div>
 </div>
 
@@ -466,6 +458,43 @@ input::placeholder{color:var(--text3)}
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px" id="bt-open-tabs"></div>
   <div class="card wide" style="padding:0;overflow:hidden">
     <div class="scroll-tall" id="bt-open-table-wrap"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
+  </div>
+</div>
+
+<!-- COMBINED BETS PAGE (Add Bet + Recent Tracker, one page per bet type) -->
+<div id="view-bets-combined" class="sec">
+  <button class="back" onclick="backToBetsMenu()"><i class="ti ti-arrow-left"></i> Bets</button>
+  <div class="sec-title">Bets</div>
+
+  <div class="card card-pad" style="margin-bottom:16px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div>
+        <label class="lbl">User</label>
+        <select id="bets-user-select" onchange="onBetsUserChange()">
+          <option value="">Select…</option>
+          <option value="buzzer">Buzzer</option>
+          <option value="assistant">Assistant</option>
+        </select>
+      </div>
+      <div>
+        <label class="lbl">Bet type</label>
+        <select id="bets-type-select" onchange="onBetsTypeChange()" disabled>
+          <option value="">Select a user first…</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div id="bets-content" style="display:none">
+    <div class="card card-pad" style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleBetsAddForm()">
+        <div class="sec-title" style="margin:0;font-size:16px"><i class="ti ti-plus"></i> Add new bet</div>
+        <i class="ti ti-chevron-down" id="bets-add-chevron"></i>
+      </div>
+      <div id="bets-add-form-wrap" style="display:none;margin-top:16px"></div>
+    </div>
+
+    <div id="bets-tracker-wrap"></div>
   </div>
 </div>
 
@@ -1865,7 +1894,7 @@ function checkPin(){
 
 // ── NAVIGATION ──
 function goHome(){document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
-function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();if(name==='ddhh')initDDHH(null);}
+function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();if(name==='ddhh')initDDHH(null);if(name==='bets-combined')initBetsPage();}
 const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger',bettracking:'bettracking'};
 function showTopSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});}
 function backToBetsMenu(){showTopSec('bets');}
@@ -2814,7 +2843,7 @@ async function submitBetEntry() {
       }
       if (successCount === allAccountIds.length) {
         msgEl.innerHTML = `<span style="color:var(--green)"><i class="ti ti-check"></i> Logged ${successCount} row${successCount===1?'':'s'} — fill in balances on the tracker as results come in.</span>`;
-        setTimeout(backToTypeSelection, 1600);
+        setTimeout(afterBetLogged, 1600);
       } else {
         msgEl.innerHTML = `<span style="color:var(--red)">Only ${successCount} of ${allAccountIds.length} rows logged successfully — check the tracker before retrying the rest.</span>`;
       }
@@ -2833,7 +2862,7 @@ async function submitBetEntry() {
     });
     if (d.ok) {
       msgEl.innerHTML = `<span style="color:var(--green)"><i class="ti ti-check"></i> Bet logged — total stake £${d.bet.total_stake.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`;
-      setTimeout(backToTypeSelection, 1400);
+      setTimeout(afterBetLogged, 1400);
     } else {
       msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Something went wrong'}</span>`;
     }
@@ -3568,6 +3597,83 @@ function backToBetTrackingGroup() {
 
 let btDetailType = null;
 
+let btsPageInitialized = false;
+
+// One-time relocation of the existing (unchanged) Add Bet form and Bet Tracking summary/
+// table into this combined page. Both keep every original element ID, so every existing
+// function (selectBetType, submitBetEntry, fetchBtDetailPage, openBtSettleModal, etc.)
+// keeps working completely unchanged — this only moves where they render, not what they do.
+function initBetsPage() {
+  if (!btsPageInitialized) {
+    document.getElementById('bets-add-form-wrap').appendChild(document.getElementById('bet-entry-form'));
+    document.getElementById('bet-entry-form').style.display = 'block';
+    document.getElementById('bets-tracker-wrap').appendChild(document.getElementById('bt-detail-content-wrap'));
+    btsPageInitialized = true;
+  }
+  document.getElementById('bets-user-select').value = '';
+  document.getElementById('bets-type-select').innerHTML = '<option value="">Select a user first…</option>';
+  document.getElementById('bets-type-select').disabled = true;
+  document.getElementById('bets-content').style.display = 'none';
+  document.getElementById('bets-add-form-wrap').style.display = 'none';
+  document.getElementById('bets-add-chevron').className = 'ti ti-chevron-down';
+  refreshBetsPageAccounts();
+}
+
+// Keeps the account dropdowns (Bookie-filtered lists, leg rows, Casino extra-accounts) up
+// to date — previously handled by initBetEntry() on the old standalone page.
+async function refreshBetsPageAccounts() {
+  try {
+    const d = await ledgerApi('accounts?excludeClosed=1');
+    LEDGER_ACCOUNTS = (d.ok && d.accounts) ? d.accounts : [];
+  } catch (e) { LEDGER_ACCOUNTS = []; }
+}
+
+function onBetsUserChange() {
+  const group = document.getElementById('bets-user-select').value;
+  const typeSel = document.getElementById('bets-type-select');
+  document.getElementById('bets-content').style.display = 'none';
+  if (!group) {
+    typeSel.innerHTML = '<option value="">Select a user first…</option>';
+    typeSel.disabled = true;
+    return;
+  }
+  typeSel.innerHTML = '<option value="">Select bet type…</option>' + BET_TYPE_GROUPS[group].map(t =>
+    `<option value="${t.key.replace(/"/g,'&quot;')}">${t.label}</option>`
+  ).join('');
+  typeSel.disabled = false;
+}
+
+function onBetsTypeChange() {
+  const group = document.getElementById('bets-user-select').value;
+  const key = document.getElementById('bets-type-select').value;
+  if (!key) { document.getElementById('bets-content').style.display = 'none'; return; }
+  const item = BET_TYPE_GROUPS[group].find(t => t.key === key);
+  document.getElementById('bets-content').style.display = 'block';
+
+  selectBetType(key, item ? item.label : key);
+  document.getElementById('bets-add-form-wrap').style.display = 'none';
+  document.getElementById('bets-add-chevron').className = 'ti ti-chevron-down';
+
+  btDetailType = key;
+  loadBetTrackingDetail();
+}
+
+function toggleBetsAddForm() {
+  const wrap = document.getElementById('bets-add-form-wrap');
+  const chevron = document.getElementById('bets-add-chevron');
+  const showing = wrap.style.display !== 'none';
+  wrap.style.display = showing ? 'none' : 'block';
+  chevron.className = showing ? 'ti ti-chevron-down' : 'ti ti-chevron-up';
+}
+
+// After a successful Log bet — collapse the form and refresh the tracker below so the new
+// entry shows up immediately, rather than navigating away.
+function afterBetLogged() {
+  document.getElementById('bets-add-form-wrap').style.display = 'none';
+  document.getElementById('bets-add-chevron').className = 'ti ti-chevron-down';
+  if (btDetailType) loadBetTrackingDetail();
+}
+
 async function openBetTrackingDetail(betType, label) {
   btDetailType = betType;
   document.getElementById('bettracking-detail-title').textContent = label;
@@ -3579,7 +3685,7 @@ async function openBetTrackingDetail(betType, label) {
 }
 
 let BT_DETAIL_STATE = { page: 0, totalCount: 0, fieldKeys: [] };
-const BT_PAGE_SIZE = 200;
+const BT_PAGE_SIZE = 15;
 
 async function loadBetTrackingDetail() {
   BT_DETAIL_STATE = { page: 0, totalCount: 0, fieldKeys: [] };
