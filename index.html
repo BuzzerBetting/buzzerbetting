@@ -2566,11 +2566,13 @@ function recalcBetEntryEV() {
       if (profitEl) setMoneyEl(profitEl, null);
       return;
     }
-    // Free Bet is always SNR (Stake Not Returned) — winnings only pay (odds-1), never the
-    // stake back, so both the real and fair sides of the EV comparison use (x-1) instead
-    // of the raw odds/fair figure.
+    // Free Bet is always SNR (Stake Not Returned) — a win pays only the profit portion
+    // (Odds-1) × Stake, never the stake back; a loss costs nothing (no real stake was ever
+    // at risk). Genuine expected value: P(win) × (Odds-1) × Stake, where P(win) = 1/FairOdds.
+    // Always comes out positive, unlike a Normal bet's EV — correctly reflecting that a free
+    // bet's downside is always capped at £0.
     const isFreeBet = cfg.oddsMode === 'pairedSingle' && cfg.hasBetKind && document.getElementById('bef-betkind')?.value === 'Free Bet';
-    const ev = isFreeBet ? stake * ((odds-1)/(fair-1) - 1) : stake * (odds/fair - 1);
+    const ev = isFreeBet ? stake * (odds - 1) / fair : stake * (odds/fair - 1);
     const profit = stake * (odds - 1);
     if (evEl) setMoneyEl(evEl, ev);
     if (profitEl) setMoneyEl(profitEl, profit);
