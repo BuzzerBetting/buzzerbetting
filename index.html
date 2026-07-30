@@ -2068,7 +2068,7 @@ const BET_TYPE_CONFIG = {
   'Ninja Golf BFEX':  { layout:'standard', bookie:true, bookieFieldKey:'Bookie', bookieDefault:'Betfair', stakeFieldKey:'Total Stake', fields:[{key:'Comp',label:'Competition',type:'text'},{key:'Player',label:'Player',type:'text'},{key:'Points Advised',label:'Points advised',type:'number'}], oddsMode:'blendedProfitCommission',
                         note:'The potential profit above already accounts for the 2% commission on this market — apply the same 2% again at settlement.' },
   'BB Horse':         { layout:'paste', pasteSpec:'bbhorse', bookie:true, bookieFieldKey:'Bookie', oddsMode:'eachWay', hideProfitBreakdown:true, stakeFieldKey:'Total Stake' },
-  'BB - RTP':         { layout:'paste', pasteSpec:'bbrtp',   bookie:true, bookieFieldKey:'Bookie', oddsMode:'eachWay', hideProfitBreakdown:true, stakeFieldKey:'Total Stake' },
+  'BB - RTP':         { layout:'paste', pasteSpec:'bbrtp',   bookie:true, oddsMode:'eachWay', hideProfitBreakdown:true, stakeFieldKey:'Total Stake' },
   'BB Golf':          { layout:'paste', pasteSpec:'bbgolf',  bookie:true, bookieFieldKey:'Bookie', event:true, oddsMode:'eachWay', stakeFieldKey:'Total Stake' },
   'BB - BT':          { layout:'paste', pasteSpec:'bbbt',    bookie:false, oddsMode:'pairedBlendedFromPasteFair' },
   'Offers (VA)':      { layout:'balance', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet description',type:'text'}], oddsMode:'pairedSingle', hasStake:true, hasBalanceBoxes:false },
@@ -3674,7 +3674,22 @@ function setBtSettleResult(result, skipCalc) {
   const plEl = document.getElementById('bt-settle-pl');
   const betTypeWrap = document.getElementById('bt-settle-bettype-wrap');
   const isFreeBet = betTypeWrap.style.display !== 'none' && document.getElementById('bt-settle-bettype').value === 'Free Bet';
-  if (result === 'won' && stake && odds) plEl.value = (stake * (odds - 1)).toFixed(2);
+  if (result === 'won' && stake && odds) {
+    if (EACH_WAY_BET_TYPES.includes(btSettleContext.betType)) {
+      // Each-way win: half the stake wins at full odds, and the other half ALSO wins (an
+      // outright win always counts as placing too) at place odds — both halves pay out.
+      let effectivePlaceOdds = placeOdds;
+      if (!effectivePlaceOdds && terms) {
+        const denom = parseTermsDenom(terms);
+        if (denom) effectivePlaceOdds = ((odds - 1) / denom) + 1;
+      }
+      plEl.value = effectivePlaceOdds
+        ? ((stake/2)*(odds-1) + (stake/2)*(effectivePlaceOdds-1)).toFixed(2)
+        : (stake * (odds - 1)).toFixed(2); // no place info available yet — fall back to win-only
+    } else {
+      plEl.value = (stake * (odds - 1)).toFixed(2);
+    }
+  }
   else if (result === 'lost') plEl.value = isFreeBet ? '0' : (stake ? (-stake).toFixed(2) : '');
   else if (result === 'void') plEl.value = '0';
   else if (result === 'placed' && stake) {
