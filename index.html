@@ -206,6 +206,11 @@ input::placeholder{color:var(--text3)}
     </div>
   </div>
   <div class="grid">
+    <div class="cat" style="--accent:var(--green)" onclick="showSec('profit')">
+      <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-chart-bar"></i></div>
+      <div><div class="cat-title">Profit breakdown</div><div class="cat-desc">Monthly P&amp;L, all-time chart and performance stats</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
     <div class="cat" style="--accent:var(--purple)" onclick="showTopSec('calc')">
       <div class="cat-ico" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-calculator"></i></div>
       <div><div class="cat-title">Calculations</div><div class="cat-desc">Value finders, DDHH, manual calculators and fixtures</div></div>
@@ -220,28 +225,6 @@ input::placeholder{color:var(--text3)}
 </div>
 
 <!-- BETS MENU -->
-<div id="view-bets-menu" class="sec">
-  <button class="back" onclick="showTopSec('ledger')"><i class="ti ti-arrow-left"></i> Ledger</button>
-  <div class="sec-title">Bets</div>
-  <div class="grid">
-    <div class="cat" onclick="showSec('profit')">
-      <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-chart-bar"></i></div>
-      <div><div class="cat-title">Profit breakdown</div><div class="cat-desc">Monthly P&amp;L, all-time chart and performance stats</div><div class="cat-tag" style="background:var(--green-bg);color:var(--green)">£264,716 total</div></div>
-      <i class="ti ti-arrow-right cat-arr"></i>
-    </div>
-    <div class="cat" onclick="showSec('bets-combined')">
-      <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-clipboard-list"></i></div>
-      <div><div class="cat-title">Bet tracker</div><div class="cat-desc">Add new bets and view recent history — Buzzer and Assistant, any tracker</div></div>
-      <i class="ti ti-arrow-right cat-arr"></i>
-    </div>
-    <div class="cat" onclick="showSec('today')">
-      <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-calendar"></i></div>
-      <div><div class="cat-title">Today's stats</div><div class="cat-desc">Live P&amp;L, active bets and today's action at a glance</div><div class="cat-tag" style="background:var(--blue-bg);color:var(--blue)">Live feed</div></div>
-      <i class="ti ti-arrow-right cat-arr"></i>
-    </div>
-  </div>
-</div>
-
 <!-- CALCULATIONS MENU -->
 <div id="view-calc-menu" class="sec">
   <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
@@ -280,9 +263,9 @@ input::placeholder{color:var(--text3)}
   <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
   <div class="sec-title">Ledger</div>
   <div class="ch-grid">
-    <div class="cat" style="--accent:var(--green)" onclick="showSec('bets-menu')">
+    <div class="cat" style="--accent:var(--green)" onclick="showSec('bets-combined')">
       <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-receipt"></i></div>
-      <div><div class="cat-title">Bets</div><div class="cat-desc">Profit breakdown, bet tracker and today's live stats</div></div>
+      <div><div class="cat-title">Bets</div><div class="cat-desc">Add new bets and view recent history — Buzzer and Assistant, any tracker</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
     <div class="cat" style="--accent:var(--blue)" onclick="showLedgerSec('accounts')">
@@ -453,7 +436,7 @@ input::placeholder{color:var(--text3)}
 
 <!-- COMBINED BETS PAGE (Add Bet + Recent Tracker, one page per bet type) -->
 <div id="view-bets-combined" class="sec">
-  <button class="back" onclick="backToBetsMenu()"><i class="ti ti-arrow-left"></i> Bets</button>
+  <button class="back" onclick="showTopSec('ledger')"><i class="ti ti-arrow-left"></i> Ledger</button>
   <div class="sec-title">Bets</div>
 
   <div class="card card-pad" style="margin-bottom:16px">
@@ -631,13 +614,22 @@ input::placeholder{color:var(--text3)}
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
       <button class="add-btn" id="money-type-deposit" onclick="setMoneyPageType('deposit')">Deposit</button>
       <button class="add-btn" id="money-type-withdrawal" onclick="setMoneyPageType('withdrawal')">Withdrawal</button>
-      <button class="add-btn" id="money-type-bank" onclick="setMoneyPageType('bank')">Bank transaction</button>
+      <button class="add-btn" id="money-type-transfer" onclick="setMoneyPageType('transfer')">Bank transfer</button>
+      <button class="add-btn" id="money-type-external" onclick="setMoneyPageType('external')">External transaction</button>
     </div>
 
     <div id="money-fields-account" style="display:none;margin-bottom:12px">
       <label class="lbl">Account</label>
       <select id="money-account"></select>
     </div>
+
+    <div id="money-fields-transfer" style="display:none;margin-bottom:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div><label class="lbl">Bank sending</label><select id="money-transfer-from" onchange="refreshMoneyTransferBanks()"></select></div>
+        <div><label class="lbl">Bank receiving</label><select id="money-transfer-to" onchange="refreshMoneyTransferBanks()"></select></div>
+      </div>
+    </div>
+
     <div id="money-fields-bank" style="display:none;margin-bottom:12px">
       <label class="lbl">Bank</label>
       <select id="money-bank"></select>
@@ -659,6 +651,12 @@ input::placeholder{color:var(--text3)}
     <div id="money-msg" style="margin-top:10px;font-size:13px"></div>
   </div>
 
+  <div class="card card-pad" style="margin-bottom:16px">
+    <div class="lbl" style="margin-bottom:10px">Pending withdrawals</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">No money has moved for these yet — confirming is what actually moves it out of the account and into the linked bank.</div>
+    <div id="money-pending-withdrawals">Loading…</div>
+  </div>
+
   <div class="card card-pad">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
       <div class="lbl">History</div>
@@ -666,7 +664,8 @@ input::placeholder{color:var(--text3)}
         <option value="">All types</option>
         <option value="deposit">Deposits</option>
         <option value="withdrawal">Withdrawals</option>
-        <option value="bank">Bank transactions</option>
+        <option value="transfer">Bank transfers</option>
+        <option value="external">External transactions</option>
       </select>
     </div>
     <div id="money-history">Loading…</div>
@@ -893,7 +892,7 @@ input::placeholder{color:var(--text3)}
 
 <!-- PROFIT BREAKDOWN -->
 <div id="view-profit" class="sec">
-  <button class="back" onclick="backToBetsMenu()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
   <div class="sec-title">Profit breakdown</div>
   <div class="kpis">
     <div class="kpi"><div class="kpi-l">Total profit</div><div class="kpi-v" style="color:var(--green)">£264,716</div><div class="kpi-s">Since Mar 2023</div></div>
@@ -3581,7 +3580,7 @@ async function submitBankTransaction() {
   } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error.</span>'; }
 }
 
-// ================== LEDGER: MONEY (unified deposits/withdrawals/bank transactions) ==================
+// ================== LEDGER: MONEY (deposits/withdrawals/bank transfers/external) ==================
 let moneyPageType = 'deposit';
 
 async function initMoneyPage() {
@@ -3596,27 +3595,54 @@ async function initMoneyPage() {
   document.getElementById('money-account').innerHTML = LEDGER_ACCOUNTS.length
     ? '<option value="">Select account…</option>' + LEDGER_ACCOUNTS.map(a => `<option value="${a.id}">${escapeHtml(a.account_id||a.profile)} — ${escapeHtml(a.bookie)} (${escapeHtml(a.profile)})</option>`).join('')
     : '<option value="">No live accounts</option>';
+  await refreshMoneyBankDropdowns();
+  loadMoneyPendingWithdrawals();
+  loadMoneyHistory();
+}
+
+async function refreshMoneyBankDropdowns() {
   try {
     const bd = await ledgerApi('banks');
-    const banks = (bd.ok && bd.banks) ? bd.banks : [];
-    document.getElementById('money-bank').innerHTML = banks.length
-      ? '<option value="">Select bank…</option>' + banks.map(b => `<option value="${escapeHtml(b.name)}">${escapeHtml(b.name)} — £${b.remaining.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</option>`).join('')
-      : '<option value="">No banks yet</option>';
-  } catch (e) { document.getElementById('money-bank').innerHTML = '<option value="">Could not load banks</option>'; }
-  loadMoneyHistory();
+    MONEY_PAGE_BANKS = (bd.ok && bd.banks) ? bd.banks : [];
+  } catch (e) { MONEY_PAGE_BANKS = []; }
+  document.getElementById('money-bank').innerHTML = MONEY_PAGE_BANKS.length
+    ? '<option value="">Select bank…</option>' + MONEY_PAGE_BANKS.map(b => `<option value="${escapeHtml(b.name)}">${escapeHtml(b.name)} — £${b.remaining.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</option>`).join('')
+    : '<option value="">No banks yet</option>';
+  refreshMoneyTransferBanks();
+}
+
+let MONEY_PAGE_BANKS = [];
+
+// Keeps the two Bank Transfer dropdowns in sync — whichever bank is picked in one gets
+// excluded from the other, so the same bank can never be both sender and receiver.
+function refreshMoneyTransferBanks() {
+  const fromSel = document.getElementById('money-transfer-from');
+  const toSel = document.getElementById('money-transfer-to');
+  if (!MONEY_PAGE_BANKS.length) {
+    fromSel.innerHTML = '<option value="">No banks yet</option>';
+    toSel.innerHTML = '<option value="">No banks yet</option>';
+    return;
+  }
+  const prevFrom = fromSel.value, prevTo = toSel.value;
+  const optHtml = (excludeName, selected) => '<option value="">Select bank…</option>' + MONEY_PAGE_BANKS
+    .filter(b => b.name !== excludeName)
+    .map(b => `<option value="${escapeHtml(b.name)}" ${b.name===selected?'selected':''}>${escapeHtml(b.name)} — £${b.remaining.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</option>`).join('');
+  fromSel.innerHTML = optHtml(prevTo, prevFrom);
+  toSel.innerHTML = optHtml(prevFrom, prevTo);
 }
 
 function setMoneyPageType(type) {
   moneyPageType = type;
-  ['deposit','withdrawal','bank'].forEach(t => {
+  ['deposit','withdrawal','transfer','external'].forEach(t => {
     const btn = document.getElementById('money-type-'+t);
     if (t === type) { btn.style.background = 'var(--brand)'; btn.style.color = '#fff'; btn.style.borderColor = 'var(--brand)'; }
     else { btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; }
   });
   document.getElementById('money-fields-account').style.display = (type === 'deposit' || type === 'withdrawal') ? 'block' : 'none';
-  document.getElementById('money-fields-bank').style.display = type === 'bank' ? 'block' : 'none';
-  document.getElementById('money-fields-direction').style.display = type === 'bank' ? 'block' : 'none';
-  document.getElementById('money-fields-reason').style.display = type === 'bank' ? 'block' : 'none';
+  document.getElementById('money-fields-transfer').style.display = type === 'transfer' ? 'block' : 'none';
+  document.getElementById('money-fields-bank').style.display = type === 'external' ? 'block' : 'none';
+  document.getElementById('money-fields-direction').style.display = type === 'external' ? 'block' : 'none';
+  document.getElementById('money-fields-reason').style.display = type === 'external' ? 'block' : 'none';
 }
 
 async function submitMoneyPageTransaction() {
@@ -3624,7 +3650,23 @@ async function submitMoneyPageTransaction() {
   const amount = parseFloat(document.getElementById('money-amount').value);
   if (!(amount > 0)) { msgEl.innerHTML = '<span style="color:var(--red)">Enter an amount greater than £0.</span>'; return; }
 
-  if (moneyPageType === 'bank') {
+  if (moneyPageType === 'transfer') {
+    const fromBank = document.getElementById('money-transfer-from').value;
+    const toBank = document.getElementById('money-transfer-to').value;
+    if (!fromBank || !toBank) { msgEl.innerHTML = '<span style="color:var(--red)">Select both the sending and receiving bank.</span>'; return; }
+    msgEl.innerHTML = '<span style="color:var(--text2)">Transferring…</span>';
+    try {
+      const d = await ledgerApi('bank-transfers', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ from_bank: fromBank, to_bank: toBank, amount }) });
+      if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to transfer'}</span>`; return; }
+      msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Transferred.</span>';
+      document.getElementById('money-amount').value = '';
+      await refreshMoneyBankDropdowns();
+      loadMoneyHistory();
+    } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error.</span>'; }
+    return;
+  }
+
+  if (moneyPageType === 'external') {
     const bank = document.getElementById('money-bank').value;
     const reason = document.getElementById('money-reason').value.trim();
     const direction = document.querySelector('input[name="money-direction"]:checked').value;
@@ -3636,6 +3678,7 @@ async function submitMoneyPageTransaction() {
       msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Logged.</span>';
       document.getElementById('money-amount').value = '';
       document.getElementById('money-reason').value = '';
+      await refreshMoneyBankDropdowns();
       loadMoneyHistory();
     } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error.</span>'; }
     return;
@@ -3657,13 +3700,44 @@ async function submitMoneyPageTransaction() {
       await ledgerApi(`${moneyPageType === 'deposit' ? 'deposits' : 'withdrawals'}/${ld.id}/sheet-row`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sheet_row: sd.row }) });
     }
     if (sd.ok) {
-      msgEl.innerHTML = `<span style="color:var(--green)"><i class="ti ti-check"></i> ${moneyPageType==='deposit'?'Deposit':'Withdrawal'} recorded — sheet updated.</span>`;
+      if (moneyPageType === 'deposit') {
+        msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Deposit recorded — sheet updated.</span>';
+      } else {
+        msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Withdrawal logged as pending — no money has moved yet, confirm it below once it lands.</span>';
+      }
     } else {
       msgEl.innerHTML = `<span style="color:var(--amber)">Ledger updated, but the sheet write failed (${sd.error||'unknown error'}) — add it there manually.</span>`;
     }
     document.getElementById('money-amount').value = '';
+    if (moneyPageType === 'withdrawal') loadMoneyPendingWithdrawals();
     loadMoneyHistory();
+    await refreshMoneyBankDropdowns();
   } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error.</span>'; }
+}
+
+async function loadMoneyPendingWithdrawals() {
+  const el = document.getElementById('money-pending-withdrawals');
+  el.innerHTML = 'Loading…';
+  try {
+    const d = await ledgerApi('withdrawals?status=pending');
+    const rows = (d.ok && d.withdrawals) ? d.withdrawals : [];
+    if (!rows.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No pending withdrawals.</div>'; return; }
+    el.innerHTML = rows.map(r => `<div style="padding:9px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px">
+        <div>
+          <div style="color:var(--text3);font-size:11px">${formatLedgerDate(r.date)}</div>
+          ${r.account_code || '—'} — ${r.bookie} <span style="color:var(--text3)">(${r.profile})</span>
+          <span style="font-weight:600;margin-left:6px">£${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+          ${!r.sheet_row?' <span style="color:var(--amber)">(not linked)</span>':''}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="add-btn" onclick="moneyConfirmWithdrawal(${r.id}, ${r.sheet_row||'null'})"><i class="ti ti-check"></i> Confirm</button>
+          <button class="add-btn" onclick="moneyReverseWithdrawal(${r.id})"><i class="ti ti-arrow-back-up"></i> Reverse</button>
+          <button class="add-btn" onclick="moneyConfiscateWithdrawal(${r.id})" style="color:var(--red);border-color:var(--red)"><i class="ti ti-ban"></i> Confiscated</button>
+        </div>
+      </div>
+    </div>`).join('');
+  } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load pending withdrawals.</div>'; }
 }
 
 async function loadMoneyHistory() {
@@ -3671,26 +3745,29 @@ async function loadMoneyHistory() {
   const filter = document.getElementById('money-filter').value;
   el.innerHTML = 'Loading…';
   try {
-    const [depRes, wdRes, bankRes] = await Promise.all([
+    const [depRes, wdRes, transferRes, extRes] = await Promise.all([
       filter && filter !== 'deposit' ? Promise.resolve({ok:true,deposits:[]}) : ledgerApi('deposits'),
-      filter && filter !== 'withdrawal' ? Promise.resolve({ok:true,withdrawals:[]}) : ledgerApi('withdrawals'),
-      filter && filter !== 'bank' ? Promise.resolve({ok:true,transactions:[]}) : ledgerApi('bank-transactions'),
+      filter && filter !== 'withdrawal' ? Promise.resolve({ok:true,withdrawals:[]}) : ledgerApi('withdrawals?status=confirmed'),
+      filter && filter !== 'transfer' ? Promise.resolve({ok:true,transfers:[]}) : ledgerApi('bank-transfers'),
+      filter && filter !== 'external' ? Promise.resolve({ok:true,transactions:[]}) : ledgerApi('bank-transactions'),
     ]);
     const items = [];
     (depRes.ok && depRes.deposits ? depRes.deposits : []).forEach(r => items.push({
       type: 'deposit', id: r.id, date: r.date, amount: r.amount, sign: 1,
       label: `${r.account_code || '—'} — ${r.bookie} <span style="color:var(--text3)">(${r.profile})</span>`,
-      status: null, sheetRow: r.sheet_row
     }));
+    // Only confirmed withdrawals show in history — pending ones live in their own box above.
     (wdRes.ok && wdRes.withdrawals ? wdRes.withdrawals : []).forEach(r => items.push({
       type: 'withdrawal', id: r.id, date: r.date, amount: r.amount, sign: -1,
-      label: `${r.account_code || '—'} — ${r.bookie} <span style="color:var(--text3)">(${r.profile})</span>${!r.sheet_row?' <span style="color:var(--amber)">(not linked)</span>':''}`,
-      status: r.status, sheetRow: r.sheet_row
+      label: `${r.account_code || '—'} — ${r.bookie} <span style="color:var(--text3)">(${r.profile})</span>`,
     }));
-    (bankRes.ok && bankRes.transactions ? bankRes.transactions : []).forEach(r => items.push({
-      type: 'bank', id: r.id, date: r.date, amount: r.amount, sign: r.direction === 'in' ? 1 : -1,
+    (transferRes.ok && transferRes.transfers ? transferRes.transfers : []).forEach(r => items.push({
+      type: 'transfer', id: r.id, date: r.date, amount: r.amount, sign: 0,
+      label: `${escapeHtml(r.from_bank)} <i class="ti ti-arrow-right" style="font-size:11px;vertical-align:middle"></i> ${escapeHtml(r.to_bank)}`,
+    }));
+    (extRes.ok && extRes.transactions ? extRes.transactions : []).forEach(r => items.push({
+      type: 'external', id: r.id, date: r.date, amount: r.amount, sign: r.direction === 'in' ? 1 : -1,
       label: `${escapeHtml(r.bank)} <span style="color:var(--text3)">${r.reason ? '— '+escapeHtml(r.reason) : ''}</span>`,
-      status: null
     }));
     items.sort((a,b) => new Date(b.date) - new Date(a.date));
     if (!items.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No transactions yet.</div>'; return; }
@@ -3699,27 +3776,22 @@ async function loadMoneyHistory() {
 }
 
 function renderMoneyRow(item) {
-  const typeLabel = item.type === 'deposit' ? 'Deposit' : item.type === 'withdrawal' ? 'Withdrawal' : 'Bank txn';
-  const typeColor = item.type === 'deposit' ? 'var(--green)' : item.type === 'withdrawal' ? 'var(--red)' : 'var(--blue)';
-  let actions = '';
-  if (item.type === 'deposit') {
-    actions = `<button class="add-btn" onclick="moneyReverseDeposit(${item.id})"><i class="ti ti-arrow-back-up"></i> Reverse</button>`;
-  } else if (item.type === 'withdrawal') {
-    actions = item.status === 'pending'
-      ? `<button class="add-btn" onclick="moneyConfirmWithdrawal(${item.id}, ${item.sheetRow||'null'})"><i class="ti ti-check"></i> Confirm</button>
-         <button class="add-btn" onclick="moneyReverseWithdrawal(${item.id})"><i class="ti ti-arrow-back-up"></i> Reverse</button>
-         <button class="add-btn" onclick="moneyConfiscateWithdrawal(${item.id})" style="color:var(--red);border-color:var(--red)"><i class="ti ti-ban"></i> Confiscated</button>`
-      : `<button class="add-btn" onclick="moneyReverseWithdrawal(${item.id})"><i class="ti ti-arrow-back-up"></i> Reverse</button>`;
-  } else {
-    actions = `<button class="add-btn" onclick="moneyUndoBankTransaction(${item.id})"><i class="ti ti-arrow-back-up"></i> Undo</button>`;
-  }
-  const statusTag = item.status ? `<span style="color:var(--amber);font-size:11px;margin-left:6px">(${item.status})</span>` : '';
+  const typeLabel = item.type === 'deposit' ? 'Deposit' : item.type === 'withdrawal' ? 'Withdrawal' : item.type === 'transfer' ? 'Bank transfer' : 'External';
+  const typeColor = item.type === 'deposit' ? 'var(--green)' : item.type === 'withdrawal' ? 'var(--red)' : item.type === 'transfer' ? 'var(--purple)' : 'var(--blue)';
+  const actions = item.type === 'deposit' ? `<button class="add-btn" onclick="moneyReverseDeposit(${item.id})"><i class="ti ti-arrow-back-up"></i> Reverse</button>`
+    : item.type === 'withdrawal' ? `<button class="add-btn" onclick="moneyReverseWithdrawal(${item.id})"><i class="ti ti-arrow-back-up"></i> Reverse</button>`
+    : item.type === 'transfer' ? `<button class="add-btn" onclick="moneyReverseBankTransfer(${item.id})"><i class="ti ti-arrow-back-up"></i> Reverse</button>`
+    : `<button class="add-btn" onclick="moneyUndoBankTransaction(${item.id})"><i class="ti ti-arrow-back-up"></i> Reverse</button>`;
+  const amountDisplay = item.sign === 0
+    ? `£${item.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}`
+    : `${item.sign>0?'+':'-'}£${item.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const amountColor = item.sign > 0 ? 'var(--green)' : item.sign < 0 ? 'var(--red)' : 'var(--text)';
   return `<div style="padding:9px 0;border-bottom:0.5px solid var(--border);font-size:13px">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
       <div>
-        <div style="color:var(--text3);font-size:11px">${formatLedgerDate(item.date)} <span style="color:${typeColor};font-weight:600;margin-left:4px">${typeLabel}</span>${statusTag}</div>
+        <div style="color:var(--text3);font-size:11px">${formatLedgerDate(item.date)} <span style="color:${typeColor};font-weight:600;margin-left:4px">${typeLabel}</span></div>
         <div>${item.label}
-          <span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;font-weight:600;color:${item.sign>0?'var(--green)':'var(--red)'};margin-left:6px" onclick="editMoneyAmount('${item.type}', ${item.id}, ${item.amount})" title="Click to correct the amount">${item.sign>0?'+':'-'}£${item.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+          <span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;font-weight:600;color:${amountColor};margin-left:6px" onclick="editMoneyAmount('${item.type}', ${item.id}, ${item.amount})" title="Click to correct the amount">${amountDisplay}</span>
         </div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">${actions}</div>
@@ -3728,15 +3800,16 @@ function renderMoneyRow(item) {
 }
 
 async function editMoneyAmount(type, id, currentAmount) {
-  const input = prompt('Correct this amount — the linked account and bank balances will be adjusted to match:', currentAmount);
+  const input = prompt('Correct this amount — the linked balances will be adjusted to match:', currentAmount);
   if (input === null) return;
   const newAmount = parseFloat(input);
   if (!(newAmount > 0)) { alert('Enter a valid positive amount.'); return; }
-  const endpoint = type === 'deposit' ? 'deposits' : type === 'withdrawal' ? 'withdrawals' : 'bank-transactions';
+  const endpoint = type === 'deposit' ? 'deposits' : type === 'withdrawal' ? 'withdrawals' : type === 'transfer' ? 'bank-transfers' : 'bank-transactions';
   try {
     const d = await ledgerApi(`${endpoint}/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ amount: newAmount }) });
     if (!d.ok) { alert(d.error || 'Failed to update'); return; }
     loadMoneyHistory();
+    loadMoneyPendingWithdrawals();
   } catch (e) { alert('Network error — please try again.'); }
 }
 
@@ -3764,35 +3837,47 @@ async function moneyConfirmWithdrawal(id, sheetRow) {
       alert('Confirmed in Ledger. This withdrawal was never linked to a sheet row, so nothing to move there.');
     }
   } catch (e) { alert('Network error confirming withdrawal.'); return; }
+  loadMoneyPendingWithdrawals();
   loadMoneyHistory();
 }
 
 async function moneyReverseWithdrawal(id) {
-  if (!confirm('Reverse this withdrawal? This adds the amount back to the account (and its bank total), and deletes the record.')) return;
+  if (!confirm('Reverse this withdrawal? If it was still pending, no money has moved and this just removes the record. If already confirmed, it adds the amount back to the account (and out of its bank total).')) return;
   try {
     const d = await ledgerApi('withdrawals/'+id+'/reverse', { method:'POST' });
     if (!d.ok) { alert('Failed to reverse: ' + (d.error||'unknown error')); return; }
     if (!d.sheetOk) alert('Reversed in Ledger, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
   } catch (e) { alert('Network error reversing withdrawal.'); return; }
+  loadMoneyPendingWithdrawals();
   loadMoneyHistory();
 }
 
 async function moneyConfiscateWithdrawal(id) {
-  if (!confirm("Mark this withdrawal as confiscated? The bookie kept the money — it moves to Locked Funds for record-keeping and won't be added back to the account.")) return;
+  if (!confirm("Mark this withdrawal as confiscated? The bookie kept the money — it's deducted from the account and moves to Locked Funds for record-keeping.")) return;
   try {
     const d = await ledgerApi('withdrawals/'+id+'/confiscate', { method:'POST' });
     if (!d.ok) { alert('Failed to confiscate: ' + (d.error||'unknown error')); return; }
     if (!d.sheetOk) alert('Moved to Locked Funds, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
   } catch (e) { alert('Network error.'); return; }
+  loadMoneyPendingWithdrawals();
   loadMoneyHistory();
 }
 
 async function moneyUndoBankTransaction(id) {
-  if (!confirm('Undo this transaction? This reverses its effect on the bank balance and removes the record.')) return;
+  if (!confirm('Reverse this transaction? This reverses its effect on the bank balance and removes the record.')) return;
   try {
     const d = await ledgerApi('bank-transactions/'+id, { method:'DELETE' });
-    if (!d.ok) { alert('Failed to undo: ' + (d.error||'unknown error')); return; }
-  } catch (e) { alert('Network error undoing transaction.'); return; }
+    if (!d.ok) { alert('Failed to reverse: ' + (d.error||'unknown error')); return; }
+  } catch (e) { alert('Network error reversing transaction.'); return; }
+  loadMoneyHistory();
+}
+
+async function moneyReverseBankTransfer(id) {
+  if (!confirm('Reverse this transfer? This moves the amount back from the receiving bank to the sending bank, and deletes the record.')) return;
+  try {
+    const d = await ledgerApi('bank-transfers/'+id, { method:'DELETE' });
+    if (!d.ok) { alert('Failed to reverse: ' + (d.error||'unknown error')); return; }
+  } catch (e) { alert('Network error reversing transfer.'); return; }
   loadMoneyHistory();
 }
 
