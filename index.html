@@ -2756,6 +2756,7 @@ async function submitBetEntry() {
     }));
     if (legs.some(l => !l.account_id)) { msgEl.innerHTML = '<span style="color:var(--red)">Every row needs an account selected.</span>'; return; }
     if (legs.some(l => !(l.stake > 0))) { msgEl.innerHTML = '<span style="color:var(--red)">Every row needs a stake greater than £0.</span>'; return; }
+    if (new Set(legs.map(l => l.account_id)).size !== legs.length) { msgEl.innerHTML = '<span style="color:var(--red)">The same account is selected more than once — each account can only appear once per bet.</span>'; return; }
   }
   if (cfg.hasStake !== false && cfg.layout !== 'balance') {
     fields[cfg.stakeFieldKey || 'Stake'] = legs.reduce((s, l) => s + (l.stake || 0), 0);
@@ -2770,6 +2771,11 @@ async function submitBetEntry() {
     const extraAccountIds = [...document.querySelectorAll('#bet-entry-casino-extra-accounts .casino-extra-account')]
       .map(el => el.value).filter(Boolean);
     const allAccountIds = [legs[0].account_id, ...extraAccountIds];
+    if (new Set(allAccountIds).size !== allAccountIds.length) {
+      msgEl.innerHTML = '<span style="color:var(--red)">The same account is selected more than once — each account can only appear once per offer.</span>';
+      btn.disabled = false; btn.textContent = 'Log bet';
+      return;
+    }
     let successCount = 0;
     try {
       for (const accountId of allAccountIds) {
@@ -3624,7 +3630,9 @@ function renderBtDetailTable(bets) {
           return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetStake(${b.id}, ${b.fields[k]||0}, fetchBtDetailPage)" title="Click to correct the stake">${cellContent}</span></td>`;
         }
         if (b.bet_type === 'Casino' && CASINO_BALANCE_KEYS.includes(k)) {
-          return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editCasinoBalanceField(${b.id}, '${k}', ${b.fields[k]||0}, fetchBtDetailPage)" title="Click to amend">${cellContent}</span></td>`;
+          const isBlank = b.fields[k] === undefined || b.fields[k] === null;
+          const display = isBlank ? '<i class="ti ti-plus" style="color:var(--text3)"></i>' : cellContent;
+          return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editCasinoBalanceField(${b.id}, '${k}', ${b.fields[k]||0}, fetchBtDetailPage)" title="${isBlank?'Click to add a value':'Click to amend'}">${display}</span></td>`;
         }
         return `<td${colClass(k)}>${cellContent}</td>`;
       }).join('')}
