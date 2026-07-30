@@ -439,10 +439,14 @@ input::placeholder{color:var(--text3)}
     </div>
     <div id="bt-settle-bettype-wrap" style="display:none;margin-bottom:16px">
       <label class="lbl">Bet type</label>
-      <select id="bt-settle-bettype" onchange="onBtSettleBetTypeChange()">
-        <option value="Normal">Normal</option>
-        <option value="Free Bet">Free Bet</option>
-      </select>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="bt-settle-bettype" onchange="onBtSettleBetTypeChange()" style="flex:1">
+          <option value="Normal">Normal</option>
+          <option value="Free Bet">Free Bet</option>
+        </select>
+        <button class="add-btn" onclick="saveBtSettleBetTypeOnly()" title="Save just the bet type — doesn't require picking a result">Save type only</button>
+      </div>
+      <div id="bt-settle-bettype-msg" style="margin-top:6px;font-size:12px"></div>
     </div>
     <label class="lbl">P/L £ (positive for a win, negative for a loss)</label>
     <input type="number" id="bt-settle-pl" step="0.01" style="margin-bottom:16px">
@@ -2081,7 +2085,7 @@ const BET_TYPE_CONFIG = {
   'BB - RTP':         { layout:'paste', pasteSpec:'bbrtp',   bookie:true, oddsMode:'eachWay', hideProfitBreakdown:true, stakeFieldKey:'Total Stake' },
   'BB Golf':          { layout:'paste', pasteSpec:'bbgolf',  bookie:true, bookieFieldKey:'Bookie', event:true, oddsMode:'eachWay', stakeFieldKey:'Total Stake' },
   'BB - BT':          { layout:'paste', pasteSpec:'bbbt',    bookie:false, oddsMode:'pairedBlendedFromPasteFair' },
-  'Offers (VA)':      { layout:'balance', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet description',type:'text'}], oddsMode:'pairedSingle', hasStake:true, hasBalanceBoxes:false },
+  'Offers (VA)':      { layout:'balance', bookie:true, bookieFieldKey:'Bookmaker', hasBetKind:true, fields:[{key:'Bet Description',label:'Bet description',type:'text'}], oddsMode:'pairedSingle', hasStake:true, hasBalanceBoxes:false },
   'Casino':           { layout:'balance', bookie:true, bookieFieldKey:'Bookie', hasBetKind:false, fields:[{key:'Offer',label:'Offer',type:'text'},{key:'EV',label:'EV £',type:'number'}], oddsMode:'none', hasStake:false, hasBalanceBoxes:false, casinoExtraAccounts:true },
   'Offers (Personal)': { layout:'balance', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet description',type:'text'}], oddsMode:'pairedSingle', hasStake:true, hasBalanceBoxes:false },
   'Other Bets':       { layout:'standard', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet',type:'text'},{key:'Back Odds',label:'Back odds',type:'number'}] },
@@ -3757,6 +3761,22 @@ function openBtSettleModal(betId, currentResult, currentPl, refreshFn, stake, od
 // a Free Bet loss should suggest £0 (no real money at risk), not the full stake.
 function onBtSettleBetTypeChange() {
   if (btSettleResult === 'lost') setBtSettleResult('lost');
+}
+
+// Saves just the Bet Type correction (Normal <-> Free Bet), completely independent of
+// settling a result — usable on a still-open bet, or to fix a wrongly-entered type without
+// disturbing an already-correct settlement.
+async function saveBtSettleBetTypeOnly() {
+  if (!btSettleContext) return;
+  const msgEl = document.getElementById('bt-settle-bettype-msg');
+  const betType = document.getElementById('bt-settle-bettype').value;
+  msgEl.innerHTML = '<span style="color:var(--text2)">Saving…</span>';
+  try {
+    const d = await ledgerApi('bets/'+btSettleContext.betId+'/bettype', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ betType }) });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to save'}</span>`; return; }
+    msgEl.innerHTML = '<span style="color:var(--green)">Saved.</span>';
+    if (btSettleContext.refreshFn) btSettleContext.refreshFn();
+  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error</span>'; }
 }
 
 // Parses an each-way terms string like "1/5" down to its denominator (5).
