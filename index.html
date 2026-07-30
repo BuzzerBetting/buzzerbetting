@@ -432,6 +432,13 @@ input::placeholder{color:var(--text3)}
       <label class="lbl">BFEX SP</label>
       <input type="number" id="bt-settle-bfex" step="0.01">
     </div>
+    <div id="bt-settle-bettype-wrap" style="display:none;margin-bottom:16px">
+      <label class="lbl">Bet type</label>
+      <select id="bt-settle-bettype" onchange="onBtSettleBetTypeChange()">
+        <option value="Normal">Normal</option>
+        <option value="Free Bet">Free Bet</option>
+      </select>
+    </div>
     <label class="lbl">P/L £ (positive for a win, negative for a loss)</label>
     <input type="number" id="bt-settle-pl" step="0.01" style="margin-bottom:16px">
     <button onclick="submitBtSettle()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:11px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;width:100%">Save</button>
@@ -2067,7 +2074,7 @@ const BET_TYPE_CONFIG = {
   'Offers (VA)':      { layout:'balance', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet description',type:'text'}], oddsMode:'pairedSingle', hasStake:true, hasBalanceBoxes:false },
   'Casino':           { layout:'balance', bookie:true, bookieFieldKey:'Bookie', hasBetKind:false, fields:[{key:'Offer',label:'Offer',type:'text'}], oddsMode:'none', hasStake:false, hasBalanceBoxes:true },
   'Offers (Personal)': { layout:'balance', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet description',type:'text'}], oddsMode:'pairedSingle', hasStake:true, hasBalanceBoxes:false },
-  'Other Bets':       { layout:'standard', bookie:true, fields:[{key:'Bet',label:'Bet',type:'text'},{key:'Back Odds',label:'Back odds',type:'number'}] },
+  'Other Bets':       { layout:'standard', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet',type:'text'},{key:'Back Odds',label:'Back odds',type:'number'}] },
   'Casino (Personal)': { layout:'balance', bookie:true, bookieFieldKey:'Bookie', hasBetKind:false, fields:[{key:'Offer',label:'Offer',type:'text'}], oddsMode:'none', hasStake:false, hasBalanceBoxes:true, balanceBoxStyle:'directPL' },
 };
 
@@ -3545,7 +3552,7 @@ function renderBtDetailTable(bets) {
       }).join('')}
       <td class="r" style="color:${(b.pl||0)>=0?'var(--green)':'var(--red)'}">${(b.pl||0)>=0?'+':'-'}£${Math.abs(b.pl||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td style="white-space:nowrap;display:flex;gap:6px">
-        <button class="add-btn" onclick="openBtSettleModal(${b.id}, '${b.result}', ${b.pl||0}, fetchBtDetailPage, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${b.bet_type.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'})">${b.result==='open'?'Settle':'Override'}</button>
+        <button class="add-btn" onclick="openBtSettleModal(${b.id}, '${b.result}', ${b.pl||0}, fetchBtDetailPage, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${b.bet_type.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">${b.result==='open'?'Settle':'Override'}</button>
         ${b.result==='open' && !b.leg_count ? `<button class="add-btn" onclick="openBtLinkModal(${b.id})">Link account</button>` : ''}
       </td>
     </tr>`;
@@ -3617,7 +3624,9 @@ let btSettleResult = null;
 
 const EACH_WAY_BET_TYPES = ['Dogs + Horses', 'BB Horse', 'BB Golf', 'BB - RTP'];
 
-function openBtSettleModal(betId, currentResult, currentPl, refreshFn, stake, odds, betType, currentBfexSp, terms, placeOdds) {
+const BET_TYPE_TOGGLE_TABS = ['Offers (Personal)', 'Offers (VA)', 'Other Bets'];
+
+function openBtSettleModal(betId, currentResult, currentPl, refreshFn, stake, odds, betType, currentBfexSp, terms, placeOdds, currentBetKind) {
   btSettleContext = { betId, refreshFn, stake: stake || 0, odds: odds || null, betType, terms: terms || null, placeOdds: placeOdds || null };
   document.getElementById('bt-settle-pl').value = (currentPl !== undefined && currentPl !== null) ? currentPl : '';
   document.getElementById('bt-settle-msg').innerHTML = '';
@@ -3627,9 +3636,19 @@ function openBtSettleModal(betId, currentResult, currentPl, refreshFn, stake, od
   const isDogbot = betType === 'Dogs + Horses';
   bfexWrap.style.display = isDogbot ? 'block' : 'none';
   document.getElementById('bt-settle-bfex').value = (currentBfexSp !== undefined && currentBfexSp !== null) ? currentBfexSp : '';
+  const betTypeWrap = document.getElementById('bt-settle-bettype-wrap');
+  const showsBetType = BET_TYPE_TOGGLE_TABS.includes(betType);
+  betTypeWrap.style.display = showsBetType ? 'block' : 'none';
+  if (showsBetType) document.getElementById('bt-settle-bettype').value = currentBetKind === 'Free Bet' ? 'Free Bet' : 'Normal';
   document.getElementById('bt-settle-placed').style.display = EACH_WAY_BET_TYPES.includes(betType) ? 'block' : 'none';
   setBtSettleResult(currentResult && currentResult !== 'open' ? currentResult : null, true);
   document.getElementById('bt-settle-modal-overlay').style.display = 'flex';
+}
+
+// If Loss is currently selected, re-suggest the P/L when the bet type toggle changes —
+// a Free Bet loss should suggest £0 (no real money at risk), not the full stake.
+function onBtSettleBetTypeChange() {
+  if (btSettleResult === 'lost') setBtSettleResult('lost');
 }
 
 // Parses an each-way terms string like "1/5" down to its denominator (5).
@@ -3639,10 +3658,10 @@ function parseTermsDenom(termsStr) {
 }
 
 // Auto-calculates a starting P/L suggestion from the bet's real Stake and Odds whenever a
-// result is picked: Win = Stake × (Odds - 1), Loss = -Stake, Void = 0, Placed uses the
-// each-way formula (from raw Odds+Terms for Dogbot, or a stored Place Odds for the other
-// each-way tabs). Stays a normal editable box afterward — this is a suggested starting
-// point, not locked in.
+// result is picked: Win = Stake × (Odds - 1), Loss = -Stake (or £0 for a Free Bet — SNR
+// means no real money was ever at risk), Void = 0, Placed uses the each-way formula (from
+// raw Odds+Terms for Dogbot, or a stored Place Odds for the other each-way tabs). Stays a
+// normal editable box afterward — this is a suggested starting point, not locked in.
 function setBtSettleResult(result, skipCalc) {
   btSettleResult = result;
   ['won','placed','lost','void'].forEach(r => {
@@ -3653,8 +3672,10 @@ function setBtSettleResult(result, skipCalc) {
   if (skipCalc || !btSettleContext) return;
   const { stake, odds, terms, placeOdds } = btSettleContext;
   const plEl = document.getElementById('bt-settle-pl');
+  const betTypeWrap = document.getElementById('bt-settle-bettype-wrap');
+  const isFreeBet = betTypeWrap.style.display !== 'none' && document.getElementById('bt-settle-bettype').value === 'Free Bet';
   if (result === 'won' && stake && odds) plEl.value = (stake * (odds - 1)).toFixed(2);
-  else if (result === 'lost' && stake) plEl.value = (-stake).toFixed(2);
+  else if (result === 'lost') plEl.value = isFreeBet ? '0' : (stake ? (-stake).toFixed(2) : '');
   else if (result === 'void') plEl.value = '0';
   else if (result === 'placed' && stake) {
     if (placeOdds) {
@@ -3725,7 +3746,9 @@ async function submitBtSettle() {
   const msgEl = document.getElementById('bt-settle-msg');
   if (!btSettleResult) { msgEl.innerHTML = '<span style="color:var(--red)">Pick a result.</span>'; return; }
   if (isNaN(pl)) { msgEl.innerHTML = '<span style="color:var(--red)">Enter a P/L amount (0 is fine for a void).</span>'; return; }
-  if (pl === 0 && (btSettleResult === 'won' || btSettleResult === 'lost')) {
+  const betTypeWrap = document.getElementById('bt-settle-bettype-wrap');
+  const isFreeBetNow = betTypeWrap.style.display !== 'none' && document.getElementById('bt-settle-bettype').value === 'Free Bet';
+  if (pl === 0 && (btSettleResult === 'won' || btSettleResult === 'lost') && !(isFreeBetNow && btSettleResult === 'lost')) {
     if (!confirm(`Saving this as a ${btSettleResult === 'won' ? 'Win' : 'Loss'} with £0 P/L — that's almost never intentional. Did you mean to enter a real amount? Click OK to save as £0 anyway.`)) return;
   }
   msgEl.innerHTML = '<span style="color:var(--text2)">Saving…</span>';
@@ -3734,6 +3757,9 @@ async function submitBtSettle() {
     if (btSettleContext.betType === 'Dogs + Horses') {
       const bfexVal = parseFloat(document.getElementById('bt-settle-bfex').value);
       if (!isNaN(bfexVal)) extraFields['BFEX SP'] = bfexVal;
+    }
+    if (betTypeWrap.style.display !== 'none') {
+      extraFields['Bet Type'] = document.getElementById('bt-settle-bettype').value;
     }
     const d = await ledgerApi('bets/'+btSettleContext.betId+'/settle', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ result: btSettleResult, pl, extraFields }) });
     if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to settle'}</span>`; return; }
@@ -3820,7 +3846,7 @@ async function loadBtOpenTable() {
           }
           return `<td${colClass(k)}>${cellContent}</td>`;
         }).join('')}
-        <td><button class="add-btn" onclick="openBtSettleModal(${b.id}, 'open', null, loadBtOpenTabs, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${btOpenState.betType.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'})">Settle</button></td>
+        <td><button class="add-btn" onclick="openBtSettleModal(${b.id}, 'open', null, loadBtOpenTabs, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${btOpenState.betType.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">Settle</button></td>
       </tr>`;
     });
     html += '</tbody></table>';
