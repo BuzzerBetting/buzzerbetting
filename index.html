@@ -2693,11 +2693,12 @@ async function submitBetEntry() {
       fields['Bonus P/L'] = bonusPL;
       fields['Total P/L'] = +(wagerPL + bonusPL).toFixed(2);
     } else {
-      ['bef-wager-start','bef-wager-end','bef-bonus-start','bef-bonus-end'].forEach(id => {
-        fields[id] = parseFloat(document.getElementById(id)?.value) || 0;
-      });
+      fields['Wager Starting Balance'] = parseFloat(document.getElementById('bef-wager-start')?.value) || 0;
+      fields['Wager Finish Balance'] = parseFloat(document.getElementById('bef-wager-end')?.value) || 0;
+      fields['Bonus Starting Balance'] = parseFloat(document.getElementById('bef-bonus-start')?.value) || 0;
+      fields['Bonus Finish Balance'] = parseFloat(document.getElementById('bef-bonus-end')?.value) || 0;
       const plNum = parseFloat((document.getElementById('bet-entry-balance-pl-value').textContent||'').replace(/[£,]/g,''));
-      fields['Balance P/L'] = isNaN(plNum) ? 0 : plNum;
+      fields['Total P/L'] = isNaN(plNum) ? 0 : plNum;
     }
   }
 
