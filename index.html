@@ -526,7 +526,7 @@ input::placeholder{color:var(--text3)}
     <!-- Single-account balance layout (Casino / Offers) -->
     <div id="bet-entry-balance-section" style="display:none">
       <div style="display:grid;grid-template-columns:1fr 160px;gap:14px;margin-bottom:14px">
-        <div><label class="lbl">Account</label><select id="bef-single-account"></select></div>
+        <div><label class="lbl">Account</label><select id="bef-single-account" onchange="refreshCasinoAccountDropdowns()"></select></div>
         <div id="bef-single-stake-wrap"><label class="lbl">Stake £</label><input type="number" id="bef-single-stake" step="0.01" min="0" oninput="recalcBetEntryEV()"></div>
       </div>
       <div id="bet-entry-balance-boxes" style="display:none;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:8px">
@@ -2394,11 +2394,14 @@ function normalizeBookieInput(raw) {
   return fuzzy || null;
 }
 
-function accountOptionsHtml(selectedId, bookieRaw) {
+function accountOptionsHtml(selectedId, bookieRaw, excludeIds) {
   let list = LEDGER_ACCOUNTS;
   if (bookieRaw && bookieRaw.trim()) {
     const matched = normalizeBookieInput(bookieRaw);
     list = matched ? LEDGER_ACCOUNTS.filter(a => a.bookie === matched) : [];
+  }
+  if (excludeIds && excludeIds.length) {
+    list = list.filter(a => String(a.id) === String(selectedId) || !excludeIds.includes(String(a.id)));
   }
   if (!list.length) {
     return bookieRaw && bookieRaw.trim() ? `<option value="">No live accounts for that bookie</option>` : `<option value="">No accounts set up yet</option>`;
@@ -2410,9 +2413,26 @@ function accountOptionsHtml(selectedId, bookieRaw) {
 
 function refreshLegAccountDropdowns() {
   const bookieRaw = document.getElementById('bef-Book')?.value || '';
-  document.querySelectorAll('#bet-entry-legs .leg-account').forEach(sel => {
+  const selects = [...document.querySelectorAll('#bet-entry-legs .leg-account')];
+  const allSelected = selects.map(s => s.value).filter(Boolean);
+  selects.forEach(sel => {
     const prev = sel.value;
-    sel.innerHTML = accountOptionsHtml(prev, bookieRaw);
+    sel.innerHTML = accountOptionsHtml(prev, bookieRaw, allSelected.filter(v => v !== prev));
+  });
+}
+
+// Keeps the primary account + every extra account dropdown (Casino) in sync — whichever
+// accounts are already picked in one row get excluded from the others, so the same account
+// can never be selected twice.
+function refreshCasinoAccountDropdowns() {
+  const bookieRaw = document.getElementById('bef-Book')?.value || '';
+  const primarySel = document.getElementById('bef-single-account');
+  const extraSels = [...document.querySelectorAll('#bet-entry-casino-extra-accounts .casino-extra-account')];
+  const allSels = primarySel ? [primarySel, ...extraSels] : extraSels;
+  const allSelected = allSels.map(s => s.value).filter(Boolean);
+  allSels.forEach(sel => {
+    const prev = sel.value;
+    sel.innerHTML = accountOptionsHtml(prev, bookieRaw, allSelected.filter(v => v !== prev));
   });
 }
 
@@ -2429,16 +2449,18 @@ function addCasinoExtraAccountRow() {
   row.dataset.row = id;
   row.style.cssText = 'display:grid;grid-template-columns:1fr 32px;gap:10px;margin-bottom:8px;align-items:center';
   row.innerHTML = `
-    <select class="casino-extra-account">${accountOptionsHtml(null, document.getElementById('bef-Book')?.value)}</select>
+    <select class="casino-extra-account" onchange="refreshCasinoAccountDropdowns()"></select>
     <button class="rm-btn" onclick="removeCasinoExtraAccountRow(${id})" title="Remove">×</button>`;
   wrap.appendChild(row);
   document.getElementById('bet-entry-casino-extra-add-btn').style.display = wrap.children.length >= 4 ? 'none' : 'inline-flex';
+  refreshCasinoAccountDropdowns();
 }
 
 function removeCasinoExtraAccountRow(id) {
   const row = document.querySelector(`.casino-extra-row[data-row="${id}"]`);
   if (row) row.remove();
   document.getElementById('bet-entry-casino-extra-add-btn').style.display = 'inline-flex';
+  refreshCasinoAccountDropdowns();
 }
 
 function addBetLegRow() {
