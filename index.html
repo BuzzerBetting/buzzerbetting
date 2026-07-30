@@ -547,7 +547,7 @@ input::placeholder{color:var(--text3)}
     </div>
 
     <div id="bet-entry-total-row" style="margin-top:18px;padding-top:14px;border-top:0.5px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-      <div><div class="lbl" style="margin-bottom:2px">Total stake</div><div style="font-size:20px;font-weight:600" id="bet-entry-total">£0.00</div></div>
+      <div id="bet-entry-total-wrap"><div class="lbl" style="margin-bottom:2px">Total stake</div><div style="font-size:20px;font-weight:600" id="bet-entry-total">£0.00</div></div>
       <button onclick="submitBetEntry()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:11px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit" id="bet-entry-submit">Log bet</button>
     </div>
     <div id="bet-entry-msg" style="margin-top:12px;font-size:13px"></div>
@@ -2251,7 +2251,8 @@ function selectBetType(type, label) {
 
   document.getElementById('bet-entry-legs-section').style.display = cfg.layout === 'balance' ? 'none' : 'block';
   document.getElementById('bet-entry-balance-section').style.display = cfg.layout === 'balance' ? 'block' : 'none';
-  document.getElementById('bet-entry-total-row').style.display = (cfg.layout === 'balance' && !cfg.hasStake) ? 'none' : 'flex';
+  document.getElementById('bet-entry-total-row').style.display = 'flex';
+  document.getElementById('bet-entry-total-wrap').style.display = (cfg.layout === 'balance' && !cfg.hasStake) ? 'none' : 'block';
 
   const fieldsWrap = document.getElementById('bet-entry-fields');
   let html = '';
