@@ -2681,6 +2681,7 @@ async function submitBetEntry() {
       fields['Potential Profit (Place)'] = isNaN(placeNum) ? 0 : placeNum;
     }
   }
+  let autoSettlePl = null;
   if (cfg.hasBalanceBoxes) {
     if (cfg.balanceBoxStyle === 'directPL') {
       const wagerGame = (document.getElementById('bef-wager-start')?.value || '').trim();
@@ -2691,14 +2692,14 @@ async function submitBetEntry() {
       fields['Wager P/L'] = wagerPL;
       fields['Bonus Game'] = bonusGame;
       fields['Bonus P/L'] = bonusPL;
-      fields['Total P/L'] = +(wagerPL + bonusPL).toFixed(2);
+      autoSettlePl = +(wagerPL + bonusPL).toFixed(2);
     } else {
       fields['Wager Starting Balance'] = parseFloat(document.getElementById('bef-wager-start')?.value) || 0;
       fields['Wager Finish Balance'] = parseFloat(document.getElementById('bef-wager-end')?.value) || 0;
       fields['Bonus Starting Balance'] = parseFloat(document.getElementById('bef-bonus-start')?.value) || 0;
       fields['Bonus Finish Balance'] = parseFloat(document.getElementById('bef-bonus-end')?.value) || 0;
       const plNum = parseFloat((document.getElementById('bet-entry-balance-pl-value').textContent||'').replace(/[£,]/g,''));
-      fields['Total P/L'] = isNaN(plNum) ? 0 : plNum;
+      autoSettlePl = isNaN(plNum) ? 0 : plNum;
     }
   }
 
@@ -2730,7 +2731,7 @@ async function submitBetEntry() {
     const d = await ledgerApi('bets', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ bet_type: betEntryType, fields, legs })
+      body: JSON.stringify({ bet_type: betEntryType, fields, legs, autoSettlePl })
     });
     if (d.ok) {
       msgEl.innerHTML = `<span style="color:var(--green)"><i class="ti ti-check"></i> Bet logged — total stake £${d.bet.total_stake.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`;
