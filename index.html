@@ -3548,6 +3548,9 @@ function renderBtDetailTable(bets) {
         if (b.bet_type === 'Ninja Golf BFEX' && k === 'Total Stake') {
           return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetStake(${b.id}, ${b.fields[k]||0}, fetchBtDetailPage)" title="Click to correct the stake">${cellContent}</span></td>`;
         }
+        if (b.bet_type === 'Casino' && CASINO_BALANCE_KEYS.includes(k)) {
+          return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editCasinoBalanceField(${b.id}, '${k}', ${b.fields[k]||0}, fetchBtDetailPage)" title="Click to amend">${cellContent}</span></td>`;
+        }
         return `<td${colClass(k)}>${cellContent}</td>`;
       }).join('')}
       <td class="r" style="color:${(b.pl||0)>=0?'var(--green)':'var(--red)'}">${(b.pl||0)>=0?'+':'-'}£${Math.abs(b.pl||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
@@ -3751,6 +3754,23 @@ async function editBetStake(betId, currentStake, refreshFn) {
   try {
     const d = await ledgerApi('bets/'+betId+'/stake', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ stake: newStake }) });
     if (!d.ok) { alert(d.error || 'Failed to update stake'); return; }
+    if (refreshFn) refreshFn();
+  } catch (e) { alert('Network error — please try again.'); }
+}
+
+const CASINO_BALANCE_KEYS = ['Wager Starting Balance', 'Wager Finish Balance', 'Bonus Starting Balance', 'Bonus Finish Balance'];
+
+// Quick inline correction for any of Casino's four balance fields — Total P/L is
+// recomputed from the resulting figures, and any linked account balance is properly
+// adjusted to match.
+async function editCasinoBalanceField(betId, fieldKey, currentValue, refreshFn) {
+  const input = prompt(`Correct "${fieldKey}" — Total P/L will be recalculated to match:`, currentValue);
+  if (input === null) return;
+  const newValue = parseFloat(input);
+  if (isNaN(newValue)) { alert('Enter a valid number.'); return; }
+  try {
+    const d = await ledgerApi('bets/'+betId+'/casino-balance', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ [fieldKey]: newValue }) });
+    if (!d.ok) { alert(d.error || 'Failed to update'); return; }
     if (refreshFn) refreshFn();
   } catch (e) { alert('Network error — please try again.'); }
 }
