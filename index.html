@@ -2072,10 +2072,10 @@ const BET_TYPE_CONFIG = {
   'BB Golf':          { layout:'paste', pasteSpec:'bbgolf',  bookie:true, bookieFieldKey:'Bookie', event:true, oddsMode:'eachWay', stakeFieldKey:'Total Stake' },
   'BB - BT':          { layout:'paste', pasteSpec:'bbbt',    bookie:false, oddsMode:'pairedBlendedFromPasteFair' },
   'Offers (VA)':      { layout:'balance', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet description',type:'text'}], oddsMode:'pairedSingle', hasStake:true, hasBalanceBoxes:false },
-  'Casino':           { layout:'balance', bookie:true, bookieFieldKey:'Bookie', hasBetKind:false, fields:[{key:'Offer',label:'Offer',type:'text'}], oddsMode:'none', hasStake:false, hasBalanceBoxes:true },
+  'Casino':           { layout:'balance', bookie:true, bookieFieldKey:'Bookie', hasBetKind:false, fields:[{key:'Offer',label:'Offer',type:'text'},{key:'EV',label:'EV £',type:'number'}], oddsMode:'none', hasStake:false, hasBalanceBoxes:true },
   'Offers (Personal)': { layout:'balance', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet description',type:'text'}], oddsMode:'pairedSingle', hasStake:true, hasBalanceBoxes:false },
   'Other Bets':       { layout:'standard', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet',type:'text'},{key:'Back Odds',label:'Back odds',type:'number'}] },
-  'Casino (Personal)': { layout:'balance', bookie:true, bookieFieldKey:'Bookie', hasBetKind:false, fields:[{key:'Offer',label:'Offer',type:'text'}], oddsMode:'none', hasStake:false, hasBalanceBoxes:true, balanceBoxStyle:'directPL' },
+  'Casino (Personal)': { layout:'balance', bookie:true, bookieFieldKey:'Bookie', hasBetKind:false, fields:[{key:'Offer',label:'Offer',type:'text'},{key:'EV',label:'EV £',type:'number'}], oddsMode:'none', hasStake:false, hasBalanceBoxes:true, balanceBoxStyle:'directPL' },
 };
 
 // Column layout guesses for paste-to-autofill types. `key` becomes the stored field name.
