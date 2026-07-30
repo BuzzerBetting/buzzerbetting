@@ -619,8 +619,10 @@ input::placeholder{color:var(--text3)}
     </div>
 
     <div id="money-fields-account" style="display:none;margin-bottom:12px">
-      <label class="lbl">Account</label>
-      <select id="money-account"></select>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div><label class="lbl">Bookmaker</label><select id="money-bookmaker" onchange="refreshMoneyAccountDropdown()"></select></div>
+        <div><label class="lbl">Account</label><select id="money-account"><option value="">Select a bookmaker first…</option></select></div>
+      </div>
     </div>
 
     <div id="money-fields-transfer" style="display:none;margin-bottom:12px">
@@ -3592,12 +3594,26 @@ async function initMoneyPage() {
     const d = await ledgerApi('accounts?excludeClosed=1');
     LEDGER_ACCOUNTS = (d.ok && d.accounts) ? d.accounts : [];
   } catch (e) { LEDGER_ACCOUNTS = []; }
-  document.getElementById('money-account').innerHTML = LEDGER_ACCOUNTS.length
-    ? '<option value="">Select account…</option>' + LEDGER_ACCOUNTS.map(a => `<option value="${a.id}">${escapeHtml(a.account_id||a.profile)} — ${escapeHtml(a.bookie)} (${escapeHtml(a.profile)})</option>`).join('')
+  const bookies = [...new Set(LEDGER_ACCOUNTS.map(a => a.bookie))].sort();
+  document.getElementById('money-bookmaker').innerHTML = bookies.length
+    ? '<option value="">Select bookmaker…</option>' + bookies.map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('')
     : '<option value="">No live accounts</option>';
+  document.getElementById('money-account').innerHTML = '<option value="">Select a bookmaker first…</option>';
   await refreshMoneyBankDropdowns();
   loadMoneyPendingWithdrawals();
   loadMoneyHistory();
+}
+
+// Filters the Account dropdown down to just the selected Bookmaker's accounts, showing
+// each one's linked bank in brackets.
+function refreshMoneyAccountDropdown() {
+  const bookie = document.getElementById('money-bookmaker').value;
+  const accSel = document.getElementById('money-account');
+  if (!bookie) { accSel.innerHTML = '<option value="">Select a bookmaker first…</option>'; return; }
+  const matches = LEDGER_ACCOUNTS.filter(a => a.bookie === bookie);
+  accSel.innerHTML = matches.length
+    ? '<option value="">Select account…</option>' + matches.map(a => `<option value="${a.id}">${escapeHtml(a.account_id||a.profile)} (${escapeHtml(a.profile)})</option>`).join('')
+    : '<option value="">No live accounts for this bookmaker</option>';
 }
 
 async function refreshMoneyBankDropdowns() {
