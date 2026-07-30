@@ -206,11 +206,6 @@ input::placeholder{color:var(--text3)}
     </div>
   </div>
   <div class="grid">
-    <div class="cat" style="--accent:var(--green)" onclick="showTopSec('bets')">
-      <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-receipt"></i></div>
-      <div><div class="cat-title">Bets</div><div class="cat-desc">Profit breakdown, bet tracker and today's live stats</div></div>
-      <i class="ti ti-arrow-right cat-arr"></i>
-    </div>
     <div class="cat" style="--accent:var(--purple)" onclick="showTopSec('calc')">
       <div class="cat-ico" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-calculator"></i></div>
       <div><div class="cat-title">Calculations</div><div class="cat-desc">Value finders, DDHH, manual calculators and fixtures</div></div>
@@ -226,7 +221,7 @@ input::placeholder{color:var(--text3)}
 
 <!-- BETS MENU -->
 <div id="view-bets-menu" class="sec">
-  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <button class="back" onclick="showTopSec('ledger')"><i class="ti ti-arrow-left"></i> Ledger</button>
   <div class="sec-title">Bets</div>
   <div class="grid">
     <div class="cat" onclick="showSec('profit')">
@@ -285,19 +280,19 @@ input::placeholder{color:var(--text3)}
   <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
   <div class="sec-title">Ledger</div>
   <div class="ch-grid">
+    <div class="cat" style="--accent:var(--green)" onclick="showSec('bets-menu')">
+      <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-receipt"></i></div>
+      <div><div class="cat-title">Bets</div><div class="cat-desc">Profit breakdown, bet tracker and today's live stats</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
     <div class="cat" style="--accent:var(--blue)" onclick="showLedgerSec('accounts')">
       <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-users"></i></div>
       <div><div class="cat-title">Live Accounts</div><div class="cat-desc">Every currently-live account by bookie, with live balances</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
-    <div class="cat" style="--accent:var(--green)" onclick="showLedgerSec('deposits')">
-      <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-arrow-down-circle"></i></div>
-      <div><div class="cat-title">Deposits</div><div class="cat-desc">Log of funds paid into each account</div></div>
-      <i class="ti ti-arrow-right cat-arr"></i>
-    </div>
-    <div class="cat" style="--accent:var(--red)" onclick="showLedgerSec('withdrawals')">
-      <div class="cat-ico" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-arrow-up-circle"></i></div>
-      <div><div class="cat-title">Withdrawals</div><div class="cat-desc">Log of funds pulled out of each account</div></div>
+    <div class="cat" style="--accent:var(--green)" onclick="showLedgerSec('money')">
+      <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-cash"></i></div>
+      <div><div class="cat-title">Money</div><div class="cat-desc">Deposits, withdrawals and bank transactions — add and edit in one place</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
     <div class="cat" style="--accent:var(--red)" onclick="showLedgerSec('locked-funds')">
@@ -318,11 +313,6 @@ input::placeholder{color:var(--text3)}
     <div class="cat" style="--accent:var(--purple)" onclick="showLedgerSec('archived')">
       <div class="cat-ico" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-archive"></i></div>
       <div><div class="cat-title">Recently Archived</div><div class="cat-desc">Accounts finished in the last 7 days — undo if needed</div></div>
-      <i class="ti ti-arrow-right cat-arr"></i>
-    </div>
-    <div class="cat" style="--accent:var(--green)" onclick="showLedgerSec('bank-transactions')">
-      <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-building-bank"></i></div>
-      <div><div class="cat-title">Bank Transactions</div><div class="cat-desc">Money moved directly in/out of a bank, affecting its live balance</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
   </div>
@@ -631,6 +621,58 @@ input::placeholder{color:var(--text3)}
 </div>
 
 <!-- LEDGER: DEPOSITS -->
+<!-- LEDGER: MONEY (unified deposits/withdrawals/bank transactions) -->
+<div id="view-ledger-money" class="sec">
+  <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
+  <div class="sec-title">Money</div>
+
+  <div class="card card-pad" style="margin-bottom:16px">
+    <div class="lbl" style="margin-bottom:10px">Add transaction</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="add-btn" id="money-type-deposit" onclick="setMoneyPageType('deposit')">Deposit</button>
+      <button class="add-btn" id="money-type-withdrawal" onclick="setMoneyPageType('withdrawal')">Withdrawal</button>
+      <button class="add-btn" id="money-type-bank" onclick="setMoneyPageType('bank')">Bank transaction</button>
+    </div>
+
+    <div id="money-fields-account" style="display:none;margin-bottom:12px">
+      <label class="lbl">Account</label>
+      <select id="money-account"></select>
+    </div>
+    <div id="money-fields-bank" style="display:none;margin-bottom:12px">
+      <label class="lbl">Bank</label>
+      <select id="money-bank"></select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;align-items:end">
+      <div><label class="lbl">Amount £</label><input type="number" id="money-amount" step="0.01" min="0"></div>
+      <div id="money-fields-direction" style="display:none">
+        <div style="display:flex;gap:14px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="money-direction" value="in" checked> Money in</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="money-direction" value="out"> Money out</label>
+        </div>
+      </div>
+    </div>
+    <div id="money-fields-reason" style="display:none;margin-bottom:12px">
+      <label class="lbl">Reason</label>
+      <input type="text" id="money-reason" placeholder="e.g. Topped up from personal savings">
+    </div>
+    <button onclick="submitMoneyPageTransaction()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:10px 18px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Log</button>
+    <div id="money-msg" style="margin-top:10px;font-size:13px"></div>
+  </div>
+
+  <div class="card card-pad">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div class="lbl">History</div>
+      <select id="money-filter" onchange="loadMoneyHistory()" style="width:auto;font-size:12px;padding:5px 10px">
+        <option value="">All types</option>
+        <option value="deposit">Deposits</option>
+        <option value="withdrawal">Withdrawals</option>
+        <option value="bank">Bank transactions</option>
+      </select>
+    </div>
+    <div id="money-history">Loading…</div>
+  </div>
+</div>
+
 <div id="view-ledger-deposits" class="sec">
   <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
   <div class="sec-title">Deposits</div>
@@ -1899,7 +1941,7 @@ const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger',bettracking
 function showTopSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});}
 function backToBetsMenu(){showTopSec('bets');}
 function backToCalcMenu(){showTopSec('calc');}
-function showLedgerSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-ledger-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='bet-entry')initBetEntry();if(name==='bulk-import')initAccountEntry();if(name==='accounts')initAccountsGrid();if(name==='deposits')initDepositsLog();if(name==='withdrawals')initWithdrawalsPending();if(name==='account-summary')initAccountSummary();if(name==='locked-funds')initLockedFunds();if(name==='archived')initArchived();if(name==='bank-transactions')initBankTransactions();}
+function showLedgerSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-ledger-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='bet-entry')initBetEntry();if(name==='bulk-import')initAccountEntry();if(name==='accounts')initAccountsGrid();if(name==='deposits')initDepositsLog();if(name==='withdrawals')initWithdrawalsPending();if(name==='account-summary')initAccountSummary();if(name==='locked-funds')initLockedFunds();if(name==='archived')initArchived();if(name==='bank-transactions')initBankTransactions();if(name==='money')initMoneyPage();}
 function backToLedgerHub(){showTopSec('ledger');}
 
 
@@ -3537,6 +3579,221 @@ async function submitBankTransaction() {
       : '<option value="">No banks yet — add one via Account Entry</option>';
     loadBankTransactions();
   } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error.</span>'; }
+}
+
+// ================== LEDGER: MONEY (unified deposits/withdrawals/bank transactions) ==================
+let moneyPageType = 'deposit';
+
+async function initMoneyPage() {
+  setMoneyPageType('deposit');
+  document.getElementById('money-amount').value = '';
+  document.getElementById('money-reason').value = '';
+  document.getElementById('money-msg').innerHTML = '';
+  try {
+    const d = await ledgerApi('accounts?excludeClosed=1');
+    LEDGER_ACCOUNTS = (d.ok && d.accounts) ? d.accounts : [];
+  } catch (e) { LEDGER_ACCOUNTS = []; }
+  document.getElementById('money-account').innerHTML = LEDGER_ACCOUNTS.length
+    ? '<option value="">Select account…</option>' + LEDGER_ACCOUNTS.map(a => `<option value="${a.id}">${escapeHtml(a.account_id||a.profile)} — ${escapeHtml(a.bookie)} (${escapeHtml(a.profile)})</option>`).join('')
+    : '<option value="">No live accounts</option>';
+  try {
+    const bd = await ledgerApi('banks');
+    const banks = (bd.ok && bd.banks) ? bd.banks : [];
+    document.getElementById('money-bank').innerHTML = banks.length
+      ? '<option value="">Select bank…</option>' + banks.map(b => `<option value="${escapeHtml(b.name)}">${escapeHtml(b.name)} — £${b.remaining.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</option>`).join('')
+      : '<option value="">No banks yet</option>';
+  } catch (e) { document.getElementById('money-bank').innerHTML = '<option value="">Could not load banks</option>'; }
+  loadMoneyHistory();
+}
+
+function setMoneyPageType(type) {
+  moneyPageType = type;
+  ['deposit','withdrawal','bank'].forEach(t => {
+    const btn = document.getElementById('money-type-'+t);
+    if (t === type) { btn.style.background = 'var(--brand)'; btn.style.color = '#fff'; btn.style.borderColor = 'var(--brand)'; }
+    else { btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; }
+  });
+  document.getElementById('money-fields-account').style.display = (type === 'deposit' || type === 'withdrawal') ? 'block' : 'none';
+  document.getElementById('money-fields-bank').style.display = type === 'bank' ? 'block' : 'none';
+  document.getElementById('money-fields-direction').style.display = type === 'bank' ? 'block' : 'none';
+  document.getElementById('money-fields-reason').style.display = type === 'bank' ? 'block' : 'none';
+}
+
+async function submitMoneyPageTransaction() {
+  const msgEl = document.getElementById('money-msg');
+  const amount = parseFloat(document.getElementById('money-amount').value);
+  if (!(amount > 0)) { msgEl.innerHTML = '<span style="color:var(--red)">Enter an amount greater than £0.</span>'; return; }
+
+  if (moneyPageType === 'bank') {
+    const bank = document.getElementById('money-bank').value;
+    const reason = document.getElementById('money-reason').value.trim();
+    const direction = document.querySelector('input[name="money-direction"]:checked').value;
+    if (!bank) { msgEl.innerHTML = '<span style="color:var(--red)">Select a bank.</span>'; return; }
+    msgEl.innerHTML = '<span style="color:var(--text2)">Logging…</span>';
+    try {
+      const d = await ledgerApi('bank-transactions', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ bank, amount, direction, reason }) });
+      if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to log transaction'}</span>`; return; }
+      msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Logged.</span>';
+      document.getElementById('money-amount').value = '';
+      document.getElementById('money-reason').value = '';
+      loadMoneyHistory();
+    } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error.</span>'; }
+    return;
+  }
+
+  // Deposit / Withdrawal — account-based
+  const accountId = document.getElementById('money-account').value;
+  if (!accountId) { msgEl.innerHTML = '<span style="color:var(--red)">Select an account.</span>'; return; }
+  const acc = LEDGER_ACCOUNTS.find(a => String(a.id) === String(accountId));
+  msgEl.innerHTML = '<span style="color:var(--text2)">Processing…</span>';
+  try {
+    const ld = await ledgerApi(`accounts/${accountId}/${moneyPageType}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ amount }) });
+    if (!ld.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${ld.error||'Failed'}</span>`; return; }
+
+    const accountName = getAccountDisplayName(acc);
+    const sheetAction = moneyPageType === 'deposit' ? 'add_deposit' : 'add_withdrawal';
+    const sd = await accountsSheetApi({ action: sheetAction, bookie: acc.bookie, profile: acc.profile, accountName, amount });
+    if (sd.ok && sd.row) {
+      await ledgerApi(`${moneyPageType === 'deposit' ? 'deposits' : 'withdrawals'}/${ld.id}/sheet-row`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sheet_row: sd.row }) });
+    }
+    if (sd.ok) {
+      msgEl.innerHTML = `<span style="color:var(--green)"><i class="ti ti-check"></i> ${moneyPageType==='deposit'?'Deposit':'Withdrawal'} recorded — sheet updated.</span>`;
+    } else {
+      msgEl.innerHTML = `<span style="color:var(--amber)">Ledger updated, but the sheet write failed (${sd.error||'unknown error'}) — add it there manually.</span>`;
+    }
+    document.getElementById('money-amount').value = '';
+    loadMoneyHistory();
+  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error.</span>'; }
+}
+
+async function loadMoneyHistory() {
+  const el = document.getElementById('money-history');
+  const filter = document.getElementById('money-filter').value;
+  el.innerHTML = 'Loading…';
+  try {
+    const [depRes, wdRes, bankRes] = await Promise.all([
+      filter && filter !== 'deposit' ? Promise.resolve({ok:true,deposits:[]}) : ledgerApi('deposits'),
+      filter && filter !== 'withdrawal' ? Promise.resolve({ok:true,withdrawals:[]}) : ledgerApi('withdrawals'),
+      filter && filter !== 'bank' ? Promise.resolve({ok:true,transactions:[]}) : ledgerApi('bank-transactions'),
+    ]);
+    const items = [];
+    (depRes.ok && depRes.deposits ? depRes.deposits : []).forEach(r => items.push({
+      type: 'deposit', id: r.id, date: r.date, amount: r.amount, sign: 1,
+      label: `${r.account_code || '—'} — ${r.bookie} <span style="color:var(--text3)">(${r.profile})</span>`,
+      status: null, sheetRow: r.sheet_row
+    }));
+    (wdRes.ok && wdRes.withdrawals ? wdRes.withdrawals : []).forEach(r => items.push({
+      type: 'withdrawal', id: r.id, date: r.date, amount: r.amount, sign: -1,
+      label: `${r.account_code || '—'} — ${r.bookie} <span style="color:var(--text3)">(${r.profile})</span>${!r.sheet_row?' <span style="color:var(--amber)">(not linked)</span>':''}`,
+      status: r.status, sheetRow: r.sheet_row
+    }));
+    (bankRes.ok && bankRes.transactions ? bankRes.transactions : []).forEach(r => items.push({
+      type: 'bank', id: r.id, date: r.date, amount: r.amount, sign: r.direction === 'in' ? 1 : -1,
+      label: `${escapeHtml(r.bank)} <span style="color:var(--text3)">${r.reason ? '— '+escapeHtml(r.reason) : ''}</span>`,
+      status: null
+    }));
+    items.sort((a,b) => new Date(b.date) - new Date(a.date));
+    if (!items.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No transactions yet.</div>'; return; }
+    el.innerHTML = items.map(renderMoneyRow).join('');
+  } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load history.</div>'; }
+}
+
+function renderMoneyRow(item) {
+  const typeLabel = item.type === 'deposit' ? 'Deposit' : item.type === 'withdrawal' ? 'Withdrawal' : 'Bank txn';
+  const typeColor = item.type === 'deposit' ? 'var(--green)' : item.type === 'withdrawal' ? 'var(--red)' : 'var(--blue)';
+  let actions = '';
+  if (item.type === 'deposit') {
+    actions = `<button class="add-btn" onclick="moneyReverseDeposit(${item.id})"><i class="ti ti-arrow-back-up"></i> Reverse</button>`;
+  } else if (item.type === 'withdrawal') {
+    actions = item.status === 'pending'
+      ? `<button class="add-btn" onclick="moneyConfirmWithdrawal(${item.id}, ${item.sheetRow||'null'})"><i class="ti ti-check"></i> Confirm</button>
+         <button class="add-btn" onclick="moneyReverseWithdrawal(${item.id})"><i class="ti ti-arrow-back-up"></i> Reverse</button>
+         <button class="add-btn" onclick="moneyConfiscateWithdrawal(${item.id})" style="color:var(--red);border-color:var(--red)"><i class="ti ti-ban"></i> Confiscated</button>`
+      : `<button class="add-btn" onclick="moneyReverseWithdrawal(${item.id})"><i class="ti ti-arrow-back-up"></i> Reverse</button>`;
+  } else {
+    actions = `<button class="add-btn" onclick="moneyUndoBankTransaction(${item.id})"><i class="ti ti-arrow-back-up"></i> Undo</button>`;
+  }
+  const statusTag = item.status ? `<span style="color:var(--amber);font-size:11px;margin-left:6px">(${item.status})</span>` : '';
+  return `<div style="padding:9px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px">
+      <div>
+        <div style="color:var(--text3);font-size:11px">${formatLedgerDate(item.date)} <span style="color:${typeColor};font-weight:600;margin-left:4px">${typeLabel}</span>${statusTag}</div>
+        <div>${item.label}
+          <span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;font-weight:600;color:${item.sign>0?'var(--green)':'var(--red)'};margin-left:6px" onclick="editMoneyAmount('${item.type}', ${item.id}, ${item.amount})" title="Click to correct the amount">${item.sign>0?'+':'-'}£${item.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${actions}</div>
+    </div>
+  </div>`;
+}
+
+async function editMoneyAmount(type, id, currentAmount) {
+  const input = prompt('Correct this amount — the linked account and bank balances will be adjusted to match:', currentAmount);
+  if (input === null) return;
+  const newAmount = parseFloat(input);
+  if (!(newAmount > 0)) { alert('Enter a valid positive amount.'); return; }
+  const endpoint = type === 'deposit' ? 'deposits' : type === 'withdrawal' ? 'withdrawals' : 'bank-transactions';
+  try {
+    const d = await ledgerApi(`${endpoint}/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ amount: newAmount }) });
+    if (!d.ok) { alert(d.error || 'Failed to update'); return; }
+    loadMoneyHistory();
+  } catch (e) { alert('Network error — please try again.'); }
+}
+
+async function moneyReverseDeposit(id) {
+  if (!confirm('Reverse this deposit? This removes the amount from the account (and its bank total), and deletes the record.')) return;
+  try {
+    const d = await ledgerApi('deposits/'+id+'/reverse', { method:'POST' });
+    if (!d.ok) { alert('Failed to reverse: ' + (d.error||'unknown error')); return; }
+    if (!d.sheetOk) alert('Reversed in Ledger, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
+  } catch (e) { alert('Network error reversing deposit.'); return; }
+  loadMoneyHistory();
+}
+
+async function moneyConfirmWithdrawal(id, sheetRow) {
+  try {
+    const ld = await ledgerApi(`withdrawals/${id}/confirm`, { method:'PATCH' });
+    if (!ld.ok) { alert('Failed to confirm: ' + (ld.error||'unknown error')); return; }
+    if (sheetRow) {
+      const sd = await accountsSheetApi({ action:'confirm_withdrawal', row: sheetRow });
+      if (sd.ok && sd.processedRow) {
+        await ledgerApi(`withdrawals/${id}/processed-sheet-row`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ processed_sheet_row: sd.processedRow }) });
+      }
+      if (!sd.ok) alert('Confirmed in Ledger, but moving the sheet row failed (' + (sd.error||'unknown error') + ') — move it manually.');
+    } else {
+      alert('Confirmed in Ledger. This withdrawal was never linked to a sheet row, so nothing to move there.');
+    }
+  } catch (e) { alert('Network error confirming withdrawal.'); return; }
+  loadMoneyHistory();
+}
+
+async function moneyReverseWithdrawal(id) {
+  if (!confirm('Reverse this withdrawal? This adds the amount back to the account (and its bank total), and deletes the record.')) return;
+  try {
+    const d = await ledgerApi('withdrawals/'+id+'/reverse', { method:'POST' });
+    if (!d.ok) { alert('Failed to reverse: ' + (d.error||'unknown error')); return; }
+    if (!d.sheetOk) alert('Reversed in Ledger, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
+  } catch (e) { alert('Network error reversing withdrawal.'); return; }
+  loadMoneyHistory();
+}
+
+async function moneyConfiscateWithdrawal(id) {
+  if (!confirm("Mark this withdrawal as confiscated? The bookie kept the money — it moves to Locked Funds for record-keeping and won't be added back to the account.")) return;
+  try {
+    const d = await ledgerApi('withdrawals/'+id+'/confiscate', { method:'POST' });
+    if (!d.ok) { alert('Failed to confiscate: ' + (d.error||'unknown error')); return; }
+    if (!d.sheetOk) alert('Moved to Locked Funds, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
+  } catch (e) { alert('Network error.'); return; }
+  loadMoneyHistory();
+}
+
+async function moneyUndoBankTransaction(id) {
+  if (!confirm('Undo this transaction? This reverses its effect on the bank balance and removes the record.')) return;
+  try {
+    const d = await ledgerApi('bank-transactions/'+id, { method:'DELETE' });
+    if (!d.ok) { alert('Failed to undo: ' + (d.error||'unknown error')); return; }
+  } catch (e) { alert('Network error undoing transaction.'); return; }
+  loadMoneyHistory();
 }
 
 // ================== BET TRACKING ==================
