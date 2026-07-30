@@ -393,6 +393,11 @@ input::placeholder{color:var(--text3)}
     </div>
   </div>
 
+  <div id="bt-detail-legend" style="display:none;margin-bottom:12px;font-size:12.5px;color:var(--text2);align-items:center;gap:8px">
+    <span style="display:inline-block;width:12px;height:12px;background:var(--amber-bg);border:1px solid var(--amber-bd);border-radius:3px"></span>
+    Orange row = still in progress (Bonus balance not yet filled in)
+  </div>
+
   <div class="card wide" style="padding:0;overflow:hidden">
     <div class="scroll-tall" id="bt-detail-table-wrap"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
   </div>
@@ -543,6 +548,11 @@ input::placeholder{color:var(--text3)}
       <div id="bet-entry-balance-pl" style="display:none;margin-top:10px;padding:12px 14px;background:var(--surface2);border-radius:var(--radius)">
         <div class="lbl" style="margin-bottom:3px">P/L from balance change</div>
         <div style="font-size:18px;font-weight:600" id="bet-entry-balance-pl-value">—</div>
+      </div>
+      <div id="bet-entry-casino-extra-section" style="display:none;margin-top:14px">
+        <div class="lbl" style="margin-bottom:8px">Additional accounts on this offer (up to 4) — same Bookie, Offer and EV, results filled in later</div>
+        <div id="bet-entry-casino-extra-accounts"></div>
+        <button class="add-btn" id="bet-entry-casino-extra-add-btn" onclick="addCasinoExtraAccountRow()"><i class="ti ti-plus"></i> Add account</button>
       </div>
     </div>
 
@@ -2072,7 +2082,7 @@ const BET_TYPE_CONFIG = {
   'BB Golf':          { layout:'paste', pasteSpec:'bbgolf',  bookie:true, bookieFieldKey:'Bookie', event:true, oddsMode:'eachWay', stakeFieldKey:'Total Stake' },
   'BB - BT':          { layout:'paste', pasteSpec:'bbbt',    bookie:false, oddsMode:'pairedBlendedFromPasteFair' },
   'Offers (VA)':      { layout:'balance', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet description',type:'text'}], oddsMode:'pairedSingle', hasStake:true, hasBalanceBoxes:false },
-  'Casino':           { layout:'balance', bookie:true, bookieFieldKey:'Bookie', hasBetKind:false, fields:[{key:'Offer',label:'Offer',type:'text'},{key:'EV',label:'EV £',type:'number'}], oddsMode:'none', hasStake:false, hasBalanceBoxes:true },
+  'Casino':           { layout:'balance', bookie:true, bookieFieldKey:'Bookie', hasBetKind:false, fields:[{key:'Offer',label:'Offer',type:'text'},{key:'EV',label:'EV £',type:'number'}], oddsMode:'none', hasStake:false, hasBalanceBoxes:false, casinoExtraAccounts:true },
   'Offers (Personal)': { layout:'balance', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet description',type:'text'}], oddsMode:'pairedSingle', hasStake:true, hasBalanceBoxes:false },
   'Other Bets':       { layout:'standard', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet',type:'text'},{key:'Back Odds',label:'Back odds',type:'number'}] },
   'Casino (Personal)': { layout:'balance', bookie:true, bookieFieldKey:'Bookie', hasBetKind:false, fields:[{key:'Offer',label:'Offer',type:'text'},{key:'EV',label:'EV £',type:'number'}], oddsMode:'none', hasStake:false, hasBalanceBoxes:true, balanceBoxStyle:'directPL' },
@@ -2253,6 +2263,9 @@ function selectBetType(type, label) {
   document.getElementById('bet-entry-balance-section').style.display = cfg.layout === 'balance' ? 'block' : 'none';
   document.getElementById('bet-entry-total-row').style.display = 'flex';
   document.getElementById('bet-entry-total-wrap').style.display = (cfg.layout === 'balance' && !cfg.hasStake) ? 'none' : 'block';
+  document.getElementById('bet-entry-casino-extra-section').style.display = cfg.casinoExtraAccounts ? 'block' : 'none';
+  document.getElementById('bet-entry-casino-extra-accounts').innerHTML = '';
+  casinoExtraAccountId = 0;
 
   const fieldsWrap = document.getElementById('bet-entry-fields');
   let html = '';
@@ -2401,6 +2414,31 @@ function refreshLegAccountDropdowns() {
     const prev = sel.value;
     sel.innerHTML = accountOptionsHtml(prev, bookieRaw);
   });
+}
+
+let casinoExtraAccountId = 0;
+
+// Simple account-only rows for Casino's "additional accounts on this offer" — no stake or
+// odds, just which account, capped at 4 extras (5 total including the primary).
+function addCasinoExtraAccountRow() {
+  const wrap = document.getElementById('bet-entry-casino-extra-accounts');
+  if (wrap.children.length >= 4) return;
+  const id = ++casinoExtraAccountId;
+  const row = document.createElement('div');
+  row.className = 'casino-extra-row';
+  row.dataset.row = id;
+  row.style.cssText = 'display:grid;grid-template-columns:1fr 32px;gap:10px;margin-bottom:8px;align-items:center';
+  row.innerHTML = `
+    <select class="casino-extra-account">${accountOptionsHtml(null, document.getElementById('bef-Book')?.value)}</select>
+    <button class="rm-btn" onclick="removeCasinoExtraAccountRow(${id})" title="Remove">×</button>`;
+  wrap.appendChild(row);
+  document.getElementById('bet-entry-casino-extra-add-btn').style.display = wrap.children.length >= 4 ? 'none' : 'inline-flex';
+}
+
+function removeCasinoExtraAccountRow(id) {
+  const row = document.querySelector(`.casino-extra-row[data-row="${id}"]`);
+  if (row) row.remove();
+  document.getElementById('bet-entry-casino-extra-add-btn').style.display = 'inline-flex';
 }
 
 function addBetLegRow() {
@@ -2727,6 +2765,34 @@ async function submitBetEntry() {
 
   btn.disabled = true; btn.textContent = 'Logging…';
   msgEl.innerHTML = '';
+
+  if (cfg.casinoExtraAccounts) {
+    const extraAccountIds = [...document.querySelectorAll('#bet-entry-casino-extra-accounts .casino-extra-account')]
+      .map(el => el.value).filter(Boolean);
+    const allAccountIds = [legs[0].account_id, ...extraAccountIds];
+    let successCount = 0;
+    try {
+      for (const accountId of allAccountIds) {
+        const d = await ledgerApi('bets', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ bet_type: betEntryType, fields, legs: [{ account_id: accountId, stake: 0.01 }] })
+        });
+        if (d.ok) successCount++;
+      }
+      if (successCount === allAccountIds.length) {
+        msgEl.innerHTML = `<span style="color:var(--green)"><i class="ti ti-check"></i> Logged ${successCount} row${successCount===1?'':'s'} — fill in balances on the tracker as results come in.</span>`;
+        setTimeout(backToTypeSelection, 1600);
+      } else {
+        msgEl.innerHTML = `<span style="color:var(--red)">Only ${successCount} of ${allAccountIds.length} rows logged successfully — check the tracker before retrying the rest.</span>`;
+      }
+    } catch (e) {
+      msgEl.innerHTML = '<span style="color:var(--red)">Network error — please try again.</span>';
+    }
+    btn.disabled = false; btn.textContent = 'Log bet';
+    return;
+  }
+
   try {
     const d = await ledgerApi('bets', {
       method: 'POST',
@@ -3509,8 +3575,10 @@ async function fetchBtDetailPage() {
     plEl.textContent = (s.totalPl>=0?'+':'-')+'£'+Math.abs(s.totalPl).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
     plEl.style.color = s.totalPl>=0?'var(--green)':'var(--red)';
 
-    if (!s.count) { tableWrap.innerHTML = '<div style="padding:24px;color:var(--text3);font-size:13px">No bets recorded yet for this type.</div>'; return; }
+    if (!s.count) { tableWrap.innerHTML = '<div style="padding:24px;color:var(--text3);font-size:13px">No bets recorded yet for this type.</div>'; document.getElementById('bt-detail-legend').style.display = 'none'; return; }
     if (!bets.length) { tableWrap.innerHTML = '<div style="padding:24px;color:var(--text3);font-size:13px">No bets on this page.</div>'; return; }
+
+    document.getElementById('bt-detail-legend').style.display = btDetailType === 'Casino' ? 'flex' : 'none';
 
     // Columns are built dynamically from the union of this page's `fields` keys, since each
     // bet type has a different shape — mirrors how the old generic tab handlers worked.
@@ -3542,7 +3610,11 @@ function renderBtDetailTable(bets) {
   </tr></thead><tbody>`;
   bets.forEach(b => {
     const resColor = b.result==='won'?'var(--green)':b.result==='lost'?'var(--red)':b.result==='placed'?'var(--blue)':b.result==='void'?'var(--text3)':'var(--amber)';
-    html += `<tr>
+    const isCasinoInProgress = b.bet_type === 'Casino' && (
+      b.fields['Bonus Starting Balance'] === undefined || b.fields['Bonus Starting Balance'] === null ||
+      b.fields['Bonus Finish Balance'] === undefined || b.fields['Bonus Finish Balance'] === null
+    );
+    html += `<tr${isCasinoInProgress ? ' style="background:var(--amber-bg)"' : ''}>
       <td>${formatLedgerDate(b.date)}</td>
       <td style="color:${resColor};font-weight:600;text-transform:capitalize">${b.result}</td>
       <td>${b.account_code ? escapeHtml(b.account_code) : '<span style="color:var(--text3)">—</span>'}</td>
