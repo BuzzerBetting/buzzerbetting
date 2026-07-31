@@ -120,6 +120,9 @@ input::placeholder{color:var(--text3)}
 .sel-tbl td{padding:6px 4px}
 .add-btn{display:inline-flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s;margin-top:4px}
 .add-btn:hover{border-color:var(--brand);color:var(--brand)}
+.add-btn.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+.acc-modal-tab{background:none;border:none;border-bottom:2px solid transparent;padding:8px 12px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;font-family:inherit;margin-bottom:-1px}
+.acc-modal-tab.active{color:var(--brand);border-bottom-color:var(--brand)}
 .rm-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:0 4px;line-height:1;transition:color .15s}
 .rm-btn:hover{color:var(--red)}
 .bettype-btn{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:var(--surface2);border:0.5px solid var(--border);border-left:3px solid var(--c,var(--border));border-radius:var(--radius);padding:13px 15px;font-size:14px;font-weight:500;font-family:inherit;color:var(--text);cursor:pointer;transition:all .15s}
@@ -270,7 +273,7 @@ input::placeholder{color:var(--text3)}
     </div>
     <div class="cat" style="--accent:var(--blue)" onclick="showLedgerSec('accounts')">
       <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-users"></i></div>
-      <div><div class="cat-title">Live Accounts</div><div class="cat-desc">Every currently-live account by bookie, with live balances</div></div>
+      <div><div class="cat-title">Accounts</div><div class="cat-desc">View, filter and add live accounts — balances, notes and transactions</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
     <div class="cat" style="--accent:var(--green)" onclick="showLedgerSec('money')">
@@ -281,11 +284,6 @@ input::placeholder{color:var(--text3)}
     <div class="cat" style="--accent:var(--red)" onclick="showLedgerSec('locked-funds')">
       <div class="cat-ico" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-lock"></i></div>
       <div><div class="cat-title">Locked Funds</div><div class="cat-desc">Confiscated withdrawals and manually locked balances</div></div>
-      <i class="ti ti-arrow-right cat-arr"></i>
-    </div>
-    <div class="cat" style="--accent:var(--amber)" onclick="showLedgerSec('bulk-import')">
-      <div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-id-badge-2"></i></div>
-      <div><div class="cat-title">Account Entry</div><div class="cat-desc">Publish a new account ID from the Bank onto Live Accounts</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
     <div class="cat" style="--accent:var(--blue)" onclick="showLedgerSec('account-summary')">
@@ -573,16 +571,54 @@ input::placeholder{color:var(--text3)}
 <!-- LEDGER: ACCOUNTS (Live Accounts) -->
 <div id="view-ledger-accounts" class="sec">
   <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
-  <div class="sec-title">Live Accounts</div>
+  <div class="sec-title">Accounts</div>
 
-  <div style="display:grid;grid-template-columns:1fr 220px;gap:16px;margin-bottom:16px">
-    <div class="card card-pad">
-      <div class="lbl" style="margin-bottom:10px">Live bank balances</div>
-      <div id="bank-balances-box" style="display:flex;flex-wrap:wrap;gap:10px">Loading…</div>
+  <div class="card card-pad" style="margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleAccountsAddForm()">
+      <div class="sec-title" style="margin:0;font-size:16px"><i class="ti ti-plus"></i> Add account</div>
+      <i class="ti ti-chevron-down" id="accounts-add-chevron"></i>
     </div>
-    <div class="card card-pad">
-      <div class="lbl" style="margin-bottom:10px">Locked Funds</div>
-      <div style="font-size:22px;font-weight:600;color:var(--red)" id="live-accounts-locked-total">£0.00</div>
+    <div id="accounts-add-form-wrap" style="display:none;margin-top:16px"></div>
+  </div>
+
+  <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px">
+    <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);cursor:pointer">
+      <input type="checkbox" id="toggle-show-bankbalances" checked onchange="renderAccountsSummaryRow()"> Show bank balances
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);cursor:pointer">
+      <input type="checkbox" id="toggle-show-lockedfunds" checked onchange="renderAccountsSummaryRow()"> Show locked funds
+    </label>
+  </div>
+  <div id="accounts-summary-row" style="display:grid;grid-template-columns:1fr 220px;gap:16px;margin-bottom:16px"></div>
+
+  <div class="card card-pad" style="margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px">
+      <div>
+        <div class="lbl" style="margin-bottom:8px">Status</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <button class="add-btn" id="accfilter-status-all" onclick="setAccountsStatusFilter('all')">All</button>
+          <button class="add-btn" id="accfilter-status-live" onclick="setAccountsStatusFilter('live')">Live</button>
+          <button class="add-btn" id="accfilter-status-locked" onclick="setAccountsStatusFilter('locked')">Locked</button>
+          <button class="add-btn" id="accfilter-status-archived" onclick="setAccountsStatusFilter('archived')">Archived</button>
+          <button class="add-btn" id="accfilter-status-balance" onclick="setAccountsStatusFilter('balance')">Balance ></button>
+          <input type="number" id="accfilter-balance-amount" value="500" step="1" style="width:80px;padding:8px 10px;font-size:13px" onchange="if(accountsStatusFilter==='balance')renderAccountsGrid()">
+        </div>
+      </div>
+      <div>
+        <div class="lbl" style="margin-bottom:8px">ID type</div>
+        <div style="display:flex;gap:6px">
+          <button class="add-btn" id="accfilter-idtype-all" onclick="setAccountsIdTypeFilter('all')">All</button>
+          <button class="add-btn" id="accfilter-idtype-client" onclick="setAccountsIdTypeFilter('client')">Client (C)</button>
+          <button class="add-btn" id="accfilter-idtype-disposable" onclick="setAccountsIdTypeFilter('disposable')">Disposable (D)</button>
+        </div>
+      </div>
+      <div>
+        <div class="lbl" style="margin-bottom:8px">Group by</div>
+        <div style="display:flex;gap:6px">
+          <button class="add-btn" id="accfilter-group-bookie" onclick="setAccountsGroupBy('bookie')">Bookie</button>
+          <button class="add-btn" id="accfilter-group-card" onclick="setAccountsGroupBy('card')">Card</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -590,6 +626,8 @@ input::placeholder{color:var(--text3)}
     <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text2)">
       <span><span class="grid-dot" style="background:#16a34a"></span> Good</span>
       <span><span class="grid-dot" style="background:#f59e0b"></span> Restricted</span>
+      <span><span class="grid-dot" style="background:#6b7280"></span> Locked</span>
+      <span><span class="grid-dot" style="background:#dc2626"></span> Archived</span>
     </div>
     <div style="display:flex;gap:16px;flex-wrap:wrap">
       <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);cursor:pointer">
@@ -789,47 +827,67 @@ input::placeholder{color:var(--text3)}
       <div class="sec-title" style="margin:0;font-size:16px" id="account-modal-title"></div>
       <button class="add-btn" onclick="closeAccountModal()"><i class="ti ti-x"></i></button>
     </div>
-    <div style="font-size:12.5px;color:var(--text2);margin-bottom:16px" id="account-modal-subtitle"></div>
+    <div style="font-size:12.5px;color:var(--text2);margin-bottom:14px" id="account-modal-subtitle"></div>
 
-    <div class="lbl" style="margin-bottom:8px">Status</div>
-    <div id="account-modal-status-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:18px"></div>
-
-    <div style="padding:12px 14px;background:var(--surface2);border-radius:var(--radius);margin-bottom:8px">
-      <div class="lbl" style="margin-bottom:3px">Live balance</div>
-      <div style="font-size:20px;font-weight:600" id="account-modal-balance">—</div>
+    <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border)">
+      <button class="acc-modal-tab" id="acc-tab-overview" onclick="setAccountModalTab('overview')">Overview</button>
+      <button class="acc-modal-tab" id="acc-tab-transactions" onclick="setAccountModalTab('transactions')">Transactions</button>
+      <button class="acc-modal-tab" id="acc-tab-notes" onclick="setAccountModalTab('notes')">Notes</button>
     </div>
 
-    <label style="display:flex;align-items:center;gap:8px;margin-bottom:18px;font-size:12.5px;color:var(--text2);cursor:pointer">
-      <input type="checkbox" id="account-balance-override-toggle" onchange="onBalanceOverrideToggle()" style="width:15px;height:15px">
-      Manual override
-    </label>
-    <div id="account-balance-override-box" style="display:none;margin:-10px 0 18px;padding:12px 14px;background:var(--surface2);border-radius:var(--radius)">
-      <label class="lbl">Set live balance to £</label>
-      <div style="display:flex;gap:8px">
-        <input type="number" id="account-balance-override-amount" step="0.01">
-        <button onclick="submitBalanceOverride()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:0 16px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Save</button>
+    <div id="account-modal-tab-overview">
+      <div class="lbl" style="margin-bottom:8px">Status</div>
+      <div id="account-modal-status-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:18px"></div>
+
+      <div style="padding:12px 14px;background:var(--surface2);border-radius:var(--radius);margin-bottom:8px">
+        <div class="lbl" style="margin-bottom:3px">Live balance</div>
+        <div style="font-size:20px;font-weight:600" id="account-modal-balance">—</div>
+      </div>
+
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:18px;font-size:12.5px;color:var(--text2);cursor:pointer">
+        <input type="checkbox" id="account-balance-override-toggle" onchange="onBalanceOverrideToggle()" style="width:15px;height:15px">
+        Manual override
+      </label>
+      <div id="account-balance-override-box" style="display:none;margin:-10px 0 18px;padding:12px 14px;background:var(--surface2);border-radius:var(--radius)">
+        <label class="lbl">Set live balance to £</label>
+        <div style="display:flex;gap:8px">
+          <input type="number" id="account-balance-override-amount" step="0.01">
+          <button onclick="submitBalanceOverride()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:0 16px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Save</button>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">
+        <button onclick="openMoneyPrompt('deposit')" style="background:var(--green);color:#fff;border:none;border-radius:var(--radius);padding:11px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Deposit</button>
+        <button onclick="openMoneyPrompt('withdraw')" style="background:var(--red);color:#fff;border:none;border-radius:var(--radius);padding:11px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Withdraw</button>
+      </div>
+      <div style="margin-bottom:8px">
+        <button onclick="lockAccountFunds()" style="background:none;border:1px solid var(--text3);color:var(--text2);border-radius:var(--radius);padding:9px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;width:100%"><i class="ti ti-lock"></i> Lock funds</button>
+      </div>
+
+      <div id="account-money-prompt" style="display:none;margin-top:12px;padding:12px 14px;background:var(--surface2);border-radius:var(--radius)">
+        <label class="lbl" id="account-money-prompt-label">Amount £</label>
+        <div style="display:flex;gap:8px">
+          <input type="number" id="account-money-amount" step="0.01" min="0" style="flex:1">
+          <button onclick="submitMoneyPrompt()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:0 16px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Confirm</button>
+        </div>
+      </div>
+
+      <div style="margin-top:18px;padding-top:14px;border-top:0.5px solid var(--border);display:flex;flex-direction:column;gap:8px">
+        <button onclick="markAccountFinished()" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:var(--radius);padding:9px 14px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;width:100%"><i class="ti ti-flag"></i> Mark as Finished</button>
+        <button onclick="deleteAccountMistake()" style="background:none;border:none;color:var(--text3);border-radius:var(--radius);padding:6px 14px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;width:100%"><i class="ti ti-trash"></i> Delete (entered in error)</button>
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">
-      <button onclick="openMoneyPrompt('deposit')" style="background:var(--green);color:#fff;border:none;border-radius:var(--radius);padding:11px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Deposit</button>
-      <button onclick="openMoneyPrompt('withdraw')" style="background:var(--red);color:#fff;border:none;border-radius:var(--radius);padding:11px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Withdraw</button>
-    </div>
-    <div style="margin-bottom:8px">
-      <button onclick="lockAccountFunds()" style="background:none;border:1px solid var(--text3);color:var(--text2);border-radius:var(--radius);padding:9px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;width:100%"><i class="ti ti-lock"></i> Lock funds</button>
+    <div id="account-modal-tab-transactions" style="display:none">
+      <div id="account-modal-transactions-list" style="font-size:13px">Loading…</div>
     </div>
 
-    <div id="account-money-prompt" style="display:none;margin-top:12px;padding:12px 14px;background:var(--surface2);border-radius:var(--radius)">
-      <label class="lbl" id="account-money-prompt-label">Amount £</label>
-      <div style="display:flex;gap:8px">
-        <input type="number" id="account-money-amount" step="0.01" min="0" style="flex:1">
-        <button onclick="submitMoneyPrompt()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:0 16px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Confirm</button>
+    <div id="account-modal-tab-notes" style="display:none">
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <button class="add-btn" onclick="addAccountNote()"><i class="ti ti-note"></i> Add note</button>
+        <button class="add-btn" onclick="toggleDisplayAccountNotes()" id="account-notes-display-btn">Display notes</button>
       </div>
-    </div>
-
-    <div style="margin-top:18px;padding-top:14px;border-top:0.5px solid var(--border);display:flex;flex-direction:column;gap:8px">
-      <button onclick="markAccountFinished()" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:var(--radius);padding:9px 14px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;width:100%"><i class="ti ti-flag"></i> Mark as Finished</button>
-      <button onclick="deleteAccountMistake()" style="background:none;border:none;color:var(--text3);border-radius:var(--radius);padding:6px 14px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;width:100%"><i class="ti ti-trash"></i> Delete (entered in error)</button>
+      <div id="account-modal-notes-list" style="display:none;font-size:13px"></div>
     </div>
 
     <div id="account-modal-msg" style="margin-top:12px;font-size:13px"></div>
@@ -839,6 +897,8 @@ input::placeholder{color:var(--text3)}
 <div id="view-ledger-bulk-import" class="sec">
   <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
   <div class="sec-title">Account Entry</div>
+
+  <div id="accounts-add-form-inner">
   <div style="font-size:12.5px;color:var(--text2);margin-bottom:16px">
     Publishes an account straight onto Live Accounts. No Google Sheet writes happen here — the Account Bank sheet is managed by you separately; this is just the final "make it live" step once an ID's ready.
   </div>
@@ -877,6 +937,7 @@ input::placeholder{color:var(--text3)}
       <button onclick="createBank()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:9px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Create</button>
     </div>
     <div id="new-bank-msg" style="margin-top:12px;font-size:13px"></div>
+  </div>
   </div>
 </div>
 
@@ -2933,6 +2994,7 @@ const BOOKIES_LIST = [
 const STATUS_CONFIG = {
   good:       { label:'Good',     color:'#16a34a', bg:'#dcfce7' },
   restricted: { label:'Restricted', color:'#f59e0b', bg:'#fef3c7' },
+  locked:     { label:'Locked',   color:'#6b7280', bg:'#f3f4f6' },
   closed:     { label:'Finished', color:'#dc2626', bg:'#fee2e2' },
 };
 
@@ -2970,42 +3032,129 @@ async function loadAllAccounts(excludeClosed) {
 }
 
 // ---- ACCOUNTS GRID ----
+let accountsAddInitialized = false;
+
 async function initAccountsGrid() {
+  if (!accountsAddInitialized) {
+    document.getElementById('accounts-add-form-wrap').appendChild(document.getElementById('accounts-add-form-inner'));
+    accountsAddInitialized = true;
+  }
+  document.getElementById('accounts-add-form-wrap').style.display = 'none';
+  document.getElementById('accounts-add-chevron').className = 'ti ti-chevron-down';
+  initAccountEntry();
+
   const wrap = document.getElementById('live-accounts-wrap');
   wrap.innerHTML = '<div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div>';
-  document.getElementById('bank-balances-box').innerHTML = 'Loading…';
-  await loadAllAccounts(true); // excludeClosed (also excludes locked)
+  setAccountsStatusFilter('live', true);
+  setAccountsIdTypeFilter('all', true);
+  setAccountsGroupBy('bookie', true);
+  await loadAllAccounts(false); // fetch everything now — filtering happens client-side
   renderAccountsGrid();
-  renderBankBalancesBox();
-  renderLiveAccountsLockedTotal();
+  renderAccountsSummaryRow();
 }
 
-// Groups live accounts into one column per bookie, each showing every account's ID and,
-// depending on the two toggles above the grid, its live balance and/or open bet stake.
-// Replaces the old fixed profile×bookie matrix — accounts no longer sit in fixed row
-// slots, each ID is its own thing, so columns are simply as long as they need to be.
+function toggleAccountsAddForm() {
+  const wrap = document.getElementById('accounts-add-form-wrap');
+  const chevron = document.getElementById('accounts-add-chevron');
+  const showing = wrap.style.display !== 'none';
+  wrap.style.display = showing ? 'none' : 'block';
+  chevron.className = showing ? 'ti ti-chevron-down' : 'ti ti-chevron-up';
+}
+
+async function renderAccountsSummaryRow() {
+  const showBanks = document.getElementById('toggle-show-bankbalances').checked;
+  const showLocked = document.getElementById('toggle-show-lockedfunds').checked;
+  const el = document.getElementById('accounts-summary-row');
+  el.style.gridTemplateColumns = (showBanks && showLocked) ? '1fr 220px' : '1fr';
+  let html = '';
+  if (showBanks) html += `<div class="card card-pad"><div class="lbl" style="margin-bottom:10px">Live bank balances</div><div id="bank-balances-box" style="display:flex;flex-wrap:wrap;gap:10px">Loading…</div></div>`;
+  if (showLocked) html += `<div class="card card-pad"><div class="lbl" style="margin-bottom:10px">Locked Funds</div><div style="font-size:22px;font-weight:600;color:var(--red)" id="live-accounts-locked-total">£0.00</div></div>`;
+  el.innerHTML = html || '';
+  if (showBanks) renderBankBalancesBox();
+  if (showLocked) renderLiveAccountsLockedTotal();
+}
+
+// ---- ACCOUNTS FILTERS ----
+let accountsStatusFilter = 'live';
+let accountsIdTypeFilter = 'all';
+let accountsGroupBy = 'bookie';
+
+function setAccountsStatusFilter(val, skipRender) {
+  accountsStatusFilter = val;
+  ['all','live','locked','archived','balance'].forEach(v => {
+    document.getElementById('accfilter-status-'+v).classList.toggle('active', v === val);
+  });
+  if (!skipRender) renderAccountsGrid();
+}
+
+function setAccountsIdTypeFilter(val, skipRender) {
+  accountsIdTypeFilter = val;
+  ['all','client','disposable'].forEach(v => {
+    document.getElementById('accfilter-idtype-'+v).classList.toggle('active', v === val);
+  });
+  if (!skipRender) renderAccountsGrid();
+}
+
+function setAccountsGroupBy(val, skipRender) {
+  accountsGroupBy = val;
+  ['bookie','card'].forEach(v => {
+    document.getElementById('accfilter-group-'+v).classList.toggle('active', v === val);
+  });
+  if (!skipRender) renderAccountsGrid();
+}
+
+function accountPassesFilters(a) {
+  if (accountsStatusFilter === 'live' && !(a.status === 'good' || a.status === 'restricted')) return false;
+  if (accountsStatusFilter === 'locked' && a.status !== 'locked') return false;
+  if (accountsStatusFilter === 'archived' && a.status !== 'closed') return false;
+  if (accountsStatusFilter === 'balance') {
+    const threshold = parseFloat(document.getElementById('accfilter-balance-amount').value) || 0;
+    if (!((a.balance||0) > threshold)) return false;
+  }
+  if (accountsIdTypeFilter === 'client' && !/^C/i.test(a.account_id||'')) return false;
+  if (accountsIdTypeFilter === 'disposable' && !/^D/i.test(a.account_id||'')) return false;
+  return true;
+}
+
+// Groups filtered accounts into one column per bookie (or, in Card view, one column per
+// account ID), each showing every account's ID and, depending on the two toggles above the
+// grid, its live balance, open bet stake, and a note indicator if one's been added.
 function renderAccountsGrid() {
   const wrap = document.getElementById('live-accounts-wrap');
   const showBalance = document.getElementById('toggle-show-balance')?.checked;
   const showOpenStake = document.getElementById('toggle-show-openstake')?.checked;
-  const byBookie = {};
-  ALL_ACCOUNTS.forEach(a => { (byBookie[a.bookie] = byBookie[a.bookie] || []).push(a); });
-  const bookies = Object.keys(byBookie).sort();
+  const filtered = ALL_ACCOUNTS.filter(accountPassesFilters);
 
-  if (!bookies.length) { wrap.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:24px">No live accounts yet — publish some via Account Entry.</div>'; return; }
+  if (!filtered.length) { wrap.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:24px">No accounts match these filters.</div>'; return; }
 
-  wrap.innerHTML = `<div style="display:flex;gap:12px;align-items:flex-start">${bookies.map(bookie => {
-    const cells = byBookie[bookie].map(a => {
-      const cfg = STATUS_CONFIG[a.status] || STATUS_CONFIG.good;
-      const openStake = a.open_stake || 0;
-      return `<div class="live-accts-cell" style="background:${cfg.bg};color:${cfg.color}" onclick="openAccountModal(${a.id})">
-        <div class="id">${escapeHtml(a.account_id || '—')}</div>
-        ${showBalance ? `<div class="bal">£${(a.balance||0).toLocaleString('en-GB',{minimumFractionDigits:0,maximumFractionDigits:2})}</div>` : ''}
-        ${showOpenStake && openStake>0 ? `<div style="font-size:10px;color:#3b82f6;font-weight:600">+£${openStake.toLocaleString('en-GB',{maximumFractionDigits:2})} open</div>` : ''}
-      </div>`;
-    }).join('');
-    return `<div class="live-accts-col"><div class="live-accts-col-header">${escapeHtml(bookie)}</div>${cells}</div>`;
-  }).join('')}</div>`;
+  const cellHtml = (a, mainLabel) => {
+    const cfg = STATUS_CONFIG[a.status] || STATUS_CONFIG.good;
+    const openStake = a.open_stake || 0;
+    return `<div class="live-accts-cell" style="background:${cfg.bg};color:${cfg.color}" onclick="openAccountModal(${a.id})">
+      <div class="id">${escapeHtml(mainLabel)}</div>
+      ${showBalance ? `<div class="bal">£${(a.balance||0).toLocaleString('en-GB',{minimumFractionDigits:0,maximumFractionDigits:2})}</div>` : ''}
+      ${showOpenStake && openStake>0 ? `<div style="font-size:10px;color:#3b82f6;font-weight:600">+£${openStake.toLocaleString('en-GB',{maximumFractionDigits:2})} open</div>` : ''}
+      ${(showBalance || showOpenStake) && a.has_notes ? `<div style="font-size:9px;color:var(--text3);margin-top:2px"><i class="ti ti-note"></i> Note added</div>` : ''}
+    </div>`;
+  };
+
+  if (accountsGroupBy === 'card') {
+    const byCard = {};
+    filtered.forEach(a => { const key = a.account_id || '—'; (byCard[key] = byCard[key] || []).push(a); });
+    const cardIds = Object.keys(byCard).sort();
+    wrap.innerHTML = `<div style="display:flex;gap:12px;align-items:flex-start">${cardIds.map(cardId => {
+      const cells = byCard[cardId].map(a => cellHtml(a, a.bookie)).join('');
+      return `<div class="live-accts-col"><div class="live-accts-col-header">${escapeHtml(cardId)}</div>${cells}</div>`;
+    }).join('')}</div>`;
+  } else {
+    const byBookie = {};
+    filtered.forEach(a => { (byBookie[a.bookie] = byBookie[a.bookie] || []).push(a); });
+    const bookies = Object.keys(byBookie).sort();
+    wrap.innerHTML = `<div style="display:flex;gap:12px;align-items:flex-start">${bookies.map(bookie => {
+      const cells = byBookie[bookie].map(a => cellHtml(a, a.account_id || '—')).join('');
+      return `<div class="live-accts-col"><div class="live-accts-col-header">${escapeHtml(bookie)}</div>${cells}</div>`;
+    }).join('')}</div>`;
+  }
 }
 
 // Bank figures come from the server (GET /banks), not summed client-side from account
@@ -3014,10 +3163,11 @@ function renderAccountsGrid() {
 // funds are shown as a separate total elsewhere, not folded into any bank's own figure.
 async function renderBankBalancesBox() {
   const el = document.getElementById('bank-balances-box');
+  if (!el) return;
   try {
     const d = await ledgerApi('banks');
     const banks = (d.ok && d.banks) ? d.banks : [];
-    if (!banks.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No banks set up yet — add one via Account Entry.</div>'; return; }
+    if (!banks.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No banks set up yet — add one above.</div>'; return; }
     el.innerHTML = banks.map(b => `
       <div style="padding:8px 14px;background:var(--surface2);border-radius:var(--radius);font-size:13px;cursor:pointer" onclick="openBankModal('${b.name.replace(/'/g,"\\'")}', ${b.remaining}, ${b.starting_balance})">
         <div style="font-weight:600">${escapeHtml(b.name)}</div>
@@ -3071,6 +3221,7 @@ async function deleteBank() {
 
 async function renderLiveAccountsLockedTotal() {
   const el = document.getElementById('live-accounts-locked-total');
+  if (!el) return;
   try {
     const d = await ledgerApi('locked-funds');
     const rows = (d.ok && d.locked) ? d.locked : [];
@@ -3124,7 +3275,7 @@ function openAccountModal(accountId) {
   document.getElementById('account-modal-subtitle').textContent = `${acc.profile} — ${acc.bookie}`;
   document.getElementById('account-modal-balance').textContent = '£' + (acc.balance||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
 
-  document.getElementById('account-modal-status-list').innerHTML = Object.keys(STATUS_CONFIG).filter(key => key !== 'closed').map(key => {
+  document.getElementById('account-modal-status-list').innerHTML = Object.keys(STATUS_CONFIG).filter(key => key !== 'closed' && key !== 'locked').map(key => {
     const cfg = STATUS_CONFIG[key];
     const active = acc.status === key;
     return `<button onclick="setAccountStatus('${key}')" style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:var(--radius);border:1px solid ${active?cfg.color:'var(--border)'};background:${active?cfg.bg:'transparent'};color:var(--text);font-size:13px;font-family:inherit;cursor:pointer;text-align:left"><span class="grid-dot" style="background:${cfg.color}"></span>${cfg.label}${active?' <i class="ti ti-check" style="margin-left:auto"></i>':''}</button>`;
@@ -3134,7 +3285,93 @@ function openAccountModal(accountId) {
   document.getElementById('account-balance-override-toggle').checked = false;
   document.getElementById('account-balance-override-box').style.display = 'none';
   document.getElementById('account-modal-msg').innerHTML = '';
+  accountModalTransactionsLoaded = false;
+  accountModalNotesLoaded = false;
+  document.getElementById('account-modal-notes-list').style.display = 'none';
+  document.getElementById('account-notes-display-btn').textContent = 'Display notes';
+  setAccountModalTab('overview');
   document.getElementById('account-modal-overlay').style.display = 'flex';
+}
+
+let accountModalTransactionsLoaded = false;
+let accountModalNotesLoaded = false;
+
+function setAccountModalTab(tab) {
+  ['overview','transactions','notes'].forEach(t => {
+    document.getElementById('acc-tab-'+t).classList.toggle('active', t === tab);
+    document.getElementById('account-modal-tab-'+t).style.display = t === tab ? 'block' : 'none';
+  });
+  if (tab === 'transactions' && !accountModalTransactionsLoaded) loadAccountModalTransactions();
+  if (tab === 'notes' && !accountModalNotesLoaded) preloadAccountModalNotes();
+}
+
+async function loadAccountModalTransactions() {
+  if (!ACTIVE_ACCOUNT) return;
+  const el = document.getElementById('account-modal-transactions-list');
+  el.innerHTML = 'Loading…';
+  try {
+    const [depRes, wdRes] = await Promise.all([
+      ledgerApi('deposits?account_id='+ACTIVE_ACCOUNT.id),
+      ledgerApi('withdrawals?account_id='+ACTIVE_ACCOUNT.id),
+    ]);
+    const items = [];
+    (depRes.ok && depRes.deposits ? depRes.deposits : []).forEach(r => items.push({ type:'Deposit', date:r.date, amount:r.amount, sign:1 }));
+    (wdRes.ok && wdRes.withdrawals ? wdRes.withdrawals : []).forEach(r => items.push({ type:`Withdrawal${r.status==='pending'?' (pending)':''}`, date:r.date, amount:r.amount, sign:-1 }));
+    items.sort((a,b) => new Date(b.date) - new Date(a.date));
+    accountModalTransactionsLoaded = true;
+    if (!items.length) { el.innerHTML = '<div style="color:var(--text3)">No deposits or withdrawals on this account yet.</div>'; return; }
+    el.innerHTML = items.map(it => `<div style="padding:8px 0;border-bottom:0.5px solid var(--border);display:flex;justify-content:space-between">
+      <div><span style="color:var(--text3);font-size:11px">${formatLedgerDate(it.date)}</span> ${it.type}</div>
+      <div style="font-weight:600;color:${it.sign>0?'var(--green)':'var(--red)'}">${it.sign>0?'+':'-'}£${it.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+    </div>`).join('');
+  } catch (e) { el.innerHTML = '<div style="color:var(--red)">Could not load transactions.</div>'; }
+}
+
+// Just checks quietly whether notes exist so the "Display notes" list can be filled in
+// without an extra round trip once the person actually clicks to view them.
+async function preloadAccountModalNotes() {
+  accountModalNotesLoaded = true;
+}
+
+async function addAccountNote() {
+  if (!ACTIVE_ACCOUNT) return;
+  const text = prompt('Add a note for this account:');
+  if (text === null || !text.trim()) return;
+  try {
+    const d = await ledgerApi('accounts/'+ACTIVE_ACCOUNT.id+'/notes', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ text: text.trim() }) });
+    if (!d.ok) { alert(d.error || 'Failed to add note'); return; }
+    ACTIVE_ACCOUNT.has_notes = true;
+    const idx = ALL_ACCOUNTS.findIndex(a => a.id === ACTIVE_ACCOUNT.id);
+    if (idx > -1) ALL_ACCOUNTS[idx].has_notes = true;
+    renderAccountsGrid();
+    const listEl = document.getElementById('account-modal-notes-list');
+    if (listEl.style.display !== 'none') loadAccountModalNotesList();
+  } catch (e) { alert('Network error adding note.'); }
+}
+
+async function toggleDisplayAccountNotes() {
+  const listEl = document.getElementById('account-modal-notes-list');
+  const btn = document.getElementById('account-notes-display-btn');
+  const showing = listEl.style.display !== 'none';
+  if (showing) { listEl.style.display = 'none'; btn.textContent = 'Display notes'; return; }
+  listEl.style.display = 'block';
+  btn.textContent = 'Hide notes';
+  loadAccountModalNotesList();
+}
+
+async function loadAccountModalNotesList() {
+  if (!ACTIVE_ACCOUNT) return;
+  const listEl = document.getElementById('account-modal-notes-list');
+  listEl.innerHTML = 'Loading…';
+  try {
+    const d = await ledgerApi('accounts/'+ACTIVE_ACCOUNT.id+'/notes');
+    const notes = (d.ok && d.notes) ? d.notes : [];
+    if (!notes.length) { listEl.innerHTML = '<div style="color:var(--text3)">No notes yet.</div>'; return; }
+    listEl.innerHTML = notes.map(n => `<div style="padding:8px 0;border-bottom:0.5px solid var(--border)">
+      <div style="color:var(--text3);font-size:11px;margin-bottom:2px">${formatLedgerDate(n.created_at)}</div>
+      <div>${escapeHtml(n.text)}</div>
+    </div>`).join('');
+  } catch (e) { listEl.innerHTML = '<div style="color:var(--red)">Could not load notes.</div>'; }
 }
 
 function closeAccountModal() {
