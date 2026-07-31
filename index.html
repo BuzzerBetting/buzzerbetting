@@ -281,21 +281,6 @@ input::placeholder{color:var(--text3)}
       <div><div class="cat-title">Money</div><div class="cat-desc">Deposits, withdrawals and bank transactions — add and edit in one place</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
-    <div class="cat" style="--accent:var(--red)" onclick="showLedgerSec('locked-funds')">
-      <div class="cat-ico" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-lock"></i></div>
-      <div><div class="cat-title">Locked Funds</div><div class="cat-desc">Confiscated withdrawals and manually locked balances</div></div>
-      <i class="ti ti-arrow-right cat-arr"></i>
-    </div>
-    <div class="cat" style="--accent:var(--blue)" onclick="showLedgerSec('account-summary')">
-      <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-report-money"></i></div>
-      <div><div class="cat-title">Account Stats</div><div class="cat-desc">Per-bookie account counts, deposits, withdrawals and P/L</div></div>
-      <i class="ti ti-arrow-right cat-arr"></i>
-    </div>
-    <div class="cat" style="--accent:var(--purple)" onclick="showLedgerSec('archived')">
-      <div class="cat-ico" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-archive"></i></div>
-      <div><div class="cat-title">Recently Archived</div><div class="cat-desc">Accounts finished in the last 7 days — undo if needed</div></div>
-      <i class="ti ti-arrow-right cat-arr"></i>
-    </div>
   </div>
 </div>
 
@@ -747,7 +732,7 @@ input::placeholder{color:var(--text3)}
 
 <!-- LEDGER: LOCKED FUNDS -->
 <div id="view-ledger-locked-funds" class="sec">
-  <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
+  <button class="back" onclick="showLedgerSec('accounts')"><i class="ti ti-arrow-left"></i> Accounts</button>
   <div class="sec-title">Locked Funds</div>
   <div style="font-size:12.5px;color:var(--text2);margin-bottom:16px">
     Money moved out of live tracking — either a withdrawal the bookie refused to pay (confiscated), or a balance manually locked on an account. How to deal with these will be decided separately.
@@ -3074,7 +3059,7 @@ async function renderAccountsSummaryRow() {
   el.style.gridTemplateColumns = (showBanks && showLocked) ? '1fr 220px' : '1fr';
   let html = '';
   if (showBanks) html += `<div class="card card-pad"><div class="lbl" style="margin-bottom:10px">Live bank balances</div><div id="bank-balances-box" style="display:flex;flex-wrap:wrap;gap:10px">Loading…</div></div>`;
-  if (showLocked) html += `<div class="card card-pad"><div class="lbl" style="margin-bottom:10px">Locked Funds</div><div style="font-size:22px;font-weight:600;color:var(--red)" id="live-accounts-locked-total">£0.00</div></div>`;
+  if (showLocked) html += `<div class="card card-pad" style="cursor:pointer" onclick="showLedgerSec('locked-funds')"><div class="lbl" style="margin-bottom:10px">Locked Funds</div><div style="font-size:22px;font-weight:600;color:var(--red)" id="live-accounts-locked-total">£0.00</div></div>`;
   el.innerHTML = html || '';
   if (showBanks) renderBankBalancesBox();
   if (showLocked) renderLiveAccountsLockedTotal();
@@ -3285,7 +3270,9 @@ function openAccountModal(accountId) {
     const cfg = STATUS_CONFIG[key];
     const active = acc.status === key;
     return `<button onclick="setAccountStatus('${key}')" style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:var(--radius);border:1px solid ${active?cfg.color:'var(--border)'};background:${active?cfg.bg:'transparent'};color:var(--text);font-size:13px;font-family:inherit;cursor:pointer;text-align:left"><span class="grid-dot" style="background:${cfg.color}"></span>${cfg.label}${active?' <i class="ti ti-check" style="margin-left:auto"></i>':''}</button>`;
-  }).join('');
+  }).join('') + (acc.status === 'closed'
+    ? `<button onclick="setAccountStatus('good')" style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:var(--radius);border:1px solid var(--green);background:var(--green-bg);color:var(--text);font-size:13px;font-family:inherit;cursor:pointer;text-align:left"><i class="ti ti-rotate"></i> Restore to Live</button>`
+    : '');
 
   document.getElementById('account-money-prompt').style.display = 'none';
   document.getElementById('account-balance-override-toggle').checked = false;
