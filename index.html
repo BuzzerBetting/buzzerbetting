@@ -578,6 +578,9 @@ input::placeholder{color:var(--text3)}
     <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);cursor:pointer">
       <input type="checkbox" id="toggle-show-lockedfunds" checked onchange="renderAccountsSummaryRow()"> Show locked funds
     </label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);cursor:pointer">
+      <input type="checkbox" id="toggle-show-accountstotals" onchange="renderAccountsSummaryRow()"> Show total accounts balance
+    </label>
   </div>
   <div id="accounts-summary-row" class="wide" style="display:grid;grid-template-columns:1fr 220px;gap:16px;margin-bottom:16px"></div>
 
@@ -3086,14 +3089,39 @@ function toggleAccountsAddForm() {
 async function renderAccountsSummaryRow() {
   const showBanks = document.getElementById('toggle-show-bankbalances').checked;
   const showLocked = document.getElementById('toggle-show-lockedfunds').checked;
+  const showAccountsTotals = document.getElementById('toggle-show-accountstotals').checked;
   const el = document.getElementById('accounts-summary-row');
-  el.style.gridTemplateColumns = (showBanks && showLocked) ? '1fr 220px' : '1fr';
+  const cols = [];
   let html = '';
-  if (showBanks) html += `<div class="card card-pad"><div class="lbl" style="margin-bottom:10px">Live bank balances</div><div id="bank-balances-box" style="display:flex;flex-wrap:wrap;gap:10px">Loading…</div></div>`;
-  if (showLocked) html += `<div class="card card-pad" style="cursor:pointer" onclick="showLedgerSec('locked-funds')"><div class="lbl" style="margin-bottom:10px">Locked Funds</div><div style="font-size:22px;font-weight:600;color:var(--red)" id="live-accounts-locked-total">£0.00</div></div>`;
+  if (showBanks) { cols.push('1fr'); html += `<div class="card card-pad"><div class="lbl" style="margin-bottom:10px">Live bank balances</div><div id="bank-balances-box" style="display:flex;flex-wrap:wrap;gap:10px">Loading…</div></div>`; }
+  if (showAccountsTotals) { cols.push('1fr'); html += `<div class="card card-pad"><div class="lbl" style="margin-bottom:10px">Total accounts balance (per bank)</div><div id="accounts-totals-box" style="display:flex;flex-wrap:wrap;gap:10px">Loading…</div></div>`; }
+  if (showLocked) { cols.push('220px'); html += `<div class="card card-pad" style="cursor:pointer" onclick="showLedgerSec('locked-funds')"><div class="lbl" style="margin-bottom:10px">Locked Funds</div><div style="font-size:22px;font-weight:600;color:var(--red)" id="live-accounts-locked-total">£0.00</div></div>`; }
+  el.style.gridTemplateColumns = cols.length ? cols.join(' ') : '1fr';
   el.innerHTML = html || '';
   if (showBanks) renderBankBalancesBox();
+  if (showAccountsTotals) renderAccountsTotalsBox();
   if (showLocked) renderLiveAccountsLockedTotal();
+}
+
+// Sums each live account's balance grouped by its linked bank — distinct from the bank's
+// own "remaining" figure (that's the uncommitted pool, this is what's actually sitting live
+// across every account funded from it).
+function renderAccountsTotalsBox() {
+  const el = document.getElementById('accounts-totals-box');
+  if (!el) return;
+  const byBank = {};
+  ALL_ACCOUNTS.forEach(a => {
+    if (a.status === 'closed') return; // archived accounts don't count toward a live total
+    const key = a.profile || 'Unknown';
+    byBank[key] = (byBank[key] || 0) + (a.balance || 0);
+  });
+  const banks = Object.keys(byBank).sort((a, b) => byBank[b] - byBank[a]);
+  if (!banks.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No live accounts yet.</div>'; return; }
+  el.innerHTML = banks.map(b => `
+    <div style="padding:8px 14px;background:var(--surface2);border-radius:var(--radius);font-size:13px">
+      <div style="font-weight:600">${escapeHtml(b)}</div>
+      <div style="color:${balanceColor(byBank[b])}">£${byBank[b].toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+    </div>`).join('');
 }
 
 // ---- ACCOUNTS FILTERS ----
@@ -3199,7 +3227,7 @@ async function renderBankBalancesBox() {
   if (!el) return;
   try {
     const d = await ledgerApi('banks');
-    const banks = (d.ok && d.banks) ? d.banks : [];
+    const banks = (d.ok && d.banks) ? [...d.banks].sort((a, b) => b.remaining - a.remaining) : [];
     if (!banks.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No banks set up yet — add one above.</div>'; return; }
     el.innerHTML = banks.map(b => `
       <div style="padding:8px 14px;background:var(--surface2);border-radius:var(--radius);font-size:13px;cursor:pointer" onclick="openBankModal('${b.name.replace(/'/g,"\\'")}', ${b.remaining}, ${b.starting_balance})">
