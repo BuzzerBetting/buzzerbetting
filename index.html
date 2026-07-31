@@ -608,6 +608,7 @@ input::placeholder{color:var(--text3)}
           <div style="display:flex;gap:6px">
             <button class="add-btn" id="accfilter-group-bookie" onclick="setAccountsGroupBy('bookie')">Bookie</button>
             <button class="add-btn" id="accfilter-group-card" onclick="setAccountsGroupBy('card')">Card</button>
+            <button class="add-btn" id="accfilter-group-bank" onclick="setAccountsGroupBy('bank')">Bank</button>
           </div>
         </div>
       </div>
@@ -631,6 +632,9 @@ input::placeholder{color:var(--text3)}
       </label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);cursor:pointer">
         <input type="checkbox" id="toggle-show-openstake" onchange="renderAccountsGrid()"> Show open bet stakes
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);cursor:pointer">
+        <input type="checkbox" id="toggle-show-bank" onchange="renderAccountsGrid()"> Show linked bank
       </label>
     </div>
   </div>
@@ -3115,7 +3119,7 @@ function setAccountsIdTypeFilter(val, skipRender) {
 
 function setAccountsGroupBy(val, skipRender) {
   accountsGroupBy = val;
-  ['bookie','card'].forEach(v => {
+  ['bookie','card','bank'].forEach(v => {
     document.getElementById('accfilter-group-'+v).classList.toggle('active', v === val);
   });
   if (!skipRender) renderAccountsGrid();
@@ -3135,24 +3139,27 @@ function accountPassesFilters(a) {
 }
 
 // Groups filtered accounts into one column per bookie (or, in Card view, one column per
-// account ID), each showing every account's ID and, depending on the two toggles above the
-// grid, its live balance, open bet stake, and a note indicator if one's been added.
+// account ID; or, in Bank view, one column per linked bank), each showing every account's
+// ID and, depending on the toggles above the grid, its live balance, open bet stake, linked
+// bank, and a note indicator if one's been added.
 function renderAccountsGrid() {
   const wrap = document.getElementById('live-accounts-wrap');
   const showBalance = document.getElementById('toggle-show-balance')?.checked;
   const showOpenStake = document.getElementById('toggle-show-openstake')?.checked;
+  const showBank = document.getElementById('toggle-show-bank')?.checked;
   const filtered = ALL_ACCOUNTS.filter(accountPassesFilters);
 
   if (!filtered.length) { wrap.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:24px">No accounts match these filters.</div>'; return; }
 
-  const cellHtml = (a, mainLabel) => {
+  const cellHtml = (a, mainLabel, suppressBank) => {
     const cfg = STATUS_CONFIG[a.status] || STATUS_CONFIG.good;
     const openStake = a.open_stake || 0;
     return `<div class="live-accts-cell" style="background:${cfg.bg};color:${cfg.color}" onclick="openAccountModal(${a.id})">
       <div class="id">${escapeHtml(mainLabel)}</div>
       ${showBalance ? `<div class="bal">£${(a.balance||0).toLocaleString('en-GB',{minimumFractionDigits:0,maximumFractionDigits:2})}</div>` : ''}
       ${showOpenStake && openStake>0 ? `<div style="font-size:10px;color:#3b82f6;font-weight:600">+£${openStake.toLocaleString('en-GB',{maximumFractionDigits:2})} open</div>` : ''}
-      ${(showBalance || showOpenStake) && a.has_notes ? `<div style="font-size:9px;color:var(--text3);margin-top:2px"><i class="ti ti-note"></i> Note added</div>` : ''}
+      ${showBank && !suppressBank ? `<div style="font-size:10px;color:var(--text3)">${escapeHtml(a.profile)}</div>` : ''}
+      ${(showBalance || showOpenStake || showBank) && a.has_notes ? `<div style="font-size:9px;color:var(--text3);margin-top:2px"><i class="ti ti-note"></i> Note added</div>` : ''}
     </div>`;
   };
 
@@ -3163,6 +3170,14 @@ function renderAccountsGrid() {
     wrap.innerHTML = `<div style="display:flex;gap:12px;align-items:flex-start">${cardIds.map(cardId => {
       const cells = byCard[cardId].map(a => cellHtml(a, a.bookie)).join('');
       return `<div class="live-accts-col"><div class="live-accts-col-header">${escapeHtml(cardId)}</div>${cells}</div>`;
+    }).join('')}</div>`;
+  } else if (accountsGroupBy === 'bank') {
+    const byBank = {};
+    filtered.forEach(a => { const key = a.profile || 'Unknown'; (byBank[key] = byBank[key] || []).push(a); });
+    const bankNames = Object.keys(byBank).sort();
+    wrap.innerHTML = `<div style="display:flex;gap:12px;align-items:flex-start">${bankNames.map(bank => {
+      const cells = byBank[bank].map(a => cellHtml(a, a.account_id || '—', true)).join('');
+      return `<div class="live-accts-col"><div class="live-accts-col-header">${escapeHtml(bank)} <span style="font-weight:400;color:var(--text3)">(${byBank[bank].length})</span></div>${cells}</div>`;
     }).join('')}</div>`;
   } else {
     const byBookie = {};
