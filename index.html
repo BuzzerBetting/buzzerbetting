@@ -281,6 +281,11 @@ input::placeholder{color:var(--text3)}
       <div><div class="cat-title">Money</div><div class="cat-desc">Deposits, withdrawals and bank transactions — add and edit in one place</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
+    <div class="cat" style="--accent:var(--amber)" onclick="showLedgerSec('dashboard')">
+      <div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-list-check"></i></div>
+      <div><div class="cat-title">Dashboard</div><div class="cat-desc">Everything currently needing actioned — open bets, pending withdrawals, locked funds</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
   </div>
 </div>
 
@@ -634,6 +639,28 @@ input::placeholder{color:var(--text3)}
 
 <!-- LEDGER: DEPOSITS -->
 <!-- LEDGER: MONEY (unified deposits/withdrawals/bank transactions) -->
+<!-- LEDGER: DASHBOARD -->
+<div id="view-ledger-dashboard" class="sec">
+  <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
+  <div class="sec-title">Dashboard</div>
+
+  <div class="card card-pad" style="margin-bottom:16px">
+    <div class="lbl" style="margin-bottom:10px">Open bets to be settled</div>
+    <div id="dashboard-open-bets">Loading…</div>
+  </div>
+
+  <div class="card card-pad" style="margin-bottom:16px">
+    <div class="lbl" style="margin-bottom:10px">Pending withdrawals to be confirmed</div>
+    <div id="dashboard-pending-withdrawals">Loading…</div>
+  </div>
+
+  <div class="card card-pad">
+    <div class="lbl" style="margin-bottom:4px">Locked funds awaiting review</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Each one gets confirmed as locked, returned to the account's live balance, or moved to a withdrawal.</div>
+    <div id="dashboard-locked-funds">Loading…</div>
+  </div>
+</div>
+
 <div id="view-ledger-money" class="sec">
   <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
   <div class="sec-title">Money</div>
@@ -1994,7 +2021,7 @@ const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger',bettracking
 function showTopSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});}
 function backToBetsMenu(){showTopSec('bets');}
 function backToCalcMenu(){showTopSec('calc');}
-function showLedgerSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-ledger-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='bet-entry')initBetEntry();if(name==='bulk-import')initAccountEntry();if(name==='accounts')initAccountsGrid();if(name==='deposits')initDepositsLog();if(name==='withdrawals')initWithdrawalsPending();if(name==='account-summary')initAccountSummary();if(name==='locked-funds')initLockedFunds();if(name==='archived')initArchived();if(name==='bank-transactions')initBankTransactions();if(name==='money')initMoneyPage();}
+function showLedgerSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-ledger-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='bet-entry')initBetEntry();if(name==='bulk-import')initAccountEntry();if(name==='accounts')initAccountsGrid();if(name==='deposits')initDepositsLog();if(name==='withdrawals')initWithdrawalsPending();if(name==='account-summary')initAccountSummary();if(name==='locked-funds')initLockedFunds();if(name==='archived')initArchived();if(name==='bank-transactions')initBankTransactions();if(name==='money')initMoneyPage();if(name==='dashboard')initDashboard();}
 function backToLedgerHub(){showTopSec('ledger');}
 
 
@@ -3707,6 +3734,145 @@ async function clearLockedFunds(id) {
     if (!d.ok) { alert('Failed to clear: ' + (d.error||'unknown error')); return; }
   } catch (e) { alert('Network error clearing entry.'); return; }
   initLockedFunds();
+}
+
+// ================== LEDGER: DASHBOARD ==================
+async function initDashboard() {
+  loadDashboardOpenBets();
+  loadDashboardPendingWithdrawals();
+  loadDashboardLockedFunds();
+}
+
+async function loadDashboardOpenBets() {
+  const el = document.getElementById('dashboard-open-bets');
+  el.innerHTML = 'Loading…';
+  try {
+    const d = await ledgerApi('bets?status=open&limit=1000');
+    const bets = (d.ok && d.bets) ? d.bets : [];
+    if (!bets.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No open bets.</div>'; return; }
+    el.innerHTML = bets.map(b => `<div style="padding:9px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="color:var(--text3);font-size:11px">${formatLedgerDate(b.date)} <span style="color:var(--blue);font-weight:600;margin-left:4px">${escapeHtml(b.bet_type)}</span></div>
+          ${b.account_code ? escapeHtml(b.account_code)+' — ' : ''}${escapeHtml(b.fields.Bet || b.fields['Bet Description'] || b.fields.Horse || b.fields.Player || b.fields.Offer || '')}
+          <span style="font-weight:600;margin-left:6px">£${(b.total_stake||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+        </div>
+        <button class="add-btn" onclick="openBtSettleModal(${b.id}, 'open', null, loadDashboardOpenBets, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${b.bet_type.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">Settle</button>
+      </div>
+    </div>`).join('');
+  } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load open bets.</div>'; }
+}
+
+async function loadDashboardPendingWithdrawals() {
+  const el = document.getElementById('dashboard-pending-withdrawals');
+  el.innerHTML = 'Loading…';
+  try {
+    const d = await ledgerApi('withdrawals?status=pending');
+    const rows = (d.ok && d.withdrawals) ? d.withdrawals : [];
+    if (!rows.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No pending withdrawals.</div>'; return; }
+    el.innerHTML = rows.map(r => `<div style="padding:9px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="color:var(--text3);font-size:11px">${formatLedgerDate(r.date)}</div>
+          ${r.account_code || '—'} — ${r.bookie} <span style="color:var(--text3)">(${r.profile})</span>
+          <span style="font-weight:600;margin-left:6px">£${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="add-btn" onclick="dashboardConfirmWithdrawal(${r.id}, ${r.sheet_row||'null'})"><i class="ti ti-check"></i> Confirm</button>
+          <button class="add-btn" onclick="dashboardReverseWithdrawal(${r.id})"><i class="ti ti-arrow-back-up"></i> Reverse</button>
+          <button class="add-btn" onclick="dashboardConfiscateWithdrawal(${r.id})" style="color:var(--red);border-color:var(--red)"><i class="ti ti-ban"></i> Confiscated</button>
+        </div>
+      </div>
+    </div>`).join('');
+  } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load pending withdrawals.</div>'; }
+}
+
+async function dashboardConfirmWithdrawal(id, sheetRow) {
+  try {
+    const ld = await ledgerApi(`withdrawals/${id}/confirm`, { method:'PATCH' });
+    if (!ld.ok) { alert('Failed to confirm: ' + (ld.error||'unknown error')); return; }
+    if (sheetRow) {
+      const sd = await accountsSheetApi({ action:'confirm_withdrawal', row: sheetRow });
+      if (sd.ok && sd.processedRow) {
+        await ledgerApi(`withdrawals/${id}/processed-sheet-row`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ processed_sheet_row: sd.processedRow }) });
+      }
+      if (!sd.ok) alert('Confirmed in Ledger, but moving the sheet row failed (' + (sd.error||'unknown error') + ') — move it manually.');
+    }
+  } catch (e) { alert('Network error confirming withdrawal.'); return; }
+  loadDashboardPendingWithdrawals();
+}
+
+async function dashboardReverseWithdrawal(id) {
+  if (!confirm('Reverse this withdrawal? No money has moved yet, so this just removes the record.')) return;
+  try {
+    const d = await ledgerApi('withdrawals/'+id+'/reverse', { method:'POST' });
+    if (!d.ok) { alert('Failed to reverse: ' + (d.error||'unknown error')); return; }
+    if (!d.sheetOk) alert('Reversed in Ledger, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
+  } catch (e) { alert('Network error reversing withdrawal.'); return; }
+  loadDashboardPendingWithdrawals();
+}
+
+async function dashboardConfiscateWithdrawal(id) {
+  if (!confirm("Mark this withdrawal as confiscated? The bookie kept the money — it's deducted from the account and moves to Locked Funds for review.")) return;
+  try {
+    const d = await ledgerApi('withdrawals/'+id+'/confiscate', { method:'POST' });
+    if (!d.ok) { alert('Failed to confiscate: ' + (d.error||'unknown error')); return; }
+    if (!d.sheetOk) alert('Moved to Locked Funds, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
+  } catch (e) { alert('Network error.'); return; }
+  loadDashboardPendingWithdrawals();
+  loadDashboardLockedFunds();
+}
+
+async function loadDashboardLockedFunds() {
+  const el = document.getElementById('dashboard-locked-funds');
+  el.innerHTML = 'Loading…';
+  try {
+    const d = await ledgerApi('locked-funds');
+    const rows = (d.ok && d.locked) ? d.locked : [];
+    if (!rows.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No locked funds awaiting review.</div>'; return; }
+    el.innerHTML = rows.map(r => `<div style="padding:9px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="color:var(--text3);font-size:11px">${formatLedgerDate(r.date)} — ${escapeHtml(r.source==='confiscated_withdrawal'?'Confiscated withdrawal':'Manually locked')}</div>
+          ${r.account_code || '—'} — ${r.bookie || '—'} <span style="color:var(--text3)">(${r.bank || '—'})</span>
+          <span style="font-weight:600;margin-left:6px;color:var(--red)">£${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${r.source==='account_locked' && r.linked_account_id ? `<button class="add-btn" onclick="dashboardUnlockFunds(${r.id})"><i class="ti ti-lock-open"></i> Return to balance</button>` : ''}
+          ${r.source==='confiscated_withdrawal' && r.linked_account_id ? `<button class="add-btn" onclick="dashboardRecoverFunds(${r.id})"><i class="ti ti-rotate"></i> Move to withdrawal</button>` : ''}
+          <button class="add-btn" onclick="dashboardClearLockedFunds(${r.id})">Confirm locked</button>
+        </div>
+      </div>
+    </div>`).join('');
+  } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load locked funds.</div>'; }
+}
+
+async function dashboardUnlockFunds(id) {
+  if (!confirm("Return these funds to the original account's live balance?")) return;
+  try {
+    const d = await ledgerApi('locked-funds/'+id+'/unlock', { method:'POST' });
+    if (!d.ok) { alert('Failed to unlock: ' + (d.error||'unknown error')); return; }
+  } catch (e) { alert('Network error unlocking funds.'); return; }
+  loadDashboardLockedFunds();
+}
+
+async function dashboardRecoverFunds(id) {
+  if (!confirm('Move these funds to a pending withdrawal, ready to Confirm once it lands?')) return;
+  try {
+    const d = await ledgerApi('locked-funds/'+id+'/recover', { method:'POST' });
+    if (!d.ok) { alert('Failed to move: ' + (d.error||'unknown error')); return; }
+  } catch (e) { alert('Network error.'); return; }
+  loadDashboardLockedFunds();
+  loadDashboardPendingWithdrawals();
+}
+
+async function dashboardClearLockedFunds(id) {
+  if (!confirm('Confirm this stays locked? This just removes it from the review list — it does not affect any account balance.')) return;
+  try {
+    const d = await ledgerApi('locked-funds/'+id, { method:'DELETE' });
+    if (!d.ok) { alert('Failed to clear: ' + (d.error||'unknown error')); return; }
+  } catch (e) { alert('Network error clearing entry.'); return; }
+  loadDashboardLockedFunds();
 }
 
 // ================== LEDGER: RECENTLY ARCHIVED (7-day undo) ==================
