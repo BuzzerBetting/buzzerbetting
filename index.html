@@ -288,7 +288,7 @@ input::placeholder{color:var(--text3)}
     </div>
     <div class="cat" style="--accent:var(--blue)" onclick="showLedgerSec('account-summary')">
       <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-report-money"></i></div>
-      <div><div class="cat-title">Account Summary</div><div class="cat-desc">Per-bookie account counts, deposits, withdrawals and P/L</div></div>
+      <div><div class="cat-title">Account Stats</div><div class="cat-desc">Per-bookie account counts, deposits, withdrawals and P/L</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
     <div class="cat" style="--accent:var(--purple)" onclick="showLedgerSec('archived')">
@@ -592,32 +592,38 @@ input::placeholder{color:var(--text3)}
   <div id="accounts-summary-row" class="wide" style="display:grid;grid-template-columns:1fr 220px;gap:16px;margin-bottom:16px"></div>
 
   <div class="card card-pad wide" style="margin-bottom:14px">
-    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px">
-      <div>
-        <div class="lbl" style="margin-bottom:8px">Status</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-          <button class="add-btn" id="accfilter-status-all" onclick="setAccountsStatusFilter('all')">All</button>
-          <button class="add-btn" id="accfilter-status-live" onclick="setAccountsStatusFilter('live')">Live</button>
-          <button class="add-btn" id="accfilter-status-locked" onclick="setAccountsStatusFilter('locked')">Locked</button>
-          <button class="add-btn" id="accfilter-status-archived" onclick="setAccountsStatusFilter('archived')">Archived</button>
-          <button class="add-btn" id="accfilter-status-balance" onclick="setAccountsStatusFilter('balance')">Balance ></button>
-          <input type="number" id="accfilter-balance-amount" value="500" step="1" style="width:80px;padding:8px 10px;font-size:13px" onchange="if(accountsStatusFilter==='balance')renderAccountsGrid()">
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px;align-items:flex-start">
+      <div style="display:flex;gap:28px;flex-wrap:wrap">
+        <div>
+          <div class="lbl" style="margin-bottom:8px">Status</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <button class="add-btn" id="accfilter-status-all" onclick="setAccountsStatusFilter('all')">All</button>
+            <button class="add-btn" id="accfilter-status-live" onclick="setAccountsStatusFilter('live')">Live</button>
+            <button class="add-btn" id="accfilter-status-locked" onclick="setAccountsStatusFilter('locked')">Locked</button>
+            <button class="add-btn" id="accfilter-status-archived" onclick="setAccountsStatusFilter('archived')">Archived</button>
+            <button class="add-btn" id="accfilter-status-balance" onclick="setAccountsStatusFilter('balance')">Balance ></button>
+            <input type="number" id="accfilter-balance-amount" value="500" step="1" style="width:80px;padding:8px 10px;font-size:13px" onchange="if(accountsStatusFilter==='balance')renderAccountsGrid()">
+          </div>
+        </div>
+        <div>
+          <div class="lbl" style="margin-bottom:8px">ID type</div>
+          <div style="display:flex;gap:6px">
+            <button class="add-btn" id="accfilter-idtype-all" onclick="setAccountsIdTypeFilter('all')">All</button>
+            <button class="add-btn" id="accfilter-idtype-client" onclick="setAccountsIdTypeFilter('client')">Card (C)</button>
+            <button class="add-btn" id="accfilter-idtype-disposable" onclick="setAccountsIdTypeFilter('disposable')">Disposable (D)</button>
+          </div>
+        </div>
+        <div>
+          <div class="lbl" style="margin-bottom:8px">Group by</div>
+          <div style="display:flex;gap:6px">
+            <button class="add-btn" id="accfilter-group-bookie" onclick="setAccountsGroupBy('bookie')">Bookie</button>
+            <button class="add-btn" id="accfilter-group-card" onclick="setAccountsGroupBy('card')">Card</button>
+          </div>
         </div>
       </div>
       <div>
-        <div class="lbl" style="margin-bottom:8px">ID type</div>
-        <div style="display:flex;gap:6px">
-          <button class="add-btn" id="accfilter-idtype-all" onclick="setAccountsIdTypeFilter('all')">All</button>
-          <button class="add-btn" id="accfilter-idtype-client" onclick="setAccountsIdTypeFilter('client')">Client (C)</button>
-          <button class="add-btn" id="accfilter-idtype-disposable" onclick="setAccountsIdTypeFilter('disposable')">Disposable (D)</button>
-        </div>
-      </div>
-      <div>
-        <div class="lbl" style="margin-bottom:8px">Group by</div>
-        <div style="display:flex;gap:6px">
-          <button class="add-btn" id="accfilter-group-bookie" onclick="setAccountsGroupBy('bookie')">Bookie</button>
-          <button class="add-btn" id="accfilter-group-card" onclick="setAccountsGroupBy('card')">Card</button>
-        </div>
+        <div class="lbl" style="margin-bottom:8px">&nbsp;</div>
+        <button class="add-btn" onclick="showLedgerSec('account-summary')"><i class="ti ti-chart-bar"></i> Account Stats</button>
       </div>
     </div>
   </div>
@@ -851,7 +857,7 @@ input::placeholder{color:var(--text3)}
       <div id="account-balance-override-box" style="display:none;margin:-10px 0 18px;padding:12px 14px;background:var(--surface2);border-radius:var(--radius)">
         <label class="lbl">Set live balance to £</label>
         <div style="display:flex;gap:8px">
-          <input type="number" id="account-balance-override-amount" step="0.01">
+          <input type="number" id="account-balance-override-amount" step="0.01" min="0">
           <button onclick="submitBalanceOverride()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:0 16px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Save</button>
         </div>
       </div>
@@ -943,8 +949,8 @@ input::placeholder{color:var(--text3)}
 
 <!-- LEDGER: ACCOUNT SUMMARY -->
 <div id="view-ledger-account-summary" class="sec">
-  <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
-  <div class="sec-title">Account Summary</div>
+  <button class="back" onclick="showLedgerSec('accounts')"><i class="ti ti-arrow-left"></i> Accounts</button>
+  <div class="sec-title">Account Stats</div>
   <div class="card card-pad" style="margin-bottom:16px">
     <label class="lbl">Filter by bookmaker</label>
     <select id="summary-bookie-filter" onchange="loadAccountSummary()"><option value="">All bookies</option></select>
