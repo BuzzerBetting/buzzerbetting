@@ -579,7 +579,7 @@ input::placeholder{color:var(--text3)}
       <input type="checkbox" id="toggle-show-lockedfunds" checked onchange="renderAccountsSummaryRow()"> Show locked funds
     </label>
     <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);cursor:pointer">
-      <input type="checkbox" id="toggle-show-accountstotals" onchange="renderAccountsSummaryRow()"> Show total accounts balance
+      <input type="checkbox" id="toggle-show-accountstotals" onchange="renderBankBalancesBox()"> Show total accounts balance
     </label>
   </div>
   <div id="accounts-summary-row" class="wide" style="display:grid;grid-template-columns:1fr 220px;gap:16px;margin-bottom:16px"></div>
@@ -830,7 +830,10 @@ input::placeholder{color:var(--text3)}
 <div id="bank-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;padding:16px">
   <div class="card card-pad" style="max-width:380px;width:100%">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-      <div class="sec-title" style="margin:0;font-size:16px" id="bank-modal-title"></div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <div class="sec-title" style="margin:0;font-size:16px" id="bank-modal-title"></div>
+        <button class="rm-btn" onclick="renameBank()" title="Rename bank" style="font-size:14px"><i class="ti ti-pencil"></i></button>
+      </div>
       <button class="add-btn" onclick="closeBankModal()"><i class="ti ti-x"></i></button>
     </div>
     <div style="font-size:12.5px;color:var(--text2);margin-bottom:16px">Remaining balance: <span id="bank-modal-remaining" style="font-weight:600"></span></div>
@@ -3089,39 +3092,29 @@ function toggleAccountsAddForm() {
 async function renderAccountsSummaryRow() {
   const showBanks = document.getElementById('toggle-show-bankbalances').checked;
   const showLocked = document.getElementById('toggle-show-lockedfunds').checked;
-  const showAccountsTotals = document.getElementById('toggle-show-accountstotals').checked;
   const el = document.getElementById('accounts-summary-row');
   const cols = [];
   let html = '';
   if (showBanks) { cols.push('1fr'); html += `<div class="card card-pad"><div class="lbl" style="margin-bottom:10px">Live bank balances</div><div id="bank-balances-box" style="display:flex;flex-wrap:wrap;gap:10px">Loading…</div></div>`; }
-  if (showAccountsTotals) { cols.push('1fr'); html += `<div class="card card-pad"><div class="lbl" style="margin-bottom:10px">Total accounts balance (per bank)</div><div id="accounts-totals-box" style="display:flex;flex-wrap:wrap;gap:10px">Loading…</div></div>`; }
   if (showLocked) { cols.push('220px'); html += `<div class="card card-pad" style="cursor:pointer" onclick="showLedgerSec('locked-funds')"><div class="lbl" style="margin-bottom:10px">Locked Funds</div><div style="font-size:22px;font-weight:600;color:var(--red)" id="live-accounts-locked-total">£0.00</div></div>`; }
   el.style.gridTemplateColumns = cols.length ? cols.join(' ') : '1fr';
   el.innerHTML = html || '';
   if (showBanks) renderBankBalancesBox();
-  if (showAccountsTotals) renderAccountsTotalsBox();
   if (showLocked) renderLiveAccountsLockedTotal();
 }
 
 // Sums each live account's balance grouped by its linked bank — distinct from the bank's
 // own "remaining" figure (that's the uncommitted pool, this is what's actually sitting live
-// across every account funded from it).
-function renderAccountsTotalsBox() {
-  const el = document.getElementById('accounts-totals-box');
-  if (!el) return;
+// across every account funded from it). Used as an extra line under each bank cell when the
+// "Show total accounts balance" toggle is on, not a separate box.
+function accountsBalanceTotalsByBank() {
   const byBank = {};
   ALL_ACCOUNTS.forEach(a => {
     if (a.status === 'closed') return; // archived accounts don't count toward a live total
     const key = a.profile || 'Unknown';
     byBank[key] = (byBank[key] || 0) + (a.balance || 0);
   });
-  const banks = Object.keys(byBank).sort((a, b) => byBank[b] - byBank[a]);
-  if (!banks.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No live accounts yet.</div>'; return; }
-  el.innerHTML = banks.map(b => `
-    <div style="padding:8px 14px;background:var(--surface2);border-radius:var(--radius);font-size:13px">
-      <div style="font-weight:600">${escapeHtml(b)}</div>
-      <div style="color:${balanceColor(byBank[b])}">£${byBank[b].toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
-    </div>`).join('');
+  return byBank;
 }
 
 // ---- ACCOUNTS FILTERS ----
@@ -3229,10 +3222,13 @@ async function renderBankBalancesBox() {
     const d = await ledgerApi('banks');
     const banks = (d.ok && d.banks) ? [...d.banks].sort((a, b) => b.remaining - a.remaining) : [];
     if (!banks.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No banks set up yet — add one above.</div>'; return; }
+    const showAccountsTotals = document.getElementById('toggle-show-accountstotals')?.checked;
+    const accountsTotals = showAccountsTotals ? accountsBalanceTotalsByBank() : {};
     el.innerHTML = banks.map(b => `
       <div style="padding:8px 14px;background:var(--surface2);border-radius:var(--radius);font-size:13px;cursor:pointer" onclick="openBankModal('${b.name.replace(/'/g,"\\'")}', ${b.remaining}, ${b.starting_balance})">
         <div style="font-weight:600">${escapeHtml(b.name)}</div>
         <div style="color:${balanceColor(b.remaining)}">£${b.remaining.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+        ${showAccountsTotals ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">Accounts: £${(accountsTotals[b.name]||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>` : ''}
       </div>`).join('');
   } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load bank balances.</div>'; }
 }
@@ -3276,6 +3272,26 @@ async function deleteBank() {
     const d = await ledgerApi('banks/'+encodeURIComponent(ACTIVE_BANK), { method:'DELETE' });
     if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to delete'}</span>`; return; }
     closeBankModal();
+    renderBankBalancesBox();
+  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error</span>'; }
+}
+
+async function renameBank() {
+  if (!ACTIVE_BANK) return;
+  const newName = prompt('Rename this bank — this also updates every account, transaction, transfer and locked funds entry linked to it:', ACTIVE_BANK);
+  if (newName === null || !newName.trim() || newName.trim() === ACTIVE_BANK) return;
+  const msgEl = document.getElementById('bank-modal-msg');
+  msgEl.innerHTML = '<span style="color:var(--text2)">Renaming…</span>';
+  try {
+    const d = await ledgerApi('banks/'+encodeURIComponent(ACTIVE_BANK)+'/rename', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ newName: newName.trim() }) });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to rename'}</span>`; return; }
+    ACTIVE_BANK = newName.trim();
+    document.getElementById('bank-modal-title').textContent = ACTIVE_BANK;
+    msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Renamed.</span>';
+    if (document.getElementById('view-ledger-accounts').style.display !== 'none') {
+      await loadAllAccounts(false); // cached account.profile values are now stale everywhere
+      renderAccountsGrid();
+    }
     renderBankBalancesBox();
   } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error</span>'; }
 }
