@@ -2436,7 +2436,7 @@ function selectBetType(type, label) {
   let html = '';
 
   if (cfg.event) html += `<div><label class="lbl">Event</label><input type="text" id="bef-Event"></div>`;
-  if (cfg.bookie) html += `<div><label class="lbl">Bookie</label><input type="text" id="bef-Book" value="${cfg.bookieDefault||''}" oninput="refreshLegAccountDropdowns()"></div>`;
+  if (cfg.bookie) html += `<div><label class="lbl">Bookie</label><input type="text" id="bef-Book" value="${cfg.bookieDefault||''}" oninput="refreshLegAccountDropdowns();refreshCasinoAccountDropdowns()"></div>`;
 
   if (cfg.layout === 'paste') {
     PASTE_SPECS[cfg.pasteSpec].columns.forEach(c => {
@@ -2489,7 +2489,7 @@ function selectBetType(type, label) {
 
   // ---- Balance layout: account dropdown, stake, wagering/bonus boxes ----
   if (cfg.layout === 'balance') {
-    document.getElementById('bef-single-account').innerHTML = accountOptionsHtml();
+    document.getElementById('bef-single-account').innerHTML = accountOptionsHtml(null, document.getElementById('bef-Book')?.value);
     document.getElementById('bef-single-stake-wrap').style.display = cfg.hasStake ? 'block' : 'none';
     document.getElementById('bef-single-stake').value = '';
     const boxesEl = document.getElementById('bet-entry-balance-boxes');
