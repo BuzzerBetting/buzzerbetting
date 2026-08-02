@@ -385,6 +385,7 @@ input::placeholder{color:var(--text3)}
       <button class="add-btn" id="bt-settle-placed" onclick="setBtSettleResult('placed')" style="flex:1;display:none">Placed</button>
       <button class="add-btn" id="bt-settle-lost" onclick="setBtSettleResult('lost')" style="flex:1">Loss</button>
       <button class="add-btn" id="bt-settle-void" onclick="setBtSettleResult('void')" style="flex:1">Void</button>
+      <button class="add-btn" id="bt-settle-reopen" onclick="setBtSettleResult('open')" style="flex:1;display:none">Open</button>
     </div>
     <div id="bt-settle-bfex-wrap" style="display:none;margin-bottom:16px">
       <label class="lbl">BFEX SP</label>
@@ -3802,23 +3803,55 @@ async function initDashboard() {
   loadDashboardLockedFunds();
 }
 
+// Looks up which group (Buzzer/Assistant) and display label a bet_type belongs to, from
+// the same BET_TYPE_GROUPS used to build the Bets page's dropdowns.
+function betTypeMeta(betType) {
+  for (const [group, list] of Object.entries(BET_TYPE_GROUPS)) {
+    const item = list.find(t => t.key === betType);
+    if (item) return { source: group === 'buzzer' ? 'Buzzer' : 'Assistant', label: item.label };
+  }
+  return { source: '—', label: betType };
+}
+
+// "C001" for a single-account bet, "C001 + 2" when extra accounts were added via Bet Entry's
+// additional-accounts option (leg_count includes the primary, so it's leg_count - 1 extra).
+function formatAccountCode(b) {
+  if (!b.account_code) return '—';
+  const extra = (b.leg_count || 1) - 1;
+  return extra > 0 ? `${escapeHtml(b.account_code)} + ${extra}` : escapeHtml(b.account_code);
+}
+
+const DASHBOARD_EXCLUDED_BET_TYPES = ['Casino', 'Casino (Personal)'];
+
 async function loadDashboardOpenBets() {
   const el = document.getElementById('dashboard-open-bets');
   el.innerHTML = 'Loading…';
   try {
     const d = await ledgerApi('bets?status=open&limit=1000');
-    const bets = (d.ok && d.bets) ? d.bets : [];
+    const bets = ((d.ok && d.bets) ? d.bets : []).filter(b => !DASHBOARD_EXCLUDED_BET_TYPES.includes(b.bet_type));
     if (!bets.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No open bets.</div>'; return; }
-    el.innerHTML = bets.map(b => `<div style="padding:9px 0;border-bottom:0.5px solid var(--border);font-size:13px">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-        <div>
-          <div style="color:var(--text3);font-size:11px">${formatLedgerDate(b.date)} <span style="color:var(--blue);font-weight:600;margin-left:4px">${escapeHtml(b.bet_type)}</span></div>
-          ${b.account_code ? escapeHtml(b.account_code)+' — ' : ''}${escapeHtml(b.fields.Bet || b.fields['Bet Description'] || b.fields.Horse || b.fields.Player || b.fields.Offer || '')}
-          <span style="font-weight:600;margin-left:6px">£${(b.total_stake||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
-        </div>
-        <button class="add-btn" onclick="openBtSettleModal(${b.id}, 'open', null, loadDashboardOpenBets, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${b.bet_type.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">Settle</button>
-      </div>
-    </div>`).join('');
+    el.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">
+      <thead><tr style="text-align:left;color:var(--text3);font-size:11px;text-transform:uppercase">
+        <th style="padding:6px 8px">Source</th><th style="padding:6px 8px">Bet Sheet</th><th style="padding:6px 8px">Account ID</th>
+        <th style="padding:6px 8px">Bookie</th><th style="padding:6px 8px">Bet</th><th style="padding:6px 8px" class="r">Odds</th>
+        <th style="padding:6px 8px" class="r">Stake</th><th style="padding:6px 8px"></th>
+      </tr></thead><tbody>
+      ${bets.map(b => {
+        const meta = betTypeMeta(b.bet_type);
+        const bookie = b.fields.Bookie || b.fields.Book || b.fields.Bookmaker || '—';
+        const betDesc = b.fields.Bet || b.fields['Bet Description'] || b.fields.Horse || b.fields.Player || b.fields.Offer || '';
+        return `<tr style="border-bottom:0.5px solid var(--border)">
+          <td style="padding:7px 8px">${meta.source}</td>
+          <td style="padding:7px 8px">${escapeHtml(meta.label)}</td>
+          <td style="padding:7px 8px">${formatAccountCode(b)}</td>
+          <td style="padding:7px 8px">${escapeHtml(bookie)}</td>
+          <td style="padding:7px 8px">${escapeHtml(betDesc)}</td>
+          <td style="padding:7px 8px" class="r">${typeof b.fields.Odds==='number'?b.fields.Odds:'—'}</td>
+          <td style="padding:7px 8px" class="r">£${(b.total_stake||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+          <td style="padding:7px 8px"><button class="add-btn" onclick="openBtSettleModal(${b.id}, 'open', null, loadDashboardOpenBets, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${b.bet_type.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">Settle</button></td>
+        </tr>`;
+      }).join('')}
+      </tbody></table></div>`;
   } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load open bets.</div>'; }
 }
 
@@ -4556,8 +4589,9 @@ function renderBtDetailTable(bets) {
   });
   const colClass = k => colIsNumeric[k] ? ' class="r"' : '';
 
+  const showNotesCol = btDetailType === 'Casino';
   let html = `<table class="dt" style="min-width:720px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr>
-    <th>Date</th><th>Result</th><th>Account ID</th>${fieldKeys.map(k=>`<th${colClass(k)}>${escapeHtml(k)}</th>`).join('')}<th class="r">P/L</th><th></th>
+    <th>Date</th>${showNotesCol?'<th>Notes</th>':''}<th>Result</th><th>Account ID</th>${fieldKeys.map(k=>`<th${colClass(k)}>${escapeHtml(k)}</th>`).join('')}<th class="r">P/L</th><th></th>
   </tr></thead><tbody>`;
   bets.forEach(b => {
     const resColor = b.result==='won'?'var(--green)':b.result==='lost'?'var(--red)':b.result==='placed'?'var(--blue)':b.result==='void'?'var(--text3)':'var(--amber)';
@@ -4567,8 +4601,12 @@ function renderBtDetailTable(bets) {
     );
     html += `<tr${isCasinoInProgress ? ' style="background:var(--amber-bg)"' : ''}>
       <td>${formatLedgerDate(b.date)}</td>
+      ${showNotesCol ? `<td>${b.has_note
+        ? `<span style="cursor:pointer;color:var(--brand);text-decoration:underline dotted;text-underline-offset:3px;font-size:12px" onclick="displayBetNote(${b.id})">Display note</span>`
+        : `<span style="cursor:pointer;color:var(--text3)" onclick="addBetNotePrompt(${b.id})" title="Add note"><i class="ti ti-plus"></i></span>`
+      }</td>` : ''}
       <td style="color:${resColor};font-weight:600;text-transform:capitalize">${b.result}</td>
-      <td>${b.account_code ? escapeHtml(b.account_code) : '<span style="color:var(--text3)">—</span>'}</td>
+      <td>${formatAccountCode(b)}</td>
       ${fieldKeys.map(k=>{
         const cellContent = formatBetField(k, b.fields[k]);
         if (b.bet_type === 'Ninja Golf BFEX' && k === 'Total Stake') {
@@ -4579,7 +4617,12 @@ function renderBtDetailTable(bets) {
           const display = isBlank ? '<i class="ti ti-plus" style="color:var(--text3)"></i>' : cellContent;
           return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editCasinoBalanceField(${b.id}, '${k}', ${b.fields[k]||0}, fetchBtDetailPage)" title="${isBlank?'Click to add a value':'Click to amend'}">${display}</span></td>`;
         }
-        return `<td${colClass(k)}>${cellContent}</td>`;
+        if (k === 'Stake' || k === 'Total Stake') {
+          return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetStake(${b.id}, ${b.fields[k]||0}, fetchBtDetailPage)" title="Click to correct the stake">${cellContent}</span></td>`;
+        }
+        const rawVal = b.fields[k];
+        const promptVal = (rawVal === undefined || rawVal === null) ? '' : rawVal;
+        return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetFieldGeneric(${b.id}, '${k.replace(/'/g,"\\'")}', ${JSON.stringify(String(promptVal))}, fetchBtDetailPage)" title="Click to amend">${cellContent || '<i class="ti ti-plus" style="color:var(--text3)"></i>'}</span></td>`;
       }).join('')}
       <td class="r" style="color:${(b.pl||0)>=0?'var(--green)':'var(--red)'}">${(b.pl||0)>=0?'+':'-'}£${Math.abs(b.pl||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td style="white-space:nowrap;display:flex;gap:6px">
@@ -4672,6 +4715,7 @@ function openBtSettleModal(betId, currentResult, currentPl, refreshFn, stake, od
   betTypeWrap.style.display = showsBetType ? 'block' : 'none';
   if (showsBetType) document.getElementById('bt-settle-bettype').value = currentBetKind === 'Free Bet' ? 'Free Bet' : 'Normal';
   document.getElementById('bt-settle-placed').style.display = EACH_WAY_BET_TYPES.includes(betType) ? 'block' : 'none';
+  document.getElementById('bt-settle-reopen').style.display = (currentResult && currentResult !== 'open') ? 'block' : 'none';
   setBtSettleResult(currentResult && currentResult !== 'open' ? currentResult : null, true);
   document.getElementById('bt-settle-modal-overlay').style.display = 'flex';
 }
@@ -4711,8 +4755,8 @@ function parseTermsDenom(termsStr) {
 // normal editable box afterward — this is a suggested starting point, not locked in.
 function setBtSettleResult(result, skipCalc) {
   btSettleResult = result;
-  ['won','placed','lost','void'].forEach(r => {
-    const btn = document.getElementById('bt-settle-'+r);
+  ['won','placed','lost','void','open'].forEach(r => {
+    const btn = document.getElementById('bt-settle-'+(r==='open'?'reopen':r));
     if (r === result) { btn.style.background = 'var(--brand)'; btn.style.color = '#fff'; btn.style.borderColor='var(--brand)'; }
     else { btn.style.background = ''; btn.style.color = ''; btn.style.borderColor=''; }
   });
@@ -4721,6 +4765,7 @@ function setBtSettleResult(result, skipCalc) {
   const plEl = document.getElementById('bt-settle-pl');
   const betTypeWrap = document.getElementById('bt-settle-bettype-wrap');
   const isFreeBet = betTypeWrap.style.display !== 'none' && document.getElementById('bt-settle-bettype').value === 'Free Bet';
+  if (result === 'open') { plEl.value = '0'; return; }
   if (result === 'won' && stake && odds) {
     if (EACH_WAY_BET_TYPES.includes(btSettleContext.betType)) {
       // Each-way win: half the stake wins at full odds, and the other half ALSO wins (an
@@ -4800,6 +4845,53 @@ async function editBetStake(betId, currentStake, refreshFn) {
     if (!d.ok) { alert(d.error || 'Failed to update stake'); return; }
     if (refreshFn) refreshFn();
   } catch (e) { alert('Network error — please try again.'); }
+}
+
+// Generic click-to-edit for any bet field not covered by a dedicated endpoint. Updates the
+// stored value directly, and — if this is Odds, Fair Odds/Fairs, or Bet Type — recalculates
+// EV automatically server-side. Deliberately never touches P/L or account balance; those
+// stay behind the Settle/Override modal where the right formula for this bet type applies.
+async function editBetFieldGeneric(betId, key, currentValue, refreshFn) {
+  const input = prompt(`Correct "${key}":`, currentValue);
+  if (input === null || input === currentValue) return;
+  try {
+    const d = await ledgerApi('bets/'+betId+'/field', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ key, value: input }) });
+    if (!d.ok) { alert(d.error || 'Failed to update'); return; }
+    if (refreshFn) refreshFn();
+  } catch (e) { alert('Network error — please try again.'); }
+}
+
+async function addBetNotePrompt(betId) {
+  const text = prompt('Add a note for this bet:');
+  if (text === null || !text.trim()) return;
+  try {
+    const d = await ledgerApi('bets/'+betId+'/note', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ text: text.trim() }) });
+    if (!d.ok) { alert(d.error || 'Failed to add note'); return; }
+    fetchBtDetailPage();
+  } catch (e) { alert('Network error adding note.'); }
+}
+
+// Shows the current note, pre-filled and editable — save a changed value to update it,
+// clear it and confirm to delete, or cancel to leave it untouched.
+async function displayBetNote(betId) {
+  try {
+    const d = await ledgerApi('bets/'+betId+'/note');
+    if (!d.ok || !d.note) { alert('Could not load note.'); return; }
+    const newText = prompt('Note (edit and save, or clear the box and save to delete):', d.note.text);
+    if (newText === null) return;
+    if (!newText.trim()) {
+      if (!confirm('Delete this note?')) return;
+      const dd = await ledgerApi('bets/'+betId+'/note', { method:'DELETE' });
+      if (!dd.ok) { alert(dd.error || 'Failed to delete note'); return; }
+      fetchBtDetailPage();
+      return;
+    }
+    if (newText.trim() !== d.note.text) {
+      const dd = await ledgerApi('bets/'+betId+'/note', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ text: newText.trim() }) });
+      if (!dd.ok) { alert(dd.error || 'Failed to update note'); return; }
+      fetchBtDetailPage();
+    }
+  } catch (e) { alert('Network error loading note.'); }
 }
 
 const CASINO_BALANCE_KEYS = ['Wager Starting Balance', 'Wager Finish Balance', 'Bonus Starting Balance', 'Bonus Finish Balance'];
@@ -4917,13 +5009,23 @@ async function loadBtOpenTable() {
     bets.forEach(b => {
       html += `<tr>
         <td>${formatLedgerDate(b.date)}</td>
-        <td>${b.account_code ? escapeHtml(b.account_code) : '<span style="color:var(--text3)">—</span>'}</td>
+        <td>${formatAccountCode(b)}</td>
         ${fieldKeys.map(k=>{
           const cellContent = formatBetField(k, b.fields[k]);
           if (btOpenState.betType === 'Ninja Golf BFEX' && k === 'Total Stake') {
             return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetStake(${b.id}, ${b.fields[k]||0}, loadBtOpenTabs)" title="Click to correct the stake">${cellContent}</span></td>`;
           }
-          return `<td${colClass(k)}>${cellContent}</td>`;
+          if (btOpenState.betType === 'Casino' && CASINO_BALANCE_KEYS.includes(k)) {
+            const isBlank = b.fields[k] === undefined || b.fields[k] === null;
+            const display = isBlank ? '<i class="ti ti-plus" style="color:var(--text3)"></i>' : cellContent;
+            return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editCasinoBalanceField(${b.id}, '${k}', ${b.fields[k]||0}, loadBtOpenTabs)" title="${isBlank?'Click to add a value':'Click to amend'}">${display}</span></td>`;
+          }
+          if (k === 'Stake' || k === 'Total Stake') {
+            return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetStake(${b.id}, ${b.fields[k]||0}, loadBtOpenTabs)" title="Click to correct the stake">${cellContent}</span></td>`;
+          }
+          const rawVal = b.fields[k];
+          const promptVal = (rawVal === undefined || rawVal === null) ? '' : rawVal;
+          return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetFieldGeneric(${b.id}, '${k.replace(/'/g,"\\'")}', ${JSON.stringify(String(promptVal))}, loadBtOpenTabs)" title="Click to amend">${cellContent || '<i class="ti ti-plus" style="color:var(--text3)"></i>'}</span></td>`;
         }).join('')}
         <td><button class="add-btn" onclick="openBtSettleModal(${b.id}, 'open', null, loadBtOpenTabs, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${btOpenState.betType.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">Settle</button></td>
       </tr>`;
