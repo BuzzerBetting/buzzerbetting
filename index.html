@@ -2429,6 +2429,10 @@ function fieldInputHtml(f) {
     return `<div><label class="lbl" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="bef-${f.key.replace(/[^a-zA-Z0-9]/g,'_')}" ${f.revealsField?`onchange="toggleRevealedField('${f.key}','${f.revealsField}')"`:''} style="width:16px;height:16px;margin:0"> ${f.label}</label></div>`;
   }
   const hideStyle = f.hiddenUnless ? 'style="display:none"' : '';
+  if (f.type === 'select') {
+    const opts = (f.options||[]).map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('');
+    return `<div id="bef-wrap-${f.key.replace(/[^a-zA-Z0-9]/g,'_')}" ${hideStyle}><label class="lbl">${f.label}</label><select id="bef-${f.key.replace(/[^a-zA-Z0-9]/g,'_')}"><option value="">Select…</option>${opts}</select></div>`;
+  }
   return `<div id="bef-wrap-${f.key.replace(/[^a-zA-Z0-9]/g,'_')}" ${hideStyle}><label class="lbl">${f.label}</label><input type="${f.type}" id="bef-${f.key.replace(/[^a-zA-Z0-9]/g,'_')}" ${f.type==='number'?'step="0.01"':''}></div>`;
 }
 
@@ -2665,14 +2669,15 @@ function addBetLegRow() {
   const wrap = document.getElementById('bet-entry-legs');
   const cfg = BET_TYPE_CONFIG[betEntryType];
   const showRemove = !(cfg && cfg.singleLegOnly);
+  const hideOdds = !!(cfg && cfg.legsHideOdds);
   const row = document.createElement('div');
   row.className = 'leg-row';
   row.dataset.leg = id;
-  row.style.cssText = 'display:grid;grid-template-columns:1fr 110px 100px 32px;gap:10px;margin-bottom:8px;align-items:center';
+  row.style.cssText = `display:grid;grid-template-columns:1fr 110px ${hideOdds?'':'100px '}32px;gap:10px;margin-bottom:8px;align-items:center`;
   row.innerHTML = `
     <select class="leg-account" onchange="updateBetEntryTotal()">${accountOptionsHtml(null, document.getElementById('bef-Book')?.value)}</select>
     <input type="number" class="leg-stake" placeholder="Stake £" step="0.01" min="0" oninput="updateBetEntryTotal()">
-    <input type="number" class="leg-odds" placeholder="Odds" step="0.01" min="1.01" oninput="updateBetEntryTotal()">
+    ${hideOdds ? '' : '<input type="number" class="leg-odds" placeholder="Odds" step="0.01" min="1.01" oninput="updateBetEntryTotal()">'}
     ${showRemove ? `<button class="rm-btn" onclick="removeBetLegRow(${id})" title="Remove">×</button>` : `<span></span>`}`;
   wrap.appendChild(row);
   updateBetEntryTotal();
@@ -3880,7 +3885,9 @@ async function loadDashboardOpenBets() {
           <td style="padding:7px 8px">${escapeHtml(betDesc)}</td>
           <td style="padding:7px 8px" class="r">${typeof b.fields.Odds==='number'?b.fields.Odds:'—'}</td>
           <td style="padding:7px 8px" class="r">£${(b.total_stake||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-          <td style="padding:7px 8px"><button class="add-btn" onclick="openBtSettleModal(${b.id}, 'open', null, loadDashboardOpenBets, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${b.bet_type.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">Settle</button></td>
+          <td style="padding:7px 8px">${BET_TYPE_CONFIG[b.bet_type]?.winningsBasedPL
+            ? `<button class="add-btn" onclick="editBetWinnings(${b.id}, ${b.fields.Winnings||0}, loadDashboardOpenBets)">Enter Winnings</button>`
+            : `<button class="add-btn" onclick="openBtSettleModal(${b.id}, 'open', null, loadDashboardOpenBets, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${b.bet_type.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">Settle</button>`}</td>
         </tr>`;
       }).join('')}
       </tbody></table></div>`;
@@ -4502,7 +4509,7 @@ function initBetsPage() {
 const NEW_SHEET_COLUMN_TYPES = [
   'Date', 'Result', 'Account ID', 'Bookie', 'Bet Type', 'Bet Description',
   'Bet 1', 'Bet 2', 'Bet 3', 'Bet 4', 'Bet 5', 'Bet 6',
-  'Back Odds', 'Fair Odds', 'Stake', 'EV', 'P/L', 'Custom'
+  'Back Odds', 'Fair Odds', 'Stake', 'Winnings', 'EV', 'P/L', 'Custom'
 ];
 let CUSTOM_SHEETS_LOADED = false;
 let newSheetColumnRowId = 0;
@@ -4517,17 +4524,21 @@ function buildConfigFromColumns(columns) {
   const cfg = { layout: 'standard', fields: [] };
   const hasBack = columns.some(c => c.type === 'Back Odds');
   const hasFair = columns.some(c => c.type === 'Fair Odds');
+  const hasWinnings = columns.some(c => c.type === 'Winnings');
   columns.forEach(c => {
     if (c.type === 'Bookie') { cfg.bookie = true; cfg.bookieFieldKey = 'Bookie'; }
     else if (c.type === 'Bet Type') { cfg.hasBetKind = true; }
     else if (c.type === 'Bet Description') { cfg.fields.push({ key: 'Bet Description', label: 'Bet description', type: 'text' }); }
     else if (/^Bet [1-6]$/.test(c.type)) { cfg.fields.push({ key: c.type, label: c.type, type: 'text' }); }
+    else if (c.type === 'Custom' && c.isDropdown) { cfg.fields.push({ key: c.label, label: c.label, type: 'select', options: c.options||[] }); }
     else if (c.type === 'Custom') { cfg.fields.push({ key: c.label, label: c.label, type: 'text' }); }
     else if (c.type === 'Back Odds' && !hasFair) { cfg.fields.push({ key: 'Odds', label: 'Odds', type: 'number' }); }
     else if (c.type === 'Fair Odds' && !hasBack) { cfg.fields.push({ key: 'Fairs', label: 'Fairs', type: 'number' }); }
     // Date/Result/Account ID/Stake/EV/P/L: no field needed, already always shown.
+    // Winnings: never a Bet Entry field — entered later directly on the tracker row.
   });
   if (hasBack && hasFair) cfg.oddsMode = 'pairedSingle';
+  if (hasWinnings) { cfg.winningsBasedPL = true; cfg.legsHideOdds = true; }
   return cfg;
 }
 
@@ -4569,11 +4580,17 @@ function addNewSheetColumnRow() {
   const row = document.createElement('div');
   row.className = 'new-sheet-col-row';
   row.dataset.row = id;
-  row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 32px;gap:8px;margin-bottom:8px;align-items:center';
+  row.style.cssText = 'border:0.5px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:8px';
   row.innerHTML = `
-    <select class="new-sheet-col-type" onchange="onNewSheetColTypeChange(${id})">${newSheetColumnOptionsHtml()}</select>
-    <input type="text" class="new-sheet-col-custom" placeholder="Custom column name" style="display:none">
-    <button class="rm-btn" onclick="removeNewSheetColumnRow(${id})" title="Remove">×</button>`;
+    <div style="display:grid;grid-template-columns:1fr 32px;gap:8px;align-items:center">
+      <select class="new-sheet-col-type" onchange="onNewSheetColTypeChange(${id})">${newSheetColumnOptionsHtml()}</select>
+      <button class="rm-btn" onclick="removeNewSheetColumnRow(${id})" title="Remove">×</button>
+    </div>
+    <input type="text" class="new-sheet-col-custom" placeholder="Custom column name" style="display:none;margin-top:8px">
+    <label class="new-sheet-col-dropdown-toggle" style="display:none;align-items:center;gap:6px;margin-top:8px;font-size:12.5px;color:var(--text2);cursor:pointer">
+      <input type="checkbox" class="new-sheet-col-isdropdown" onchange="onNewSheetDropdownToggle(${id})"> Make this a dropdown
+    </label>
+    <input type="text" class="new-sheet-col-options" placeholder="Options, comma separated e.g. Trixie, Treble, Yankee" style="display:none;margin-top:8px">`;
   wrap.appendChild(row);
 }
 
@@ -4586,7 +4603,19 @@ function onNewSheetColTypeChange(id) {
   const row = document.querySelector(`.new-sheet-col-row[data-row="${id}"]`);
   if (!row) return;
   const type = row.querySelector('.new-sheet-col-type').value;
-  row.querySelector('.new-sheet-col-custom').style.display = type === 'Custom' ? 'block' : 'none';
+  const isCustom = type === 'Custom';
+  row.querySelector('.new-sheet-col-custom').style.display = isCustom ? 'block' : 'none';
+  row.querySelector('.new-sheet-col-dropdown-toggle').style.display = isCustom ? 'flex' : 'none';
+  if (!isCustom) {
+    row.querySelector('.new-sheet-col-isdropdown').checked = false;
+    row.querySelector('.new-sheet-col-options').style.display = 'none';
+  }
+}
+
+function onNewSheetDropdownToggle(id) {
+  const row = document.querySelector(`.new-sheet-col-row[data-row="${id}"]`);
+  if (!row) return;
+  row.querySelector('.new-sheet-col-options').style.display = row.querySelector('.new-sheet-col-isdropdown').checked ? 'block' : 'none';
 }
 
 async function submitNewSheet() {
@@ -4602,7 +4631,14 @@ async function submitNewSheet() {
     if (type === 'Custom') {
       const label = row.querySelector('.new-sheet-col-custom').value.trim();
       if (!label) { msgEl.innerHTML = '<span style="color:var(--red)">Every Custom column needs a name.</span>'; return; }
-      columns.push({ type: 'Custom', label });
+      const isDropdown = row.querySelector('.new-sheet-col-isdropdown').checked;
+      if (isDropdown) {
+        const options = row.querySelector('.new-sheet-col-options').value.split(',').map(s => s.trim()).filter(Boolean);
+        if (!options.length) { msgEl.innerHTML = `<span style="color:var(--red)">"${label}" is set as a dropdown but has no options.</span>`; return; }
+        columns.push({ type: 'Custom', label, isDropdown: true, options });
+      } else {
+        columns.push({ type: 'Custom', label });
+      }
     } else {
       columns.push({ type });
     }
@@ -4782,13 +4818,20 @@ function renderBtDetailTable(bets) {
         if (k === 'Stake' || k === 'Total Stake') {
           return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetStake(${b.id}, ${b.fields[k]||0}, fetchBtDetailPage)" title="Click to correct the stake">${cellContent}</span></td>`;
         }
+        if (k === 'Winnings') {
+          const isBlank = b.fields[k] === undefined || b.fields[k] === null;
+          const display = isBlank ? '<i class="ti ti-plus" style="color:var(--text3)"></i>' : cellContent;
+          return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetWinnings(${b.id}, ${b.fields[k]||0}, fetchBtDetailPage)" title="${isBlank?'Click to enter winnings':'Click to amend'}">${display}</span></td>`;
+        }
         const rawVal = b.fields[k];
         const promptVal = (rawVal === undefined || rawVal === null) ? '' : rawVal;
         return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetFieldGeneric(${b.id}, '${k.replace(/'/g,"\\'")}', '${String(promptVal).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}', fetchBtDetailPage)" title="Click to amend">${cellContent || '<i class="ti ti-plus" style="color:var(--text3)"></i>'}</span></td>`;
       }).join('')}
       <td class="r" style="color:${(b.pl||0)>=0?'var(--green)':'var(--red)'}">${(b.pl||0)>=0?'+':'-'}£${Math.abs(b.pl||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td style="white-space:nowrap;display:flex;gap:6px">
-        <button class="add-btn" onclick="openBtSettleModal(${b.id}, '${b.result}', ${b.pl||0}, fetchBtDetailPage, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${b.bet_type.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">${b.result==='open'?'Settle':'Override'}</button>
+        ${BET_TYPE_CONFIG[b.bet_type]?.winningsBasedPL
+          ? `<button class="add-btn" onclick="editBetWinnings(${b.id}, ${b.fields.Winnings||0}, fetchBtDetailPage)">Enter Winnings</button>`
+          : `<button class="add-btn" onclick="openBtSettleModal(${b.id}, '${b.result}', ${b.pl||0}, fetchBtDetailPage, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${b.bet_type.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">${b.result==='open'?'Settle':'Override'}</button>`}
         ${b.result==='open' && !b.leg_count ? `<button class="add-btn" onclick="openBtLinkModal(${b.id})">Link account</button>` : ''}
       </td>
     </tr>`;
@@ -5005,6 +5048,20 @@ async function editBetStake(betId, currentStake, refreshFn) {
   try {
     const d = await ledgerApi('bets/'+betId+'/stake', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ stake: newStake }) });
     if (!d.ok) { alert(d.error || 'Failed to update stake'); return; }
+    if (refreshFn) refreshFn();
+  } catch (e) { alert('Network error — please try again.'); }
+}
+
+// For sheets with no win/loss result concept (e.g. SharpBetting multis) — P/L is simply
+// Winnings minus Stake, entered directly once the outcome is known.
+async function editBetWinnings(betId, currentWinnings, refreshFn) {
+  const input = prompt('Enter the winnings for this bet — P/L will be calculated as Winnings minus Stake:', currentWinnings || '');
+  if (input === null) return;
+  const winnings = parseFloat(input);
+  if (isNaN(winnings) || winnings < 0) { alert('Enter a valid winnings amount (0 or more).'); return; }
+  try {
+    const d = await ledgerApi('bets/'+betId+'/winnings', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ winnings }) });
+    if (!d.ok) { alert(d.error || 'Failed to update winnings'); return; }
     if (refreshFn) refreshFn();
   } catch (e) { alert('Network error — please try again.'); }
 }
