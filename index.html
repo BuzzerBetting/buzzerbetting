@@ -4622,7 +4622,7 @@ function renderBtDetailTable(bets) {
         }
         const rawVal = b.fields[k];
         const promptVal = (rawVal === undefined || rawVal === null) ? '' : rawVal;
-        return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetFieldGeneric(${b.id}, '${k.replace(/'/g,"\\'")}', ${JSON.stringify(String(promptVal))}, fetchBtDetailPage)" title="Click to amend">${cellContent || '<i class="ti ti-plus" style="color:var(--text3)"></i>'}</span></td>`;
+        return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetFieldGeneric(${b.id}, '${k.replace(/'/g,"\\'")}', '${String(promptVal).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}', fetchBtDetailPage)" title="Click to amend">${cellContent || '<i class="ti ti-plus" style="color:var(--text3)"></i>'}</span></td>`;
       }).join('')}
       <td class="r" style="color:${(b.pl||0)>=0?'var(--green)':'var(--red)'}">${(b.pl||0)>=0?'+':'-'}£${Math.abs(b.pl||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td style="white-space:nowrap;display:flex;gap:6px">
@@ -5025,7 +5025,7 @@ async function loadBtOpenTable() {
           }
           const rawVal = b.fields[k];
           const promptVal = (rawVal === undefined || rawVal === null) ? '' : rawVal;
-          return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetFieldGeneric(${b.id}, '${k.replace(/'/g,"\\'")}', ${JSON.stringify(String(promptVal))}, loadBtOpenTabs)" title="Click to amend">${cellContent || '<i class="ti ti-plus" style="color:var(--text3)"></i>'}</span></td>`;
+          return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetFieldGeneric(${b.id}, '${k.replace(/'/g,"\\'")}', '${String(promptVal).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}', loadBtOpenTabs)" title="Click to amend">${cellContent || '<i class="ti ti-plus" style="color:var(--text3)"></i>'}</span></td>`;
         }).join('')}
         <td><button class="add-btn" onclick="openBtSettleModal(${b.id}, 'open', null, loadBtOpenTabs, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${btOpenState.betType.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">Settle</button></td>
       </tr>`;
