@@ -4832,7 +4832,7 @@ function renderBtDetailTable(bets) {
       }).join('')}
       <td class="r" style="color:${(b.pl||0)>=0?'var(--green)':'var(--red)'}">${(b.pl||0)>=0?'+':'-'}£${Math.abs(b.pl||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td style="white-space:nowrap;display:flex;gap:6px">
-        ${BET_TYPE_CONFIG[b.bet_type]?.winningsBasedPL ? '' : `<button class="add-btn" onclick="openBtSettleModal(${b.id}, '${b.result}', ${b.pl||0}, fetchBtDetailPage, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${b.bet_type.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">${b.result==='open'?'Settle':'Override'}</button>`}
+        ${BET_TYPE_CONFIG[b.bet_type]?.winningsBasedPL ? `<button class="add-btn" onclick="deleteBetDirect(${b.id}, fetchBtDetailPage)" style="color:var(--red);border-color:var(--red)">Delete</button>` : `<button class="add-btn" onclick="openBtSettleModal(${b.id}, '${b.result}', ${b.pl||0}, fetchBtDetailPage, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${b.bet_type.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">${b.result==='open'?'Settle':'Override'}</button>`}
         ${b.result==='open' && !b.leg_count ? `<button class="add-btn" onclick="openBtLinkModal(${b.id})">Link account</button>` : ''}
       </td>
     </tr>`;
@@ -5018,6 +5018,17 @@ function resetBtDeleteButton() {
 // Two-step delete — first click asks for confirmation, second click (within the same modal
 // session) actually deletes. Reverses whatever balance effect the bet currently has on any
 // linked account, removes it from open bets, and removes it from the sheet entirely.
+// Direct delete for rows with no Settle modal to reach it through (e.g. winnings-based
+// sheets) — simple confirm, permanently removes the bet and reverses any linked balance.
+async function deleteBetDirect(betId, refreshFn) {
+  if (!confirm('Delete this bet? This permanently removes it and reverses any linked account balance. Cannot be undone.')) return;
+  try {
+    const d = await ledgerApi('bets/'+betId, { method: 'DELETE' });
+    if (!d.ok) { alert(d.error || 'Failed to delete'); return; }
+    if (refreshFn) refreshFn();
+  } catch (e) { alert('Network error — please try again.'); }
+}
+
 async function handleBtDeleteClick() {
   if (!btSettleContext) return;
   const btn = document.getElementById('bt-delete-btn');
