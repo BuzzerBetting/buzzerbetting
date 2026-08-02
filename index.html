@@ -4788,8 +4788,9 @@ function renderBtDetailTable(bets) {
   const colClass = k => colIsNumeric[k] ? ' class="r"' : '';
 
   const showNotesCol = btDetailType === 'Casino';
+  const showResultCol = !BET_TYPE_CONFIG[btDetailType]?.winningsBasedPL;
   let html = `<table class="dt" style="min-width:720px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr>
-    <th>Date</th>${showNotesCol?'<th>Notes</th>':''}<th>Result</th><th>Account ID</th>${fieldKeys.map(k=>`<th${colClass(k)}>${escapeHtml(k)}</th>`).join('')}<th class="r">P/L</th><th></th>
+    <th>Date</th>${showNotesCol?'<th>Notes</th>':''}${showResultCol?'<th>Result</th>':''}<th>Account ID</th>${fieldKeys.map(k=>`<th${colClass(k)}>${escapeHtml(k)}</th>`).join('')}<th class="r">P/L</th><th></th>
   </tr></thead><tbody>`;
   bets.forEach(b => {
     const resColor = b.result==='won'?'var(--green)':b.result==='lost'?'var(--red)':b.result==='placed'?'var(--blue)':b.result==='void'?'var(--text3)':'var(--amber)';
@@ -4803,7 +4804,7 @@ function renderBtDetailTable(bets) {
         ? `<span style="cursor:pointer;color:var(--brand);text-decoration:underline dotted;text-underline-offset:3px;font-size:12px" onclick="displayBetNote(${b.id})">Display note</span>`
         : `<span style="cursor:pointer;color:var(--text3)" onclick="addBetNotePrompt(${b.id})" title="Add note"><i class="ti ti-plus"></i></span>`
       }</td>` : ''}
-      <td style="color:${resColor};font-weight:600;text-transform:capitalize">${b.result}</td>
+      ${showResultCol ? `<td style="color:${resColor};font-weight:600;text-transform:capitalize">${b.result}</td>` : ''}
       <td>${formatAccountCode(b)}</td>
       ${fieldKeys.map(k=>{
         const cellContent = formatBetField(k, b.fields[k]);
@@ -4829,9 +4830,7 @@ function renderBtDetailTable(bets) {
       }).join('')}
       <td class="r" style="color:${(b.pl||0)>=0?'var(--green)':'var(--red)'}">${(b.pl||0)>=0?'+':'-'}£${Math.abs(b.pl||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td style="white-space:nowrap;display:flex;gap:6px">
-        ${BET_TYPE_CONFIG[b.bet_type]?.winningsBasedPL
-          ? `<button class="add-btn" onclick="editBetWinnings(${b.id}, ${b.fields.Winnings||0}, fetchBtDetailPage)">Enter Winnings</button>`
-          : `<button class="add-btn" onclick="openBtSettleModal(${b.id}, '${b.result}', ${b.pl||0}, fetchBtDetailPage, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${b.bet_type.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">${b.result==='open'?'Settle':'Override'}</button>`}
+        ${BET_TYPE_CONFIG[b.bet_type]?.winningsBasedPL ? '' : `<button class="add-btn" onclick="openBtSettleModal(${b.id}, '${b.result}', ${b.pl||0}, fetchBtDetailPage, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${b.bet_type.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">${b.result==='open'?'Settle':'Override'}</button>`}
         ${b.result==='open' && !b.leg_count ? `<button class="add-btn" onclick="openBtLinkModal(${b.id})">Link account</button>` : ''}
       </td>
     </tr>`;
