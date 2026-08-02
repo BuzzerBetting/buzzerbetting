@@ -426,7 +426,10 @@ input::placeholder{color:var(--text3)}
 <!-- COMBINED BETS PAGE (Add Bet + Recent Tracker, one page per bet type) -->
 <div id="view-bets-combined" class="sec">
   <button class="back" onclick="showTopSec('ledger')"><i class="ti ti-arrow-left"></i> Ledger</button>
-  <div class="sec-title">Bets</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+    <div class="sec-title" style="margin:0">Bets</div>
+    <button class="add-btn" onclick="openNewSheetModal()"><i class="ti ti-plus"></i> Add New Sheet</button>
+  </div>
 
   <div class="card card-pad" style="margin-bottom:16px">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
@@ -828,6 +831,34 @@ input::placeholder{color:var(--text3)}
 </div>
 
 <!-- LEDGER: ACCOUNT DETAIL MODAL -->
+<!-- BETS: NEW SHEET MODAL -->
+<div id="new-sheet-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;padding:16px">
+  <div class="card" style="max-width:480px;width:100%;max-height:85vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="sec-title" style="margin:0;font-size:16px">Add New Sheet</div>
+      <button class="add-btn" onclick="closeNewSheetModal()"><i class="ti ti-x"></i></button>
+    </div>
+
+    <label class="lbl">Sheet name</label>
+    <input type="text" id="new-sheet-name" placeholder="e.g. Golf Outrights" style="margin-bottom:14px">
+
+    <label class="lbl">User</label>
+    <select id="new-sheet-user" style="margin-bottom:18px">
+      <option value="buzzer">Buzzer</option>
+      <option value="assistant">Assistant</option>
+    </select>
+
+    <label class="lbl" style="margin-bottom:8px">Columns (in order, left to right)</label>
+    <div id="new-sheet-columns"></div>
+    <button class="add-btn" onclick="addNewSheetColumnRow()"><i class="ti ti-plus"></i> Add column</button>
+
+    <div style="margin-top:18px;padding-top:14px;border-top:0.5px solid var(--border)">
+      <button onclick="submitNewSheet()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:11px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Create sheet</button>
+    </div>
+    <div id="new-sheet-msg" style="margin-top:12px;font-size:13px"></div>
+  </div>
+</div>
+
 <div id="bank-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;padding:16px">
   <div class="card card-pad" style="max-width:380px;width:100%">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
@@ -3798,6 +3829,7 @@ async function clearLockedFunds(id) {
 
 // ================== LEDGER: DASHBOARD ==================
 async function initDashboard() {
+  await loadCustomSheets();
   loadDashboardOpenBets();
   loadDashboardPendingWithdrawals();
   loadDashboardLockedFunds();
@@ -4463,6 +4495,136 @@ function initBetsPage() {
   document.getElementById('bets-add-form-wrap').style.display = 'none';
   document.getElementById('bets-add-chevron').className = 'ti ti-chevron-down';
   refreshBetsPageAccounts();
+  loadCustomSheets();
+}
+
+// ================== CUSTOM SHEETS (user-defined bet trackers) ==================
+const NEW_SHEET_COLUMN_TYPES = [
+  'Date', 'Result', 'Account ID', 'Bookie', 'Bet Type', 'Bet Description',
+  'Bet 1', 'Bet 2', 'Bet 3', 'Bet 4', 'Bet 5', 'Bet 6',
+  'Back Odds', 'Fair Odds', 'EV', 'P/L', 'Custom'
+];
+let CUSTOM_SHEETS_LOADED = false;
+let newSheetColumnRowId = 0;
+
+// Translates a sheet's column definitions into a BET_TYPE_CONFIG-shaped object, reusing the
+// exact same mechanisms every hardcoded sheet uses — Back Odds + Fair Odds together enable
+// the same paired-value EV calc Offers already uses (so all of tonight's EV/P&L recalc
+// fixes apply automatically), Bookie/Bet Type reuse their existing toggles. Date, Result,
+// Account ID, P/L, and EV are always shown as fixed columns regardless of what's picked —
+// selecting them just confirms the layout, they don't create a new field.
+function buildConfigFromColumns(columns) {
+  const cfg = { layout: 'standard', fields: [] };
+  const hasBack = columns.some(c => c.type === 'Back Odds');
+  const hasFair = columns.some(c => c.type === 'Fair Odds');
+  columns.forEach(c => {
+    if (c.type === 'Bookie') { cfg.bookie = true; cfg.bookieFieldKey = 'Bookie'; }
+    else if (c.type === 'Bet Type') { cfg.hasBetKind = true; }
+    else if (c.type === 'Bet Description') { cfg.fields.push({ key: 'Bet Description', label: 'Bet description', type: 'text' }); }
+    else if (/^Bet [1-6]$/.test(c.type)) { cfg.fields.push({ key: c.type, label: c.type, type: 'text' }); }
+    else if (c.type === 'Custom') { cfg.fields.push({ key: c.label, label: c.label, type: 'text' }); }
+    else if (c.type === 'Back Odds' && !hasFair) { cfg.fields.push({ key: 'Odds', label: 'Odds', type: 'number' }); }
+    else if (c.type === 'Fair Odds' && !hasBack) { cfg.fields.push({ key: 'Fairs', label: 'Fairs', type: 'number' }); }
+    // Date/Result/Account ID/EV/P/L: no field needed, already always shown.
+  });
+  if (hasBack && hasFair) cfg.oddsMode = 'pairedSingle';
+  return cfg;
+}
+
+async function loadCustomSheets() {
+  try {
+    const d = await ledgerApi('custom-sheets');
+    const sheets = (d.ok && d.sheets) ? d.sheets : [];
+    sheets.forEach(s => {
+      if (BET_TYPE_CONFIG[s.key]) return; // already merged (or a name collision with a hardcoded sheet — leave the hardcoded one alone)
+      BET_TYPE_CONFIG[s.key] = buildConfigFromColumns(s.columns);
+      const group = BET_TYPE_GROUPS[s.user_group];
+      if (group && !group.some(t => t.key === s.key)) group.push({ key: s.key, label: s.key });
+    });
+    CUSTOM_SHEETS_LOADED = true;
+  } catch (e) { /* non-fatal — custom sheets just won't show up until the page is revisited */ }
+}
+
+function openNewSheetModal() {
+  document.getElementById('new-sheet-name').value = '';
+  document.getElementById('new-sheet-user').value = 'buzzer';
+  document.getElementById('new-sheet-columns').innerHTML = '';
+  document.getElementById('new-sheet-msg').innerHTML = '';
+  newSheetColumnRowId = 0;
+  for (let i = 0; i < 5; i++) addNewSheetColumnRow();
+  document.getElementById('new-sheet-modal-overlay').style.display = 'flex';
+}
+
+function closeNewSheetModal() {
+  document.getElementById('new-sheet-modal-overlay').style.display = 'none';
+}
+
+function newSheetColumnOptionsHtml(selected) {
+  return NEW_SHEET_COLUMN_TYPES.map(t => `<option value="${t}" ${t===selected?'selected':''}>${t}</option>`).join('');
+}
+
+function addNewSheetColumnRow() {
+  const wrap = document.getElementById('new-sheet-columns');
+  const id = ++newSheetColumnRowId;
+  const row = document.createElement('div');
+  row.className = 'new-sheet-col-row';
+  row.dataset.row = id;
+  row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 32px;gap:8px;margin-bottom:8px;align-items:center';
+  row.innerHTML = `
+    <select class="new-sheet-col-type" onchange="onNewSheetColTypeChange(${id})">${newSheetColumnOptionsHtml()}</select>
+    <input type="text" class="new-sheet-col-custom" placeholder="Custom column name" style="display:none">
+    <button class="rm-btn" onclick="removeNewSheetColumnRow(${id})" title="Remove">×</button>`;
+  wrap.appendChild(row);
+}
+
+function removeNewSheetColumnRow(id) {
+  const row = document.querySelector(`.new-sheet-col-row[data-row="${id}"]`);
+  if (row) row.remove();
+}
+
+function onNewSheetColTypeChange(id) {
+  const row = document.querySelector(`.new-sheet-col-row[data-row="${id}"]`);
+  if (!row) return;
+  const type = row.querySelector('.new-sheet-col-type').value;
+  row.querySelector('.new-sheet-col-custom').style.display = type === 'Custom' ? 'block' : 'none';
+}
+
+async function submitNewSheet() {
+  const msgEl = document.getElementById('new-sheet-msg');
+  const name = document.getElementById('new-sheet-name').value.trim();
+  const userGroup = document.getElementById('new-sheet-user').value;
+  if (!name) { msgEl.innerHTML = '<span style="color:var(--red)">Enter a sheet name.</span>'; return; }
+
+  const rows = [...document.querySelectorAll('#new-sheet-columns .new-sheet-col-row')];
+  const columns = [];
+  for (const row of rows) {
+    const type = row.querySelector('.new-sheet-col-type').value;
+    if (type === 'Custom') {
+      const label = row.querySelector('.new-sheet-col-custom').value.trim();
+      if (!label) { msgEl.innerHTML = '<span style="color:var(--red)">Every Custom column needs a name.</span>'; return; }
+      columns.push({ type: 'Custom', label });
+    } else {
+      columns.push({ type });
+    }
+  }
+  if (!columns.length) { msgEl.innerHTML = '<span style="color:var(--red)">Add at least one column.</span>'; return; }
+
+  msgEl.innerHTML = '<span style="color:var(--text2)">Creating…</span>';
+  try {
+    const d = await ledgerApi('custom-sheets', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ key: name, user_group: userGroup, columns }) });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to create sheet'}</span>`; return; }
+    BET_TYPE_CONFIG[name] = buildConfigFromColumns(columns);
+    BET_TYPE_GROUPS[userGroup].push({ key: name, label: name });
+    msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Sheet created.</span>';
+    setTimeout(() => {
+      closeNewSheetModal();
+      // Jump straight to the new sheet so it's immediately visible.
+      document.getElementById('bets-user-select').value = userGroup;
+      onBetsUserChange();
+      document.getElementById('bets-type-select').value = name;
+      onBetsTypeChange();
+    }, 700);
+  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error.</span>'; }
 }
 
 // Keeps the account dropdowns (Bookie-filtered lists, leg rows, Casino extra-accounts) up
