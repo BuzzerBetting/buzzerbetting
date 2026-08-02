@@ -2965,6 +2965,8 @@ async function submitBetEntry() {
     }
   }
 
+  if (cfg.winningsBasedPL) fields['Winnings'] = null;
+
   let legs;
   if (cfg.layout === 'balance') {
     const accountId = document.getElementById('bef-single-account').value;
