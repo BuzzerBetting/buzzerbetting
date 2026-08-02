@@ -884,7 +884,10 @@ input::placeholder{color:var(--text3)}
 <div id="account-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;padding:16px">
   <div class="card" style="max-width:420px;width:100%;max-height:85vh;overflow-y:auto">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-      <div class="sec-title" style="margin:0;font-size:16px" id="account-modal-title"></div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <div class="sec-title" style="margin:0;font-size:16px" id="account-modal-title"></div>
+        <button class="rm-btn" onclick="renameAccountId()" title="Rename ID (temporary migration tool)" style="font-size:14px"><i class="ti ti-pencil"></i></button>
+      </div>
       <button class="add-btn" onclick="closeAccountModal()"><i class="ti ti-x"></i></button>
     </div>
     <div style="font-size:12.5px;color:var(--text2);margin-bottom:14px" id="account-modal-subtitle"></div>
@@ -965,11 +968,11 @@ input::placeholder{color:var(--text3)}
 
   <div class="card card-pad" style="margin-bottom:16px">
     <div class="sec-title" style="margin:0 0 14px;font-size:15px">New Account</div>
-    <div style="margin-bottom:16px"><label class="lbl">Bookie</label><input type="text" id="entry-bookie" placeholder="e.g. PaddyPower"></div>
+    <div style="margin-bottom:16px"><label class="lbl">Bookie</label><input type="text" id="entry-bookie" placeholder="e.g. PaddyPower" oninput="refreshEntryCardRows()"></div>
 
     <div class="lbl" style="margin-bottom:10px">Accounts to publish</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-      <button class="add-btn" onclick="addEntryRowWithNextId('C')"><i class="ti ti-user"></i> Client</button>
+      <button class="add-btn" onclick="addCardAccountRow()"><i class="ti ti-credit-card"></i> Card</button>
       <button class="add-btn" onclick="addEntryRowWithNextId('D')"><i class="ti ti-trash-x"></i> Disposable</button>
     </div>
     <div id="entry-rows-header" style="display:none;grid-template-columns:1fr 1fr 110px 32px;gap:10px;margin-bottom:6px">
@@ -984,6 +987,18 @@ input::placeholder{color:var(--text3)}
       <button onclick="submitAccountEntry()" id="entry-submit-btn" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:11px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Publish</button>
     </div>
     <div id="entry-results" style="margin-top:18px"></div>
+  </div>
+
+  <div class="card card-pad" style="margin-bottom:16px">
+    <div class="sec-title" style="margin:0 0 4px;font-size:15px">New Card</div>
+    <div style="font-size:12.5px;color:var(--text2);margin-bottom:14px">
+      A card is a physical or virtual deposit card, linked to one bank. The same card can fund accounts at multiple different bookies — create it once here, then pick it from the Card option above whenever you're publishing a new bookie account with it.
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 100px;gap:10px;align-items:end">
+      <div><label class="lbl">Linked bank</label><select id="new-card-bank">${bankOptionsHtml()}</select></div>
+      <button onclick="createCard()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:9px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Create</button>
+    </div>
+    <div id="new-card-msg" style="margin-top:12px;font-size:13px"></div>
   </div>
 
   <div class="card card-pad">
@@ -2085,11 +2100,13 @@ async function initAccountEntry() {
   document.getElementById('new-bank-name').value = '';
   document.getElementById('new-bank-balance').value = '0';
   document.getElementById('new-bank-msg').innerHTML = '';
+  document.getElementById('new-card-msg').innerHTML = '';
   entryRowId = 0;
   try {
     const d = await ledgerApi('banks');
     KNOWN_BANKS = (d.ok && d.banks) ? d.banks : [];
   } catch (e) { KNOWN_BANKS = []; }
+  document.getElementById('new-card-bank').innerHTML = bankOptionsHtml();
 }
 
 function bankOptionsHtml(selected) {
@@ -2097,6 +2114,19 @@ function bankOptionsHtml(selected) {
   return `<option value="">Select bank…</option>` + KNOWN_BANKS.map(b =>
     `<option value="${escapeHtml(b.name)}" ${b.name===selected?'selected':''}>${escapeHtml(b.name)} — £${b.remaining.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</option>`
   ).join('');
+}
+
+async function createCard() {
+  const bank = document.getElementById('new-card-bank').value;
+  const msgEl = document.getElementById('new-card-msg');
+  if (!bank) { msgEl.innerHTML = '<span style="color:var(--red)">Select a bank.</span>'; return; }
+  msgEl.innerHTML = '<span style="color:var(--text2)">Creating…</span>';
+  try {
+    const d = await ledgerApi('cards', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ bank }) });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to create card'}</span>`; return; }
+    msgEl.innerHTML = `<span style="color:var(--green)"><i class="ti ti-check"></i> ${d.card_number} created, linked to ${escapeHtml(bank)}.</span>`;
+    refreshEntryCardRows();
+  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error.</span>'; }
 }
 
 async function createBank() {
@@ -2113,8 +2143,67 @@ async function createBank() {
     document.getElementById('new-bank-balance').value = '0';
     const bd = await ledgerApi('banks');
     KNOWN_BANKS = (bd.ok && bd.banks) ? bd.banks : [];
-    document.querySelectorAll('#entry-rows .entry-bank').forEach(sel => { sel.innerHTML = bankOptionsHtml(sel.value); });
+    document.querySelectorAll('#entry-rows .entry-row:not(.entry-row-card) .entry-bank').forEach(sel => { sel.innerHTML = bankOptionsHtml(sel.value); });
+    document.getElementById('new-card-bank').innerHTML = bankOptionsHtml();
   } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error.</span>'; }
+}
+
+function cardOptionsHtml(cards, selected) {
+  if (!cards.length) return `<option value="">No available cards for this bookie</option>`;
+  return `<option value="">Select card…</option>` + cards.map(c =>
+    `<option value="${c.card_number}" data-bank="${escapeHtml(c.bank)}" ${c.card_number===selected?'selected':''}>${c.card_number} (${escapeHtml(c.bank)})</option>`
+  ).join('');
+}
+
+// A Card row picks from EXISTING cards (created via New Card above), filtered to exclude
+// any card already used for the currently-entered bookie — the same card can back accounts
+// at other bookies, just not twice at this one. The linked bank comes from the card itself,
+// not chosen separately.
+async function addCardAccountRow() {
+  const bookie = document.getElementById('entry-bookie').value.trim();
+  const id = ++entryRowId;
+  const wrap = document.getElementById('entry-rows');
+  document.getElementById('entry-rows-header').style.display = 'grid';
+  const row = document.createElement('div');
+  row.className = 'entry-row entry-row-card';
+  row.dataset.row = id;
+  row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 110px 32px;gap:10px;margin-bottom:8px;align-items:center';
+  row.innerHTML = `
+    <select class="entry-id" onchange="onEntryCardRowChange(this)"><option value="">Loading…</option></select>
+    <select class="entry-bank" disabled></select>
+    <input type="number" class="entry-balance" placeholder="Start £" step="0.01" value="0">
+    <button class="rm-btn" onclick="removeEntryRow(${id})" title="Remove">×</button>`;
+  wrap.appendChild(row);
+  await refreshOneCardRow(row, bookie);
+  return row;
+}
+
+async function refreshOneCardRow(row, bookie) {
+  const sel = row.querySelector('.entry-id');
+  const prevVal = sel.value;
+  if (!bookie) { sel.innerHTML = '<option value="">Enter a bookie first…</option>'; onEntryCardRowChange(sel); return; }
+  try {
+    const d = await ledgerApi('cards?availableForBookie='+encodeURIComponent(bookie));
+    const cards = (d.ok && d.cards) ? d.cards : [];
+    sel.innerHTML = cardOptionsHtml(cards, prevVal);
+    onEntryCardRowChange(sel);
+  } catch (e) { sel.innerHTML = '<option value="">Could not load cards</option>'; }
+}
+
+function onEntryCardRowChange(sel) {
+  const row = sel.closest('.entry-row');
+  const bankSel = row.querySelector('.entry-bank');
+  const selectedOption = sel.options[sel.selectedIndex];
+  const bank = selectedOption ? selectedOption.dataset.bank : null;
+  bankSel.innerHTML = bank ? `<option value="${escapeHtml(bank)}" selected>${escapeHtml(bank)}</option>` : '<option value="">—</option>';
+}
+
+// Refreshes every currently-staged Card row's available-cards list — called when the Bookie
+// box changes, since "available" depends on which bookie is being published to.
+async function refreshEntryCardRows() {
+  const bookie = document.getElementById('entry-bookie').value.trim();
+  const rows = [...document.querySelectorAll('#entry-rows .entry-row-card')];
+  for (const row of rows) await refreshOneCardRow(row, bookie);
 }
 
 function addEntryRow() {
@@ -3495,6 +3584,27 @@ async function loadAccountModalNotesList() {
 function closeAccountModal() {
   document.getElementById('account-modal-overlay').style.display = 'none';
   ACTIVE_ACCOUNT = null;
+}
+
+// Temporary migration tool — lets the account ID itself be corrected directly, for
+// consolidating the existing account pool onto the shared-card model (multiple accounts,
+// across different bookies, intentionally sharing the same C-number). Still enforces the
+// same per-bookie uniqueness rule as normal account creation.
+async function renameAccountId() {
+  if (!ACTIVE_ACCOUNT) return;
+  const newId = prompt('Rename this account\'s ID:', ACTIVE_ACCOUNT.account_id || '');
+  if (newId === null || !newId.trim() || newId.trim() === ACTIVE_ACCOUNT.account_id) return;
+  const msgEl = document.getElementById('account-modal-msg');
+  msgEl.innerHTML = '<span style="color:var(--text2)">Renaming…</span>';
+  try {
+    const d = await ledgerApi('accounts/'+ACTIVE_ACCOUNT.id+'/rename-id', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ account_id: newId.trim() }) });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to rename'}</span>`; return; }
+    ACTIVE_ACCOUNT.account_id = newId.trim();
+    const idx = ALL_ACCOUNTS.findIndex(a=>a.id===ACTIVE_ACCOUNT.id);
+    if (idx>-1) ALL_ACCOUNTS[idx].account_id = newId.trim();
+    openAccountModal(ACTIVE_ACCOUNT.id);
+    if (document.getElementById('view-ledger-accounts').style.display !== 'none') renderAccountsGrid();
+  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error</span>'; }
 }
 
 async function setAccountStatus(status) {
