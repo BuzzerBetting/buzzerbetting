@@ -181,11 +181,14 @@ input::placeholder{color:var(--text3)}
   <div style="width:46px;height:46px;background:var(--brand);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;margin-bottom:4px"><i class="ti ti-bolt"></i></div>
   <div style="font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;color:#fff;letter-spacing:-0.02em">Buzzer<span style="color:var(--brand)">Betting</span></div>
   <div style="margin-top:8px;width:260px;display:flex;flex-direction:column;gap:8px">
-    <input type="password" id="pin-input" placeholder="Enter PIN" autocomplete="off"
+    <input type="text" id="login-username" placeholder="Username" autocomplete="off"
+      style="width:100%;padding:12px 16px;background:rgba(255,255,255,0.07);border:0.5px solid rgba(255,255,255,0.18);border-radius:8px;color:#fff;font-size:15px;text-align:center;outline:none;font-family:inherit"
+      onkeydown="if(event.key==='Enter')document.getElementById('login-passcode').focus()">
+    <input type="password" id="login-passcode" placeholder="Passcode" autocomplete="off"
       style="width:100%;padding:12px 16px;background:rgba(255,255,255,0.07);border:0.5px solid rgba(255,255,255,0.18);border-radius:8px;color:#fff;font-size:16px;text-align:center;outline:none;font-family:inherit;letter-spacing:0.15em"
       onkeydown="if(event.key==='Enter')checkPin()">
-    <button onclick="checkPin()" style="width:100%;background:var(--brand);color:#fff;border:none;border-radius:8px;padding:11px;font-size:14px;cursor:pointer;font-family:inherit;font-weight:500">Unlock</button>
-    <div id="pin-err" style="display:none;color:#f87171;font-size:12px;text-align:center">Incorrect PIN — try again</div>
+    <button onclick="checkPin()" id="login-btn" style="width:100%;background:var(--brand);color:#fff;border:none;border-radius:8px;padding:11px;font-size:14px;cursor:pointer;font-family:inherit;font-weight:500">Log in</button>
+    <div id="pin-err" style="display:none;color:#f87171;font-size:12px;text-align:center">Incorrect username or passcode — try again</div>
   </div>
 </div>
 <header>
@@ -209,7 +212,7 @@ input::placeholder{color:var(--text3)}
     </div>
   </div>
   <div class="grid">
-    <div class="cat" style="--accent:var(--green)" onclick="showSec('profit')">
+    <div class="cat" id="home-card-profit" style="--accent:var(--green)" onclick="showSec('profit')">
       <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-chart-bar"></i></div>
       <div><div class="cat-title">Profit breakdown</div><div class="cat-desc">Monthly P&amp;L, all-time chart and performance stats</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
@@ -2047,27 +2050,58 @@ const monthly=[['Mar-23',702.54],['Apr-23',710.43],['May-23',1739.72],['Jun-23',
 const avgP=monthly.reduce((s,m)=>s+m[1],0)/monthly.length;
 const bets=[{t:'14:30',match:'Arsenal vs Chelsea',mkt:'AGS',sel:'Saka',fair:3.45,bk:'Bet365',odds:4.00,ev:15.9,stake:50},{t:'14:30',match:'Arsenal vs Chelsea',mkt:'Header',sel:'Gabriel',fair:12.20,bk:'Betway',odds:15.00,ev:22.9,stake:30},{t:'16:00',match:'Man City vs Liverpool',mkt:'AGS',sel:'Haaland',fair:1.85,bk:'William Hill',odds:2.10,ev:13.5,stake:80},{t:'16:00',match:'Man City vs Liverpool',mkt:'First scorer',sel:'Salah',fair:8.40,bk:'Paddy Power',odds:10.00,ev:19.0,stake:40},{t:'16:00',match:'Man City vs Liverpool',mkt:'Header',sel:'Dias',fair:22.50,bk:'Unibet',odds:29.00,ev:28.9,stake:20},{t:'20:00',match:'Spurs vs Everton',mkt:'AGS',sel:'Son',fair:2.95,bk:'Betfair SB',odds:3.50,ev:18.6,stake:60}];
 
-// ── PIN LOCK — change this before uploading ──
-const BB_PIN='2306';
+// ── LOGIN ──
+let CURRENT_USER_ROLE = null;
+let CURRENT_USERNAME = null;
+
 function checkPin(){
-  const v=document.getElementById('pin-input').value;
-  if(v===BB_PIN){
-    sessionStorage.setItem('bb_auth','1');
-    document.getElementById('pin-overlay').style.display='none';
-    document.getElementById('pin-input').value='';
-  } else {
-    document.getElementById('pin-err').style.display='block';
-    document.getElementById('pin-input').value='';
-    document.getElementById('pin-input').focus();
-    setTimeout(()=>document.getElementById('pin-err').style.display='none',2500);
+  const username = document.getElementById('login-username').value.trim();
+  const passcode = document.getElementById('login-passcode').value;
+  const btn = document.getElementById('login-btn');
+  const errEl = document.getElementById('pin-err');
+  if (!username || !passcode) {
+    errEl.textContent = 'Enter both a username and passcode.';
+    errEl.style.display = 'block';
+    return;
   }
+  btn.disabled = true; btn.textContent = 'Logging in…';
+  fetch('/.netlify/functions/ledger?path=login', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ username, passcode })
+  }).then(r => r.json()).then(d => {
+    btn.disabled = false; btn.textContent = 'Log in';
+    if (d.ok) {
+      sessionStorage.setItem('bb_session_token', d.token);
+      sessionStorage.setItem('bb_role', d.role);
+      sessionStorage.setItem('bb_username', d.username);
+      CURRENT_USER_ROLE = d.role;
+      CURRENT_USERNAME = d.username;
+      document.getElementById('pin-overlay').style.display='none';
+      document.getElementById('login-passcode').value='';
+      applyRoleRestrictions();
+    } else {
+      errEl.textContent = d.error || 'Incorrect username or passcode — try again';
+      errEl.style.display='block';
+      document.getElementById('login-passcode').value='';
+      document.getElementById('login-passcode').focus();
+      setTimeout(()=>errEl.style.display='none',2500);
+    }
+  }).catch(() => {
+    btn.disabled = false; btn.textContent = 'Log in';
+    errEl.textContent = 'Network error — please try again.';
+    errEl.style.display='block';
+  });
 }
 (function(){
-  if(sessionStorage.getItem('bb_auth')==='1'){
+  const token = sessionStorage.getItem('bb_session_token');
+  if (token) {
+    CURRENT_USER_ROLE = sessionStorage.getItem('bb_role');
+    CURRENT_USERNAME = sessionStorage.getItem('bb_username');
     const o=document.getElementById('pin-overlay');
     if(o)o.style.display='none';
+    setTimeout(applyRoleRestrictions, 0);
   } else {
-    setTimeout(()=>{const i=document.getElementById('pin-input');if(i)i.focus();},200);
+    setTimeout(()=>{const i=document.getElementById('login-username');if(i)i.focus();},200);
   }
 })();
 
@@ -2470,8 +2504,24 @@ let betEntryLastGroup = null;
 const BETTYPE_COLORS = ['var(--green)','var(--blue)','var(--purple)','var(--amber)','var(--red)'];
 const NINJA_GOLF_COMMISSION = 0.02;
 
+// Handles the static, always-present elements that need hiding for Staff. Dynamic ones
+// (bank balance clickability, withdrawal confirm buttons, the Bets User dropdown) are
+// checked directly inside their own render functions instead, since those get rebuilt
+// from scratch on every load anyway — no separate pass needed for those.
+function applyRoleRestrictions() {
+  const isStaff = CURRENT_USER_ROLE === 'staff';
+  const profitCard = document.getElementById('home-card-profit');
+  if (profitCard) profitCard.style.display = isStaff ? 'none' : '';
+  const transferBtn = document.getElementById('money-type-transfer');
+  if (transferBtn) transferBtn.style.display = isStaff ? 'none' : '';
+  const externalBtn = document.getElementById('money-type-external');
+  if (externalBtn) externalBtn.style.display = isStaff ? 'none' : '';
+}
+
 async function ledgerApi(path, opts) {
-  const res = await fetch('/.netlify/functions/ledger?path='+encodeURIComponent(path)+'&_='+Date.now(), opts);
+  const token = sessionStorage.getItem('bb_session_token');
+  const finalOpts = { ...(opts||{}), headers: { ...((opts&&opts.headers)||{}), ...(token ? {'x-session-token': token} : {}) } };
+  const res = await fetch('/.netlify/functions/ledger?path='+encodeURIComponent(path)+'&_='+Date.now(), finalOpts);
   return res.json();
 }
 
@@ -3352,8 +3402,9 @@ async function renderBankBalancesBox() {
     if (!banks.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No banks set up yet — add one above.</div>'; return; }
     const showAccountsTotals = document.getElementById('toggle-show-accountstotals')?.checked;
     const accountsTotals = showAccountsTotals ? accountsBalanceTotalsByBank() : {};
+    const clickable = CURRENT_USER_ROLE !== 'staff';
     el.innerHTML = banks.map(b => `
-      <div style="padding:8px 14px;background:var(--surface2);border-radius:var(--radius);font-size:13px;cursor:pointer" onclick="openBankModal('${b.name.replace(/'/g,"\\'")}', ${b.remaining}, ${b.starting_balance})">
+      <div style="padding:8px 14px;background:var(--surface2);border-radius:var(--radius);font-size:13px;${clickable?'cursor:pointer':''}" ${clickable?`onclick="openBankModal('${b.name.replace(/'/g,"\\'")}', ${b.remaining}, ${b.starting_balance})"`:''}>
         <div style="font-weight:600">${escapeHtml(b.name)}</div>
         <div style="color:${balanceColor(b.remaining)}">£${b.remaining.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
         ${showAccountsTotals ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">Accounts: £${(accountsTotals[b.name]||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>` : ''}
@@ -4021,7 +4072,7 @@ async function loadDashboardPendingWithdrawals() {
           <span style="font-weight:600;margin-left:6px">£${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="add-btn" onclick="dashboardConfirmWithdrawal(${r.id}, ${r.sheet_row||'null'})"><i class="ti ti-check"></i> Confirm</button>
+          ${CURRENT_USER_ROLE !== 'staff' ? `<button class="add-btn" onclick="dashboardConfirmWithdrawal(${r.id}, ${r.sheet_row||'null'})"><i class="ti ti-check"></i> Confirm</button>` : ''}
           <button class="add-btn" onclick="dashboardReverseWithdrawal(${r.id})"><i class="ti ti-arrow-back-up"></i> Reverse</button>
           <button class="add-btn" onclick="dashboardConfiscateWithdrawal(${r.id})" style="color:var(--red);border-color:var(--red)"><i class="ti ti-ban"></i> Confiscated</button>
         </div>
@@ -4386,7 +4437,7 @@ async function loadMoneyPendingWithdrawals() {
           ${!r.sheet_row?' <span style="color:var(--amber)">(not linked)</span>':''}
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="add-btn" onclick="moneyConfirmWithdrawal(${r.id}, ${r.sheet_row||'null'})"><i class="ti ti-check"></i> Confirm</button>
+          ${CURRENT_USER_ROLE !== 'staff' ? `<button class="add-btn" onclick="moneyConfirmWithdrawal(${r.id}, ${r.sheet_row||'null'})"><i class="ti ti-check"></i> Confirm</button>` : ''}
           <button class="add-btn" onclick="moneyReverseWithdrawal(${r.id})"><i class="ti ti-arrow-back-up"></i> Reverse</button>
           <button class="add-btn" onclick="moneyConfiscateWithdrawal(${r.id})" style="color:var(--red);border-color:var(--red)"><i class="ti ti-ban"></i> Confiscated</button>
         </div>
@@ -4613,8 +4664,15 @@ function initBetsPage() {
   document.getElementById('bets-content').style.display = 'none';
   document.getElementById('bets-add-form-wrap').style.display = 'none';
   document.getElementById('bets-add-chevron').className = 'ti ti-chevron-down';
+  const userSel = document.getElementById('bets-user-select');
+  if (CURRENT_USER_ROLE === 'staff') {
+    userSel.innerHTML = '<option value="assistant">Assistant</option>';
+    userSel.value = 'assistant';
+  } else {
+    userSel.innerHTML = '<option value="">Select…</option><option value="buzzer">Buzzer</option><option value="assistant">Assistant</option>';
+  }
   refreshBetsPageAccounts();
-  loadCustomSheets();
+  loadCustomSheets().then(() => { if (CURRENT_USER_ROLE === 'staff') onBetsUserChange(); });
 }
 
 // ================== CUSTOM SHEETS (user-defined bet trackers) ==================
