@@ -217,6 +217,11 @@ input::placeholder{color:var(--text3)}
       <div><div class="cat-title">Profit breakdown</div><div class="cat-desc">Monthly P&amp;L, all-time chart and performance stats</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
+    <div class="cat" style="--accent:var(--blue)" onclick="showSec('today')">
+      <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-calendar"></i></div>
+      <div><div class="cat-title">Today's stats</div><div class="cat-desc">Live P&amp;L, profit probability and today's bets — Combined, Buzzer and Assistant</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
     <div class="cat" style="--accent:var(--purple)" onclick="showTopSec('calc')">
       <div class="cat-ico" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-calculator"></i></div>
       <div><div class="cat-title">Calculations</div><div class="cat-desc">Value finders, DDHH, manual calculators and fixtures</div></div>
@@ -336,6 +341,11 @@ input::placeholder{color:var(--text3)}
   <div class="sec-title wide" id="bettracking-detail-title"></div>
 
   <div id="bt-detail-content-wrap">
+  <div class="wide" style="display:flex;gap:6px;margin-bottom:10px">
+    <button class="add-btn" id="bt-daterange-all" onclick="setBtDateRange('all')">All</button>
+    <button class="add-btn" id="bt-daterange-today" onclick="setBtDateRange('today')">Today</button>
+    <button class="add-btn" id="bt-daterange-month" onclick="setBtDateRange('month')">This Month</button>
+  </div>
   <div class="card wide card-pad" style="margin-bottom:16px">
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:14px">
       <div><div class="lbl" style="margin-bottom:3px">Bets</div><div style="font-size:18px;font-weight:600" id="bt-detail-count">—</div></div>
@@ -1489,19 +1499,20 @@ input::placeholder{color:var(--text3)}
 
 <!-- TODAY -->
 <div id="view-today" class="sec">
-  <button class="back" onclick="backToBetsMenu()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
     <div class="sec-title" style="margin-bottom:0">Today's stats</div>
     <button onclick="initToday()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'"><i class="ti ti-refresh"></i> Refresh</button>
   </div>
   <div id="today-status" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="today-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="today-status-title">Loading...</div><div class="ph-d" id="today-status-msg"></div></div></div></div>
   <div id="today-content" style="display:none">
-    <!-- KPI row -->
-    <div class="kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px" id="today-kpis"></div>
-    <!-- Profit probability card -->
-    <div class="card" style="margin-bottom:16px" id="today-prob-card">
-      <div class="card-h" style="font-size:15px;font-weight:700;text-align:center">Overall Profit Probability — Today's Bets</div>
-      <div style="padding:20px">
+    <!-- Combined box: KPIs + Profit Probability, all users together -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-h" style="font-size:15px;font-weight:700;text-align:center">Combined — All Bets Today</div>
+      <div style="padding:16px 20px 4px">
+        <div class="kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px" id="today-kpis"></div>
+      </div>
+      <div style="padding:4px 20px 20px">
         <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
           <div style="flex:1;min-width:200px">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -1521,14 +1532,14 @@ input::placeholder{color:var(--text3)}
         </div>
       </div>
     </div>
-    <!-- Split Personal / VA panels -->
+    <!-- Split panels — Buzzer vs Assistant -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px" id="today-split-panels">
       <div class="card">
-        <div class="card-h" style="font-size:15px;font-weight:700;text-align:center">Personal Bets</div>
+        <div class="card-h" style="font-size:15px;font-weight:700;text-align:center">Buzzer</div>
         <div style="padding:16px" id="today-personal-content"></div>
       </div>
       <div class="card">
-        <div class="card-h" style="font-size:15px;font-weight:700;text-align:center">VA Bets</div>
+        <div class="card-h" style="font-size:15px;font-weight:700;text-align:center">Assistant</div>
         <div style="padding:16px" id="today-va-content"></div>
       </div>
     </div>
@@ -2611,7 +2622,7 @@ function selectBetType(type, label) {
   let html = '';
 
   if (cfg.event) html += `<div><label class="lbl">Event</label><input type="text" id="bef-Event"></div>`;
-  if (cfg.bookie) html += `<div><label class="lbl">Bookie</label><input type="text" id="bef-Book" value="${cfg.bookieDefault||''}" oninput="refreshLegAccountDropdowns();refreshCasinoAccountDropdowns()"></div>`;
+  if (cfg.bookie) html += `<div style="position:relative"><label class="lbl">Bookie</label><input type="text" id="bef-Book" value="${cfg.bookieDefault||''}" autocomplete="off" oninput="refreshLegAccountDropdowns();refreshCasinoAccountDropdowns();showBookieSuggestions(this)" onblur="setTimeout(hideBookieSuggestions,150)" onfocus="showBookieSuggestions(this)"><div id="bef-book-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius);box-shadow:0 4px 14px rgba(0,0,0,0.12);z-index:50;max-height:190px;overflow-y:auto;margin-top:4px"></div></div>`;
 
   if (cfg.layout === 'paste') {
     PASTE_SPECS[cfg.pasteSpec].columns.forEach(c => {
@@ -2724,6 +2735,13 @@ function handlePasteInput() {
 
 // Matches typed bookie text against the bookies actually present in live accounts —
 // exact case-insensitive match first, then a loose substring match as a fallback.
+// Abbreviations that aren't simple substrings of the real name, so the fuzzy matcher below
+// wouldn't catch them on their own — extend this list as more come up in practice.
+const BOOKIE_ALIASES = {
+  'b365': 'Bet365',
+  '365': 'Bet365',
+};
+
 function normalizeBookieInput(raw) {
   if (!raw || !raw.trim()) return null;
   const cleaned = raw.trim().toLowerCase();
@@ -2732,6 +2750,44 @@ function normalizeBookieInput(raw) {
   if (exact) return exact;
   const fuzzy = known.find(b => b.toLowerCase().includes(cleaned) || cleaned.includes(b.toLowerCase()));
   return fuzzy || null;
+}
+
+// Live "as you type" bookie suggestions — combines direct substring matching against known
+// bookies with the alias table above, so typing an abbreviation still surfaces the real name.
+function showBookieSuggestions(input) {
+  const raw = input.value.trim().toLowerCase();
+  const listEl = document.getElementById('bef-book-suggestions');
+  if (!listEl) return;
+  if (!raw) { listEl.style.display = 'none'; return; }
+  const known = [...new Set(LEDGER_ACCOUNTS.map(a => a.bookie))];
+  const matches = new Set();
+  Object.keys(BOOKIE_ALIASES).forEach(alias => {
+    if (alias.includes(raw) || raw.includes(alias)) {
+      const target = BOOKIE_ALIASES[alias];
+      if (known.includes(target)) matches.add(target);
+    }
+  });
+  known.forEach(b => { if (b.toLowerCase().includes(raw)) matches.add(b); });
+  const results = [...matches].slice(0, 8);
+  if (!results.length) { listEl.style.display = 'none'; return; }
+  listEl.innerHTML = results.map(b =>
+    `<div style="padding:8px 12px;cursor:pointer;font-size:13px" onmousedown="selectBookieSuggestion('${b.replace(/'/g,"\\'")}')" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">${escapeHtml(b)}</div>`
+  ).join('');
+  listEl.style.display = 'block';
+}
+
+function selectBookieSuggestion(name) {
+  const input = document.getElementById('bef-Book');
+  if (!input) return;
+  input.value = name;
+  hideBookieSuggestions();
+  refreshLegAccountDropdowns();
+  refreshCasinoAccountDropdowns();
+}
+
+function hideBookieSuggestions() {
+  const el = document.getElementById('bef-book-suggestions');
+  if (el) el.style.display = 'none';
 }
 
 function accountOptionsHtml(selectedId, bookieRaw, excludeIds) {
@@ -4869,6 +4925,8 @@ function onBetsTypeChange() {
   document.getElementById('bets-add-chevron').className = 'ti ti-chevron-down';
 
   btDetailType = key;
+  BT_DATE_RANGE = 'all';
+  ['all','today','month'].forEach(r => document.getElementById('bt-daterange-'+r)?.classList.toggle('active', r === 'all'));
   loadBetTrackingDetail();
 }
 
@@ -4901,6 +4959,14 @@ async function openBetTrackingDetail(betType, label) {
 let BT_DETAIL_STATE = { page: 0, totalCount: 0, fieldKeys: [] };
 const BT_PAGE_SIZE = 15;
 
+let BT_DATE_RANGE = 'all';
+
+function setBtDateRange(range) {
+  BT_DATE_RANGE = range;
+  ['all','today','month'].forEach(r => document.getElementById('bt-daterange-'+r).classList.toggle('active', r === range));
+  loadBetTrackingDetail();
+}
+
 async function loadBetTrackingDetail() {
   BT_DETAIL_STATE = { page: 0, totalCount: 0, fieldKeys: [] };
   await fetchBtDetailPage();
@@ -4911,7 +4977,8 @@ async function fetchBtDetailPage() {
   tableWrap.innerHTML = '<div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div>';
   try {
     const offset = BT_DETAIL_STATE.page * BT_PAGE_SIZE;
-    const d = await ledgerApi(`bets?type=${encodeURIComponent(btDetailType)}&limit=${BT_PAGE_SIZE}&offset=${offset}`);
+    const rangeParam = BT_DATE_RANGE !== 'all' ? `&dateRange=${BT_DATE_RANGE}` : '';
+    const d = await ledgerApi(`bets?type=${encodeURIComponent(btDetailType)}&limit=${BT_PAGE_SIZE}&offset=${offset}${rangeParam}`);
     if (!d.ok) { tableWrap.innerHTML = `<div style="padding:24px;color:var(--red);font-size:13px">Could not load bets: ${d.error||'unknown error'}</div>`; return; }
     const bets = d.bets || [];
     const s = d.summary || { count:0, open:0, wins:0, losses:0, totalStake:0, totalPl:0, totalEV:0 };
@@ -6240,85 +6307,40 @@ function parseRowDate(raw){
 }
 
 async function initToday(){
-  const mainUrl=localStorage.getItem('bb_main_url');
-  const vaUrl=localStorage.getItem('bb_va_url');
-  document.getElementById('today-status').style.display='';
-  document.getElementById('today-content').style.display='none';
-  if(!mainUrl&&!vaUrl){
-    showTodayStatus('ti-plug-connected-x','No data connection set up','Go to Bet Tracker and paste your sheet URLs in the Data connections card.');
-    return;
+  document.getElementById("today-status").style.display="";
+  document.getElementById("today-content").style.display="none";
+  showTodayStatus("ti-loader","Loading...","Fetching today's bets.");
+  try {
+    await loadCustomSheets(); // so betTypeMeta correctly resolves custom sheets too
+    const d = await ledgerApi("bets?dateRange=today&limit=1000");
+    if (!d.ok) { showTodayStatus("ti-alert-triangle","Could not load bets", d.error||"Unknown error"); return; }
+    const rawBets = d.bets || [];
+    if (!rawBets.length) {
+      showTodayStatus("ti-calendar-off","No bets found today","No bets have been logged today yet.");
+      return;
+    }
+    const bets = rawBets.map(b => {
+      const meta = betTypeMeta(b.bet_type);
+      const betDesc = b.fields.Bet || b.fields["Bet Description"] || b.fields.Horse || b.fields.Player || b.fields.Offer || b.fields["Bet 1"] || "";
+      const evVal = typeof b.fields.EV === "number" ? b.fields.EV : (typeof b.fields["EV £"] === "number" ? b.fields["EV £"] : 0);
+      return {
+        source: meta.label,
+        group: meta.source, // "Buzzer" or "Assistant"
+        date: formatLedgerDate(b.date),
+        bet: betDesc,
+        result: b.result==="won"?"w":b.result==="lost"?"l":b.result==="void"?"v":b.result==="placed"?"p":"",
+        odds: typeof b.fields.Odds === "number" ? b.fields.Odds : 0,
+        stake: b.total_stake || 0,
+        ev: evVal,
+        pl: b.pl || 0,
+      };
+    });
+    document.getElementById("today-status").style.display="none";
+    renderToday(bets, todayDateStr());
+  } catch (e) {
+    showTodayStatus("ti-alert-triangle","Network error","Could not reach the server.");
   }
-  showTodayStatus('ti-loader','Loading...','Fetching today\'s bets from your sheets.');
-  const today=todayDateStr();
-  let allBets=[];
-  // Main sheet tabs
-  const mainTabs=['Value','American Props','Keithbot','BB Horse','BB Golf','Freeze','Corners','Dogs + Horses','Other Bets','Ninja Golf BFEX'];
-  const mainFetches=mainTabs.map(async tab=>{
-    if(!mainUrl)return;
-    try{
-      const r=await fetch(`/.netlify/functions/sheets?url=${encodeURIComponent(mainUrl)}&tab=${encodeURIComponent(tab)}`);
-      const d=await r.json();
-      if(d.ok&&d.rows){
-        d.rows.forEach(row=>{
-          const dt=parseRowDate(row['Date']);
-          if(dt===today){
-            allBets.push({
-              source:tab,
-              date:row['Date']||'',
-              bet:row['Bet']||row['Player']||row['Horse']||row['Horse/Trap']||'',
-              result:String(row['Result']||row['Win?']||row['Win/Loss']||'').trim().toLowerCase(),
-              odds:parseFloat(row['Odds']||row['Acca Odds'])||0,
-              stake:parseFloat(row['Stake']||row['Total Stake'])||0,
-              ev:parseFloat(row['EV']||row['EV £']||row['EV£'])||0,
-              pl:parseFloat(row['P/L']||row['Profit/Loss']||row['Actual P/L'])||0,
-            });
-          }
-        });
-      }
-    }catch(e){}
-  });
-  // VA sheet tabs
-  const vaTabConfigs=[
-    {tab:'Discord',   betCol:'Bet',    oddsCol:'Odds',  stakeCol:'Stake', evCol:'EV',   plCol:'P/L',    resultCol:'Result'},
-    {tab:'BB - RTP',  betCol:'Horse',  oddsCol:'Odds',  stakeCol:'Stake', evCol:'EV',   plCol:'P/L',    resultCol:'Result'},
-    {tab:'BB - BT',   betCol:'Bet',    oddsCol:'Odds',  stakeCol:'Stake', evCol:'EV',   plCol:'P/L',    resultCol:'Result'},
-    {tab:'Casino',    betCol:'Notes',  oddsCol:'',      stakeCol:'Stake', evCol:'EV',   plCol:'P/L',    resultCol:''},
-    {tab:'Offers',    betCol:'Bet',    oddsCol:'Odds',  stakeCol:'Stake', evCol:'EV',   plCol:'P/L',    resultCol:'Result'},
-  ];
-  const vaFetches=vaTabConfigs.map(async cfg=>{
-    if(!vaUrl)return;
-    try{
-      const r=await fetch(`/.netlify/functions/sheets?url=${encodeURIComponent(vaUrl)}&tab=${encodeURIComponent(cfg.tab)}`);
-      const d=await r.json();
-      if(d.ok&&d.rows){
-        d.rows.forEach(row=>{
-          const dt=parseRowDate(row['Date']);
-          if(dt===today){
-            allBets.push({
-              source:'VA: '+cfg.tab,
-              date:row['Date']||'',
-              bet:row[cfg.betCol]||'',
-              result:String(row[cfg.resultCol]||'').trim().toLowerCase(),
-              odds:parseFloat(row[cfg.oddsCol])||0,
-              stake:parseFloat(row[cfg.stakeCol])||0,
-              ev:parseFloat(row[cfg.evCol])||0,
-              pl:parseFloat(row[cfg.plCol])||0,
-            });
-          }
-        });
-      }
-    }catch(e){}
-  });
-  await Promise.allSettled([...mainFetches,...vaFetches]);
-  document.getElementById('today-status').style.display='none';
-  if(!allBets.length){
-    showTodayStatus('ti-calendar-off','No bets found today','No bets with today\'s date ('+today+') were found across your connected sheets.');
-    document.getElementById('today-status').style.display='';
-    return;
-  }
-  renderToday(allBets,today);
 }
-
 function showTodayStatus(icon,title,msg){
   document.getElementById('today-status-ico').innerHTML=`<i class="ti ${icon}"></i>`;
   document.getElementById('today-status-title').textContent=title;
@@ -6332,7 +6354,7 @@ function renderToday(bets,today){
   const totalStaked=bets.reduce((s,b)=>s+b.stake,0);
   const totalEV=bets.reduce((s,b)=>s+b.ev,0);
   const avgEV=totalBets?totalEV/totalBets:0;
-  const settledBets=bets.filter(b=>b.result==='w'||b.result==='l'||b.result==='v');
+  const settledBets=bets.filter(b=>b.result==='w'||b.result==='l'||b.result==='v'||b.result==='p');
   const settledPL=settledBets.reduce((s,b)=>s+b.pl,0);
   const openBets=bets.filter(b=>!b.result||b.result==='');
 
@@ -6370,6 +6392,7 @@ function renderToday(bets,today){
     if(res==='w')badge=`<span class="badge" style="background:var(--green-bg);color:var(--green);font-weight:600">W</span>`;
     else if(res==='l')badge=`<span class="badge" style="background:var(--red-bg);color:var(--red)">L</span>`;
     else if(res==='v')badge=`<span class="badge" style="background:var(--amber-bg);color:var(--amber)">V</span>`;
+    else if(res==='p')badge=`<span class="badge" style="background:var(--blue-bg);color:var(--blue)">P</span>`;
     const plStr=b.pl===0&&!res?'—':`${b.pl>=0?'+':''}£${Math.abs(b.pl).toFixed(2)}`;
     const plC=b.pl>0?'var(--green)':b.pl<0?'var(--red)':'var(--text2)';
     const evStr=b.ev===0?'—':`${b.ev>=0?'+':''}£${Math.abs(b.ev).toFixed(2)}`;
@@ -6380,11 +6403,11 @@ function renderToday(bets,today){
   });
   document.getElementById('today-table-hdr').textContent=`${totalBets} bet${totalBets!==1?'s':''} — ${today}`;
 
-  // Split panels — Personal vs VA
-  const personalBets = bets.filter(b => !b.source.startsWith('VA:'));
-  const vaBets = bets.filter(b => b.source.startsWith('VA:'));
-  renderTodayPanel('today-personal-content', personalBets);
-  renderTodayPanel('today-va-content', vaBets);
+  // Split panels — Buzzer vs Assistant
+  const buzzerBets = bets.filter(b => b.group === 'Buzzer');
+  const assistantBets = bets.filter(b => b.group === 'Assistant');
+  renderTodayPanel('today-personal-content', buzzerBets);
+  renderTodayPanel('today-va-content', assistantBets);
 
   document.getElementById('today-content').style.display='';
 }
@@ -6397,7 +6420,7 @@ function renderTodayPanel(elId, bets) {
   }
   const totalStake = bets.reduce((s,b)=>s+b.stake,0);
   const totalEV = bets.reduce((s,b)=>s+b.ev,0);
-  const settled = bets.filter(b=>b.result==='w'||b.result==='l'||b.result==='v');
+  const settled = bets.filter(b=>b.result==='w'||b.result==='l'||b.result==='v'||b.result==='p');
   const settledPL = settled.reduce((s,b)=>s+b.pl,0);
   const open = bets.filter(b=>!b.result||b.result==='');
   const prob = monteCarloProfitProb(bets, settledPL);
