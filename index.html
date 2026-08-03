@@ -294,6 +294,16 @@ input::placeholder{color:var(--text3)}
       <div><div class="cat-title">Dashboard</div><div class="cat-desc">Everything currently needing actioned — open bets, pending withdrawals, locked funds</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
+    <div class="cat" style="--accent:var(--purple)" onclick="showLedgerSec('bankroll')">
+      <div class="cat-ico" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-wallet"></i></div>
+      <div><div class="cat-title">Bankroll Breakdown</div><div class="cat-desc">Liquid bankroll, net asset, debts and personal spending</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
+    <div class="cat" style="--accent:var(--blue)" onclick="showLedgerSec('external-staking')">
+      <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-users"></i></div>
+      <div><div class="cat-title">External Staking</div><div class="cat-desc">Bets staked for or by you, and transactions between you and others</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
   </div>
 </div>
 
@@ -682,6 +692,139 @@ input::placeholder{color:var(--text3)}
     <div class="lbl" style="margin-bottom:4px">Locked funds awaiting review</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Each one gets confirmed as locked, returned to the account's live balance, or moved to a withdrawal.</div>
     <div id="dashboard-locked-funds">Loading…</div>
+  </div>
+</div>
+
+<!-- LEDGER: BANKROLL BREAKDOWN -->
+<div id="view-ledger-bankroll" class="sec">
+  <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
+  <div class="sec-title">Bankroll Breakdown</div>
+
+  <div class="kpis" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px" id="bankroll-kpis"></div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+    <div class="card card-pad">
+      <div class="sec-title" style="margin:0 0 12px;font-size:15px">Savings</div>
+      <div id="bankroll-savings-list" style="margin-bottom:10px"></div>
+      <div style="display:grid;grid-template-columns:1fr 100px 32px;gap:8px">
+        <input type="text" id="bankroll-savings-label" placeholder="e.g. Trading 212">
+        <input type="number" id="bankroll-savings-amount" step="0.01" placeholder="£">
+        <button class="add-btn" onclick="submitBankrollManual('savings')" title="Save"><i class="ti ti-plus"></i></button>
+      </div>
+    </div>
+    <div class="card card-pad">
+      <div class="sec-title" style="margin:0 0 12px;font-size:15px">Pension</div>
+      <div id="bankroll-pension-list" style="margin-bottom:10px"></div>
+      <div style="display:grid;grid-template-columns:1fr 100px 32px;gap:8px">
+        <input type="text" id="bankroll-pension-label" placeholder="e.g. Personal Pension">
+        <input type="number" id="bankroll-pension-amount" step="0.01" placeholder="£">
+        <button class="add-btn" onclick="submitBankrollManual('pension')" title="Save"><i class="ti ti-plus"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card card-pad" style="margin-bottom:16px">
+    <div class="sec-title" style="margin:0 0 12px;font-size:15px">Miscellaneous</div>
+    <div id="bankroll-misc-list" style="margin-bottom:10px"></div>
+    <div style="display:grid;grid-template-columns:1fr 100px 32px;gap:8px">
+      <input type="text" id="bankroll-misc-label" placeholder="e.g. Amazon gift balance">
+      <input type="number" id="bankroll-misc-amount" step="0.01" placeholder="£">
+      <button class="add-btn" onclick="submitBankrollManual('misc')" title="Save"><i class="ti ti-plus"></i></button>
+    </div>
+  </div>
+
+  <div class="card card-pad" style="margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div class="sec-title" style="margin:0;font-size:15px">Debts</div>
+      <button class="add-btn" onclick="addDebtPerson()"><i class="ti ti-plus"></i> Add person</button>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Positive = they owe you. Negative = you owe them. Click a name to view history or adjust manually.</div>
+    <div id="bankroll-debts-list"></div>
+  </div>
+
+  <div class="card card-pad" style="margin-bottom:16px">
+    <div class="sec-title" style="margin:0 0 4px;font-size:15px">Add spending</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:14px">Moves money in/out of the selected bank's live balance and records it permanently below.</div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="add-btn" id="spending-dir-out" onclick="setSpendingDirection('out')">Money out</button>
+      <button class="add-btn" id="spending-dir-in" onclick="setSpendingDirection('in')">Money in</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div><label class="lbl">Bank</label><select id="spending-bank"></select></div>
+      <div><label class="lbl">Amount £</label><input type="number" id="spending-amount" step="0.01" min="0"></div>
+    </div>
+    <div style="margin-bottom:12px"><label class="lbl">Details (optional)</label><input type="text" id="spending-details" placeholder="e.g. Weekly shop"></div>
+    <button onclick="submitSpending()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:10px 18px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Log spending</button>
+    <div id="spending-msg" style="margin-top:10px;font-size:13px"></div>
+  </div>
+
+  <div class="card card-pad" style="margin-bottom:16px">
+    <div class="sec-title" style="margin:0 0 12px;font-size:15px">Spending history</div>
+    <div id="bankroll-spending-history">Loading…</div>
+  </div>
+
+  <div class="card card-pad">
+    <div class="sec-title" style="margin:0 0 12px;font-size:15px">Monthly history</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Captured automatically on the last day of each month.</div>
+    <div id="bankroll-snapshots">Loading…</div>
+  </div>
+</div>
+
+<!-- LEDGER: EXTERNAL STAKING -->
+<div id="view-ledger-external-staking" class="sec">
+  <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
+  <div class="sec-title">External Staking</div>
+
+  <div class="card card-pad" style="margin-bottom:16px">
+    <div class="sec-title" style="margin:0 0 4px;font-size:15px">Staked for me</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:14px">Someone else is funding this bet — it's recorded as a real bet on our pages, and their debt adjusts automatically when it's settled.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div><label class="lbl">Person</label><select id="stake-for-me-person"></select></div>
+      <div><label class="lbl">Log on which sheet?</label><select id="stake-for-me-sheet"></select></div>
+    </div>
+    <button onclick="continueToStakeForMe()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:10px 18px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Continue to bet form <i class="ti ti-arrow-right"></i></button>
+    <div id="stake-for-me-msg" style="margin-top:10px;font-size:13px"></div>
+  </div>
+
+  <div class="card card-pad" style="margin-bottom:16px">
+    <div class="sec-title" style="margin:0 0 4px;font-size:15px">Staked by me</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:14px">Placed on someone else's behalf through one of our accounts — doesn't count toward our P&amp;L, tracked entirely here.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div><label class="lbl">Person</label><select id="stake-by-me-person"></select></div>
+      <div><label class="lbl">Account</label><select id="stake-by-me-account"></select></div>
+    </div>
+    <div style="margin-bottom:10px"><label class="lbl">Bet description</label><input type="text" id="stake-by-me-desc" placeholder="e.g. Man Utd to win"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div><label class="lbl">Odds</label><input type="number" id="stake-by-me-odds" step="0.01" min="1.01"></div>
+      <div><label class="lbl">Stake £</label><input type="number" id="stake-by-me-stake" step="0.01" min="0"></div>
+    </div>
+    <button onclick="submitStakeByMe()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:10px 18px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Log stake</button>
+    <div id="stake-by-me-msg" style="margin-top:10px;font-size:13px"></div>
+  </div>
+
+  <div class="card card-pad" style="margin-bottom:16px">
+    <div class="sec-title" style="margin:0 0 12px;font-size:15px">Open — staked by me</div>
+    <div id="stake-by-me-open">Loading…</div>
+  </div>
+
+  <div class="card card-pad" style="margin-bottom:16px">
+    <div class="sec-title" style="margin:0 0 4px;font-size:15px">Add transaction</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:14px">For anything else between you and someone else — a shared subscription, a one-off repayment, etc.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div><label class="lbl">Person</label><select id="debt-txn-person"></select></div>
+      <div><label class="lbl">Direction</label><select id="debt-txn-direction"><option value="from">Money from them</option><option value="to">Money to them</option></select></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div><label class="lbl">Amount £</label><input type="number" id="debt-txn-amount" step="0.01" min="0"></div>
+      <div><label class="lbl">Reason</label><input type="text" id="debt-txn-reason" placeholder="e.g. Shared subscription — his half"></div>
+    </div>
+    <button onclick="submitDebtTransaction()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:10px 18px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Add</button>
+    <div id="debt-txn-msg" style="margin-top:10px;font-size:13px"></div>
+  </div>
+
+  <div class="card card-pad">
+    <div class="sec-title" style="margin:0 0 12px;font-size:15px">History</div>
+    <div id="debt-history">Loading…</div>
   </div>
 </div>
 
@@ -2149,7 +2292,7 @@ const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger',bettracking
 function showTopSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});}
 function backToBetsMenu(){showTopSec('bets');}
 function backToCalcMenu(){showTopSec('calc');}
-function showLedgerSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-ledger-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='bet-entry')initBetEntry();if(name==='bulk-import')initAccountEntry();if(name==='accounts')initAccountsGrid();if(name==='deposits')initDepositsLog();if(name==='withdrawals')initWithdrawalsPending();if(name==='account-summary')initAccountSummary();if(name==='locked-funds')initLockedFunds();if(name==='archived')initArchived();if(name==='bank-transactions')initBankTransactions();if(name==='money')initMoneyPage();if(name==='dashboard')initDashboard();}
+function showLedgerSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-ledger-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='bet-entry')initBetEntry();if(name==='bulk-import')initAccountEntry();if(name==='accounts')initAccountsGrid();if(name==='deposits')initDepositsLog();if(name==='withdrawals')initWithdrawalsPending();if(name==='account-summary')initAccountSummary();if(name==='locked-funds')initLockedFunds();if(name==='archived')initArchived();if(name==='bank-transactions')initBankTransactions();if(name==='money')initMoneyPage();if(name==='dashboard')initDashboard();if(name==='bankroll')initBankroll();if(name==='external-staking')initExternalStaking();}
 function backToLedgerHub(){showTopSec('ledger');}
 
 
@@ -3254,6 +3397,15 @@ async function submitBetEntry() {
     });
     if (d.ok) {
       msgEl.innerHTML = `<span style="color:var(--green)"><i class="ti ti-check"></i> Bet logged — total stake £${d.bet.total_stake.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`;
+      if (window.pendingStakeForPerson) {
+        const person = window.pendingStakeForPerson;
+        window.pendingStakeForPerson = null;
+        try {
+          await ledgerApi('bet-external-stakes', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ bet_id: d.bet.id, person }) });
+          msgEl.innerHTML += `<br><span style="color:var(--blue)">Linked to ${escapeHtml(person)} — their debt will update automatically once this is settled.</span>`;
+        } catch (e) { msgEl.innerHTML += `<br><span style="color:var(--red)">Bet logged, but linking it to ${escapeHtml(person)} failed — link it manually from External Staking.</span>`; }
+        document.getElementById('bets-staking-banner')?.remove();
+      }
       setTimeout(afterBetLogged, 1400);
     } else {
       msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Something went wrong'}</span>`;
@@ -4078,6 +4230,378 @@ async function clearLockedFunds(id) {
 }
 
 // ================== LEDGER: DASHBOARD ==================
+// ================== LEDGER: BANKROLL BREAKDOWN ==================
+let BANKROLL_DATA = null;
+
+async function initBankroll() {
+  document.getElementById('bankroll-kpis').innerHTML = 'Loading…';
+  try {
+    const d = await ledgerApi('bankroll');
+    if (!d.ok) { document.getElementById('bankroll-kpis').innerHTML = `<div style="color:var(--red);font-size:13px">${d.error||'Could not load'}</div>`; return; }
+    BANKROLL_DATA = d;
+    renderBankrollKpis();
+    renderBankrollManualLists();
+    renderBankrollDebts();
+    renderBankrollSnapshots();
+  } catch (e) { document.getElementById('bankroll-kpis').innerHTML = '<div style="color:var(--red);font-size:13px">Network error.</div>'; }
+  loadSpendingBanks();
+  loadSpendingHistory();
+  setSpendingDirection('out');
+}
+
+function renderBankrollKpis() {
+  const d = BANKROLL_DATA;
+  const fmt = v => `${v>=0?'':'-'}£${Math.abs(v).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  document.getElementById('bankroll-kpis').innerHTML = `
+    <div class="kpi"><div class="kpi-l">Liquid Bankroll</div><div class="kpi-v">${fmt(d.liquid)}</div></div>
+    <div class="kpi"><div class="kpi-l">Net Asset</div><div class="kpi-v">${fmt(d.netAsset)}</div></div>
+    <div class="kpi"><div class="kpi-l">Kelly Stake (10%)</div><div class="kpi-v">${fmt(d.kellyStake)}</div></div>`;
+}
+
+function renderBankrollManualLists() {
+  ['savings','pension','misc'].forEach(cat => {
+    const items = BANKROLL_DATA.manual.filter(m => m.category === cat);
+    const el = document.getElementById('bankroll-'+cat+'-list');
+    if (!items.length) { el.innerHTML = '<div style="color:var(--text3);font-size:12.5px">Nothing added yet.</div>'; return; }
+    el.innerHTML = items.map(m => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+        <span>${escapeHtml(m.label)}</span>
+        <span style="display:flex;align-items:center;gap:8px">
+          <span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;font-weight:600" onclick="editBankrollManual(${m.id},'${cat}','${m.label.replace(/'/g,"\\'")}',${m.amount})">£${m.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+          <span class="rm-btn" style="cursor:pointer" onclick="deleteBankrollManual(${m.id})" title="Remove">×</span>
+        </span>
+      </div>`).join('');
+  });
+}
+
+async function submitBankrollManual(category) {
+  const label = document.getElementById('bankroll-'+category+'-label').value.trim();
+  const amount = parseFloat(document.getElementById('bankroll-'+category+'-amount').value);
+  if (!label) { alert('Enter a name for this item.'); return; }
+  if (isNaN(amount)) { alert('Enter a valid amount.'); return; }
+  try {
+    const d = await ledgerApi('bankroll/manual', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ category, label, amount }) });
+    if (!d.ok) { alert(d.error || 'Failed to save'); return; }
+    document.getElementById('bankroll-'+category+'-label').value = '';
+    document.getElementById('bankroll-'+category+'-amount').value = '';
+    initBankroll();
+  } catch (e) { alert('Network error.'); }
+}
+
+async function editBankrollManual(id, category, currentLabel, currentAmount) {
+  const input = prompt(`Update "${currentLabel}":`, currentAmount);
+  if (input === null) return;
+  const amount = parseFloat(input);
+  if (isNaN(amount)) { alert('Enter a valid amount.'); return; }
+  try {
+    const d = await ledgerApi('bankroll/manual', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ category, label: currentLabel, amount }) });
+    if (!d.ok) { alert(d.error || 'Failed to update'); return; }
+    initBankroll();
+  } catch (e) { alert('Network error.'); }
+}
+
+async function deleteBankrollManual(id) {
+  if (!confirm('Remove this item?')) return;
+  try {
+    const d = await ledgerApi('bankroll/manual/'+id, { method:'DELETE' });
+    if (!d.ok) { alert(d.error || 'Failed to remove'); return; }
+    initBankroll();
+  } catch (e) { alert('Network error.'); }
+}
+
+function renderBankrollDebts() {
+  const el = document.getElementById('bankroll-debts-list');
+  if (!BANKROLL_DATA.debts.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No one added yet.</div>'; return; }
+  el.innerHTML = BANKROLL_DATA.debts.map(p => {
+    const col = p.balance > 0 ? 'var(--green)' : p.balance < 0 ? 'var(--red)' : 'var(--text2)';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+      <span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="openDebtHistory('${p.name.replace(/'/g,"\\'")}')">${escapeHtml(p.name)}</span>
+      <span style="display:flex;align-items:center;gap:10px">
+        <span style="font-weight:600;color:${col}">${p.balance>=0?'+':'-'}£${Math.abs(p.balance).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+        <button class="add-btn" onclick="adjustDebtManual('${p.name.replace(/'/g,"\\'")}')" style="margin:0">Adjust</button>
+      </span>
+    </div>`;
+  }).join('');
+}
+
+async function addDebtPerson() {
+  const name = prompt('Name of the new person to track:');
+  if (name === null || !name.trim()) return;
+  try {
+    const d = await ledgerApi('debts', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: name.trim() }) });
+    if (!d.ok) { alert(d.error || 'Failed to add'); return; }
+    initBankroll();
+  } catch (e) { alert('Network error.'); }
+}
+
+async function adjustDebtManual(name) {
+  const input = prompt(`Adjust ${name}'s balance by (positive = they now owe more, negative = you now owe more):`, '0');
+  if (input === null) return;
+  const amount = parseFloat(input);
+  if (isNaN(amount) || amount === 0) { alert('Enter a non-zero number.'); return; }
+  const reason = prompt('Reason (optional):', '') || '';
+  try {
+    const d = await ledgerApi('debts/'+encodeURIComponent(name), { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ amount, reason }) });
+    if (!d.ok) { alert(d.error || 'Failed to adjust'); return; }
+    initBankroll();
+  } catch (e) { alert('Network error.'); }
+}
+
+async function openDebtHistory(name) {
+  try {
+    const d = await ledgerApi('debt-transactions?person='+encodeURIComponent(name));
+    const rows = (d.ok && d.transactions) ? d.transactions : [];
+    if (!rows.length) { alert(`No history yet for ${name}.`); return; }
+    const lines = rows.map(r => `${formatLedgerDate(r.date)} — ${r.amount>=0?'+':''}£${r.amount.toFixed(2)} (${r.type})${r.reason ? ' — '+r.reason : ''}`);
+    alert(`History for ${name}:\n\n` + lines.join('\n'));
+  } catch (e) { alert('Network error.'); }
+}
+
+function renderBankrollSnapshots() {
+  const el = document.getElementById('bankroll-snapshots');
+  if (!BANKROLL_DATA.snapshots.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No history yet — the first snapshot is taken automatically at the end of this month.</div>'; return; }
+  el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr style="text-align:left;color:var(--text3);font-size:11px;text-transform:uppercase"><th style="padding:6px 8px">Month</th><th class="r" style="padding:6px 8px">Liquid Bankroll</th><th class="r" style="padding:6px 8px">Net Asset</th></tr></thead>
+    <tbody>${BANKROLL_DATA.snapshots.map(s => `<tr style="border-bottom:0.5px solid var(--border)">
+      <td style="padding:7px 8px">${s.month}</td>
+      <td class="r" style="padding:7px 8px">£${s.liquid_bankroll.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td class="r" style="padding:7px 8px">£${s.net_asset.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+// ---- Spendings ----
+let spendingDirection = 'out';
+function setSpendingDirection(dir) {
+  spendingDirection = dir;
+  document.getElementById('spending-dir-out').classList.toggle('active', dir === 'out');
+  document.getElementById('spending-dir-in').classList.toggle('active', dir === 'in');
+}
+
+async function loadSpendingBanks() {
+  try {
+    const d = await ledgerApi('banks');
+    const banks = (d.ok && d.banks) ? d.banks : [];
+    document.getElementById('spending-bank').innerHTML = banks.length
+      ? banks.map(b => `<option value="${escapeHtml(b.name)}">${escapeHtml(b.name)} — £${b.remaining.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</option>`).join('')
+      : '<option value="">No banks set up yet</option>';
+  } catch (e) { document.getElementById('spending-bank').innerHTML = '<option value="">Could not load banks</option>'; }
+}
+
+async function submitSpending() {
+  const bank = document.getElementById('spending-bank').value;
+  const amount = parseFloat(document.getElementById('spending-amount').value);
+  const details = document.getElementById('spending-details').value.trim();
+  const msgEl = document.getElementById('spending-msg');
+  if (!bank) { msgEl.innerHTML = '<span style="color:var(--red)">Select a bank.</span>'; return; }
+  if (!(amount > 0)) { msgEl.innerHTML = '<span style="color:var(--red)">Enter an amount greater than £0.</span>'; return; }
+  msgEl.innerHTML = '<span style="color:var(--text2)">Logging…</span>';
+  try {
+    const d = await ledgerApi('spendings', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ bank, direction: spendingDirection, amount, details }) });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to log'}</span>`; return; }
+    msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Logged.</span>';
+    document.getElementById('spending-amount').value = '';
+    document.getElementById('spending-details').value = '';
+    loadSpendingBanks();
+    loadSpendingHistory();
+    initBankroll();
+  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error.</span>'; }
+}
+
+async function loadSpendingHistory() {
+  const el = document.getElementById('bankroll-spending-history');
+  el.innerHTML = 'Loading…';
+  try {
+    const d = await ledgerApi('spendings');
+    const rows = (d.ok && d.spendings) ? d.spendings : [];
+    if (!rows.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No spending logged yet.</div>'; return; }
+    el.innerHTML = rows.map(r => `<div style="padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px;display:flex;justify-content:space-between;align-items:center">
+      <div><span style="color:var(--text3);font-size:11px">${formatLedgerDate(r.date)}</span> ${escapeHtml(r.bank)}${r.details?' — '+escapeHtml(r.details):''}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;font-weight:600;color:${r.direction==='in'?'var(--green)':'var(--red)'}" onclick="editSpending(${r.id},${r.amount})">${r.direction==='in'?'+':'-'}£${r.amount.toFixed(2)}</span>
+        <span class="rm-btn" style="cursor:pointer" onclick="deleteSpending(${r.id})" title="Remove">×</span>
+      </div>
+    </div>`).join('');
+  } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load history.</div>'; }
+}
+
+async function editSpending(id, currentAmount) {
+  const input = prompt('Correct this amount:', currentAmount);
+  if (input === null) return;
+  const amount = parseFloat(input);
+  if (!(amount > 0)) { alert('Enter a valid positive amount.'); return; }
+  try {
+    const d = await ledgerApi('spendings/'+id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ amount }) });
+    if (!d.ok) { alert(d.error || 'Failed to update'); return; }
+    loadSpendingHistory(); loadSpendingBanks(); initBankroll();
+  } catch (e) { alert('Network error.'); }
+}
+
+async function deleteSpending(id) {
+  if (!confirm('Remove this spending entry? This reverses its effect on the bank balance.')) return;
+  try {
+    const d = await ledgerApi('spendings/'+id, { method:'DELETE' });
+    if (!d.ok) { alert(d.error || 'Failed to remove'); return; }
+    loadSpendingHistory(); loadSpendingBanks(); initBankroll();
+  } catch (e) { alert('Network error.'); }
+}
+
+// ================== LEDGER: EXTERNAL STAKING ==================
+function debtPersonOptionsHtml(selected) {
+  const people = (BANKROLL_DATA && BANKROLL_DATA.debts) ? BANKROLL_DATA.debts : [];
+  if (!people.length) return '<option value="">Add a person on Bankroll Breakdown first</option>';
+  return '<option value="">Select…</option>' + people.map(p => `<option value="${escapeHtml(p.name)}" ${p.name===selected?'selected':''}>${escapeHtml(p.name)}</option>`).join('');
+}
+
+async function initExternalStaking() {
+  // Debts data doubles as the person list here — load it fresh so a newly-added person
+  // (from Bankroll Breakdown) shows up immediately.
+  try {
+    const d = await ledgerApi('bankroll');
+    if (d.ok) BANKROLL_DATA = d;
+  } catch (e) { /* fall through with whatever's cached, if anything */ }
+
+  ['stake-for-me-person', 'stake-by-me-person', 'debt-txn-person'].forEach(id => {
+    document.getElementById(id).innerHTML = debtPersonOptionsHtml();
+  });
+
+  const sheetSel = document.getElementById('stake-for-me-sheet');
+  await loadCustomSheets();
+  const opts = [];
+  ['buzzer','assistant'].forEach(group => {
+    (BET_TYPE_GROUPS[group]||[]).forEach(t => opts.push({ group, key: t.key, label: `${group==='buzzer'?'Buzzer':'Assistant'} — ${t.label}` }));
+  });
+  sheetSel.innerHTML = opts.map(o => `<option value="${o.key}" data-group="${o.group}">${escapeHtml(o.label)}</option>`).join('');
+
+  try {
+    const d = await ledgerApi('accounts?excludeClosed=1');
+    const accounts = (d.ok && d.accounts) ? d.accounts : [];
+    document.getElementById('stake-by-me-account').innerHTML = accounts.length
+      ? accounts.map(a => `<option value="${a.id}">${escapeHtml(a.account_id||a.profile)} — ${escapeHtml(a.bookie)} (${escapeHtml(a.profile)})</option>`).join('')
+      : '<option value="">No live accounts</option>';
+  } catch (e) { document.getElementById('stake-by-me-account').innerHTML = '<option value="">Could not load accounts</option>'; }
+
+  loadStakeByMeOpen();
+  loadDebtHistory();
+}
+
+// "Staked for me" doesn't submit anything itself — it hands off to the real Bet Entry form
+// via a redirect, so the bet is created through the exact same logic (and calculations) as
+// every other bet, with a link created automatically once it's submitted there.
+function continueToStakeForMe() {
+  const person = document.getElementById('stake-for-me-person').value;
+  const sheetSel = document.getElementById('stake-for-me-sheet');
+  const key = sheetSel.value;
+  const group = sheetSel.options[sheetSel.selectedIndex]?.dataset.group;
+  const msgEl = document.getElementById('stake-for-me-msg');
+  if (!person) { msgEl.innerHTML = '<span style="color:var(--red)">Select who this is staked for.</span>'; return; }
+  if (!key || !group) { msgEl.innerHTML = '<span style="color:var(--red)">Select which sheet to log it on.</span>'; return; }
+  window.pendingStakeForPerson = person;
+  window.pendingStakeForSheet = { group, key };
+  showSec('bets-combined');
+}
+
+async function submitStakeByMe() {
+  const person = document.getElementById('stake-by-me-person').value;
+  const account_id = document.getElementById('stake-by-me-account').value;
+  const bet_description = document.getElementById('stake-by-me-desc').value.trim();
+  const odds = parseFloat(document.getElementById('stake-by-me-odds').value);
+  const stake = parseFloat(document.getElementById('stake-by-me-stake').value);
+  const msgEl = document.getElementById('stake-by-me-msg');
+  if (!person) { msgEl.innerHTML = '<span style="color:var(--red)">Select who this is staked by.</span>'; return; }
+  if (!account_id) { msgEl.innerHTML = '<span style="color:var(--red)">Select an account.</span>'; return; }
+  if (!(odds > 1)) { msgEl.innerHTML = '<span style="color:var(--red)">Enter valid odds (greater than 1).</span>'; return; }
+  if (!(stake > 0)) { msgEl.innerHTML = '<span style="color:var(--red)">Enter a stake greater than £0.</span>'; return; }
+  msgEl.innerHTML = '<span style="color:var(--text2)">Logging…</span>';
+  try {
+    const d = await ledgerApi('external-stakes', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ person, account_id, bet_description, odds, stake }) });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to log'}</span>`; return; }
+    msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Logged.</span>';
+    document.getElementById('stake-by-me-desc').value = '';
+    document.getElementById('stake-by-me-odds').value = '';
+    document.getElementById('stake-by-me-stake').value = '';
+    loadStakeByMeOpen();
+  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error.</span>'; }
+}
+
+async function loadStakeByMeOpen() {
+  const el = document.getElementById('stake-by-me-open');
+  el.innerHTML = 'Loading…';
+  try {
+    const d = await ledgerApi('external-stakes?status=open');
+    const rows = (d.ok && d.stakes) ? d.stakes : [];
+    if (!rows.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">Nothing open.</div>'; return; }
+    el.innerHTML = rows.map(r => `<div style="padding:9px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="color:var(--text3);font-size:11px">${formatLedgerDate(r.date)} — ${escapeHtml(r.person)} — ${escapeHtml(r.account_code||'—')} (${escapeHtml(r.bookie||'')})</div>
+          ${escapeHtml(r.bet_description||'')} <span style="font-weight:600;margin-left:6px">£${r.stake.toFixed(2)} @ ${r.odds}</span>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="add-btn" onclick="settleStakeByMe(${r.id},'won')">Won</button>
+          <button class="add-btn" onclick="settleStakeByMe(${r.id},'lost')">Lost</button>
+          <button class="add-btn" onclick="deleteStakeByMe(${r.id})" style="color:var(--red);border-color:var(--red)">Delete</button>
+        </div>
+      </div>
+    </div>`).join('');
+  } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load.</div>'; }
+}
+
+async function settleStakeByMe(id, result) {
+  try {
+    const d = await ledgerApi('external-stakes/'+id+'/settle', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ result }) });
+    if (!d.ok) { alert(d.error || 'Failed to settle'); return; }
+    loadStakeByMeOpen();
+    loadDebtHistory();
+  } catch (e) { alert('Network error.'); }
+}
+
+async function deleteStakeByMe(id) {
+  if (!confirm('Delete this stake? This reverses its effect on the account balance and, if already settled, the linked debt.')) return;
+  try {
+    const d = await ledgerApi('external-stakes/'+id, { method:'DELETE' });
+    if (!d.ok) { alert(d.error || 'Failed to delete'); return; }
+    loadStakeByMeOpen();
+    loadDebtHistory();
+  } catch (e) { alert('Network error.'); }
+}
+
+async function submitDebtTransaction() {
+  const person = document.getElementById('debt-txn-person').value;
+  const direction = document.getElementById('debt-txn-direction').value;
+  const amount = parseFloat(document.getElementById('debt-txn-amount').value);
+  const reason = document.getElementById('debt-txn-reason').value.trim();
+  const msgEl = document.getElementById('debt-txn-msg');
+  if (!person) { msgEl.innerHTML = '<span style="color:var(--red)">Select a person.</span>'; return; }
+  if (!(amount > 0)) { msgEl.innerHTML = '<span style="color:var(--red)">Enter an amount greater than £0.</span>'; return; }
+  msgEl.innerHTML = '<span style="color:var(--text2)">Adding…</span>';
+  try {
+    const d = await ledgerApi('debt-transactions', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ person, direction, amount, reason }) });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to add'}</span>`; return; }
+    msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Added.</span>';
+    document.getElementById('debt-txn-amount').value = '';
+    document.getElementById('debt-txn-reason').value = '';
+    loadDebtHistory();
+  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error.</span>'; }
+}
+
+async function loadDebtHistory() {
+  const el = document.getElementById('debt-history');
+  el.innerHTML = 'Loading…';
+  try {
+    const d = await ledgerApi('debt-transactions');
+    const rows = (d.ok && d.transactions) ? d.transactions : [];
+    if (!rows.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No history yet.</div>'; return; }
+    const typeLabel = { stake_for_me: 'Staked for you', stake_by_me: 'Staked by you', transaction: 'Transaction' };
+    el.innerHTML = rows.map(r => `<div style="padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+      <div style="color:var(--text3);font-size:11px">${formatLedgerDate(r.date)} — ${escapeHtml(r.person)} — ${typeLabel[r.type]||r.type}</div>
+      <div style="display:flex;justify-content:space-between">
+        <span>${escapeHtml(r.reason||'')}</span>
+        <span style="font-weight:600;color:${r.amount>=0?'var(--green)':'var(--red)'}">${r.amount>=0?'+':''}£${r.amount.toFixed(2)}</span>
+      </div>
+    </div>`).join('');
+  } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load history.</div>'; }
+}
+
 async function initDashboard() {
   await loadCustomSheets();
   loadDashboardOpenBets();
@@ -4754,7 +5278,25 @@ function initBetsPage() {
     userSel.innerHTML = '<option value="">Select…</option><option value="buzzer">Buzzer</option><option value="assistant">Assistant</option>';
   }
   refreshBetsPageAccounts();
-  loadCustomSheets().then(() => { if (CURRENT_USER_ROLE === 'staff') onBetsUserChange(); });
+  loadCustomSheets().then(() => {
+    if (CURRENT_USER_ROLE === 'staff') onBetsUserChange();
+    if (window.pendingStakeForPerson && window.pendingStakeForSheet) {
+      const { group, key } = window.pendingStakeForSheet;
+      userSel.value = group;
+      onBetsUserChange();
+      document.getElementById('bets-type-select').value = key;
+      onBetsTypeChange();
+      toggleBetsAddForm();
+      let banner = document.getElementById('bets-staking-banner');
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'bets-staking-banner';
+        banner.style.cssText = 'background:var(--blue-bg);color:var(--blue);border-radius:var(--radius);padding:10px 14px;font-size:13px;margin-bottom:14px';
+        document.getElementById('bets-content').prepend(banner);
+      }
+      banner.innerHTML = `<i class="ti ti-user"></i> Logging this bet on behalf of <strong>${escapeHtml(window.pendingStakeForPerson)}</strong> — their debt will update automatically once it's settled.`;
+    }
+  });
 }
 
 // ================== CUSTOM SHEETS (user-defined bet trackers) ==================
