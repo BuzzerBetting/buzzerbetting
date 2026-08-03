@@ -668,7 +668,7 @@ input::placeholder{color:var(--text3)}
       </label>
     </div>
   </div>
-  <div id="live-accounts-wrap" class="wide" style="overflow-x:auto"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
+  <div class="wide"><div id="live-accounts-wrap" style="overflow-x:auto"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div></div>
 </div>
 
 <!-- LEDGER: DEPOSITS -->
@@ -3601,7 +3601,7 @@ function renderAccountsGrid() {
     filtered.forEach(a => { const key = a.account_id || '—'; (byCard[key] = byCard[key] || []).push(a); });
     const cardIds = Object.keys(byCard).sort();
     wrap.innerHTML = `<div style="display:flex;gap:12px;align-items:flex-start">${cardIds.map(cardId => {
-      const cells = byCard[cardId].map(a => cellHtml(a, a.bookie)).join('');
+      const cells = sortAccountsForGrid(byCard[cardId]).map(a => cellHtml(a, a.bookie)).join('');
       return `<div class="live-accts-col"><div class="live-accts-col-header">${escapeHtml(cardId)}</div>${cells}</div>`;
     }).join('')}</div>`;
   } else if (accountsGroupBy === 'bank') {
@@ -3609,7 +3609,7 @@ function renderAccountsGrid() {
     filtered.forEach(a => { const key = a.profile || 'Unknown'; (byBank[key] = byBank[key] || []).push(a); });
     const bankNames = Object.keys(byBank).sort();
     wrap.innerHTML = `<div style="display:flex;gap:12px;align-items:flex-start">${bankNames.map(bank => {
-      const cells = byBank[bank].map(a => cellHtml(a, a.account_id || '—', true)).join('');
+      const cells = sortAccountsForGrid(byBank[bank]).map(a => cellHtml(a, a.account_id || '—', true)).join('');
       return `<div class="live-accts-col"><div class="live-accts-col-header">${escapeHtml(bank)} <span style="font-weight:400;color:var(--text3)">(${byBank[bank].length})</span></div>${cells}</div>`;
     }).join('')}</div>`;
   } else {
@@ -3617,10 +3617,22 @@ function renderAccountsGrid() {
     filtered.forEach(a => { (byBookie[a.bookie] = byBookie[a.bookie] || []).push(a); });
     const bookies = Object.keys(byBookie).sort();
     wrap.innerHTML = `<div style="display:flex;gap:12px;align-items:flex-start">${bookies.map(bookie => {
-      const cells = byBookie[bookie].map(a => cellHtml(a, a.account_id || '—')).join('');
+      const cells = sortAccountsForGrid(byBookie[bookie]).map(a => cellHtml(a, a.account_id || '—')).join('');
       return `<div class="live-accts-col"><div class="live-accts-col-header">${escapeHtml(bookie)}</div>${cells}</div>`;
     }).join('')}</div>`;
   }
+}
+
+// Highest balance first within each column; ties (most commonly a run of £0 balances)
+// fall back to lowest C/D-ID number first, extracting the numeric part so C2 sorts before
+// C10 regardless of zero-padding.
+function sortAccountsForGrid(list) {
+  return [...list].sort((a, b) => {
+    if (b.balance !== a.balance) return b.balance - a.balance;
+    const numA = parseInt((a.account_id||'').replace(/\D/g,''), 10) || 0;
+    const numB = parseInt((b.account_id||'').replace(/\D/g,''), 10) || 0;
+    return numA - numB;
+  });
 }
 
 // Bank figures come from the server (GET /banks), not summed client-side from account
