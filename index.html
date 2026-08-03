@@ -4021,30 +4021,36 @@ async function submitMoneyPrompt() {
   const acc = ACTIVE_ACCOUNT;
   const accountName = getAccountDisplayName(acc);
 
+  let ld;
   try {
-    const ld = await ledgerApi(`accounts/${acc.id}/${ACTIVE_MONEY_TYPE}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ amount }) });
-    if (!ld.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${ld.error||'Failed'}</span>`; return; }
+    ld = await ledgerApi(`accounts/${acc.id}/${ACTIVE_MONEY_TYPE}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ amount }) });
+  } catch (e) {
+    msgEl.innerHTML = '<span style="color:var(--red)">Network error — nothing was recorded, please try again.</span>';
+    return;
+  }
+  if (!ld.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${ld.error||'Failed'}</span>`; return; }
 
-    acc.balance = ld.balance;
-    document.getElementById('account-modal-balance').textContent = '£' + ld.balance.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+  // The ledger-side operation has now genuinely succeeded — money has moved (or the
+  // pending withdrawal has been created). Everything from here on is the Google Sheets
+  // sync, kept in its own try/catch so a failure there (of any kind, including a network
+  // throw, not just a clean error response) is always shown as a separate sheet-only
+  // problem, never as a blanket error that could be mistaken for the ledger side failing.
+  acc.balance = ld.balance;
+  document.getElementById('account-modal-balance').textContent = '£' + ld.balance.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('account-money-prompt').style.display = 'none';
+  if (document.getElementById('view-ledger-accounts').style.display !== 'none') { renderAccountsGrid(); renderBankBalancesBox(); }
 
-    const sheetAction = ACTIVE_MONEY_TYPE === 'deposit' ? 'add_deposit' : 'add_withdrawal';
+  const sheetAction = ACTIVE_MONEY_TYPE === 'deposit' ? 'add_deposit' : 'add_withdrawal';
+  try {
     const sd = await accountsSheetApi({ action: sheetAction, bookie: acc.bookie, profile: acc.profile, accountName, amount });
-
     if (sd.ok && sd.row) {
       await ledgerApi(`${ACTIVE_MONEY_TYPE === 'deposit' ? 'deposits' : 'withdrawals'}/${ld.id}/sheet-row`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sheet_row: sd.row }) });
     }
-
-    if (sd.ok) {
-      msgEl.innerHTML = `<span style="color:var(--green)"><i class="ti ti-check"></i> ${ACTIVE_MONEY_TYPE==='deposit'?'Deposit':'Withdrawal'} recorded — sheet updated.</span>`;
-    } else {
-      msgEl.innerHTML = `<span style="color:var(--amber)">Ledger updated, but the sheet write failed (${sd.error||'unknown error'}) — add it there manually.</span>`;
-    }
-
-    document.getElementById('account-money-prompt').style.display = 'none';
-    if (document.getElementById('view-ledger-accounts').style.display !== 'none') { renderAccountsGrid(); renderBankBalancesBox(); }
+    msgEl.innerHTML = sd.ok
+      ? `<span style="color:var(--green)"><i class="ti ti-check"></i> ${ACTIVE_MONEY_TYPE==='deposit'?'Deposit':'Withdrawal'} recorded — sheet updated.</span>`
+      : `<span style="color:var(--amber)">${ACTIVE_MONEY_TYPE==='deposit'?'Deposit':'Withdrawal'} recorded in the Ledger, but the sheet write failed (${sd.error||'unknown error'}) — add it there manually.</span>`;
   } catch (e) {
-    msgEl.innerHTML = '<span style="color:var(--red)">Network error.</span>';
+    msgEl.innerHTML = `<span style="color:var(--amber)">${ACTIVE_MONEY_TYPE==='deposit'?'Deposit':'Withdrawal'} recorded in the Ledger, but the sheet sync failed to even respond — add it there manually.</span>`;
   }
 }
 
