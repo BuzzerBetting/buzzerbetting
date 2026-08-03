@@ -668,7 +668,10 @@ input::placeholder{color:var(--text3)}
       </label>
     </div>
   </div>
-  <div class="wide"><div id="live-accounts-wrap" style="overflow-x:auto;overflow-y:auto;max-height:75vh;width:100%;min-width:0"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div></div>
+  <div class="wide">
+    <div id="live-accounts-topscroll" style="overflow-x:auto;overflow-y:hidden;height:14px;margin-bottom:2px" onscroll="document.getElementById('live-accounts-wrap').scrollLeft=this.scrollLeft"><div id="live-accounts-topscroll-spacer" style="height:1px;width:1px"></div></div>
+    <div id="live-accounts-wrap" style="overflow-x:auto;width:100%;min-width:0" onscroll="document.getElementById('live-accounts-topscroll').scrollLeft=this.scrollLeft"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
+  </div>
 </div>
 
 <!-- LEDGER: DEPOSITS -->
@@ -3621,6 +3624,10 @@ function renderAccountsGrid() {
       return `<div class="live-accts-col"><div class="live-accts-col-header">${escapeHtml(bookie)}</div>${cells}</div>`;
     }).join('')}</div>`;
   }
+  setTimeout(() => {
+    const spacer = document.getElementById('live-accounts-topscroll-spacer');
+    if (spacer) spacer.style.width = wrap.scrollWidth + 'px';
+  }, 0);
 }
 
 // Highest balance first within each column; ties (most commonly a run of £0 balances)
