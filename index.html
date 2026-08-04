@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BuzzerBetting</title>
+<script>
+  (function(){
+    var saved = localStorage.getItem('bb_theme');
+    var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  })();
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 <style>
@@ -19,7 +26,7 @@
   --purple:#7c3aed;--purple-bg:#f5f3ff;--purple-bd:#ddd6fe;
   --radius:10px;--radius-lg:14px;
 }
-@media(prefers-color-scheme:dark){:root{
+html[data-theme="dark"]{
   --bg:#0d1117;--surface:#161b22;--surface2:#1c2128;--border:rgba(255,255,255,0.09);
   --text:#e6edf3;--text2:#8b949e;--text3:#484f58;
   --green:#4ade80;--green-bg:#052e16;--green-bd:#166534;
@@ -27,7 +34,7 @@
   --blue:#60a5fa;--blue-bg:#0c1a2e;--blue-bd:#1e3a6e;
   --red:#f87171;--red-bg:#1a0505;--red-bd:#7f1d1d;
   --purple:#a78bfa;--purple-bg:#1a0a3e;--purple-bd:#3b1f80;
-}}
+}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 header{background:var(--header);height:62px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:100;border-bottom:1px solid rgba(255,255,255,0.05)}
 .brand{display:flex;align-items:center;gap:10px;cursor:pointer}
@@ -38,7 +45,7 @@ header{background:var(--header);height:62px;display:flex;align-items:center;just
 .live-dot{width:6px;height:6px;border-radius:50%;background:var(--brand);animation:pdot 2s infinite}
 @keyframes pdot{0%,100%{opacity:1}50%{opacity:.25}}
 .page{max-width:1080px;margin:0 auto;padding:36px 24px}
-.greeting{margin-bottom:32px}
+.greeting{margin-bottom:32px;position:relative}
 .greeting-sub{font-size:13px;color:var(--text2);margin-bottom:8px}
 .greeting-h{font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:700;color:var(--text);letter-spacing:-0.025em;line-height:1.2}
 .greeting-h em{color:var(--brand);font-style:normal}
@@ -204,6 +211,9 @@ input::placeholder{color:var(--text3)}
 <!-- HOME -->
 <div id="view-home">
   <div class="greeting">
+    <button onclick="toggleTheme()" id="theme-toggle-btn" title="Toggle dark mode" style="position:absolute;top:0;right:0;background:var(--surface);border:0.5px solid var(--border);border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;color:var(--text2)">
+      <i class="ti ti-moon" id="theme-toggle-icon"></i>
+    </button>
     <div class="greeting-sub" id="greet-sub"></div>
     <div class="greeting-h">40 profitable months.<br><em>And counting.</em></div>
     <div style="margin-top:10px;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);background:var(--surface);border:0.5px solid var(--border);border-radius:20px;padding:5px 12px">
@@ -2232,6 +2242,26 @@ input::placeholder{color:var(--text3)}
 const monthly=[['Mar-23',702.54],['Apr-23',710.43],['May-23',1739.72],['Jun-23',1023.58],['Jul-23',1220.85],['Aug-23',725.03],['Sep-23',1950.56],['Oct-23',2461.47],['Nov-23',712.58],['Dec-23',1295.21],['Jan-24',1877.81],['Feb-24',3643.18],['Mar-24',12815.17],['Apr-24',10181.92],['May-24',5402.41],['Jun-24',4127.19],['Jul-24',2498.64],['Aug-24',4212.55],['Sep-24',9249.03],['Oct-24',7709.85],['Nov-24',6813.29],['Dec-24',7266.93],['Jan-25',3059.91],['Feb-25',6153.66],['Mar-25',6053.66],['Apr-25',1877.62],['May-25',2680.38],['Jun-25',5706.43],['Jul-25',1639.16],['Aug-25',44099.17],['Sep-25',12037.66],['Oct-25',4764.44],['Nov-25',11264.44],['Dec-25',18841.19],['Jan-26',6436.35],['Feb-26',3477.65],['Mar-26',10366.91],['Apr-26',11284.31],['May-26',5940.42],['Jun-26',19099.43]];
 const avgP=monthly.reduce((s,m)=>s+m[1],0)/monthly.length;
 const bets=[{t:'14:30',match:'Arsenal vs Chelsea',mkt:'AGS',sel:'Saka',fair:3.45,bk:'Bet365',odds:4.00,ev:15.9,stake:50},{t:'14:30',match:'Arsenal vs Chelsea',mkt:'Header',sel:'Gabriel',fair:12.20,bk:'Betway',odds:15.00,ev:22.9,stake:30},{t:'16:00',match:'Man City vs Liverpool',mkt:'AGS',sel:'Haaland',fair:1.85,bk:'William Hill',odds:2.10,ev:13.5,stake:80},{t:'16:00',match:'Man City vs Liverpool',mkt:'First scorer',sel:'Salah',fair:8.40,bk:'Paddy Power',odds:10.00,ev:19.0,stake:40},{t:'16:00',match:'Man City vs Liverpool',mkt:'Header',sel:'Dias',fair:22.50,bk:'Unibet',odds:29.00,ev:28.9,stake:20},{t:'20:00',match:'Spurs vs Everton',mkt:'AGS',sel:'Son',fair:2.95,bk:'Betfair SB',odds:3.50,ev:18.6,stake:60}];
+
+// ── THEME ──
+// The data-theme attribute itself is already applied by the inline script in <head>,
+// before any content renders, to avoid a flash of the wrong theme. This just keeps the
+// toggle icon in sync and handles the actual switch when clicked.
+function applyThemeIcon(theme) {
+  const icon = document.getElementById('theme-toggle-icon');
+  if (icon) icon.className = theme === 'dark' ? 'ti ti-sun' : 'ti ti-moon';
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  const next = current === 'dark' ? 'light' : 'dark';
+  if (next === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  else document.documentElement.removeAttribute('data-theme');
+  localStorage.setItem('bb_theme', next);
+  applyThemeIcon(next);
+}
+document.addEventListener('DOMContentLoaded', function() {
+  applyThemeIcon(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+});
 
 // ── LOGIN ──
 let CURRENT_USER_ROLE = null;
