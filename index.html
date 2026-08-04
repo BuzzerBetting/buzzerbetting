@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BuzzerBetting</title>
+<script>
+  (function(){
+    var saved = localStorage.getItem('bb_theme');
+    var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  })();
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 <style>
@@ -19,7 +26,7 @@
   --purple:#7c3aed;--purple-bg:#f5f3ff;--purple-bd:#ddd6fe;
   --radius:10px;--radius-lg:14px;
 }
-@media(prefers-color-scheme:dark){:root{
+html[data-theme="dark"]{
   --bg:#0d1117;--surface:#161b22;--surface2:#1c2128;--border:rgba(255,255,255,0.09);
   --text:#e6edf3;--text2:#8b949e;--text3:#484f58;
   --green:#4ade80;--green-bg:#052e16;--green-bd:#166534;
@@ -27,7 +34,7 @@
   --blue:#60a5fa;--blue-bg:#0c1a2e;--blue-bd:#1e3a6e;
   --red:#f87171;--red-bg:#1a0505;--red-bd:#7f1d1d;
   --purple:#a78bfa;--purple-bg:#1a0a3e;--purple-bd:#3b1f80;
-}}
+}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 header{background:var(--header);height:62px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:100;border-bottom:1px solid rgba(255,255,255,0.05)}
 .brand{display:flex;align-items:center;gap:10px;cursor:pointer}
@@ -38,7 +45,7 @@ header{background:var(--header);height:62px;display:flex;align-items:center;just
 .live-dot{width:6px;height:6px;border-radius:50%;background:var(--brand);animation:pdot 2s infinite}
 @keyframes pdot{0%,100%{opacity:1}50%{opacity:.25}}
 .page{max-width:1080px;margin:0 auto;padding:36px 24px}
-.greeting{margin-bottom:32px}
+.greeting{margin-bottom:32px;position:relative}
 .greeting-sub{font-size:13px;color:var(--text2);margin-bottom:8px}
 .greeting-h{font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:700;color:var(--text);letter-spacing:-0.025em;line-height:1.2}
 .greeting-h em{color:var(--brand);font-style:normal}
@@ -139,7 +146,7 @@ input::placeholder{color:var(--text3)}
 .ledger-grid td.acct-cell:hover{filter:brightness(0.94)}
 .ledger-grid td.bal-cell{padding:8px 10px;min-width:90px;text-align:right;font-weight:600}
 .live-accts-col{min-width:150px;flex-shrink:0;background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
-.live-accts-col-header{padding:10px 12px;background:var(--surface2);font-weight:600;font-size:12.5px;color:var(--text2);text-align:center;border-bottom:0.5px solid var(--border)}
+.live-accts-col-header{padding:10px 12px;background:var(--surface2);font-weight:600;font-size:12.5px;color:var(--text2);text-align:center;border-bottom:0.5px solid var(--border);position:sticky;top:0;z-index:1}
 .live-accts-cell{padding:9px 10px;text-align:center;cursor:pointer;border-bottom:0.5px solid var(--border);transition:filter .12s}
 .live-accts-cell:hover{filter:brightness(0.94)}
 .live-accts-cell .id{font-weight:600;font-size:13px}
@@ -204,6 +211,9 @@ input::placeholder{color:var(--text3)}
 <!-- HOME -->
 <div id="view-home">
   <div class="greeting">
+    <button onclick="toggleTheme()" id="theme-toggle-btn" title="Toggle dark mode" style="position:absolute;top:0;right:0;background:var(--surface);border:0.5px solid var(--border);border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;color:var(--text2)">
+      <i class="ti ti-moon" id="theme-toggle-icon"></i>
+    </button>
     <div class="greeting-sub" id="greet-sub"></div>
     <div class="greeting-h">40 profitable months.<br><em>And counting.</em></div>
     <div style="margin-top:10px;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);background:var(--surface);border:0.5px solid var(--border);border-radius:20px;padding:5px 12px">
@@ -668,7 +678,10 @@ input::placeholder{color:var(--text3)}
       </label>
     </div>
   </div>
-  <div id="live-accounts-wrap" style="overflow-x:auto;max-width:100%"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
+  <div class="wide">
+    <div id="live-accounts-topscroll" style="overflow-x:auto;overflow-y:hidden;height:14px;margin-bottom:2px" onscroll="document.getElementById('live-accounts-wrap').scrollLeft=this.scrollLeft"><div id="live-accounts-topscroll-spacer" style="height:1px;width:1px"></div></div>
+    <div id="live-accounts-wrap" style="overflow-x:auto;width:100%;min-width:0" onscroll="document.getElementById('live-accounts-topscroll').scrollLeft=this.scrollLeft"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
+  </div>
 </div>
 
 <!-- LEDGER: DEPOSITS -->
@@ -2230,6 +2243,26 @@ const monthly=[['Mar-23',702.54],['Apr-23',710.43],['May-23',1739.72],['Jun-23',
 const avgP=monthly.reduce((s,m)=>s+m[1],0)/monthly.length;
 const bets=[{t:'14:30',match:'Arsenal vs Chelsea',mkt:'AGS',sel:'Saka',fair:3.45,bk:'Bet365',odds:4.00,ev:15.9,stake:50},{t:'14:30',match:'Arsenal vs Chelsea',mkt:'Header',sel:'Gabriel',fair:12.20,bk:'Betway',odds:15.00,ev:22.9,stake:30},{t:'16:00',match:'Man City vs Liverpool',mkt:'AGS',sel:'Haaland',fair:1.85,bk:'William Hill',odds:2.10,ev:13.5,stake:80},{t:'16:00',match:'Man City vs Liverpool',mkt:'First scorer',sel:'Salah',fair:8.40,bk:'Paddy Power',odds:10.00,ev:19.0,stake:40},{t:'16:00',match:'Man City vs Liverpool',mkt:'Header',sel:'Dias',fair:22.50,bk:'Unibet',odds:29.00,ev:28.9,stake:20},{t:'20:00',match:'Spurs vs Everton',mkt:'AGS',sel:'Son',fair:2.95,bk:'Betfair SB',odds:3.50,ev:18.6,stake:60}];
 
+// ── THEME ──
+// The data-theme attribute itself is already applied by the inline script in <head>,
+// before any content renders, to avoid a flash of the wrong theme. This just keeps the
+// toggle icon in sync and handles the actual switch when clicked.
+function applyThemeIcon(theme) {
+  const icon = document.getElementById('theme-toggle-icon');
+  if (icon) icon.className = theme === 'dark' ? 'ti ti-sun' : 'ti ti-moon';
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  const next = current === 'dark' ? 'light' : 'dark';
+  if (next === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  else document.documentElement.removeAttribute('data-theme');
+  localStorage.setItem('bb_theme', next);
+  applyThemeIcon(next);
+}
+document.addEventListener('DOMContentLoaded', function() {
+  applyThemeIcon(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+});
+
 // ── LOGIN ──
 let CURRENT_USER_ROLE = null;
 let CURRENT_USERNAME = null;
@@ -3446,22 +3479,6 @@ let PENDING_ACCOUNT_CELL = null; // { profile, bookie } when creating a brand ne
 
 function acctKey(profile, bookie) { return profile + '|' + bookie; }
 
-// Sheet writes now go through the Ledger backend (direct Google Sheets API, no Apps
-// Script) — same interface as before so every caller (Bulk Entry, deposit/withdraw,
-// blank-cell create, withdrawal confirm) needed zero changes.
-const SHEET_ACTION_PATHS = {
-  fill_account: 'sheet/fill-account',
-  set_cell: 'sheet/set-cell',
-  add_deposit: 'sheet/add-deposit',
-  add_withdrawal: 'sheet/add-withdrawal',
-  confirm_withdrawal: 'sheet/confirm-withdrawal',
-};
-async function accountsSheetApi(payload) {
-  const { action, ...body } = payload;
-  const path = SHEET_ACTION_PATHS[action] || 'sheet/fill-account';
-  return ledgerApi(path, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-}
-
 async function loadAllAccounts(excludeClosed) {
   try {
     const d = await ledgerApi('accounts' + (excludeClosed ? '?excludeClosed=1' : ''));
@@ -3621,6 +3638,10 @@ function renderAccountsGrid() {
       return `<div class="live-accts-col"><div class="live-accts-col-header">${escapeHtml(bookie)}</div>${cells}</div>`;
     }).join('')}</div>`;
   }
+  setTimeout(() => {
+    const spacer = document.getElementById('live-accounts-topscroll-spacer');
+    if (spacer) spacer.style.width = wrap.scrollWidth + 'px';
+  }, 0);
 }
 
 // Highest balance first within each column; ties (most commonly a run of £0 balances)
@@ -4031,7 +4052,6 @@ async function submitMoneyPrompt() {
 
   msgEl.innerHTML = '<span style="color:var(--text2)">Processing…</span>';
   const acc = ACTIVE_ACCOUNT;
-  const accountName = getAccountDisplayName(acc);
 
   let ld;
   try {
@@ -4051,19 +4071,7 @@ async function submitMoneyPrompt() {
   document.getElementById('account-modal-balance').textContent = '£' + ld.balance.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
   document.getElementById('account-money-prompt').style.display = 'none';
   if (document.getElementById('view-ledger-accounts').style.display !== 'none') { renderAccountsGrid(); renderBankBalancesBox(); }
-
-  const sheetAction = ACTIVE_MONEY_TYPE === 'deposit' ? 'add_deposit' : 'add_withdrawal';
-  try {
-    const sd = await accountsSheetApi({ action: sheetAction, bookie: acc.bookie, profile: acc.profile, accountName, amount });
-    if (sd.ok && sd.row) {
-      await ledgerApi(`${ACTIVE_MONEY_TYPE === 'deposit' ? 'deposits' : 'withdrawals'}/${ld.id}/sheet-row`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sheet_row: sd.row }) });
-    }
-    msgEl.innerHTML = sd.ok
-      ? `<span style="color:var(--green)"><i class="ti ti-check"></i> ${ACTIVE_MONEY_TYPE==='deposit'?'Deposit':'Withdrawal'} recorded — sheet updated.</span>`
-      : `<span style="color:var(--amber)">${ACTIVE_MONEY_TYPE==='deposit'?'Deposit':'Withdrawal'} recorded in the Ledger, but the sheet write failed (${sd.error||'unknown error'}) — add it there manually.</span>`;
-  } catch (e) {
-    msgEl.innerHTML = `<span style="color:var(--amber)">${ACTIVE_MONEY_TYPE==='deposit'?'Deposit':'Withdrawal'} recorded in the Ledger, but the sheet sync failed to even respond — add it there manually.</span>`;
-  }
+  msgEl.innerHTML = `<span style="color:var(--green)"><i class="ti ti-check"></i> ${ACTIVE_MONEY_TYPE==='deposit'?'Deposit':'Withdrawal'} recorded.</span>`;
 }
 
 // ---- DEPOSITS LOG ----
@@ -4098,7 +4106,6 @@ async function reverseDeposit(id) {
   try {
     const d = await ledgerApi('deposits/'+id+'/reverse', { method:'POST' });
     if (!d.ok) { alert('Failed to reverse: ' + (d.error||'unknown error')); return; }
-    if (!d.sheetOk) alert('Reversed in Ledger, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
   } catch (e) { alert('Network error reversing deposit.'); return; }
   initDepositsLog();
 }
@@ -4125,11 +4132,11 @@ function renderPendingWithdrawalRow(r) {
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
       <div>
         <div style="color:var(--text3);font-size:11px">${formatLedgerDate(r.date)}</div>
-        ${r.account_code || '—'} — ${r.bookie} <span style="color:var(--text3)">(${r.profile}) £${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>${!r.sheet_row?' <span style="color:var(--amber)">(not linked)</span>':''}
+        ${r.account_code || '—'} — ${r.bookie} <span style="color:var(--text3)">(${r.profile}) £${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
       </div>
     </div>
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-      <button class="add-btn" onclick="confirmWithdrawal(${r.id}, ${r.sheet_row||'null'})"><i class="ti ti-check"></i> Confirm</button>
+      <button class="add-btn" onclick="confirmWithdrawal(${r.id})"><i class="ti ti-check"></i> Confirm</button>
       <button class="add-btn" onclick="reverseWithdrawal(${r.id})"><i class="ti ti-arrow-back-up"></i> Reverse</button>
       <button class="add-btn" onclick="confiscateWithdrawal(${r.id})" style="color:var(--red);border-color:var(--red)"><i class="ti ti-ban"></i> Confiscated</button>
     </div>
@@ -4146,19 +4153,10 @@ function renderProcessedWithdrawalRow(r) {
   </div>`;
 }
 
-async function confirmWithdrawal(id, sheetRow) {
+async function confirmWithdrawal(id) {
   try {
     const ld = await ledgerApi(`withdrawals/${id}/confirm`, { method:'PATCH' });
     if (!ld.ok) { alert('Failed to confirm: ' + (ld.error||'unknown error')); return; }
-    if (sheetRow) {
-      const sd = await accountsSheetApi({ action:'confirm_withdrawal', row: sheetRow });
-      if (sd.ok && sd.processedRow) {
-        await ledgerApi(`withdrawals/${id}/processed-sheet-row`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ processed_sheet_row: sd.processedRow }) });
-      }
-      if (!sd.ok) alert('Confirmed in Ledger, but moving the sheet row failed (' + (sd.error||'unknown error') + ') — move it manually.');
-    } else {
-      alert('Confirmed in Ledger. This withdrawal was never linked to a sheet row, so nothing to move there.');
-    }
   } catch (e) { alert('Network error confirming withdrawal.'); return; }
   initWithdrawalsPending();
 }
@@ -4168,7 +4166,6 @@ async function reverseWithdrawal(id) {
   try {
     const d = await ledgerApi('withdrawals/'+id+'/reverse', { method:'POST' });
     if (!d.ok) { alert('Failed to reverse: ' + (d.error||'unknown error')); return; }
-    if (!d.sheetOk) alert('Reversed in Ledger, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
   } catch (e) { alert('Network error reversing withdrawal.'); return; }
   initWithdrawalsPending();
 }
@@ -4178,7 +4175,6 @@ async function confiscateWithdrawal(id) {
   try {
     const d = await ledgerApi('withdrawals/'+id+'/confiscate', { method:'POST' });
     if (!d.ok) { alert('Failed to confiscate: ' + (d.error||'unknown error')); return; }
-    if (!d.sheetOk) alert('Moved to Locked Funds, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
   } catch (e) { alert('Network error.'); return; }
   initWithdrawalsPending();
 }
@@ -4696,7 +4692,7 @@ async function loadDashboardPendingWithdrawals() {
           <span style="font-weight:600;margin-left:6px">£${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${CURRENT_USER_ROLE !== 'staff' ? `<button class="add-btn" onclick="dashboardConfirmWithdrawal(${r.id}, ${r.sheet_row||'null'})"><i class="ti ti-check"></i> Confirm</button>` : ''}
+          ${CURRENT_USER_ROLE !== 'staff' ? `<button class="add-btn" onclick="dashboardConfirmWithdrawal(${r.id})"><i class="ti ti-check"></i> Confirm</button>` : ''}
           <button class="add-btn" onclick="dashboardReverseWithdrawal(${r.id})"><i class="ti ti-arrow-back-up"></i> Reverse</button>
           <button class="add-btn" onclick="dashboardConfiscateWithdrawal(${r.id})" style="color:var(--red);border-color:var(--red)"><i class="ti ti-ban"></i> Confiscated</button>
         </div>
@@ -4705,17 +4701,10 @@ async function loadDashboardPendingWithdrawals() {
   } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load pending withdrawals.</div>'; }
 }
 
-async function dashboardConfirmWithdrawal(id, sheetRow) {
+async function dashboardConfirmWithdrawal(id) {
   try {
     const ld = await ledgerApi(`withdrawals/${id}/confirm`, { method:'PATCH' });
     if (!ld.ok) { alert('Failed to confirm: ' + (ld.error||'unknown error')); return; }
-    if (sheetRow) {
-      const sd = await accountsSheetApi({ action:'confirm_withdrawal', row: sheetRow });
-      if (sd.ok && sd.processedRow) {
-        await ledgerApi(`withdrawals/${id}/processed-sheet-row`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ processed_sheet_row: sd.processedRow }) });
-      }
-      if (!sd.ok) alert('Confirmed in Ledger, but moving the sheet row failed (' + (sd.error||'unknown error') + ') — move it manually.');
-    }
   } catch (e) { alert('Network error confirming withdrawal.'); return; }
   loadDashboardPendingWithdrawals();
 }
@@ -4725,7 +4714,6 @@ async function dashboardReverseWithdrawal(id) {
   try {
     const d = await ledgerApi('withdrawals/'+id+'/reverse', { method:'POST' });
     if (!d.ok) { alert('Failed to reverse: ' + (d.error||'unknown error')); return; }
-    if (!d.sheetOk) alert('Reversed in Ledger, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
   } catch (e) { alert('Network error reversing withdrawal.'); return; }
   loadDashboardPendingWithdrawals();
 }
@@ -4735,7 +4723,6 @@ async function dashboardConfiscateWithdrawal(id) {
   try {
     const d = await ledgerApi('withdrawals/'+id+'/confiscate', { method:'POST' });
     if (!d.ok) { alert('Failed to confiscate: ' + (d.error||'unknown error')); return; }
-    if (!d.sheetOk) alert('Moved to Locked Funds, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
   } catch (e) { alert('Network error.'); return; }
   loadDashboardPendingWithdrawals();
   loadDashboardLockedFunds();
@@ -5017,26 +5004,15 @@ async function submitMoneyPageTransaction() {
   // Deposit / Withdrawal — account-based
   const accountId = document.getElementById('money-account').value;
   if (!accountId) { msgEl.innerHTML = '<span style="color:var(--red)">Select an account.</span>'; return; }
-  const acc = LEDGER_ACCOUNTS.find(a => String(a.id) === String(accountId));
   msgEl.innerHTML = '<span style="color:var(--text2)">Processing…</span>';
   try {
     const ld = await ledgerApi(`accounts/${accountId}/${moneyPageType}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ amount }) });
     if (!ld.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${ld.error||'Failed'}</span>`; return; }
 
-    const accountName = getAccountDisplayName(acc);
-    const sheetAction = moneyPageType === 'deposit' ? 'add_deposit' : 'add_withdrawal';
-    const sd = await accountsSheetApi({ action: sheetAction, bookie: acc.bookie, profile: acc.profile, accountName, amount });
-    if (sd.ok && sd.row) {
-      await ledgerApi(`${moneyPageType === 'deposit' ? 'deposits' : 'withdrawals'}/${ld.id}/sheet-row`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sheet_row: sd.row }) });
-    }
-    if (sd.ok) {
-      if (moneyPageType === 'deposit') {
-        msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Deposit recorded — sheet updated.</span>';
-      } else {
-        msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Withdrawal logged as pending — no money has moved yet, confirm it below once it lands.</span>';
-      }
+    if (moneyPageType === 'deposit') {
+      msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Deposit recorded.</span>';
     } else {
-      msgEl.innerHTML = `<span style="color:var(--amber)">Ledger updated, but the sheet write failed (${sd.error||'unknown error'}) — add it there manually.</span>`;
+      msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Withdrawal logged as pending — no money has moved yet, confirm it below once it lands.</span>';
     }
     document.getElementById('money-amount').value = '';
     if (moneyPageType === 'withdrawal') loadMoneyPendingWithdrawals();
@@ -5058,10 +5034,9 @@ async function loadMoneyPendingWithdrawals() {
           <div style="color:var(--text3);font-size:11px">${formatLedgerDate(r.date)}</div>
           ${r.account_code || '—'} — ${r.bookie} <span style="color:var(--text3)">(${r.profile})</span>
           <span style="font-weight:600;margin-left:6px">£${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
-          ${!r.sheet_row?' <span style="color:var(--amber)">(not linked)</span>':''}
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${CURRENT_USER_ROLE !== 'staff' ? `<button class="add-btn" onclick="moneyConfirmWithdrawal(${r.id}, ${r.sheet_row||'null'})"><i class="ti ti-check"></i> Confirm</button>` : ''}
+          ${CURRENT_USER_ROLE !== 'staff' ? `<button class="add-btn" onclick="moneyConfirmWithdrawal(${r.id})"><i class="ti ti-check"></i> Confirm</button>` : ''}
           <button class="add-btn" onclick="moneyReverseWithdrawal(${r.id})"><i class="ti ti-arrow-back-up"></i> Reverse</button>
           <button class="add-btn" onclick="moneyConfiscateWithdrawal(${r.id})" style="color:var(--red);border-color:var(--red)"><i class="ti ti-ban"></i> Confiscated</button>
         </div>
@@ -5148,24 +5123,14 @@ async function moneyReverseDeposit(id) {
   try {
     const d = await ledgerApi('deposits/'+id+'/reverse', { method:'POST' });
     if (!d.ok) { alert('Failed to reverse: ' + (d.error||'unknown error')); return; }
-    if (!d.sheetOk) alert('Reversed in Ledger, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
   } catch (e) { alert('Network error reversing deposit.'); return; }
   loadMoneyHistory();
 }
 
-async function moneyConfirmWithdrawal(id, sheetRow) {
+async function moneyConfirmWithdrawal(id) {
   try {
     const ld = await ledgerApi(`withdrawals/${id}/confirm`, { method:'PATCH' });
     if (!ld.ok) { alert('Failed to confirm: ' + (ld.error||'unknown error')); return; }
-    if (sheetRow) {
-      const sd = await accountsSheetApi({ action:'confirm_withdrawal', row: sheetRow });
-      if (sd.ok && sd.processedRow) {
-        await ledgerApi(`withdrawals/${id}/processed-sheet-row`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ processed_sheet_row: sd.processedRow }) });
-      }
-      if (!sd.ok) alert('Confirmed in Ledger, but moving the sheet row failed (' + (sd.error||'unknown error') + ') — move it manually.');
-    } else {
-      alert('Confirmed in Ledger. This withdrawal was never linked to a sheet row, so nothing to move there.');
-    }
   } catch (e) { alert('Network error confirming withdrawal.'); return; }
   loadMoneyPendingWithdrawals();
   loadMoneyHistory();
@@ -5176,7 +5141,6 @@ async function moneyReverseWithdrawal(id) {
   try {
     const d = await ledgerApi('withdrawals/'+id+'/reverse', { method:'POST' });
     if (!d.ok) { alert('Failed to reverse: ' + (d.error||'unknown error')); return; }
-    if (!d.sheetOk) alert('Reversed in Ledger, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
   } catch (e) { alert('Network error reversing withdrawal.'); return; }
   loadMoneyPendingWithdrawals();
   loadMoneyHistory();
@@ -5187,7 +5151,6 @@ async function moneyConfiscateWithdrawal(id) {
   try {
     const d = await ledgerApi('withdrawals/'+id+'/confiscate', { method:'POST' });
     if (!d.ok) { alert('Failed to confiscate: ' + (d.error||'unknown error')); return; }
-    if (!d.sheetOk) alert('Moved to Locked Funds, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
   } catch (e) { alert('Network error.'); return; }
   loadMoneyPendingWithdrawals();
   loadMoneyHistory();
