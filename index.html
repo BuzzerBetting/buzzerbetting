@@ -2621,7 +2621,7 @@ const BET_TYPE_CONFIG = {
   'Casino':           { layout:'balance', bookie:true, bookieFieldKey:'Bookie', hasBetKind:false, fields:[{key:'Offer',label:'Offer',type:'text'},{key:'EV',label:'EV £',type:'number'}], oddsMode:'none', hasStake:false, hasBalanceBoxes:false, casinoExtraAccounts:true },
   'Offers (Personal)': { layout:'balance', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet description',type:'text'}], oddsMode:'pairedSingle', hasStake:true, hasBalanceBoxes:false },
   'Other Bets':       { layout:'standard', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet',type:'text'},{key:'Back Odds',label:'Back odds',type:'number'}] },
-  'Casino (Personal)': { layout:'balance', bookie:true, bookieFieldKey:'Bookie', hasBetKind:false, fields:[{key:'Offer',label:'Offer',type:'text'},{key:'EV',label:'EV £',type:'number'}], oddsMode:'none', hasStake:false, hasBalanceBoxes:true, balanceBoxStyle:'directPL' },
+  'Casino (Personal)': { layout:'balance', bookie:true, bookieFieldKey:'Bookie', hasBetKind:false, fields:[{key:'Offer',label:'Offer',type:'text'},{key:'EV',label:'EV £',type:'number'}], oddsMode:'none', hasStake:false, hasBalanceBoxes:false },
 };
 
 // Column layout guesses for paste-to-autofill types. `key` becomes the stored field name.
@@ -3650,12 +3650,10 @@ function renderAccountsGrid() {
   }, 0);
 }
 
-// Highest balance first within each column; ties (most commonly a run of £0 balances)
-// fall back to lowest C/D-ID number first, extracting the numeric part so C2 sorts before
+// Simple numerical order by C/D-ID number, extracting the numeric part so C2 sorts before
 // C10 regardless of zero-padding.
 function sortAccountsForGrid(list) {
   return [...list].sort((a, b) => {
-    if (b.balance !== a.balance) return b.balance - a.balance;
     const numA = parseInt((a.account_id||'').replace(/\D/g,''), 10) || 0;
     const numB = parseInt((b.account_id||'').replace(/\D/g,''), 10) || 0;
     return numA - numB;
@@ -5567,8 +5565,22 @@ async function fetchBtDetailPage() {
 
     // Columns are built dynamically from the union of this page's `fields` keys, since each
     // bet type has a different shape — mirrors how the old generic tab handlers worked.
-    const fieldKeys = [];
+    let fieldKeys = [];
     bets.forEach(b => { Object.keys(b.fields||{}).forEach(k => { if (!fieldKeys.includes(k)) fieldKeys.push(k); }); });
+    // The four Casino balance keys need a fixed column order regardless of which ones
+    // happen to be filled in yet, or what order they were added in — otherwise filling in
+    // Wager balances after Bonus ones (or vice versa) visibly reorders the columns. Pulls
+    // out whichever of the four are actually present, puts them in their fixed order, and
+    // reinserts that group back at the position it originally occupied — every other
+    // column stays exactly where discovery put it.
+    const presentCasinoKeys = CASINO_BALANCE_KEYS.filter(k => fieldKeys.includes(k));
+    if (presentCasinoKeys.length) {
+      const firstCasinoIdx = fieldKeys.findIndex(k => CASINO_BALANCE_KEYS.includes(k));
+      const withoutCasino = fieldKeys.filter(k => !CASINO_BALANCE_KEYS.includes(k));
+      const insertPos = fieldKeys.slice(0, firstCasinoIdx).filter(k => !CASINO_BALANCE_KEYS.includes(k)).length;
+      withoutCasino.splice(insertPos, 0, ...presentCasinoKeys);
+      fieldKeys = withoutCasino;
+    }
     BT_DETAIL_STATE.fieldKeys = fieldKeys;
 
     renderBtDetailTable(bets);
@@ -5597,7 +5609,7 @@ function renderBtDetailTable(bets) {
   </tr></thead><tbody>`;
   bets.forEach(b => {
     const resColor = b.result==='won'?'var(--green)':b.result==='lost'?'var(--red)':b.result==='placed'?'var(--blue)':b.result==='void'?'var(--text3)':'var(--amber)';
-    const isCasinoInProgress = b.bet_type === 'Casino' && (
+    const isCasinoInProgress = (b.bet_type === 'Casino' || b.bet_type === 'Casino (Personal)') && (
       b.fields['Bonus Starting Balance'] === undefined || b.fields['Bonus Starting Balance'] === null ||
       b.fields['Bonus Finish Balance'] === undefined || b.fields['Bonus Finish Balance'] === null
     );
@@ -5614,7 +5626,7 @@ function renderBtDetailTable(bets) {
         if (b.bet_type === 'Ninja Golf BFEX' && k === 'Total Stake') {
           return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetStake(${b.id}, ${b.fields[k]||0}, fetchBtDetailPage)" title="Click to correct the stake">${cellContent}</span></td>`;
         }
-        if (b.bet_type === 'Casino' && CASINO_BALANCE_KEYS.includes(k)) {
+        if ((b.bet_type === 'Casino' || b.bet_type === 'Casino (Personal)') && CASINO_BALANCE_KEYS.includes(k)) {
           const isBlank = b.fields[k] === undefined || b.fields[k] === null;
           const display = isBlank ? '<i class="ti ti-plus" style="color:var(--text3)"></i>' : cellContent;
           return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editCasinoBalanceField(${b.id}, '${k}', ${b.fields[k]||0}, fetchBtDetailPage)" title="${isBlank?'Click to add a value':'Click to amend'}">${display}</span></td>`;
@@ -6026,8 +6038,16 @@ async function loadBtOpenTable() {
     const bets = d.bets || [];
     if (!bets.length) { tableWrap.innerHTML = '<div style="padding:24px;color:var(--text3);font-size:13px">No open bets here.</div>'; return; }
 
-    const fieldKeys = [];
+    let fieldKeys = [];
     bets.forEach(b => { Object.keys(b.fields||{}).forEach(k => { if (!fieldKeys.includes(k)) fieldKeys.push(k); }); });
+    const presentCasinoKeys2 = CASINO_BALANCE_KEYS.filter(k => fieldKeys.includes(k));
+    if (presentCasinoKeys2.length) {
+      const firstCasinoIdx2 = fieldKeys.findIndex(k => CASINO_BALANCE_KEYS.includes(k));
+      const withoutCasino2 = fieldKeys.filter(k => !CASINO_BALANCE_KEYS.includes(k));
+      const insertPos2 = fieldKeys.slice(0, firstCasinoIdx2).filter(k => !CASINO_BALANCE_KEYS.includes(k)).length;
+      withoutCasino2.splice(insertPos2, 0, ...presentCasinoKeys2);
+      fieldKeys = withoutCasino2;
+    }
     const colIsNumeric = {};
     fieldKeys.forEach(k => {
       const numCount = bets.filter(x => typeof x.fields[k] === 'number').length;
@@ -6047,7 +6067,7 @@ async function loadBtOpenTable() {
           if (btOpenState.betType === 'Ninja Golf BFEX' && k === 'Total Stake') {
             return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetStake(${b.id}, ${b.fields[k]||0}, loadBtOpenTabs)" title="Click to correct the stake">${cellContent}</span></td>`;
           }
-          if (btOpenState.betType === 'Casino' && CASINO_BALANCE_KEYS.includes(k)) {
+          if ((btOpenState.betType === 'Casino' || btOpenState.betType === 'Casino (Personal)') && CASINO_BALANCE_KEYS.includes(k)) {
             const isBlank = b.fields[k] === undefined || b.fields[k] === null;
             const display = isBlank ? '<i class="ti ti-plus" style="color:var(--text3)"></i>' : cellContent;
             return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editCasinoBalanceField(${b.id}, '${k}', ${b.fields[k]||0}, loadBtOpenTabs)" title="${isBlank?'Click to add a value':'Click to amend'}">${display}</span></td>`;
