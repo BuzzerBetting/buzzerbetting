@@ -616,6 +616,9 @@ input::placeholder{color:var(--text3)}
       <input type="checkbox" id="toggle-show-lockedfunds" checked onchange="renderAccountsSummaryRow()"> Show locked funds
     </label>
     <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);cursor:pointer">
+      <input type="checkbox" id="toggle-show-pendingwithdrawals" checked onchange="renderAccountsSummaryRow()"> Show pending withdrawals
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);cursor:pointer">
       <input type="checkbox" id="toggle-show-accountstotals" onchange="renderBankBalancesBox()"> Show total accounts balance
     </label>
   </div>
@@ -3521,15 +3524,18 @@ function toggleAccountsAddForm() {
 async function renderAccountsSummaryRow() {
   const showBanks = document.getElementById('toggle-show-bankbalances').checked;
   const showLocked = document.getElementById('toggle-show-lockedfunds').checked;
+  const showPending = document.getElementById('toggle-show-pendingwithdrawals').checked;
   const el = document.getElementById('accounts-summary-row');
   const cols = [];
   let html = '';
   if (showBanks) { cols.push('1fr'); html += `<div class="card card-pad"><div class="lbl" style="margin-bottom:10px">Live bank balances</div><div id="bank-balances-box" style="display:flex;flex-wrap:wrap;gap:10px">Loading…</div></div>`; }
   if (showLocked) { cols.push('220px'); html += `<div class="card card-pad" style="cursor:pointer" onclick="showLedgerSec('locked-funds')"><div class="lbl" style="margin-bottom:10px">Locked Funds</div><div style="font-size:22px;font-weight:600;color:var(--red)" id="live-accounts-locked-total">£0.00</div></div>`; }
+  if (showPending) { cols.push('220px'); html += `<div class="card card-pad" style="cursor:pointer" onclick="showLedgerSec('money')"><div class="lbl" style="margin-bottom:10px">Pending Withdrawals</div><div style="font-size:22px;font-weight:600;color:var(--amber)" id="live-accounts-pending-total">£0.00</div></div>`; }
   el.style.gridTemplateColumns = cols.length ? cols.join(' ') : '1fr';
   el.innerHTML = html || '';
   if (showBanks) renderBankBalancesBox();
   if (showLocked) renderLiveAccountsLockedTotal();
+  if (showPending) renderLiveAccountsPendingTotal();
 }
 
 // Sums each live account's balance grouped by its linked bank — distinct from the bank's
@@ -3748,6 +3754,17 @@ async function renderLiveAccountsLockedTotal() {
   try {
     const d = await ledgerApi('locked-funds');
     const rows = (d.ok && d.locked) ? d.locked : [];
+    const total = rows.reduce((s,r) => s + r.amount, 0);
+    el.textContent = '£' + total.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+  } catch (e) { el.textContent = '—'; }
+}
+
+async function renderLiveAccountsPendingTotal() {
+  const el = document.getElementById('live-accounts-pending-total');
+  if (!el) return;
+  try {
+    const d = await ledgerApi('withdrawals?status=pending');
+    const rows = (d.ok && d.withdrawals) ? d.withdrawals : [];
     const total = rows.reduce((s,r) => s + r.amount, 0);
     el.textContent = '£' + total.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
   } catch (e) { el.textContent = '—'; }
