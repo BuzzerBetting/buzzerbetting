@@ -3394,6 +3394,7 @@ async function submitBetEntry() {
   msgEl.innerHTML = '';
 
   if (cfg.casinoExtraAccounts) {
+    CASINO_BALANCE_KEYS.forEach(k => { if (!(k in fields)) fields[k] = null; });
     const extraAccountIds = [...document.querySelectorAll('#bet-entry-casino-extra-accounts .casino-extra-account')]
       .map(el => el.value).filter(Boolean);
     const allAccountIds = [legs[0].account_id, ...extraAccountIds];
