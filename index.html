@@ -5561,25 +5561,28 @@ async function fetchBtDetailPage() {
     if (!s.count) { tableWrap.innerHTML = '<div style="padding:24px;color:var(--text3);font-size:13px">No bets recorded yet for this type.</div>'; document.getElementById('bt-detail-legend').style.display = 'none'; return; }
     if (!bets.length) { tableWrap.innerHTML = '<div style="padding:24px;color:var(--text3);font-size:13px">No bets on this page.</div>'; return; }
 
-    document.getElementById('bt-detail-legend').style.display = btDetailType === 'Casino' ? 'flex' : 'none';
+    document.getElementById('bt-detail-legend').style.display = (btDetailType === 'Casino' || btDetailType === 'Casino (Personal)') ? 'flex' : 'none';
 
     // Columns are built dynamically from the union of this page's `fields` keys, since each
     // bet type has a different shape — mirrors how the old generic tab handlers worked.
     let fieldKeys = [];
     bets.forEach(b => { Object.keys(b.fields||{}).forEach(k => { if (!fieldKeys.includes(k)) fieldKeys.push(k); }); });
-    // The four Casino balance keys need a fixed column order regardless of which ones
-    // happen to be filled in yet, or what order they were added in — otherwise filling in
-    // Wager balances after Bonus ones (or vice versa) visibly reorders the columns. Pulls
-    // out whichever of the four are actually present, puts them in their fixed order, and
-    // reinserts that group back at the position it originally occupied — every other
-    // column stays exactly where discovery put it.
-    const presentCasinoKeys = CASINO_BALANCE_KEYS.filter(k => fieldKeys.includes(k));
-    if (presentCasinoKeys.length) {
-      const firstCasinoIdx = fieldKeys.findIndex(k => CASINO_BALANCE_KEYS.includes(k));
-      const withoutCasino = fieldKeys.filter(k => !CASINO_BALANCE_KEYS.includes(k));
-      const insertPos = fieldKeys.slice(0, firstCasinoIdx).filter(k => !CASINO_BALANCE_KEYS.includes(k)).length;
-      withoutCasino.splice(insertPos, 0, ...presentCasinoKeys);
-      fieldKeys = withoutCasino;
+    // Both Casino sheets need a fixed column order regardless of which fields happen to be
+    // filled in yet, or what order they were added in — otherwise filling in balance fields
+    // later visibly reorders the columns, and the two sheets can end up looking different
+    // from each other depending on entry history. Pulls out whichever of these are actually
+    // present, puts them in their fixed order, and reinserts that group back at the
+    // position it originally occupied — every other column stays exactly where discovery
+    // put it.
+    if (btDetailType === 'Casino' || btDetailType === 'Casino (Personal)') {
+      const presentOrdered = CASINO_COLUMN_ORDER.filter(k => fieldKeys.includes(k));
+      if (presentOrdered.length) {
+        const firstIdx = fieldKeys.findIndex(k => CASINO_COLUMN_ORDER.includes(k));
+        const withoutOrdered = fieldKeys.filter(k => !CASINO_COLUMN_ORDER.includes(k));
+        const insertPos = fieldKeys.slice(0, firstIdx).filter(k => !CASINO_COLUMN_ORDER.includes(k)).length;
+        withoutOrdered.splice(insertPos, 0, ...presentOrdered);
+        fieldKeys = withoutOrdered;
+      }
     }
     BT_DETAIL_STATE.fieldKeys = fieldKeys;
 
@@ -5602,8 +5605,8 @@ function renderBtDetailTable(bets) {
   });
   const colClass = k => colIsNumeric[k] ? ' class="r"' : '';
 
-  const showNotesCol = btDetailType === 'Casino';
-  const showResultCol = !BET_TYPE_CONFIG[btDetailType]?.winningsBasedPL;
+  const showNotesCol = btDetailType === 'Casino' || btDetailType === 'Casino (Personal)';
+  const showResultCol = !BET_TYPE_CONFIG[btDetailType]?.winningsBasedPL && btDetailType !== 'Casino';
   let html = `<table class="dt" style="min-width:720px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr>
     <th>Date</th>${showNotesCol?'<th>Notes</th>':''}${showResultCol?'<th>Result</th>':''}<th>Account ID</th>${fieldKeys.map(k=>`<th${colClass(k)}>${escapeHtml(k)}</th>`).join('')}<th class="r">P/L</th><th></th>
   </tr></thead><tbody>`;
@@ -5939,6 +5942,10 @@ async function displayBetNote(betId) {
 }
 
 const CASINO_BALANCE_KEYS = ['Wager Starting Balance', 'Wager Finish Balance', 'Bonus Starting Balance', 'Bonus Finish Balance'];
+// Full fixed column order for both Casino sheets — Date/Notes/Account ID are fixed columns
+// handled separately, this covers everything from the dynamic fields onward (P/L is also
+// a separate fixed column, always last, so isn't included here).
+const CASINO_COLUMN_ORDER = ['Bookie', 'Offer', 'EV', ...CASINO_BALANCE_KEYS];
 
 // Quick inline correction for any of Casino's four balance fields — Total P/L is
 // recomputed from the resulting figures, and any linked account balance is properly
@@ -6040,13 +6047,15 @@ async function loadBtOpenTable() {
 
     let fieldKeys = [];
     bets.forEach(b => { Object.keys(b.fields||{}).forEach(k => { if (!fieldKeys.includes(k)) fieldKeys.push(k); }); });
-    const presentCasinoKeys2 = CASINO_BALANCE_KEYS.filter(k => fieldKeys.includes(k));
-    if (presentCasinoKeys2.length) {
-      const firstCasinoIdx2 = fieldKeys.findIndex(k => CASINO_BALANCE_KEYS.includes(k));
-      const withoutCasino2 = fieldKeys.filter(k => !CASINO_BALANCE_KEYS.includes(k));
-      const insertPos2 = fieldKeys.slice(0, firstCasinoIdx2).filter(k => !CASINO_BALANCE_KEYS.includes(k)).length;
-      withoutCasino2.splice(insertPos2, 0, ...presentCasinoKeys2);
-      fieldKeys = withoutCasino2;
+    if (btOpenState.betType === 'Casino' || btOpenState.betType === 'Casino (Personal)') {
+      const presentOrdered2 = CASINO_COLUMN_ORDER.filter(k => fieldKeys.includes(k));
+      if (presentOrdered2.length) {
+        const firstIdx2 = fieldKeys.findIndex(k => CASINO_COLUMN_ORDER.includes(k));
+        const withoutOrdered2 = fieldKeys.filter(k => !CASINO_COLUMN_ORDER.includes(k));
+        const insertPos2 = fieldKeys.slice(0, firstIdx2).filter(k => !CASINO_COLUMN_ORDER.includes(k)).length;
+        withoutOrdered2.splice(insertPos2, 0, ...presentOrdered2);
+        fieldKeys = withoutOrdered2;
+      }
     }
     const colIsNumeric = {};
     fieldKeys.forEach(k => {
