@@ -684,6 +684,7 @@ input::placeholder{color:var(--text3)}
       <span><span class="grid-dot" style="background:#f59e0b"></span> Restricted</span>
       <span><span class="grid-dot" style="background:#6b7280"></span> Locked</span>
       <span><span class="grid-dot" style="background:#dc2626"></span> Archived</span>
+      <span><span class="grid-dot" style="background:#3b82f6"></span> Dormant (60+ days, funds still in it)</span>
     </div>
     <div style="display:flex;gap:16px;flex-wrap:wrap">
       <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);cursor:pointer">
@@ -3957,11 +3958,13 @@ function renderAccountsGrid() {
   if (!filtered.length) { wrap.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:24px">No accounts match these filters.</div>'; return; }
 
   const cellHtml = (a, mainLabel, suppressBank) => {
-    const cfg = STATUS_CONFIG[a.status] || STATUS_CONFIG.good;
+    const cfg = a.is_dormant ? { bg: 'var(--blue-bg)', color: 'var(--blue)' } : (STATUS_CONFIG[a.status] || STATUS_CONFIG.good);
     const openStake = a.open_stake || 0;
-    return `<div class="live-accts-cell" style="background:${cfg.bg};color:${cfg.color}" onclick="openAccountModal(${a.id})">
+    const idleDays = a.is_dormant && a.last_activity ? Math.floor((Date.now() - new Date(a.last_activity).getTime()) / 86400000) : null;
+    return `<div class="live-accts-cell" style="background:${cfg.bg};color:${cfg.color}" onclick="openAccountModal(${a.id})" title="${a.is_dormant ? `Dormant — no activity for ${idleDays} days` : ''}">
       <div class="id">${escapeHtml(mainLabel)}</div>
       ${showBalance ? `<div class="bal">£${(a.balance||0).toLocaleString('en-GB',{minimumFractionDigits:0,maximumFractionDigits:2})}</div>` : ''}
+      ${a.is_dormant ? `<div style="font-size:9px;font-weight:600">Dormant · ${idleDays}d</div>` : ''}
       ${showOpenStake && openStake>0 ? `<div style="font-size:10px;color:#3b82f6;font-weight:600">+£${openStake.toLocaleString('en-GB',{maximumFractionDigits:2})} open</div>` : ''}
       ${showBank && !suppressBank ? `<div style="font-size:10px;color:var(--text3)">${escapeHtml(a.profile)}</div>` : ''}
       ${(showBalance || showOpenStake || showBank) && a.has_notes ? `<div style="font-size:9px;color:var(--text3);margin-top:2px"><i class="ti ti-note"></i> Note added</div>` : ''}
