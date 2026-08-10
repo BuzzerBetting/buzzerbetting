@@ -1852,23 +1852,23 @@ input::placeholder{color:var(--text3)}
   <div id="monthly-status" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="monthly-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="monthly-status-title">Loading...</div><div class="ph-d" id="monthly-status-msg"></div></div></div></div>
   <div id="monthly-content" style="display:none">
     <div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px" id="monthly-kpis"></div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:16px">10,000 simulations · EV-based win probability per bet · bets with no usable Odds/EV/Stake are excluded</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px" id="monthly-panels">
-      <div class="card">
-        <div class="card-h" style="font-size:15px;font-weight:700;text-align:center">All Bets Placed</div>
-        <div style="font-size:11px;color:var(--text3);text-align:center;padding:6px 12px 0">Pure EV simulation — ignores actual results</div>
-        <div style="padding:16px"><table style="width:100%;border-collapse:collapse;font-size:12.5px" id="monthly-static-table"><tbody id="monthly-static-body"></tbody></table></div>
-      </div>
-      <div class="card">
-        <div class="card-h" style="font-size:15px;font-weight:700;text-align:center">Live</div>
-        <div style="font-size:11px;color:var(--text3);text-align:center;padding:6px 12px 0">Settled P/L locked in — simulates only what's still open</div>
-        <div style="padding:16px"><table style="width:100%;border-collapse:collapse;font-size:12.5px" id="monthly-live-table"><tbody id="monthly-live-body"></tbody></table></div>
-      </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:16px">10,000 simulations · EV-based win probability per bet · bets with no usable Odds/EV/Stake are excluded · pure EV simulation, ignores actual results</div>
+    <div class="card" style="max-width:520px;margin:0 auto 20px">
+      <div class="card-h" style="font-size:15px;font-weight:700;text-align:center">All Bets Placed</div>
+      <div style="padding:16px"><table style="width:100%;border-collapse:collapse" id="monthly-static-table"><tbody id="monthly-static-body"></tbody></table></div>
     </div>
-    <div class="card" style="max-width:420px;margin:0 auto">
-      <div class="card-h" style="font-size:15px;font-weight:700;text-align:center">DogBot</div>
-      <div style="font-size:11px;color:var(--text3);text-align:center;padding:6px 12px 0">Dogs + Horses only — pure EV simulation, this month</div>
-      <div style="padding:16px"><table style="width:100%;border-collapse:collapse;font-size:12.5px" id="monthly-dogbot-table"><tbody id="monthly-dogbot-body"></tbody></table></div>
+
+    <div class="card card-pad" style="max-width:520px;margin:0 auto">
+      <div class="sec-title" style="margin:0 0 12px;font-size:15px;text-align:center">By sheet</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div><label class="lbl">User</label><select id="monthly-sheet-group" onchange="onMonthlySheetGroupChange()">
+          <option value="buzzer">Buzzer</option>
+          <option value="assistant">Assistant</option>
+        </select></div>
+        <div><label class="lbl">Sheet</label><select id="monthly-sheet-select" onchange="runSheetProbability()"></select></div>
+      </div>
+      <div id="monthly-sheet-status" style="font-size:12.5px;color:var(--text3);text-align:center;padding:12px 0;display:none"></div>
+      <table style="width:100%;border-collapse:collapse" id="monthly-sheet-table"><tbody id="monthly-sheet-body"></tbody></table>
     </div>
   </div>
 </div>
@@ -7615,18 +7615,43 @@ function evBasedWinProb(odds, ev, stake) {
 const MONTHLY_BANDS = [
   { label: '-£10,000 or lower', value: -10000, direction: 'below' },
   { label: '-£5,000 or lower',  value: -5000,  direction: 'below' },
+  { label: '-£2,500 or lower',  value: -2500,  direction: 'below' },
   { label: 'Break even+',       value: 0,      direction: 'above' },
   { label: '+£2,500+',          value: 2500,   direction: 'above' },
   { label: '+£5,000+',          value: 5000,   direction: 'above' },
   { label: '+£7,500+',          value: 7500,   direction: 'above' },
   { label: '+£10,000+',         value: 10000,  direction: 'above' },
+  { label: '+£12,500+',         value: 12500,  direction: 'above' },
   { label: '+£15,000+',         value: 15000,  direction: 'above' },
+  { label: '+£17,500+',         value: 17500,  direction: 'above' },
   { label: '+£20,000+',         value: 20000,  direction: 'above' },
+  { label: '+£22,500+',         value: 22500,  direction: 'above' },
   { label: '+£25,000+',         value: 25000,  direction: 'above' },
+  { label: '+£27,500+',         value: 27500,  direction: 'above' },
   { label: '+£30,000+',         value: 30000,  direction: 'above' },
 ];
 
-function monteCarloProfitBands(simBets, lockedInPL) {
+// Smaller-margin bands for a single sheet's own probability — a sheet's totals are naturally
+// much smaller than the all-bets total, so the wide bands above wouldn't show anything
+// meaningful. Same set applied to every sheet for now, not individually tuned per sheet yet.
+const SHEET_BANDS = [
+  { label: '-£2,000 or lower', value: -2000, direction: 'below' },
+  { label: '-£1,500 or lower', value: -1500, direction: 'below' },
+  { label: '-£1,000 or lower', value: -1000, direction: 'below' },
+  { label: '-£500 or lower',   value: -500,  direction: 'below' },
+  { label: 'Break even+',      value: 0,     direction: 'above' },
+  { label: '+£500+',           value: 500,   direction: 'above' },
+  { label: '+£1,000+',         value: 1000,  direction: 'above' },
+  { label: '+£1,500+',         value: 1500,  direction: 'above' },
+  { label: '+£2,000+',         value: 2000,  direction: 'above' },
+  { label: '+£2,500+',         value: 2500,  direction: 'above' },
+  { label: '+£3,000+',         value: 3000,  direction: 'above' },
+  { label: '+£4,000+',         value: 4000,  direction: 'above' },
+  { label: '+£5,000+',         value: 5000,  direction: 'above' },
+];
+
+function monteCarloProfitBands(simBets, lockedInPL, bands) {
+  bands = bands || MONTHLY_BANDS;
   const SIMS = 10000;
   const results = [];
   for (let i = 0; i < SIMS; i++) {
@@ -7637,7 +7662,7 @@ function monteCarloProfitBands(simBets, lockedInPL) {
     }
     results.push(total);
   }
-  return MONTHLY_BANDS.map(band => {
+  return bands.map(band => {
     const count = band.direction === 'below'
       ? results.filter(r => r <= band.value).length
       : results.filter(r => r >= band.value).length;
@@ -7651,9 +7676,9 @@ function renderMonthlyTable(elId, bandResults) {
     const pct = Math.round(b.prob * 100);
     const col = pct>=70?'var(--green)':pct>=40?'var(--amber)':'var(--red)';
     return `<tr>
-      <td style="padding:6px 8px;font-size:12.5px;white-space:nowrap">${b.label}</td>
-      <td style="padding:6px 8px;width:100%"><div style="background:var(--surface2);border-radius:4px;height:7px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${col};border-radius:4px;transition:width .6s ease"></div></div></td>
-      <td style="padding:6px 8px;text-align:right;font-weight:600;color:${col};white-space:nowrap">${pct}%</td>
+      <td style="padding:4px 8px;font-size:12px;white-space:nowrap">${b.label}</td>
+      <td style="padding:4px 8px;width:100%"><div style="background:var(--surface2);border-radius:4px;height:6px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${col};border-radius:4px;transition:width .6s ease"></div></div></td>
+      <td style="padding:4px 8px;text-align:right;font-weight:600;color:${col};white-space:nowrap;font-size:12px">${pct}%</td>
     </tr>`;
   }).join('');
 }
@@ -7669,6 +7694,7 @@ async function initMonthly() {
   document.getElementById('monthly-status').style.display='';
   document.getElementById('monthly-content').style.display='none';
   showMonthlyStatus('ti-loader','Loading...',"Fetching this month's bets.");
+  await loadCustomSheets();
   try {
     const d = await ledgerApi('bets?dateRange=month&limit=5000');
     if (!d.ok) { showMonthlyStatus('ti-alert-triangle','Could not load bets', d.error||'Unknown error'); return; }
@@ -7703,26 +7729,55 @@ async function initMonthly() {
       <div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:${evCol}">${totalEV>=0?'+':''}£${Math.abs(totalEV).toFixed(2)}</div></div>
       <div class="kpi"><div class="kpi-l">Settled P/L so far</div><div class="kpi-v" style="color:${plCol}">${settledPL>=0?'+':''}£${Math.abs(settledPL).toFixed(2)}</div></div>`;
 
-    // Static: every usable bet simulated from scratch, ignoring what actually happened.
-    const staticBands = monteCarloProfitBands(usable, 0);
-    // Live: settled P/L locked in exactly as it happened, only open bets get simulated.
-    const liveBands = monteCarloProfitBands(open, settledPL);
-
-    renderMonthlyTable('monthly-static-body', staticBands);
-    renderMonthlyTable('monthly-live-body', liveBands);
-
-    // DogBot-specific — pure static simulation only, matching what was actually asked for.
-    const dogbot = usable.filter(b => b.bet_type === 'Dogs + Horses');
-    if (dogbot.length) {
-      renderMonthlyTable('monthly-dogbot-body', monteCarloProfitBands(dogbot, 0));
-    } else {
-      document.getElementById('monthly-dogbot-body').innerHTML = '<tr><td style="padding:12px 6px;color:var(--text3);font-size:12.5px">No usable DogBot bets this month.</td></tr>';
-    }
+    renderMonthlyTable('monthly-static-body', monteCarloProfitBands(usable, 0, MONTHLY_BANDS));
 
     document.getElementById('monthly-content').style.display='';
+
+    onMonthlySheetGroupChange(); // populate + auto-run the by-sheet panel below
   } catch (e) {
     showMonthlyStatus('ti-alert-triangle','Network error','Could not reach the server.');
   }
+}
+
+function onMonthlySheetGroupChange() {
+  const group = document.getElementById('monthly-sheet-group').value;
+  const sel = document.getElementById('monthly-sheet-select');
+  const list = BET_TYPE_GROUPS[group] || [];
+  sel.innerHTML = list.map(t => `<option value="${t.key}">${escapeHtml(t.label)}</option>`).join('');
+  runSheetProbability();
+}
+
+// Runs the same static EV simulation as the main panel, scoped to just one sheet — smaller
+// bands, since a single sheet's totals are naturally far smaller than the all-bets total.
+async function runSheetProbability() {
+  const key = document.getElementById('monthly-sheet-select').value;
+  const statusEl = document.getElementById('monthly-sheet-status');
+  const tableEl = document.getElementById('monthly-sheet-table');
+  if (!key) return;
+  statusEl.style.display = 'block';
+  statusEl.textContent = 'Loading…';
+  tableEl.style.display = 'none';
+  try {
+    const d = await ledgerApi(`bets?type=${encodeURIComponent(key)}&dateRange=month&limit=5000`);
+    if (!d.ok) { statusEl.textContent = d.error || 'Could not load'; return; }
+    const usable = [];
+    (d.bets || []).forEach(b => {
+      const odds = typeof b.fields.Odds === 'number' ? b.fields.Odds : null;
+      const ev = typeof b.fields.EV === 'number' ? b.fields.EV : (typeof b.fields['EV £'] === 'number' ? b.fields['EV £'] : null);
+      const stake = b.total_stake || 0;
+      if (odds === null || ev === null || !(stake > 0)) return;
+      const winProb = evBasedWinProb(odds, ev, stake);
+      if (winProb === null) return;
+      usable.push({ odds, ev, stake, winProb });
+    });
+    if (!usable.length) {
+      statusEl.textContent = 'No bets on this sheet this month have a usable Odds/EV/Stake to simulate from.';
+      return;
+    }
+    statusEl.style.display = 'none';
+    tableEl.style.display = '';
+    renderMonthlyTable('monthly-sheet-body', monteCarloProfitBands(usable, 0, SHEET_BANDS));
+  } catch (e) { statusEl.textContent = 'Network error.'; }
 }
 
 
