@@ -184,6 +184,8 @@ input::placeholder{color:var(--text3)}
 </style>
 </head>
 <body>
+<div id="toast-container" style="position:fixed;top:16px;right:16px;z-index:9998;display:flex;flex-direction:column;gap:8px;pointer-events:none"></div>
+
 <div id="pin-overlay" style="position:fixed;inset:0;background:#0c1220;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">
   <div style="width:46px;height:46px;background:var(--brand);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;margin-bottom:4px"><i class="ti ti-bolt"></i></div>
   <div style="font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;color:#fff;letter-spacing:-0.02em">Buzzer<span style="color:var(--brand)">Betting</span></div>
@@ -2874,6 +2876,25 @@ function applyRoleRestrictions() {
 // needed. Browsers block audio until a genuine user gesture has happened first; logging in
 // counts as one, so the AudioContext gets created there to "unlock" it for later use.
 let TODO_AUDIO_CTX = null;
+// Generic toast banner — fixed top-right, auto-dismisses. Built reusable on purpose since
+// this pattern (sound + banner alert) will likely get used for other things later.
+function showToast(message, opts) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const color = (opts && opts.color) || 'var(--blue)';
+  const bg = (opts && opts.bg) || 'var(--blue-bg)';
+  const el = document.createElement('div');
+  el.style.cssText = `pointer-events:auto;background:${bg};color:${color};border:0.5px solid ${color};border-radius:var(--radius);padding:12px 16px;font-size:13px;font-weight:500;box-shadow:0 4px 14px rgba(0,0,0,0.15);max-width:300px;opacity:0;transform:translateX(20px);transition:opacity .25s ease,transform .25s ease`;
+  el.innerHTML = `<i class="ti ti-bell" style="margin-right:6px"></i>${escapeHtml(message)}`;
+  container.appendChild(el);
+  requestAnimationFrame(() => { el.style.opacity = '1'; el.style.transform = 'translateX(0)'; });
+  setTimeout(() => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateX(20px)';
+    setTimeout(() => el.remove(), 300);
+  }, 6000);
+}
+
 function unlockTodoAudio() {
   if (TODO_AUDIO_CTX) return;
   try { TODO_AUDIO_CTX = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { /* audio unavailable, alerts will just be silent */ }
@@ -2906,14 +2927,14 @@ async function pollForNewTodos() {
       const d = await ledgerApi('todos?status=open');
       const rows = (d.ok && d.todos) ? d.todos : [];
       const maxId = rows.length ? Math.max(...rows.map(r => r.id)) : 0;
-      if (TODO_LAST_OPEN_MAX_ID !== null && maxId > TODO_LAST_OPEN_MAX_ID) playTodoAlertSound();
+      if (TODO_LAST_OPEN_MAX_ID !== null && maxId > TODO_LAST_OPEN_MAX_ID) { playTodoAlertSound(); showToast('To Do request received'); }
       TODO_LAST_OPEN_MAX_ID = maxId;
       updateTodoBadge(rows.length);
     } else if (CURRENT_USER_ROLE === 'admin') {
       const d = await ledgerApi('todos?status=problem');
       const rows = (d.ok && d.todos) ? d.todos : [];
       const maxId = rows.length ? Math.max(...rows.map(r => r.id)) : 0;
-      if (TODO_LAST_PROBLEM_MAX_ID !== null && maxId > TODO_LAST_PROBLEM_MAX_ID) playTodoAlertSound();
+      if (TODO_LAST_PROBLEM_MAX_ID !== null && maxId > TODO_LAST_PROBLEM_MAX_ID) { playTodoAlertSound(); showToast('Problem flagged on a To Do request'); }
       TODO_LAST_PROBLEM_MAX_ID = maxId;
       updateTodoBadge(rows.length);
     }
@@ -2969,7 +2990,9 @@ async function renderTodoOpen() {
       ${!isAdmin ? `<div style="display:flex;gap:6px;flex-shrink:0">
         <button class="add-btn" onclick="completeTodo(${r.id})" style="color:var(--green);border-color:var(--green)"><i class="ti ti-check"></i> Done</button>
         <button class="add-btn" onclick="flagTodoProblem(${r.id})" style="color:var(--red);border-color:var(--red)">Problem</button>
-      </div>` : ''}
+      </div>` : `<div style="flex-shrink:0">
+        <button class="add-btn" onclick="deleteTodo(${r.id})" style="color:var(--red);border-color:var(--red)">Cancel</button>
+      </div>`}
     </div>`).join('');
   } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load.</div>'; }
 }
