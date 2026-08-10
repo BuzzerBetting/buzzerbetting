@@ -1130,7 +1130,23 @@ input::placeholder{color:var(--text3)}
     </div>
 
     <div id="account-modal-tab-transactions" style="display:none">
-      <div id="account-modal-transactions-list" style="font-size:13px">Loading…</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+        <select id="account-txn-month-filter" onchange="onAccountTxnFilterChange('month')" style="font-size:12.5px;padding:6px 10px"></select>
+        <span style="font-size:11px;color:var(--text3)">or</span>
+        <input type="date" id="account-txn-date-filter" onchange="onAccountTxnFilterChange('date')" style="font-size:12.5px;padding:5px 10px">
+        <button class="add-btn" onclick="clearAccountTxnFilter()" style="font-size:12px">Clear filter</button>
+      </div>
+      <div id="account-txn-count-note" style="font-size:11px;color:var(--text3);margin-bottom:8px"></div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+          <thead><tr style="text-align:left;color:var(--text3);font-size:10.5px;text-transform:uppercase">
+            <th style="padding:5px 6px">Date</th><th style="padding:5px 6px">Transaction</th>
+            <th class="r" style="padding:5px 6px">Odds</th><th class="r" style="padding:5px 6px">Stake</th>
+            <th class="r" style="padding:5px 6px">Amount</th><th class="r" style="padding:5px 6px">Balance</th>
+          </tr></thead>
+          <tbody id="account-modal-transactions-list"><tr><td colspan="6" style="padding:16px 6px;color:var(--text3)">Loading…</td></tr></tbody>
+        </table>
+      </div>
     </div>
 
     <div id="account-modal-tab-notes" style="display:none">
@@ -4174,30 +4190,66 @@ function setAccountModalTab(tab) {
     document.getElementById('acc-tab-'+t).classList.toggle('active', t === tab);
     document.getElementById('account-modal-tab-'+t).style.display = t === tab ? 'block' : 'none';
   });
-  if (tab === 'transactions' && !accountModalTransactionsLoaded) loadAccountModalTransactions();
+  if (tab === 'transactions' && !accountModalTransactionsLoaded) {
+    populateAccountTxnMonthFilter();
+    loadAccountModalTransactions();
+  }
   if (tab === 'notes' && !accountModalNotesLoaded) preloadAccountModalNotes();
+}
+
+function populateAccountTxnMonthFilter() {
+  const sel = document.getElementById('account-txn-month-filter');
+  const opts = ['<option value="">All (most recent 50)</option>'];
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const value = d.toISOString().slice(0, 7);
+    const label = d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+    opts.push(`<option value="${value}">${label}</option>`);
+  }
+  sel.innerHTML = opts.join('');
+}
+
+function onAccountTxnFilterChange(source) {
+  if (source === 'month') document.getElementById('account-txn-date-filter').value = '';
+  else document.getElementById('account-txn-month-filter').value = '';
+  loadAccountModalTransactions();
+}
+
+function clearAccountTxnFilter() {
+  document.getElementById('account-txn-month-filter').value = '';
+  document.getElementById('account-txn-date-filter').value = '';
+  loadAccountModalTransactions();
 }
 
 async function loadAccountModalTransactions() {
   if (!ACTIVE_ACCOUNT) return;
   const el = document.getElementById('account-modal-transactions-list');
-  el.innerHTML = 'Loading…';
+  const noteEl = document.getElementById('account-txn-count-note');
+  el.innerHTML = '<tr><td colspan="6" style="padding:16px 6px;color:var(--text3)">Loading…</td></tr>';
+  const month = document.getElementById('account-txn-month-filter').value;
+  const date = document.getElementById('account-txn-date-filter').value;
+  const params = date ? `?date=${date}` : month ? `?month=${month}` : '';
   try {
-    const [depRes, wdRes] = await Promise.all([
-      ledgerApi('deposits?account_id='+ACTIVE_ACCOUNT.id),
-      ledgerApi('withdrawals?account_id='+ACTIVE_ACCOUNT.id),
-    ]);
-    const items = [];
-    (depRes.ok && depRes.deposits ? depRes.deposits : []).forEach(r => items.push({ type:'Deposit', date:r.date, amount:r.amount, sign:1 }));
-    (wdRes.ok && wdRes.withdrawals ? wdRes.withdrawals : []).forEach(r => items.push({ type:`Withdrawal${r.status==='pending'?' (pending)':''}`, date:r.date, amount:r.amount, sign:-1 }));
-    items.sort((a,b) => new Date(b.date) - new Date(a.date));
+    const d = await ledgerApi(`accounts/${ACTIVE_ACCOUNT.id}/full-transactions${params}`);
     accountModalTransactionsLoaded = true;
-    if (!items.length) { el.innerHTML = '<div style="color:var(--text3)">No deposits or withdrawals on this account yet.</div>'; return; }
-    el.innerHTML = items.map(it => `<div style="padding:8px 0;border-bottom:0.5px solid var(--border);display:flex;justify-content:space-between">
-      <div><span style="color:var(--text3);font-size:11px">${formatLedgerDate(it.date)}</span> ${it.type}</div>
-      <div style="font-weight:600;color:${it.sign>0?'var(--green)':'var(--red)'}">${it.sign>0?'+':'-'}£${it.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
-    </div>`).join('');
-  } catch (e) { el.innerHTML = '<div style="color:var(--red)">Could not load transactions.</div>'; }
+    if (!d.ok) { el.innerHTML = `<tr><td colspan="6" style="padding:16px 6px;color:var(--red)">${d.error||'Could not load'}</td></tr>`; return; }
+    const rows = d.transactions || [];
+    if (!rows.length) { el.innerHTML = '<tr><td colspan="6" style="padding:16px 6px;color:var(--text3)">No transactions in this range.</td></tr>'; noteEl.textContent = ''; return; }
+    noteEl.textContent = d.totalMatching > 50 ? `Showing the most recent 50 of ${d.totalMatching} matching transactions.` : `${d.totalMatching} transaction${d.totalMatching===1?'':'s'}.`;
+    el.innerHTML = rows.map(r => {
+      const col = r.amount > 0 ? 'var(--green)' : r.amount < 0 ? 'var(--red)' : 'var(--text2)';
+      const sign = r.amount > 0 ? '+' : r.amount < 0 ? '-' : '';
+      return `<tr style="border-bottom:0.5px solid var(--border)">
+        <td style="padding:6px">${formatLedgerDate(r.date)}</td>
+        <td style="padding:6px">${escapeHtml(r.type)}${r.betType?` <span style="color:var(--text3);font-size:11px">(${escapeHtml(r.betType)})</span>`:''}</td>
+        <td class="r" style="padding:6px">${r.odds!=null?r.odds:'—'}</td>
+        <td class="r" style="padding:6px">${r.stake!=null?'£'+r.stake.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td>
+        <td class="r" style="padding:6px;color:${col};font-weight:600">${sign}£${Math.abs(r.amount).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+        <td class="r" style="padding:6px">£${r.balanceAfter.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      </tr>`;
+    }).join('');
+  } catch (e) { el.innerHTML = '<tr><td colspan="6" style="padding:16px 6px;color:var(--red)">Could not load transactions.</td></tr>'; }
 }
 
 // Just checks quietly whether notes exist so the "Display notes" list can be filled in
@@ -5007,7 +5059,7 @@ async function loadDashboardOpenBets() {
       ${bets.map(b => {
         const meta = betTypeMeta(b.bet_type);
         const bookie = b.fields.Bookie || b.fields.Book || b.fields.Bookmaker || '—';
-        const betDesc = b.fields.Bet || b.fields['Bet Description'] || b.fields.Horse || b.fields.Player || b.fields.Offer || '';
+        const betDesc = (b.fields.Race && b.fields['Horse/Trap']) ? `${b.fields.Race} - ${b.fields['Horse/Trap']}` : b.fields.Bet || b.fields['Bet Description'] || b.fields.Horse || b.fields.Player || b.fields.Offer || '';
         return `<tr style="border-bottom:0.5px solid var(--border)">
           <td style="padding:7px 8px">${meta.source}</td>
           <td style="padding:7px 8px">${escapeHtml(meta.label)}</td>
@@ -7249,7 +7301,7 @@ async function initToday(){
     }
     const bets = rawBets.map(b => {
       const meta = betTypeMeta(b.bet_type);
-      const betDesc = b.fields.Bet || b.fields["Bet Description"] || b.fields.Horse || b.fields.Player || b.fields.Offer || b.fields["Bet 1"] || "";
+      const betDesc = (b.fields.Race && b.fields["Horse/Trap"]) ? `${b.fields.Race} - ${b.fields["Horse/Trap"]}` : b.fields.Bet || b.fields["Bet Description"] || b.fields.Horse || b.fields.Player || b.fields.Offer || b.fields["Bet 1"] || "";
       const evVal = typeof b.fields.EV === "number" ? b.fields.EV : (typeof b.fields["EV £"] === "number" ? b.fields["EV £"] : 0);
       return {
         source: meta.label,
