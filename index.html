@@ -1844,7 +1844,7 @@ input::placeholder{color:var(--text3)}
 
 <!-- MONTHLY PROBABILITY -->
 <div id="view-monthly" class="sec">
-  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <button class="back" onclick="showTopSec('stats')"><i class="ti ti-arrow-left"></i> Stats</button>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
     <div class="sec-title" style="margin-bottom:0">Monthly probability</div>
     <button onclick="initMonthly()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'"><i class="ti ti-refresh"></i> Refresh</button>
@@ -1853,7 +1853,7 @@ input::placeholder{color:var(--text3)}
   <div id="monthly-content" style="display:none">
     <div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px" id="monthly-kpis"></div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:16px">10,000 simulations · EV-based win probability per bet · bets with no usable Odds/EV/Stake are excluded</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px" id="monthly-panels">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px" id="monthly-panels">
       <div class="card">
         <div class="card-h" style="font-size:15px;font-weight:700;text-align:center">All Bets Placed</div>
         <div style="font-size:11px;color:var(--text3);text-align:center;padding:6px 12px 0">Pure EV simulation — ignores actual results</div>
@@ -1864,6 +1864,11 @@ input::placeholder{color:var(--text3)}
         <div style="font-size:11px;color:var(--text3);text-align:center;padding:6px 12px 0">Settled P/L locked in — simulates only what's still open</div>
         <div style="padding:16px"><table style="width:100%;border-collapse:collapse;font-size:12.5px" id="monthly-live-table"><tbody id="monthly-live-body"></tbody></table></div>
       </div>
+    </div>
+    <div class="card" style="max-width:420px;margin:0 auto">
+      <div class="card-h" style="font-size:15px;font-weight:700;text-align:center">DogBot</div>
+      <div style="font-size:11px;color:var(--text3);text-align:center;padding:6px 12px 0">Dogs + Horses only — pure EV simulation, this month</div>
+      <div style="padding:16px"><table style="width:100%;border-collapse:collapse;font-size:12.5px" id="monthly-dogbot-table"><tbody id="monthly-dogbot-body"></tbody></table></div>
     </div>
   </div>
 </div>
@@ -2464,6 +2469,11 @@ function renderStatsMenu() {
     cards.push(`<div class="cat" style="--accent:var(--green)" onclick="showSec('monthlyprofit')">
       <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-chart-histogram"></i></div>
       <div><div class="cat-title">Monthly profit</div><div class="cat-desc">This month's total bets, EV, profit and a breakdown by sheet — everyone</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>`);
+    cards.push(`<div class="cat" style="--accent:var(--blue)" onclick="showSec('monthly')">
+      <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-chart-dots"></i></div>
+      <div><div class="cat-title">Monthly probability</div><div class="cat-desc">Static profit/loss band chances for this month — all bets, plus a DogBot breakdown</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>`);
   }
@@ -7671,7 +7681,7 @@ async function initMonthly() {
       if (odds === null || ev === null || !(stake > 0)) return; // no usable EV — excluded, as agreed
       const winProb = evBasedWinProb(odds, ev, stake);
       if (winProb === null) return;
-      usable.push({ odds, ev, stake, winProb, result: b.result, pl: b.pl || 0 });
+      usable.push({ odds, ev, stake, winProb, result: b.result, pl: b.pl || 0, bet_type: b.bet_type });
     });
     if (!usable.length) {
       showMonthlyStatus('ti-calendar-off','No usable bets this month','No bets with Odds, EV and Stake found for this month.');
@@ -7700,6 +7710,14 @@ async function initMonthly() {
 
     renderMonthlyTable('monthly-static-body', staticBands);
     renderMonthlyTable('monthly-live-body', liveBands);
+
+    // DogBot-specific — pure static simulation only, matching what was actually asked for.
+    const dogbot = usable.filter(b => b.bet_type === 'Dogs + Horses');
+    if (dogbot.length) {
+      renderMonthlyTable('monthly-dogbot-body', monteCarloProfitBands(dogbot, 0));
+    } else {
+      document.getElementById('monthly-dogbot-body').innerHTML = '<tr><td style="padding:12px 6px;color:var(--text3);font-size:12.5px">No usable DogBot bets this month.</td></tr>';
+    }
 
     document.getElementById('monthly-content').style.display='';
   } catch (e) {
