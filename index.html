@@ -234,6 +234,11 @@ input::placeholder{color:var(--text3)}
       <div><div class="cat-title">Stats</div><div class="cat-desc">Today's stats, monthly profit tracker and more to come</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
+    <div class="cat" style="--accent:var(--red)" onclick="showSec('todo')">
+      <div class="cat-ico" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-list-details"></i></div>
+      <div><div class="cat-title">To Do<span id="todo-badge" style="display:none;margin-left:8px;background:var(--red);color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600"></span></div><div class="cat-desc">Requests between Admin and Assistant</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
     <div class="cat" style="--accent:var(--purple)" onclick="showTopSec('calc')">
       <div class="cat-ico" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-calculator"></i></div>
       <div><div class="cat-title">Calculations</div><div class="cat-desc">Value finders, DDHH, manual calculators and fixtures</div></div>
@@ -1753,6 +1758,36 @@ input::placeholder{color:var(--text3)}
   </div>
 </div>
 
+<!-- TO DO -->
+<div id="view-todo" class="sec">
+  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <div class="sec-title">To Do</div>
+
+  <div id="todo-add-form" class="card card-pad" style="margin-bottom:16px;display:none">
+    <div class="sec-title" style="margin:0 0 4px;font-size:15px">Add request</div>
+    <div style="margin-bottom:12px"><label class="lbl">Note</label><textarea id="todo-note" rows="3" style="width:100%;padding:10px 12px;border:0.5px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:14px;background:var(--surface);color:var(--text);resize:vertical" placeholder="What do you need done?"></textarea></div>
+    <div style="margin-bottom:14px"><label class="lbl">Urgency</label><select id="todo-urgency">
+      <option value="asap">ASAP</option>
+      <option value="today">Today</option>
+      <option value="week">This week</option>
+      <option value="whenever">Whenever</option>
+    </select></div>
+    <button onclick="submitTodo()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:10px 18px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Send request</button>
+    <div id="todo-add-msg" style="margin-top:10px;font-size:13px"></div>
+  </div>
+
+  <div id="todo-problems-section" class="card card-pad" style="margin-bottom:16px;display:none">
+    <div class="sec-title" style="margin:0 0 4px;font-size:15px;color:var(--red)">Problems</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px">Flagged by the Assistant — needs sorting out together.</div>
+    <div id="todo-problems-list">Loading…</div>
+  </div>
+
+  <div class="card card-pad">
+    <div class="sec-title" style="margin:0 0 4px;font-size:15px">Open</div>
+    <div id="todo-open-list">Loading…</div>
+  </div>
+</div>
+
 <!-- ASSISTANT ALL TIME STATS (placeholder — backlog data not yet in) -->
 <div id="view-assistantalltime" class="sec">
   <button class="back" onclick="showTopSec('stats')"><i class="ti ti-arrow-left"></i> Stats</button>
@@ -2391,7 +2426,7 @@ function checkPin(){
 
 // ── NAVIGATION ──
 function goHome(){document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
-function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();if(name==='ddhh')initDDHH(null);if(name==='bets-combined')initBetsPage();if(name==='monthly')initMonthly();if(name==='monthlyprofit')initMonthlyProfit();if(name==='assistantmonthly')initAssistantMonthly();}
+function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();if(name==='ddhh')initDDHH(null);if(name==='bets-combined')initBetsPage();if(name==='monthly')initMonthly();if(name==='monthlyprofit')initMonthlyProfit();if(name==='assistantmonthly')initAssistantMonthly();if(name==='todo')initTodo();}
 const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger',bettracking:'bettracking',stats:'stats-menu'};
 function showTopSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='stats')renderStatsMenu();}
 
@@ -2831,6 +2866,181 @@ function applyRoleRestrictions() {
   if (transferBtn) transferBtn.style.display = isStaff ? 'none' : '';
   const externalBtn = document.getElementById('money-type-external');
   if (externalBtn) externalBtn.style.display = isStaff ? 'none' : '';
+  startTodoPolling();
+}
+
+// ── TO DO ──
+// A simple beep-beep tone generated on the fly via the Web Audio API — no sound file
+// needed. Browsers block audio until a genuine user gesture has happened first; logging in
+// counts as one, so the AudioContext gets created there to "unlock" it for later use.
+let TODO_AUDIO_CTX = null;
+function unlockTodoAudio() {
+  if (TODO_AUDIO_CTX) return;
+  try { TODO_AUDIO_CTX = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { /* audio unavailable, alerts will just be silent */ }
+}
+function playTodoAlertSound() {
+  if (!TODO_AUDIO_CTX) return;
+  const now = TODO_AUDIO_CTX.currentTime;
+  [0, 0.16].forEach((offset, i) => {
+    const osc = TODO_AUDIO_CTX.createOscillator();
+    const gain = TODO_AUDIO_CTX.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = i === 0 ? 880 : 1046.5;
+    gain.gain.setValueAtTime(0.0001, now + offset);
+    gain.gain.exponentialRampToValueAtTime(0.25, now + offset + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.18);
+    osc.connect(gain).connect(TODO_AUDIO_CTX.destination);
+    osc.start(now + offset);
+    osc.stop(now + offset + 0.2);
+  });
+}
+
+let TODO_POLL_INTERVAL = null;
+let TODO_LAST_OPEN_MAX_ID = null; // null = baseline not yet established, don't alert on first poll
+let TODO_LAST_PROBLEM_MAX_ID = null;
+
+async function pollForNewTodos() {
+  if (!CURRENT_USER_ROLE) return;
+  try {
+    if (CURRENT_USER_ROLE === 'staff') {
+      const d = await ledgerApi('todos?status=open');
+      const rows = (d.ok && d.todos) ? d.todos : [];
+      const maxId = rows.length ? Math.max(...rows.map(r => r.id)) : 0;
+      if (TODO_LAST_OPEN_MAX_ID !== null && maxId > TODO_LAST_OPEN_MAX_ID) playTodoAlertSound();
+      TODO_LAST_OPEN_MAX_ID = maxId;
+      updateTodoBadge(rows.length);
+    } else if (CURRENT_USER_ROLE === 'admin') {
+      const d = await ledgerApi('todos?status=problem');
+      const rows = (d.ok && d.todos) ? d.todos : [];
+      const maxId = rows.length ? Math.max(...rows.map(r => r.id)) : 0;
+      if (TODO_LAST_PROBLEM_MAX_ID !== null && maxId > TODO_LAST_PROBLEM_MAX_ID) playTodoAlertSound();
+      TODO_LAST_PROBLEM_MAX_ID = maxId;
+      updateTodoBadge(rows.length);
+    }
+    // If currently viewing the To Do page, keep it live too.
+    if (document.getElementById('view-todo')?.style.display !== 'none') refreshTodoPage();
+  } catch (e) { /* non-fatal — just try again next poll */ }
+}
+
+function updateTodoBadge(count) {
+  const badge = document.getElementById('todo-badge');
+  if (!badge) return;
+  if (count > 0) { badge.textContent = count; badge.style.display = 'inline-block'; }
+  else { badge.style.display = 'none'; }
+}
+
+function startTodoPolling() {
+  unlockTodoAudio();
+  if (TODO_POLL_INTERVAL) clearInterval(TODO_POLL_INTERVAL);
+  pollForNewTodos(); // establishes the baseline silently, no alert on this first check
+  TODO_POLL_INTERVAL = setInterval(pollForNewTodos, 20000);
+}
+
+async function initTodo() {
+  const isAdmin = CURRENT_USER_ROLE === 'admin';
+  document.getElementById('todo-add-form').style.display = isAdmin ? 'block' : 'none';
+  document.getElementById('todo-problems-section').style.display = isAdmin ? 'block' : 'none';
+  await refreshTodoPage();
+}
+
+async function refreshTodoPage() {
+  const isAdmin = CURRENT_USER_ROLE === 'admin';
+  if (isAdmin) renderTodoProblems();
+  renderTodoOpen();
+}
+
+async function renderTodoOpen() {
+  const el = document.getElementById('todo-open-list');
+  const isAdmin = CURRENT_USER_ROLE === 'admin';
+  try {
+    const d = await ledgerApi('todos?status=open');
+    const rows = (d.ok && d.todos) ? d.todos : [];
+    if (!rows.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">Nothing open.</div>'; return; }
+    const urgencyLabel = { asap: 'ASAP', today: 'Today', week: 'This week', whenever: 'Whenever' };
+    const urgencyColor = { asap: 'var(--red)', today: 'var(--amber)', week: 'var(--blue)', whenever: 'var(--text3)' };
+    el.innerHTML = rows.map(r => `<div style="padding:10px 0;border-bottom:0.5px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span style="font-size:10px;font-weight:600;text-transform:uppercase;color:${urgencyColor[r.urgency]};border:0.5px solid ${urgencyColor[r.urgency]};border-radius:4px;padding:1px 6px">${urgencyLabel[r.urgency]}</span>
+          <span style="font-size:11px;color:var(--text3)">${formatLedgerDate(r.created_at)}</span>
+        </div>
+        <div style="font-size:14px">${escapeHtml(r.note)}</div>
+      </div>
+      ${!isAdmin ? `<div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="add-btn" onclick="completeTodo(${r.id})" style="color:var(--green);border-color:var(--green)"><i class="ti ti-check"></i> Done</button>
+        <button class="add-btn" onclick="flagTodoProblem(${r.id})" style="color:var(--red);border-color:var(--red)">Problem</button>
+      </div>` : ''}
+    </div>`).join('');
+  } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load.</div>'; }
+}
+
+async function renderTodoProblems() {
+  const el = document.getElementById('todo-problems-list');
+  try {
+    const d = await ledgerApi('todos?status=problem');
+    const rows = (d.ok && d.todos) ? d.todos : [];
+    if (!rows.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No problems flagged.</div>'; return; }
+    el.innerHTML = rows.map(r => `<div style="padding:10px 0;border-bottom:0.5px solid var(--border)">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${formatLedgerDate(r.created_at)}</div>
+      <div style="font-size:14px;margin-bottom:4px">${escapeHtml(r.note)}</div>
+      ${r.problem_note ? `<div style="font-size:13px;color:var(--red);margin-bottom:8px">Problem: ${escapeHtml(r.problem_note)}</div>` : ''}
+      <div style="display:flex;gap:6px">
+        <button class="add-btn" onclick="completeTodo(${r.id})">Mark done</button>
+        <button class="add-btn" onclick="reopenTodo(${r.id})">Send back to open</button>
+        <button class="add-btn" onclick="deleteTodo(${r.id})" style="color:var(--red);border-color:var(--red)">Remove</button>
+      </div>
+    </div>`).join('');
+  } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load.</div>'; }
+}
+
+async function submitTodo() {
+  const note = document.getElementById('todo-note').value.trim();
+  const urgency = document.getElementById('todo-urgency').value;
+  const msgEl = document.getElementById('todo-add-msg');
+  if (!note) { msgEl.innerHTML = '<span style="color:var(--red)">Enter a note.</span>'; return; }
+  msgEl.innerHTML = '<span style="color:var(--text2)">Sending…</span>';
+  try {
+    const d = await ledgerApi('todos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ note, urgency }) });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to send'}</span>`; return; }
+    msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Sent.</span>';
+    document.getElementById('todo-note').value = '';
+    renderTodoOpen();
+  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error.</span>'; }
+}
+
+async function completeTodo(id) {
+  try {
+    const d = await ledgerApi('todos/'+id+'/complete', { method:'PATCH' });
+    if (!d.ok) { alert(d.error || 'Failed to update'); return; }
+    refreshTodoPage();
+  } catch (e) { alert('Network error.'); }
+}
+
+async function flagTodoProblem(id) {
+  const note = prompt('What went wrong? (optional)');
+  if (note === null) return;
+  try {
+    const d = await ledgerApi('todos/'+id+'/problem', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ problem_note: note }) });
+    if (!d.ok) { alert(d.error || 'Failed to flag'); return; }
+    refreshTodoPage();
+  } catch (e) { alert('Network error.'); }
+}
+
+async function reopenTodo(id) {
+  try {
+    const d = await ledgerApi('todos/'+id+'/reopen', { method:'PATCH' });
+    if (!d.ok) { alert(d.error || 'Failed to reopen'); return; }
+    refreshTodoPage();
+  } catch (e) { alert('Network error.'); }
+}
+
+async function deleteTodo(id) {
+  if (!confirm('Remove this request permanently?')) return;
+  try {
+    const d = await ledgerApi('todos/'+id, { method:'DELETE' });
+    if (!d.ok) { alert(d.error || 'Failed to remove'); return; }
+    refreshTodoPage();
+  } catch (e) { alert('Network error.'); }
 }
 
 async function ledgerApi(path, opts) {
