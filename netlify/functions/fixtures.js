@@ -9,6 +9,7 @@ const PRIMARY_IDS = new Set([
   42,  // UEFA Champions League
   73,  // UEFA Europa League
   40,  // FA Cup
+  74,  // UEFA Super Cup
 ]);
 
 const CORS = {
