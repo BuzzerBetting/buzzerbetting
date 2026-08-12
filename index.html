@@ -3391,6 +3391,7 @@ function accountOptionsHtml(selectedId, bookieRaw, excludeIds) {
   if (excludeIds && excludeIds.length) {
     list = list.filter(a => String(a.id) === String(selectedId) || !excludeIds.includes(String(a.id)));
   }
+  list = sortAccountsForGrid(list);
   if (!list.length) {
     return bookieRaw && bookieRaw.trim() ? `<option value="">No live accounts for that bookie</option>` : `<option value="">No accounts set up yet</option>`;
   }
@@ -4040,10 +4041,13 @@ function renderAccountsGrid() {
   }, 0);
 }
 
-// Simple numerical order by C/D-ID number, extracting the numeric part so C2 sorts before
-// C10 regardless of zero-padding.
+// Grouped by prefix first (all C-IDs, then all D-IDs), numerical order within each group —
+// extracting the numeric part so C2 sorts before C10 regardless of zero-padding.
 function sortAccountsForGrid(list) {
   return [...list].sort((a, b) => {
+    const prefixA = (a.account_id||'').replace(/[^A-Za-z]/g,'');
+    const prefixB = (b.account_id||'').replace(/[^A-Za-z]/g,'');
+    if (prefixA !== prefixB) return prefixA.localeCompare(prefixB);
     const numA = parseInt((a.account_id||'').replace(/\D/g,''), 10) || 0;
     const numB = parseInt((b.account_id||'').replace(/\D/g,''), 10) || 0;
     return numA - numB;
