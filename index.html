@@ -264,7 +264,7 @@ input::placeholder{color:var(--text3)}
 <!-- BETS MENU -->
 <!-- CALCULATIONS MENU -->
 <div id="view-calc-menu" class="sec">
-  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <button class="back" id="calc-menu-back-btn" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
   <div class="sec-title">Calculations</div>
   <div class="grid">
     <div class="cat" onclick="showSec('oddschecker')">
@@ -2422,6 +2422,7 @@ function checkPin(){
       document.getElementById('pin-overlay').style.display='none';
       document.getElementById('login-passcode').value='';
       applyRoleRestrictions();
+      if (d.role === 'calculator') showTopSec('calc');
     } else {
       errEl.textContent = d.error || 'Incorrect username or passcode — try again';
       errEl.style.display='block';
@@ -2443,13 +2444,14 @@ function checkPin(){
     const o=document.getElementById('pin-overlay');
     if(o)o.style.display='none';
     setTimeout(applyRoleRestrictions, 0);
+    if (CURRENT_USER_ROLE === 'calculator') setTimeout(()=>showTopSec('calc'), 0);
   } else {
     setTimeout(()=>{const i=document.getElementById('login-username');if(i)i.focus();},200);
   }
 })();
 
 // ── NAVIGATION ──
-function goHome(){document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
+function goHome(){if(CURRENT_USER_ROLE==='calculator'){showTopSec('calc');return;}document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
 function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();if(name==='ddhh')initDDHH(null);if(name==='bets-combined')initBetsPage();if(name==='monthly')initMonthly();if(name==='monthlyprofit')initMonthlyProfit();if(name==='assistantmonthly')initAssistantMonthly();if(name==='todo')initTodo();}
 const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger',bettracking:'bettracking',stats:'stats-menu'};
 function showTopSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='stats')renderStatsMenu();}
@@ -2889,13 +2891,16 @@ const NINJA_GOLF_COMMISSION = 0.02;
 // from scratch on every load anyway — no separate pass needed for those.
 function applyRoleRestrictions() {
   const isStaff = CURRENT_USER_ROLE === 'staff';
+  const isCalculator = CURRENT_USER_ROLE === 'calculator';
   const profitCard = document.getElementById('home-card-profit');
   if (profitCard) profitCard.style.display = isStaff ? 'none' : '';
   const transferBtn = document.getElementById('money-type-transfer');
   if (transferBtn) transferBtn.style.display = isStaff ? 'none' : '';
   const externalBtn = document.getElementById('money-type-external');
   if (externalBtn) externalBtn.style.display = isStaff ? 'none' : '';
-  startTodoPolling();
+  const calcBackBtn = document.getElementById('calc-menu-back-btn');
+  if (calcBackBtn) calcBackBtn.style.display = isCalculator ? 'none' : '';
+  if (!isCalculator) startTodoPolling(); // Calculator has no Ledger access at all — polling would just produce repeated 403s
 }
 
 // ── TO DO ──
