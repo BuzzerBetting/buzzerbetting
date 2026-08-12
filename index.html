@@ -9459,12 +9459,20 @@ function deriveBfexFair(runner) {
 }
 
 async function runScanCore(matchId, home, away, competition, idsArr) {
-  const ids = idsArr.filter(Boolean).join(',');
-  const hasAllIds = idsArr.filter(Boolean).length === 4;
+  // Pairs each ID with its market key BEFORE filtering, so gaps (a market with no ID
+  // entered) don't shift positions — the request and the result-parsing below both derive
+  // from this same filtered list, so they always stay in sync regardless of which ones are
+  // actually provided.
+  const OC_MARKET_KEY_ORDER = ['header', 'otb', 'headed_sot', 'sot_otb'];
+  const providedMarkets = OC_MARKET_KEY_ORDER
+    .map((key, i) => ({ key, id: (idsArr[i] || '').trim() }))
+    .filter(m => m.id);
+  const ids = providedMarkets.map(m => m.id).join(',');
+  const hasAnyIds = providedMarkets.length > 0;
 
-  // Step 1: Fetch OC odds (only if all 4 IDs present), lineups, BB odds and Betfair in parallel
+  // Step 1: Fetch OC odds (only if at least one ID is present), lineups, BB odds and Betfair in parallel
   const [ocRaw, lineupData, , bfexData] = await Promise.all([
-    hasAllIds
+    hasAnyIds
       ? fetch(`https://www.oddschecker.com/api/markets/v2/all-odds?market-ids=${ids}&repub=OC`).then(r => r.json()).catch(() => [])
       : Promise.resolve([]),
     fetch(`/.netlify/functions/lineups?matchId=${matchId}`)
@@ -9533,15 +9541,15 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
       return { fair, confidence };
     }
 
-    // Step 2: Parse OC odds into lookup by market → player name
-    const MARKET_KEYS = ['header', 'otb', 'headed_sot', 'sot_otb'];
+    // Step 2: Parse OC odds into lookup by market → player name — uses the same
+    // providedMarkets list the request was built from, so a result's position always maps
+    // to the correct market key regardless of which ones were actually provided.
     const ocMarkets = {};
-    const idList = ids.split(',');
 
     for (const mkt of (Array.isArray(ocRaw) ? ocRaw : [])) {
-      const idx = idList.indexOf(String(mkt.marketId));
-      if (idx === -1) continue;
-      const mkey = MARKET_KEYS[idx];
+      const found = providedMarkets.find(m => m.id === String(mkt.marketId));
+      if (!found) continue;
+      const mkey = found.key;
       if (!ocMarkets[mkey]) ocMarkets[mkey] = {};
       const byBet = {};
       for (const bet of (mkt.odds ?? [])) {
@@ -9808,8 +9816,8 @@ async function scanOC(matchId, home, away, competition, btn) {
   try {
     const key = `${slugifyOC(home)}-v-${slugifyOC(away)}`;
     const idsArr = [0,1,2,3].map(i => document.getElementById(`mid-${key}-${i}`)?.value.trim() || '');
-    if (idsArr.filter(Boolean).length !== 4) {
-      alert('Please fill in all 4 market IDs');
+    if (idsArr.filter(Boolean).length === 0) {
+      alert('Please fill in at least one market ID');
       return;
     }
     btn.innerHTML = '<i class="ti ti-loader"></i> Scanning...';
