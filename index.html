@@ -2798,6 +2798,8 @@ const BET_TYPE_CONFIG = {
   'Discord':          { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Bet',label:'Bet',type:'text'}], oddsMode:'pairedBlended' },
   'Dogs + Horses':    { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Race',label:'Race',type:'text'},{key:'Horse/Trap',label:'Horse / trap',type:'text'},{key:'Each-Way',label:'Each-way?',type:'checkbox',revealsField:'Terms'},{key:'Terms',label:'Each-way terms (e.g. 1/5)',type:'text',hiddenUnless:'Each-Way'}], oddsMode:'blendedProfit',
                         note:'Fair odds aren\u2019t captured here — this bet is priced at the off (BFEX SP), so EV is calculated at settlement, not at entry.' },
+  'Dogs + Horses (VA)': { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Race',label:'Race',type:'text'},{key:'Horse/Trap',label:'Horse / trap',type:'text'},{key:'Each-Way',label:'Each-way?',type:'checkbox',revealsField:'Terms'},{key:'Terms',label:'Each-way terms (e.g. 1/5)',type:'text',hiddenUnless:'Each-Way'}], oddsMode:'blendedProfit',
+                        note:'Fair odds aren\u2019t captured here — this bet is priced at the off (BFEX SP), so EV is calculated at settlement, not at entry.' },
   'Corners':          { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Team',label:'Team',type:'text'},{key:'Assist',label:'Assist',type:'text'},{key:'Scorer',label:'Scorer',type:'text'}], oddsMode:'blendedProfit' },
   'Ninja Golf BFEX':  { layout:'standard', bookie:true, bookieFieldKey:'Bookie', bookieDefault:'Betfair', stakeFieldKey:'Total Stake', fields:[{key:'Comp',label:'Competition',type:'text'},{key:'Player',label:'Player',type:'text'},{key:'Points Advised',label:'Points advised',type:'number'}], oddsMode:'blendedProfitCommission',
                         note:'The potential profit above already accounts for the 2% commission on this market — apply the same 2% again at settlement.' },
@@ -2896,6 +2898,7 @@ const BET_TYPE_GROUPS = {
     {key:'BB - BT', label:'BB Bet Tracker'},
     {key:'Casino', label:'Casino'},
     {key:'Offers (VA)', label:'Offers'},
+    {key:'Dogs + Horses (VA)', label:'Dogs + Horses DogBot'},
   ],
 };
 
@@ -5698,6 +5701,7 @@ const BET_TRACKING_GROUPS = {
     {key:'BB - BT', label:'BB Bet Tracker'},
     {key:'Casino', label:'Casino'},
     {key:'Offers (VA)', label:'Offers'},
+    {key:'Dogs + Horses (VA)', label:'Dogs + Horses DogBot'},
     {key:'Other', label:'Other'},
   ],
 };
@@ -5706,7 +5710,7 @@ let betTrackingLastGroup = null;
 
 // Manually maintained — add a bet_type key here once you've finished reviewing/fixing its
 // columns, so the list shows which tabs are done vs still need checking.
-const BET_TRACKING_REVIEWED = ['Value', 'Keithbot', 'Dogs + Horses', 'BB Horse', 'BB Golf', 'American Props', 'Freeze', 'Offers (Personal)', 'Casino (Personal)', 'Ninja Golf BFEX', 'Corners', 'Other Bets', 'Discord', 'BB - RTP', 'BB - BT', 'Offers (VA)'];
+const BET_TRACKING_REVIEWED = ['Value', 'Keithbot', 'Dogs + Horses', 'Dogs + Horses (VA)', 'BB Horse', 'BB Golf', 'American Props', 'Freeze', 'Offers (Personal)', 'Casino (Personal)', 'Ninja Golf BFEX', 'Corners', 'Other Bets', 'Discord', 'BB - RTP', 'BB - BT', 'Offers (VA)'];
 
 function showBetTrackingGroup(group) {
   betTrackingLastGroup = group;
@@ -6203,7 +6207,7 @@ async function submitBtLink() {
 let btSettleContext = null; // { betId, refreshFn }
 let btSettleResult = null;
 
-const EACH_WAY_BET_TYPES = ['Dogs + Horses', 'BB Horse', 'BB Golf', 'BB - RTP'];
+const EACH_WAY_BET_TYPES = ['Dogs + Horses', 'Dogs + Horses (VA)', 'BB Horse', 'BB Golf', 'BB - RTP'];
 
 const BET_TYPE_TOGGLE_TABS = ['Offers (Personal)', 'Offers (VA)', 'Other Bets'];
 
@@ -6214,7 +6218,7 @@ function openBtSettleModal(betId, currentResult, currentPl, refreshFn, stake, od
   document.getElementById('bt-delete-msg').innerHTML = '';
   resetBtDeleteButton();
   const bfexWrap = document.getElementById('bt-settle-bfex-wrap');
-  const isDogbot = betType === 'Dogs + Horses';
+  const isDogbot = betType === 'Dogs + Horses' || betType === 'Dogs + Horses (VA)';
   bfexWrap.style.display = isDogbot ? 'block' : 'none';
   document.getElementById('bt-settle-bfex').value = (currentBfexSp !== undefined && currentBfexSp !== null) ? currentBfexSp : '';
   const betTypeWrap = document.getElementById('bt-settle-bettype-wrap');
@@ -6461,7 +6465,7 @@ async function submitBtSettle() {
   msgEl.innerHTML = '<span style="color:var(--text2)">Saving…</span>';
   try {
     const extraFields = {};
-    if (btSettleContext.betType === 'Dogs + Horses') {
+    if (btSettleContext.betType === 'Dogs + Horses' || btSettleContext.betType === 'Dogs + Horses (VA)') {
       const bfexVal = parseFloat(document.getElementById('bt-settle-bfex').value);
       if (!isNaN(bfexVal)) extraFields['BFEX SP'] = bfexVal;
     }
