@@ -5150,7 +5150,7 @@ async function loadDashboardOpenBets() {
   const el = document.getElementById('dashboard-open-bets');
   el.innerHTML = 'Loading…';
   try {
-    const d = await ledgerApi('bets?status=open&limit=1000');
+    const d = await ledgerApi('bets?status=open&limit=1000&dashboardOpen=1');
     const bets = ((d.ok && d.bets) ? d.bets : []).filter(b => !DASHBOARD_EXCLUDED_BET_TYPES.includes(b.bet_type));
     if (!bets.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No open bets.</div>'; return; }
     el.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">
