@@ -42,7 +42,7 @@ const HARDCODED_BUZZER_TYPES = [
   'Value', 'Keithbot', 'Dogs + Horses', 'BB Horse', 'BB Golf', 'American Props', 'Freeze',
   'Ninja Golf BFEX', 'Corners', 'Offers (Personal)', 'Other Bets', 'Casino (Personal)'
 ];
-const HARDCODED_ASSISTANT_TYPES = ['Discord', 'BB - RTP', 'BB - BT', 'Casino', 'Offers (VA)'];
+const HARDCODED_ASSISTANT_TYPES = ['Discord', 'BB - RTP', 'BB - BT', 'Casino', 'Offers (VA)', 'Dogs + Horses (VA)'];
 function getBetTypeGroup(bet_type) {
   if (HARDCODED_BUZZER_TYPES.includes(bet_type)) return 'buzzer';
   if (HARDCODED_ASSISTANT_TYPES.includes(bet_type)) return 'assistant';
@@ -90,6 +90,15 @@ router.use((req, res, next) => {
   next();
 });
 
+// The Calculator role can only ever use the Calculations tools, which don't touch any
+// live betting/financial data — so it has no legitimate reason to ever call this API at
+// all. Blocked entirely here, not just hidden in the frontend, so there's no endpoint a
+// Calculator session could reach even by calling the API directly.
+router.use((req, res, next) => {
+  if (req.userRole === 'calculator') return res.status(403).json({ ok: false, error: 'This account has no access to the Ledger.' });
+  next();
+});
+
 // Blocks the request unless the session resolved to an admin. Used on every action that
 // should be Admin-only regardless of what the frontend UI shows or hides.
 function requireAdmin(req, res, next) {
@@ -115,10 +124,10 @@ router.post('/login', (req, res) => {
 
 
 function openStakeFor(accountId) {
-  const row = db.prepare(
-    `SELECT COALESCE(SUM(stake),0) AS total FROM bet_legs WHERE account_id = ? AND settled = 0`
-  ).get(accountId);
-  return row.total;
+  const rows = db.prepare(
+    `SELECT bl.stake, b.bet_type, b.fields FROM bet_legs bl JOIN bets b ON b.id = bl.bet_id WHERE bl.account_id = ? AND bl.settled = 0`
+  ).all(accountId);
+  return rows.reduce((sum, r) => hasNoRealStake(r.bet_type, r.fields) ? sum : sum + r.stake, 0);
 }
 
 // ================== ACCOUNTS ==================
@@ -144,6 +153,18 @@ router.get('/accounts/next-id', (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// Computes each account's last-activity date across deposits, withdrawals, and bets in
+// three single aggregate queries (not one query per account, which wouldn't scale) — used
+// to flag accounts sitting dormant with real money still in them.
+function computeLastActivityMap() {
+  const map = {};
+  const bump = (accountId, date) => { if (!map[accountId] || date > map[accountId]) map[accountId] = date; };
+  db.prepare(`SELECT account_id, MAX(date) AS last FROM deposits GROUP BY account_id`).all().forEach(r => bump(r.account_id, r.last));
+  db.prepare(`SELECT account_id, MAX(date) AS last FROM withdrawals GROUP BY account_id`).all().forEach(r => bump(r.account_id, r.last));
+  db.prepare(`SELECT bl.account_id, MAX(b.date) AS last FROM bet_legs bl JOIN bets b ON b.id = bl.bet_id GROUP BY bl.account_id`).all().forEach(r => bump(r.account_id, r.last));
+  return map;
+}
+
 router.get('/accounts', (req, res) => {
   try {
     const query = req.query.excludeClosed
@@ -151,7 +172,13 @@ router.get('/accounts', (req, res) => {
       : `SELECT * FROM accounts ORDER BY bookie, profile`;
     const accounts = db.prepare(query).all();
     const hasNotesStmt = db.prepare(`SELECT 1 FROM account_notes WHERE account_id = ? LIMIT 1`);
-    const withExtras = accounts.map(a => ({ ...a, open_stake: openStakeFor(a.id), has_notes: !!hasNotesStmt.get(a.id) }));
+    const lastActivity = computeLastActivityMap();
+    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+    const withExtras = accounts.map(a => {
+      const last = lastActivity[a.id] || a.created_at; // never used at all — dormant clock starts from when it was created
+      const isDormant = a.status === 'good' && a.balance > 0 && last < sixtyDaysAgo;
+      return { ...a, open_stake: openStakeFor(a.id), has_notes: !!hasNotesStmt.get(a.id), is_dormant: isDormant, last_activity: last };
+    });
     res.json({ ok: true, accounts: withExtras });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
@@ -499,18 +526,25 @@ router.patch('/bank-transfers/:id', requireAdmin, (req, res) => {
 // `closed_at` is managed automatically here, not passed in: stamped when status becomes
 // 'closed', cleared when it becomes anything else (e.g. restored from the archive).
 router.patch('/accounts/:id', (req, res) => {
-  try {
-    const { status, note, label, account_name, balance } = req.body;
-    if (typeof balance === 'number' && balance < 0) return res.status(400).json({ ok: false, error: 'Balance cannot be set below £0' });
-    const account = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(req.params.id);
-    if (!account) return res.status(404).json({ ok: false, error: 'Account not found' });
+  const doUpdate = db.transaction((id, status, note, label, account_name, balance, username) => {
+    const account = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(id);
+    if (!account) throw new Error('Account not found');
     let closedAt = undefined; // undefined = don't touch
     if (status === 'closed') closedAt = new Date().toISOString();
     else if (status) closedAt = null; // any other explicit status clears it
     db.prepare(
       `UPDATE accounts SET status = COALESCE(?, status), note = COALESCE(?, note), label = COALESCE(?, label), account_name = COALESCE(?, account_name), balance = COALESCE(?, balance), closed_at = CASE WHEN ? THEN ? ELSE closed_at END, updated_at = datetime('now') WHERE id = ?`
-    ).run(status ?? null, note ?? null, label ?? null, account_name ?? null, (typeof balance === 'number' ? balance : null), closedAt !== undefined ? 1 : 0, closedAt ?? null, req.params.id);
-    const updated = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(req.params.id);
+    ).run(status ?? null, note ?? null, label ?? null, account_name ?? null, (typeof balance === 'number' ? balance : null), closedAt !== undefined ? 1 : 0, closedAt ?? null, id);
+    if (typeof balance === 'number' && balance !== account.balance) {
+      db.prepare(`INSERT INTO manual_adjustments (account_id, old_balance, new_balance, delta, created_by) VALUES (?, ?, ?, ?, ?)`)
+        .run(id, account.balance, balance, balance - account.balance, username || null);
+    }
+    return db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(id);
+  });
+  try {
+    const { status, note, label, account_name, balance } = req.body;
+    if (typeof balance === 'number' && balance < 0) return res.status(400).json({ ok: false, error: 'Balance cannot be set below £0' });
+    const updated = doUpdate(req.params.id, status, note, label, account_name, balance, req.username);
     res.json({ ok: true, account: updated });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
@@ -555,7 +589,7 @@ router.post('/locked-funds/:id/unlock', (req, res) => {
     if (lf.source !== 'account_locked' || !lf.linked_account_id) throw new Error('This entry has no linked account to restore');
     const account = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(lf.linked_account_id);
     if (!account) throw new Error('Original account no longer exists');
-    db.prepare(`UPDATE accounts SET balance = MAX(0, balance + ?), status = 'good', updated_at = datetime('now') WHERE id = ?`).run(lf.amount, lf.linked_account_id);
+    db.prepare(`UPDATE accounts SET balance = balance + ?, status = 'good', updated_at = datetime('now') WHERE id = ?`).run(lf.amount, lf.linked_account_id);
     db.prepare(`DELETE FROM locked_funds WHERE id = ?`).run(id);
   });
   try {
@@ -579,9 +613,12 @@ router.post('/locked-funds/:id/recover', (req, res) => {
     const account = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(lf.linked_account_id);
     if (!account) throw new Error('Original account no longer exists');
     if (account.status === 'closed') throw new Error('Original account is Finished — cannot recreate a pending withdrawal against it');
-    db.prepare(`UPDATE accounts SET balance = MAX(0, balance + ?), updated_at = datetime('now') WHERE id = ?`).run(lf.amount, lf.linked_account_id);
+    // No account balance change here — it's already reflecting the deduction from when
+    // this withdrawal was originally requested, and stays deducted through recovery, same
+    // as it did through confiscation. This just recreates the pending record for the same
+    // money.
     const info = db.prepare(`INSERT INTO withdrawals (account_id, amount, balance_after, status) VALUES (?, ?, ?, 'pending')`)
-      .run(lf.linked_account_id, lf.amount, account.balance + lf.amount);
+      .run(lf.linked_account_id, lf.amount, account.balance);
     db.prepare(`DELETE FROM locked_funds WHERE id = ?`).run(id);
     return info.lastInsertRowid;
   });
@@ -617,6 +654,74 @@ router.get('/accounts/:id', (req, res) => {
 });
 
 // GET /api/ledger/accounts/:id/notes
+// GET /api/ledger/accounts/:id/full-transactions?month=YYYY-MM or ?date=YYYY-MM-DD
+// Every event that's ever moved this account's balance by a penny, in one unified list:
+// deposits, withdrawals (deducted at request time under the current model, so shown
+// regardless of pending/confirmed status), bet placement (stake leaving), bet settlement
+// (credit back), and a withdrawal being reversed (the refund back to the account). Free-bet
+// /Casino nominal-stake legs are correctly excluded from the placement event, matching how
+// they never touch real balance anywhere else in the app.
+//
+// Running balance is computed working backwards from the account's current, trusted live
+// balance — anchored to a known-correct number rather than summed forward from an
+// arbitrary starting point, which could drift if any historical data is incomplete.
+router.get('/accounts/:id/full-transactions', (req, res) => {
+  try {
+    const account = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(req.params.id);
+    if (!account) return res.status(404).json({ ok: false, error: 'Account not found' });
+
+    const events = [];
+
+    db.prepare(`SELECT * FROM deposits WHERE account_id = ?`).all(req.params.id).forEach(d => {
+      events.push({ date: d.date, type: 'Deposit', amount: d.amount, odds: null, stake: null, betType: null });
+    });
+
+    db.prepare(`SELECT * FROM withdrawals WHERE account_id = ?`).all(req.params.id).forEach(w => {
+      events.push({ date: w.date, type: 'Withdrawal', amount: -w.amount, odds: null, stake: null, betType: null });
+      if (w.status === 'reversed' && w.reversed_at) {
+        events.push({ date: w.reversed_at, type: 'Withdrawal reversed', amount: w.amount, odds: null, stake: null, betType: null });
+      }
+    });
+
+    db.prepare(`SELECT * FROM manual_adjustments WHERE account_id = ?`).all(req.params.id).forEach(a => {
+      events.push({ date: a.date, type: 'Manual adjustment', amount: a.delta, odds: null, stake: null, betType: null });
+    });
+
+    const legs = db.prepare(
+      `SELECT bl.*, b.date AS bet_date, b.settled_at, b.bet_type, b.fields
+       FROM bet_legs bl JOIN bets b ON b.id = bl.bet_id WHERE bl.account_id = ?`
+    ).all(req.params.id);
+    legs.forEach(leg => {
+      const fields = JSON.parse(leg.fields);
+      const freeBet = hasNoRealStake(leg.bet_type, fields);
+      const odds = typeof fields.Odds === 'number' ? fields.Odds : null;
+      if (!freeBet) {
+        events.push({ date: leg.bet_date, type: 'Bet placed', amount: -leg.stake, odds, stake: leg.stake, betType: leg.bet_type });
+      }
+      if (leg.settled && leg.settled_at) {
+        const stakeComponent = freeBet ? 0 : leg.stake;
+        const creditBack = stakeComponent + (leg.leg_pl || 0);
+        events.push({ date: leg.settled_at, type: 'Bet settled', amount: creditBack, odds, stake: leg.stake, betType: leg.bet_type });
+      }
+    });
+
+    events.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    let running = account.balance;
+    events.forEach(e => {
+      e.balanceAfter = +running.toFixed(2);
+      running = +(running - e.amount).toFixed(2);
+    });
+
+    const { month, date } = req.query;
+    let filtered = events;
+    if (date) filtered = events.filter(e => e.date.slice(0, 10) === date);
+    else if (month) filtered = events.filter(e => e.date.slice(0, 7) === month);
+
+    res.json({ ok: true, transactions: filtered.slice(0, 50), totalMatching: filtered.length });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 router.get('/accounts/:id/notes', (req, res) => {
   try {
     const notes = db.prepare(`SELECT * FROM account_notes WHERE account_id = ? ORDER BY created_at DESC`).all(req.params.id);
@@ -697,39 +802,35 @@ router.post('/accounts/:id/deposit', (req, res) => {
   } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
 });
 
-// POST /api/ledger/accounts/:id/withdraw — body: { amount }
-// Balance is deducted immediately (the money has left the bookie account); `status` tracks
-// separately whether it's been verified as actually landed in the bank yet.
-// POST /api/ledger/accounts/:id/withdraw — creates a pending withdrawal. No money moves yet
-// — neither the account nor its bank are touched until this is confirmed (see /confirm
-// below). This matches the real-world sequence: requesting a withdrawal doesn't mean it's
-// landed anywhere yet.
+// POST /api/ledger/accounts/:id/withdraw — creates a pending withdrawal. The account's live
+// balance is deducted immediately (the money is no longer available to bet with), but the
+// bank isn't credited until the withdrawal is confirmed as actually landed.
 router.post('/accounts/:id/withdraw', (req, res) => {
   const createPending = db.transaction((accountId, amount) => {
     const account = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(accountId);
     if (!account) throw new Error('Account not found');
-    const info = db.prepare(`INSERT INTO withdrawals (account_id, amount, balance_after, status) VALUES (?, ?, ?, 'pending')`).run(accountId, amount, account.balance);
-    return info.lastInsertRowid;
+    const newBalance = Math.max(0, account.balance - amount);
+    db.prepare(`UPDATE accounts SET balance = ?, updated_at = datetime('now') WHERE id = ?`).run(newBalance, accountId);
+    const info = db.prepare(`INSERT INTO withdrawals (account_id, amount, balance_after, status) VALUES (?, ?, ?, 'pending')`).run(accountId, amount, newBalance);
+    return { newBalance, id: info.lastInsertRowid };
   });
   try {
     const amount = parseFloat(req.body.amount);
     if (!(amount > 0)) return res.status(400).json({ ok: false, error: 'amount must be a positive number' });
-    const id = createPending(req.params.id, amount);
-    res.json({ ok: true, id });
+    const { newBalance, id } = createPending(req.params.id, amount);
+    res.json({ ok: true, balance: newBalance, id });
   } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
 });
 
 // PATCH /api/ledger/withdrawals/:id/confirm — marks a withdrawal as verified in the bank.
-// This is where the money actually moves now: out of the account, into its linked bank.
+// The account side already happened at request time — this only credits the bank.
 router.patch('/withdrawals/:id/confirm', requireAdmin, (req, res) => {
   const doConfirm = db.transaction((id) => {
     const w = db.prepare(`SELECT wd.*, a.profile FROM withdrawals wd JOIN accounts a ON a.id = wd.account_id WHERE wd.id = ?`).get(id);
     if (!w) throw new Error('Withdrawal not found');
     if (w.status === 'confirmed') return; // already confirmed — don't double-apply
-    const newBalance = Math.max(0, db.prepare(`SELECT balance FROM accounts WHERE id = ?`).get(w.account_id).balance - w.amount);
-    db.prepare(`UPDATE accounts SET balance = ?, updated_at = datetime('now') WHERE id = ?`).run(newBalance, w.account_id);
     if (w.profile) db.prepare(`UPDATE banks SET starting_balance = starting_balance + ? WHERE name = ?`).run(w.amount, w.profile);
-    db.prepare(`UPDATE withdrawals SET status = 'confirmed', balance_after = ? WHERE id = ?`).run(newBalance, id);
+    db.prepare(`UPDATE withdrawals SET status = 'confirmed' WHERE id = ?`).run(id);
   });
   try {
     doConfirm(req.params.id);
@@ -747,18 +848,21 @@ router.delete('/withdrawals/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
-// POST /api/ledger/withdrawals/:id/reverse — for one added in error. If it was pending,
-// no money ever moved, so this just deletes the record. If it was confirmed, this undoes
-// the account+bank movement that happened at confirmation.
+// POST /api/ledger/withdrawals/:id/reverse — for one added in error. The account was
+// deducted at request time regardless of status, so that's always undone here. The bank
+// side is only undone if it was confirmed, since that's the only point it was ever credited.
+// Soft-deletes (status -> 'reversed') rather than removing the row entirely, so there's a
+// genuine record of it for the account's transaction history.
 router.post('/withdrawals/:id/reverse', async (req, res) => {
   const doReverse = db.transaction((id) => {
     const w = db.prepare(`SELECT w.*, a.profile FROM withdrawals w JOIN accounts a ON a.id = w.account_id WHERE w.id = ?`).get(id);
     if (!w) throw new Error('Withdrawal not found');
-    if (w.status === 'confirmed') {
-      db.prepare(`UPDATE accounts SET balance = MAX(0, balance + ?), updated_at = datetime('now') WHERE id = ?`).run(w.amount, w.account_id);
-      if (w.profile) db.prepare(`UPDATE banks SET starting_balance = starting_balance - ? WHERE name = ?`).run(w.amount, w.profile);
+    if (w.status === 'reversed') throw new Error('Already reversed');
+    db.prepare(`UPDATE accounts SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`).run(w.amount, w.account_id);
+    if (w.status === 'confirmed' && w.profile) {
+      db.prepare(`UPDATE banks SET starting_balance = starting_balance - ? WHERE name = ?`).run(w.amount, w.profile);
     }
-    db.prepare(`DELETE FROM withdrawals WHERE id = ?`).run(id);
+    db.prepare(`UPDATE withdrawals SET status = 'reversed', reversed_at = datetime('now') WHERE id = ?`).run(id);
     return w;
   });
   try {
@@ -769,20 +873,17 @@ router.post('/withdrawals/:id/reverse', async (req, res) => {
 
 // POST /api/ledger/withdrawals/:id/confiscate — the bookie refused to pay out a pending
 // withdrawal. Moves the amount into Locked Funds (for record-keeping) and removes the
-// withdrawal from Pending. Under the new model nothing has moved yet at pending stage — but
-// since the bookie is keeping the money, it needs deducting from the account now (it's
-// genuinely gone). The bank is NOT touched, since the money never reached it.
+// withdrawal from Pending. The account was already deducted at request time, so for a
+// pending withdrawal nothing further happens to it — it stays deducted, matching the money
+// genuinely being gone. The bank is untouched, since the money never reached it.
 router.post('/withdrawals/:id/confiscate', async (req, res) => {
   const doConfiscate = db.transaction((id) => {
     const w = db.prepare(`SELECT w.*, a.account_id AS account_code, a.bookie AS acct_bookie, a.profile AS bank FROM withdrawals w JOIN accounts a ON a.id = w.account_id WHERE w.id = ?`).get(id);
     if (!w) throw new Error('Withdrawal not found');
-    if (w.status !== 'confirmed') {
-      db.prepare(`UPDATE accounts SET balance = MAX(0, balance - ?), updated_at = datetime('now') WHERE id = ?`).run(w.amount, w.account_id);
-    }
     // If it had somehow already been confirmed, the account was already deducted and the
-    // bank already credited at that point — confiscating from there would mean the bookie
-    // clawed back a completed transfer, which needs the bank credit undone instead.
-    else if (w.bank) {
+    // bank already credited at that point — confiscating from there means the bookie
+    // clawed back a completed transfer, which needs the bank credit undone.
+    if (w.status === 'confirmed' && w.bank) {
       db.prepare(`UPDATE banks SET starting_balance = starting_balance - ? WHERE name = ?`).run(w.amount, w.bank);
     }
     db.prepare(`INSERT INTO locked_funds (account_code, bookie, bank, amount, source, linked_account_id) VALUES (?, ?, ?, ?, 'confiscated_withdrawal', ?)`)
@@ -816,7 +917,7 @@ router.patch('/deposits/:id', (req, res) => {
     const dep = db.prepare(`SELECT dep.*, a.profile FROM deposits dep JOIN accounts a ON a.id = dep.account_id WHERE dep.id = ?`).get(id);
     if (!dep) throw new Error('Deposit not found');
     const diff = newAmount - dep.amount;
-    db.prepare(`UPDATE accounts SET balance = MAX(0, balance + ?), updated_at = datetime('now') WHERE id = ?`).run(diff, dep.account_id);
+    db.prepare(`UPDATE accounts SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`).run(diff, dep.account_id);
     if (dep.profile) db.prepare(`UPDATE banks SET starting_balance = starting_balance - ? WHERE name = ?`).run(diff, dep.profile);
     db.prepare(`UPDATE deposits SET amount = ?, balance_after = balance_after + ? WHERE id = ?`).run(newAmount, diff, id);
   });
@@ -844,7 +945,7 @@ router.post('/deposits/:id/reverse', async (req, res) => {
   const doReverse = db.transaction((id) => {
     const d = db.prepare(`SELECT dep.*, a.profile FROM deposits dep JOIN accounts a ON a.id = dep.account_id WHERE dep.id = ?`).get(id);
     if (!d) throw new Error('Deposit not found');
-    db.prepare(`UPDATE accounts SET balance = MAX(0, balance - ?), updated_at = datetime('now') WHERE id = ?`).run(d.amount, d.account_id);
+    db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`).run(d.amount, d.account_id);
     if (d.profile) db.prepare(`UPDATE banks SET starting_balance = starting_balance + ? WHERE name = ?`).run(d.amount, d.profile);
     db.prepare(`DELETE FROM deposits WHERE id = ?`).run(id);
     return d;
@@ -880,7 +981,7 @@ router.patch('/withdrawals/:id', (req, res) => {
     if (!w) throw new Error('Withdrawal not found');
     if (w.status === 'confirmed') {
       const diff = newAmount - w.amount;
-      db.prepare(`UPDATE accounts SET balance = MAX(0, balance - ?), updated_at = datetime('now') WHERE id = ?`).run(diff, w.account_id);
+      db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`).run(diff, w.account_id);
       if (w.profile) db.prepare(`UPDATE banks SET starting_balance = starting_balance + ? WHERE name = ?`).run(diff, w.profile);
       db.prepare(`UPDATE withdrawals SET amount = ?, balance_after = balance_after - ? WHERE id = ?`).run(newAmount, diff, id);
     } else {
@@ -917,11 +1018,11 @@ router.post('/bets', (req, res) => {
         const share = total_stake > 0 ? leg.stake / total_stake : (legs.length ? 1 / legs.length : 0);
         const legPl = +(autoSettlePl * share).toFixed(2);
         db.prepare(`INSERT INTO bet_legs (bet_id, account_id, stake, settled, leg_pl) VALUES (?, ?, ?, 1, ?)`).run(betId, leg.account_id, leg.stake, legPl);
-        db.prepare(`UPDATE accounts SET balance = MAX(0, balance + ?), updated_at = datetime('now') WHERE id = ?`).run(legPl, leg.account_id);
+        db.prepare(`UPDATE accounts SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`).run(legPl, leg.account_id);
       } else {
         db.prepare(`INSERT INTO bet_legs (bet_id, account_id, stake) VALUES (?, ?, ?)`).run(betId, leg.account_id, leg.stake);
         if (!freeBet) {
-          db.prepare(`UPDATE accounts SET balance = MAX(0, balance - ?), updated_at = datetime('now') WHERE id = ?`).run(leg.stake, leg.account_id);
+          db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`).run(leg.stake, leg.account_id);
         }
       }
     }
@@ -958,7 +1059,12 @@ router.get('/bets', (req, res) => {
     if (type) { filters.push('bet_type = ?'); params.push(type); }
     if (dateRange === 'today') { filters.push(`date(date) = date('now')`); }
     else if (dateRange === 'month') { filters.push(`strftime('%Y-%m', date) = strftime('%Y-%m', 'now')`); }
-    if (req.userRole === 'staff' && !type) {
+    // Dashboard-only exception: Staff can see (and settle) Admin's open Buzzer bets from
+    // there specifically, via an explicit flag — deliberately narrow, only ever applies to
+    // open bets on this one call. Everywhere else (settled/historical Buzzer data, any
+    // other view) Staff's access is unchanged.
+    const dashboardOpenException = status === 'open' && req.query.dashboardOpen === '1';
+    if (req.userRole === 'staff' && !type && !dashboardOpenException) {
       const buzzerTypes = [...HARDCODED_BUZZER_TYPES, ...db.prepare(`SELECT key FROM custom_sheets WHERE user_group = 'buzzer'`).all().map(r => r.key)];
       if (buzzerTypes.length) { filters.push(`bet_type NOT IN (${buzzerTypes.map(()=>'?').join(',')})`); params.push(...buzzerTypes); }
     }
@@ -1024,7 +1130,7 @@ router.post('/bets/:id/legs', (req, res) => {
     const account = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(accountId);
     if (!account) throw new Error('Account not found');
     db.prepare(`INSERT INTO bet_legs (bet_id, account_id, stake) VALUES (?, ?, ?)`).run(betId, accountId, stake);
-    db.prepare(`UPDATE accounts SET balance = MAX(0, balance - ?), updated_at = datetime('now') WHERE id = ?`).run(stake, accountId);
+    db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`).run(stake, accountId);
   });
   try {
     const { account_id, stake } = req.body;
@@ -1109,7 +1215,7 @@ router.patch('/bets/:id/winnings', (req, res) => {
     if (bet.result !== 'open') {
       for (const leg of legs) {
         const stakeComponent = freeBet ? 0 : leg.stake;
-        db.prepare(`UPDATE accounts SET balance = MAX(0, balance - ? - ?), updated_at = datetime('now') WHERE id = ?`)
+        db.prepare(`UPDATE accounts SET balance = balance - ? - ?, updated_at = datetime('now') WHERE id = ?`)
           .run(stakeComponent, leg.leg_pl || 0, leg.account_id);
       }
     }
@@ -1118,7 +1224,7 @@ router.patch('/bets/:id/winnings', (req, res) => {
       const legPl = +(newPl * share).toFixed(2);
       db.prepare(`UPDATE bet_legs SET settled = 1, leg_pl = ? WHERE id = ?`).run(legPl, leg.id);
       const stakeComponent = freeBet ? 0 : leg.stake;
-      db.prepare(`UPDATE accounts SET balance = MAX(0, balance + ? + ?), updated_at = datetime('now') WHERE id = ?`)
+      db.prepare(`UPDATE accounts SET balance = balance + ? + ?, updated_at = datetime('now') WHERE id = ?`)
         .run(stakeComponent, legPl, leg.account_id);
     }
 
@@ -1155,7 +1261,7 @@ router.patch('/bets/:id/settle', (req, res) => {
     if (bet.result !== 'open') {
       for (const leg of legs) {
         const stakeComponent = freeBet ? 0 : leg.stake;
-        db.prepare(`UPDATE accounts SET balance = MAX(0, balance - ? - ?), updated_at = datetime('now') WHERE id = ?`)
+        db.prepare(`UPDATE accounts SET balance = balance - ? - ?, updated_at = datetime('now') WHERE id = ?`)
           .run(stakeComponent, leg.leg_pl || 0, leg.account_id);
       }
     }
@@ -1165,7 +1271,7 @@ router.patch('/bets/:id/settle', (req, res) => {
       for (const leg of legs) {
         db.prepare(`UPDATE bet_legs SET settled = 0, leg_pl = 0 WHERE id = ?`).run(leg.id);
         if (!freeBet) {
-          db.prepare(`UPDATE accounts SET balance = MAX(0, balance + ?), updated_at = datetime('now') WHERE id = ?`)
+          db.prepare(`UPDATE accounts SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`)
             .run(leg.stake, leg.account_id);
         }
       }
@@ -1186,7 +1292,7 @@ router.patch('/bets/:id/settle', (req, res) => {
       const legPl = pl * share;
       db.prepare(`UPDATE bet_legs SET settled = 1, leg_pl = ? WHERE id = ?`).run(legPl, leg.id);
       const stakeComponent = freeBet ? 0 : leg.stake;
-      db.prepare(`UPDATE accounts SET balance = MAX(0, balance + ? + ?), updated_at = datetime('now') WHERE id = ?`)
+      db.prepare(`UPDATE accounts SET balance = balance + ? + ?, updated_at = datetime('now') WHERE id = ?`)
         .run(stakeComponent, legPl, leg.account_id);
     }
 
@@ -1245,11 +1351,11 @@ router.delete('/bets/:id', (req, res) => {
     for (const leg of legs) {
       if (bet.result === 'open') {
         if (!freeBet) {
-          db.prepare(`UPDATE accounts SET balance = MAX(0, balance + ?), updated_at = datetime('now') WHERE id = ?`)
+          db.prepare(`UPDATE accounts SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`)
             .run(leg.stake, leg.account_id);
         }
       } else {
-        db.prepare(`UPDATE accounts SET balance = MAX(0, balance - ?), updated_at = datetime('now') WHERE id = ?`)
+        db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`)
           .run(leg.leg_pl || 0, leg.account_id);
       }
     }
@@ -1281,7 +1387,7 @@ router.delete('/bets/:id', (req, res) => {
 // other result (Lost/Void/Placed) or an each-way type, P/L is deliberately left alone —
 // those formulas depend on result type and bet type in ways that would risk moving real
 // money incorrectly if guessed generically. Use the Settle/Override modal for those.
-const FIELD_EDIT_EACH_WAY_TYPES = ['Dogs + Horses', 'BB Horse', 'BB Golf', 'BB - RTP'];
+const FIELD_EDIT_EACH_WAY_TYPES = ['Dogs + Horses', 'Dogs + Horses (VA)', 'BB Horse', 'BB Golf', 'BB - RTP'];
 router.patch('/bets/:id/field', (req, res) => {
   const doEdit = db.transaction((betId, key, value) => {
     const bet = db.prepare(`SELECT * FROM bets WHERE id = ?`).get(betId);
@@ -1315,7 +1421,7 @@ router.patch('/bets/:id/field', (req, res) => {
         const share = bet.total_stake > 0 ? leg.stake / bet.total_stake : 0;
         const legPlDelta = +(plDelta * share).toFixed(2);
         db.prepare(`UPDATE bet_legs SET leg_pl = leg_pl + ? WHERE id = ?`).run(legPlDelta, leg.id);
-        db.prepare(`UPDATE accounts SET balance = MAX(0, balance + ?), updated_at = datetime('now') WHERE id = ?`).run(legPlDelta, leg.account_id);
+        db.prepare(`UPDATE accounts SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`).run(legPlDelta, leg.account_id);
       }
     }
 
@@ -1348,11 +1454,11 @@ router.patch('/bets/:id/stake', (req, res) => {
       const newStakeComponent = freeBet ? 0 : newLegStake;
       if (bet.result !== 'open') {
         // Reverse the old net effect (stake + P/L already applied), apply the new one.
-        db.prepare(`UPDATE accounts SET balance = MAX(0, balance - ? - ? + ? + ?), updated_at = datetime('now') WHERE id = ?`)
+        db.prepare(`UPDATE accounts SET balance = balance - ? - ? + ? + ?, updated_at = datetime('now') WHERE id = ?`)
           .run(oldStakeComponent, leg.leg_pl || 0, newStakeComponent, newLegPl, leg.account_id);
       } else {
         // Still open — only the initial stake deduction has happened, adjust just that.
-        db.prepare(`UPDATE accounts SET balance = MAX(0, balance - ? + ?), updated_at = datetime('now') WHERE id = ?`)
+        db.prepare(`UPDATE accounts SET balance = balance - ? + ?, updated_at = datetime('now') WHERE id = ?`)
           .run(oldStakeComponent, newStakeComponent, leg.account_id);
       }
       db.prepare(`UPDATE bet_legs SET stake = ?, leg_pl = ? WHERE id = ?`).run(newLegStake, newLegPl, leg.id);
@@ -1402,23 +1508,46 @@ router.patch('/bets/:id/casino-balance', (req, res) => {
 
     const legs = db.prepare(`SELECT * FROM bet_legs WHERE bet_id = ?`).all(betId);
     const totalLegStake = legs.reduce((s, l) => s + l.stake, 0);
+    let newResult = bet.result;
+
     if (bet.result !== 'open') {
+      // Already settled — this is a correction. Reverse the old P/L, apply the new one.
       for (const leg of legs) {
         const share = totalLegStake > 0 ? leg.stake / totalLegStake : (legs.length ? 1 / legs.length : 0);
         const newLegPl = +(newPl * share).toFixed(2);
-        db.prepare(`UPDATE accounts SET balance = MAX(0, balance - ? + ?), updated_at = datetime('now') WHERE id = ?`)
+        db.prepare(`UPDATE accounts SET balance = balance - ? + ?, updated_at = datetime('now') WHERE id = ?`)
           .run(leg.leg_pl || 0, newLegPl, leg.account_id);
         db.prepare(`UPDATE bet_legs SET leg_pl = ? WHERE id = ?`).run(newLegPl, leg.id);
       }
+    } else {
+      const allFourPresent = CASINO_BALANCE_KEYS.every(k => typeof fields[k] === 'number');
+      if (allFourPresent) {
+        // All four balance fields are now complete for the first time — this is the actual
+        // moment of settlement. Without this branch the bet stayed on Open forever and its
+        // P/L never reached the account, since the block above only ever ran for bets that
+        // were already settled.
+        newResult = newPl > 0 ? 'won' : newPl < 0 ? 'lost' : 'void';
+        for (const leg of legs) {
+          const share = totalLegStake > 0 ? leg.stake / totalLegStake : (legs.length ? 1 / legs.length : 0);
+          const newLegPl = +(newPl * share).toFixed(2);
+          db.prepare(`UPDATE accounts SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`)
+            .run(newLegPl, leg.account_id);
+          db.prepare(`UPDATE bet_legs SET settled = 1, leg_pl = ? WHERE id = ?`).run(newLegPl, leg.id);
+        }
+        db.prepare(`UPDATE bets SET result = ?, pl = ?, fields = ?, settled_at = datetime('now') WHERE id = ?`).run(newResult, newPl, JSON.stringify(fields), betId);
+        return { pl: newPl, result: newResult };
+      }
+      // Still genuinely incomplete — save the value, no balance change yet, correctly
+      // matching the original intent (nothing should move until all four are in).
     }
 
     db.prepare(`UPDATE bets SET pl = ?, fields = ? WHERE id = ?`).run(newPl, JSON.stringify(fields), betId);
-    return newPl;
+    return { pl: newPl, result: newResult };
   });
 
   try {
-    const newPl = updateBalance(req.params.id, req.body || {});
-    res.json({ ok: true, pl: newPl });
+    const result = updateBalance(req.params.id, req.body || {});
+    res.json({ ok: true, pl: result.pl, result: result.result });
   } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
 });
 
@@ -1701,7 +1830,7 @@ router.post('/external-stakes', (req, res) => {
   const doCreate = db.transaction((person, accountId, betDescription, odds, stake) => {
     const account = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(accountId);
     if (!account) throw new Error('Account not found');
-    db.prepare(`UPDATE accounts SET balance = MAX(0, balance - ?), updated_at = datetime('now') WHERE id = ?`).run(stake, accountId);
+    db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`).run(stake, accountId);
     const info = db.prepare(
       `INSERT INTO external_stakes (person, account_id, bet_description, odds, stake) VALUES (?, ?, ?, ?, ?)`
     ).run(person, accountId, betDescription, odds, stake);
@@ -1757,9 +1886,9 @@ router.delete('/external-stakes/:id', (req, res) => {
     const stake = db.prepare(`SELECT * FROM external_stakes WHERE id = ?`).get(id);
     if (!stake) throw new Error('External stake not found');
     if (stake.result === 'open') {
-      db.prepare(`UPDATE accounts SET balance = MAX(0, balance + ?), updated_at = datetime('now') WHERE id = ?`).run(stake.stake, stake.account_id);
+      db.prepare(`UPDATE accounts SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`).run(stake.stake, stake.account_id);
     } else {
-      db.prepare(`UPDATE accounts SET balance = MAX(0, balance - ?), updated_at = datetime('now') WHERE id = ?`).run(stake.pl, stake.account_id);
+      db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`).run(stake.pl, stake.account_id);
       db.prepare(`UPDATE debts SET balance = balance + ?, updated_at = datetime('now') WHERE name = ?`).run(stake.pl, stake.person);
     }
     db.prepare(`DELETE FROM external_stakes WHERE id = ?`).run(id);
@@ -1790,6 +1919,95 @@ router.post('/debt-transactions', (req, res) => {
     doAdd(person.trim(), signedAmount, reason || '');
     res.json({ ok: true });
   } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
+// ================== ASSISTANT TO-DO ==================
+
+// GET /api/ledger/todos?status=open|completed|problem (optional — omit for everything)
+router.get('/todos', (req, res) => {
+  try {
+    const { status } = req.query;
+    const rows = status
+      ? db.prepare(`SELECT * FROM todos WHERE status = ? ORDER BY created_at DESC`).all(status)
+      : db.prepare(`SELECT * FROM todos ORDER BY created_at DESC LIMIT 500`).all();
+    res.json({ ok: true, todos: rows });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/todos — body: { note, urgency }. Admin only.
+router.post('/todos', requireAdmin, (req, res) => {
+  try {
+    const { note, urgency } = req.body;
+    if (!note || !note.trim()) return res.status(400).json({ ok: false, error: 'note is required' });
+    if (!['asap', 'today', 'week', 'whenever'].includes(urgency)) return res.status(400).json({ ok: false, error: 'urgency must be asap, today, week, or whenever' });
+    const info = db.prepare(`INSERT INTO todos (note, urgency, created_by) VALUES (?, ?, ?)`).run(note.trim(), urgency, req.username || null);
+    res.json({ ok: true, id: info.lastInsertRowid });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
+// PATCH /api/ledger/todos/:id/complete
+router.patch('/todos/:id/complete', (req, res) => {
+  try {
+    db.prepare(`UPDATE todos SET status = 'completed', completed_at = datetime('now') WHERE id = ?`).run(req.params.id);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// PATCH /api/ledger/todos/:id/problem — body: { problem_note } (optional)
+router.patch('/todos/:id/problem', (req, res) => {
+  try {
+    const { problem_note } = req.body;
+    db.prepare(`UPDATE todos SET status = 'problem', problem_note = ? WHERE id = ?`).run(problem_note || null, req.params.id);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// PATCH /api/ledger/todos/:id/reopen — puts a completed/problem item back to open, in case
+// either side needs to undo a mistaken action.
+router.patch('/todos/:id/reopen', (req, res) => {
+  try {
+    db.prepare(`UPDATE todos SET status = 'open', completed_at = NULL, problem_note = NULL WHERE id = ?`).run(req.params.id);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// DELETE /api/ledger/todos/:id — Admin only, for clearing out resolved items.
+router.delete('/todos/:id', requireAdmin, (req, res) => {
+  try {
+    db.prepare(`DELETE FROM todos WHERE id = ?`).run(req.params.id);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// ================== FOTMOB LEAGUES (Today's Matches league list) ==================
+
+// GET /api/ledger/fotmob-leagues
+router.get('/fotmob-leagues', (req, res) => {
+  try {
+    const leagues = db.prepare(`SELECT * FROM fotmob_leagues ORDER BY league_name`).all();
+    res.json({ ok: true, leagues });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/fotmob-leagues — body: { league_id, league_name }. Admin only.
+router.post('/fotmob-leagues', requireAdmin, (req, res) => {
+  try {
+    const { league_id, league_name } = req.body;
+    if (!league_id || !String(league_id).trim()) return res.status(400).json({ ok: false, error: 'league_id is required' });
+    if (!league_name || !league_name.trim()) return res.status(400).json({ ok: false, error: 'league_name is required' });
+    const existing = db.prepare(`SELECT 1 FROM fotmob_leagues WHERE league_id = ?`).get(String(league_id).trim());
+    if (existing) return res.status(409).json({ ok: false, error: `League ID ${league_id} is already in the list` });
+    db.prepare(`INSERT INTO fotmob_leagues (league_id, league_name) VALUES (?, ?)`).run(String(league_id).trim(), league_name.trim());
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
+// DELETE /api/ledger/fotmob-leagues/:id — :id is the row id, not the FotMob league_id. Admin only.
+router.delete('/fotmob-leagues/:id', requireAdmin, (req, res) => {
+  try {
+    db.prepare(`DELETE FROM fotmob_leagues WHERE id = ?`).run(req.params.id);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
 router.get('/bets/open-summary', (req, res) => {

@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS withdrawals (
   amount REAL NOT NULL,
   date TEXT NOT NULL DEFAULT (datetime('now')),
   balance_after REAL NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending', -- pending | confirmed (confirmed = verified it hit the bank)
+  status TEXT NOT NULL DEFAULT 'pending', -- pending | confirmed | reversed
   sheet_row INTEGER,                      -- row number on the Withdrawals-Pending sheet tab, for the confirm step
   processed_sheet_row INTEGER,            -- row number on the Withdrawals-Processed sheet tab, once confirmed
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -286,6 +286,48 @@ CREATE TABLE IF NOT EXISTS spendings (
   date TEXT NOT NULL DEFAULT (datetime('now')), -- time of entry, recorded automatically
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Admin-to-Assistant requests. status: 'open' -> 'completed' or 'problem'. problem_note is
+-- only set when Assistant flags it as a problem, so Admin knows what actually went wrong.
+CREATE TABLE IF NOT EXISTS todos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  note TEXT NOT NULL,
+  urgency TEXT NOT NULL, -- 'asap' | 'today' | 'week' | 'whenever'
+  status TEXT NOT NULL DEFAULT 'open', -- 'open' | 'completed' | 'problem'
+  problem_note TEXT,
+  created_by TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  completed_at TEXT
+);
+
+-- One row per direct balance override — the manual "correct this balance" box on an
+-- account, not any normal deposit/withdrawal/bet flow. Kept separate from those so it can
+-- be shown clearly in the account's transaction history as its own distinct event type.
+CREATE TABLE IF NOT EXISTS manual_adjustments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id INTEGER NOT NULL REFERENCES accounts(id),
+  old_balance REAL NOT NULL,
+  new_balance REAL NOT NULL,
+  delta REAL NOT NULL,
+  created_by TEXT,
+  date TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Which FotMob leagues Today's Matches pulls fixtures for. Previously hardcoded directly
+-- into fixtures.js; now editable via the "Edit Leagues" button, with fixtures.js fetching
+-- this list fresh on every request instead of reading a fixed array.
+CREATE TABLE IF NOT EXISTS fotmob_leagues (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  league_id TEXT NOT NULL UNIQUE,
+  league_name TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `);
+
+// Safe migration — ALTER TABLE ADD COLUMN errors if the column already exists, so this is
+// wrapped to silently no-op on every restart after the first. Needed because `withdrawals`
+// already existed with live data before this column was added; CREATE TABLE IF NOT EXISTS
+// only creates a brand new table, it never adds columns to one that's already there.
+try { db.exec(`ALTER TABLE withdrawals ADD COLUMN reversed_at TEXT`); } catch (e) { /* already exists */ }
 
 module.exports = db;

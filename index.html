@@ -4,13 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BuzzerBetting</title>
-<script>
-  (function(){
-    var saved = localStorage.getItem('bb_theme');
-    var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-  })();
-</script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 <style>
@@ -26,7 +19,7 @@
   --purple:#7c3aed;--purple-bg:#f5f3ff;--purple-bd:#ddd6fe;
   --radius:10px;--radius-lg:14px;
 }
-html[data-theme="dark"]{
+@media(prefers-color-scheme:dark){:root{
   --bg:#0d1117;--surface:#161b22;--surface2:#1c2128;--border:rgba(255,255,255,0.09);
   --text:#e6edf3;--text2:#8b949e;--text3:#484f58;
   --green:#4ade80;--green-bg:#052e16;--green-bd:#166534;
@@ -34,7 +27,7 @@ html[data-theme="dark"]{
   --blue:#60a5fa;--blue-bg:#0c1a2e;--blue-bd:#1e3a6e;
   --red:#f87171;--red-bg:#1a0505;--red-bd:#7f1d1d;
   --purple:#a78bfa;--purple-bg:#1a0a3e;--purple-bd:#3b1f80;
-}
+}}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 header{background:var(--header);height:62px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:100;border-bottom:1px solid rgba(255,255,255,0.05)}
 .brand{display:flex;align-items:center;gap:10px;cursor:pointer}
@@ -45,7 +38,7 @@ header{background:var(--header);height:62px;display:flex;align-items:center;just
 .live-dot{width:6px;height:6px;border-radius:50%;background:var(--brand);animation:pdot 2s infinite}
 @keyframes pdot{0%,100%{opacity:1}50%{opacity:.25}}
 .page{max-width:1080px;margin:0 auto;padding:36px 24px}
-.greeting{margin-bottom:32px;position:relative}
+.greeting{margin-bottom:32px}
 .greeting-sub{font-size:13px;color:var(--text2);margin-bottom:8px}
 .greeting-h{font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:700;color:var(--text);letter-spacing:-0.025em;line-height:1.2}
 .greeting-h em{color:var(--brand);font-style:normal}
@@ -146,7 +139,7 @@ input::placeholder{color:var(--text3)}
 .ledger-grid td.acct-cell:hover{filter:brightness(0.94)}
 .ledger-grid td.bal-cell{padding:8px 10px;min-width:90px;text-align:right;font-weight:600}
 .live-accts-col{min-width:150px;flex-shrink:0;background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
-.live-accts-col-header{padding:10px 12px;background:var(--surface2);font-weight:600;font-size:12.5px;color:var(--text2);text-align:center;border-bottom:0.5px solid var(--border);position:sticky;top:0;z-index:1}
+.live-accts-col-header{padding:10px 12px;background:var(--surface2);font-weight:600;font-size:12.5px;color:var(--text2);text-align:center;border-bottom:0.5px solid var(--border)}
 .live-accts-cell{padding:9px 10px;text-align:center;cursor:pointer;border-bottom:0.5px solid var(--border);transition:filter .12s}
 .live-accts-cell:hover{filter:brightness(0.94)}
 .live-accts-cell .id{font-weight:600;font-size:13px}
@@ -184,8 +177,6 @@ input::placeholder{color:var(--text3)}
 </style>
 </head>
 <body>
-<div id="toast-container" style="position:fixed;top:16px;right:16px;z-index:9998;display:flex;flex-direction:column;gap:8px;pointer-events:none"></div>
-
 <div id="pin-overlay" style="position:fixed;inset:0;background:#0c1220;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">
   <div style="width:46px;height:46px;background:var(--brand);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;margin-bottom:4px"><i class="ti ti-bolt"></i></div>
   <div style="font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;color:#fff;letter-spacing:-0.02em">Buzzer<span style="color:var(--brand)">Betting</span></div>
@@ -213,9 +204,6 @@ input::placeholder{color:var(--text3)}
 <!-- HOME -->
 <div id="view-home">
   <div class="greeting">
-    <button onclick="toggleTheme()" id="theme-toggle-btn" title="Toggle dark mode" style="position:absolute;top:0;right:0;background:var(--surface);border:0.5px solid var(--border);border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;color:var(--text2)">
-      <i class="ti ti-moon" id="theme-toggle-icon"></i>
-    </button>
     <div class="greeting-sub" id="greet-sub"></div>
     <div class="greeting-h">40 profitable months.<br><em>And counting.</em></div>
     <div style="margin-top:10px;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);background:var(--surface);border:0.5px solid var(--border);border-radius:20px;padding:5px 12px">
@@ -229,16 +217,9 @@ input::placeholder{color:var(--text3)}
       <div><div class="cat-title">Profit breakdown</div><div class="cat-desc">Monthly P&amp;L, all-time chart and performance stats</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
-      <i class="ti ti-arrow-right cat-arr"></i>
-    </div>
-    <div class="cat" style="--accent:var(--blue)" onclick="showTopSec('stats')">
-      <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-chart-bar"></i></div>
-      <div><div class="cat-title">Stats</div><div class="cat-desc">Today's stats, monthly profit tracker and more to come</div></div>
-      <i class="ti ti-arrow-right cat-arr"></i>
-    </div>
-    <div class="cat" style="--accent:var(--red)" onclick="showSec('todo')">
-      <div class="cat-ico" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-list-details"></i></div>
-      <div><div class="cat-title">To Do<span id="todo-badge" style="display:none;margin-left:8px;background:var(--red);color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600"></span></div><div class="cat-desc">Requests between Admin and Assistant</div></div>
+    <div class="cat" style="--accent:var(--blue)" onclick="showSec('today')">
+      <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-calendar"></i></div>
+      <div><div class="cat-title">Today's stats</div><div class="cat-desc">Live P&amp;L, profit probability and today's bets — Combined, Buzzer and Assistant</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
     <div class="cat" style="--accent:var(--purple)" onclick="showTopSec('calc')">
@@ -254,17 +235,10 @@ input::placeholder{color:var(--text3)}
   </div>
 </div>
 
-<!-- STATS MENU -->
-<div id="view-stats-menu" class="sec">
-  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
-  <div class="sec-title">Stats</div>
-  <div class="grid" id="stats-menu-grid"></div>
-</div>
-
 <!-- BETS MENU -->
 <!-- CALCULATIONS MENU -->
 <div id="view-calc-menu" class="sec">
-  <button class="back" id="calc-menu-back-btn" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
   <div class="sec-title">Calculations</div>
   <div class="grid">
     <div class="cat" onclick="showSec('oddschecker')">
@@ -632,9 +606,6 @@ input::placeholder{color:var(--text3)}
       <input type="checkbox" id="toggle-show-lockedfunds" checked onchange="renderAccountsSummaryRow()"> Show locked funds
     </label>
     <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);cursor:pointer">
-      <input type="checkbox" id="toggle-show-pendingwithdrawals" checked onchange="renderAccountsSummaryRow()"> Show pending withdrawals
-    </label>
-    <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);cursor:pointer">
       <input type="checkbox" id="toggle-show-accountstotals" onchange="renderBankBalancesBox()"> Show total accounts balance
     </label>
   </div>
@@ -684,7 +655,6 @@ input::placeholder{color:var(--text3)}
       <span><span class="grid-dot" style="background:#f59e0b"></span> Restricted</span>
       <span><span class="grid-dot" style="background:#6b7280"></span> Locked</span>
       <span><span class="grid-dot" style="background:#dc2626"></span> Archived</span>
-      <span><span class="grid-dot" style="background:#3b82f6"></span> Dormant (60+ days, funds still in it)</span>
     </div>
     <div style="display:flex;gap:16px;flex-wrap:wrap">
       <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);cursor:pointer">
@@ -698,10 +668,7 @@ input::placeholder{color:var(--text3)}
       </label>
     </div>
   </div>
-  <div class="wide">
-    <div id="live-accounts-topscroll" style="overflow-x:auto;overflow-y:hidden;height:14px;margin-bottom:2px" onscroll="document.getElementById('live-accounts-wrap').scrollLeft=this.scrollLeft"><div id="live-accounts-topscroll-spacer" style="height:1px;width:1px"></div></div>
-    <div id="live-accounts-wrap" style="overflow-x:auto;width:100%;min-width:0" onscroll="document.getElementById('live-accounts-topscroll').scrollLeft=this.scrollLeft"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
-  </div>
+  <div id="live-accounts-wrap" style="overflow-x:auto;max-width:100%"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
 </div>
 
 <!-- LEDGER: DEPOSITS -->
@@ -1048,29 +1015,6 @@ input::placeholder{color:var(--text3)}
   </div>
 </div>
 
-<!-- EDIT LEAGUES MODAL (Today's Matches) -->
-<div id="edit-leagues-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;padding:16px">
-  <div class="card" style="max-width:480px;width:100%;max-height:85vh;overflow-y:auto">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-      <div class="sec-title" style="margin:0;font-size:16px">Edit Leagues</div>
-      <button class="add-btn" onclick="closeEditLeaguesModal()"><i class="ti ti-x"></i></button>
-    </div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:16px">Leagues pulled into Today's Matches. Find a league's ID on its FotMob page URL (fotmob.com/leagues/<b>ID</b>/overview/...).</div>
-
-    <div id="edit-leagues-list" style="margin-bottom:16px">Loading…</div>
-
-    <div style="border-top:0.5px solid var(--border);padding-top:14px">
-      <div class="lbl" style="margin-bottom:8px">Add league</div>
-      <div style="display:grid;grid-template-columns:100px 1fr 32px;gap:8px">
-        <input type="text" id="new-league-id" placeholder="League ID">
-        <input type="text" id="new-league-name" placeholder="Exact league name">
-        <button class="add-btn" onclick="submitNewLeague()" title="Add"><i class="ti ti-plus"></i></button>
-      </div>
-      <div id="edit-leagues-msg" style="margin-top:10px;font-size:13px"></div>
-    </div>
-  </div>
-</div>
-
 <div id="bank-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;padding:16px">
   <div class="card card-pad" style="max-width:380px;width:100%">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
@@ -1154,23 +1098,7 @@ input::placeholder{color:var(--text3)}
     </div>
 
     <div id="account-modal-tab-transactions" style="display:none">
-      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
-        <select id="account-txn-month-filter" onchange="onAccountTxnFilterChange('month')" style="font-size:12.5px;padding:6px 10px"></select>
-        <span style="font-size:11px;color:var(--text3)">or</span>
-        <input type="date" id="account-txn-date-filter" onchange="onAccountTxnFilterChange('date')" style="font-size:12.5px;padding:5px 10px">
-        <button class="add-btn" onclick="clearAccountTxnFilter()" style="font-size:12px">Clear filter</button>
-      </div>
-      <div id="account-txn-count-note" style="font-size:11px;color:var(--text3);margin-bottom:8px"></div>
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:12.5px">
-          <thead><tr style="text-align:left;color:var(--text3);font-size:10.5px;text-transform:uppercase">
-            <th style="padding:5px 6px">Date</th><th style="padding:5px 6px">Transaction</th>
-            <th class="r" style="padding:5px 6px">Odds</th><th class="r" style="padding:5px 6px">Stake</th>
-            <th class="r" style="padding:5px 6px">Amount</th><th class="r" style="padding:5px 6px">Balance</th>
-          </tr></thead>
-          <tbody id="account-modal-transactions-list"><tr><td colspan="6" style="padding:16px 6px;color:var(--text3)">Loading…</td></tr></tbody>
-        </table>
-      </div>
+      <div id="account-modal-transactions-list" style="font-size:13px">Loading…</div>
     </div>
 
     <div id="account-modal-tab-notes" style="display:none">
@@ -1714,7 +1642,7 @@ input::placeholder{color:var(--text3)}
 
 <!-- TODAY -->
 <div id="view-today" class="sec">
-  <button class="back" onclick="showTopSec('stats')"><i class="ti ti-arrow-left"></i> Stats</button>
+  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
     <div class="sec-title" style="margin-bottom:0">Today's stats</div>
     <button onclick="initToday()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'"><i class="ti ti-refresh"></i> Refresh</button>
@@ -1776,98 +1704,9 @@ input::placeholder{color:var(--text3)}
   </div>
 </div>
 
-<!-- MONTHLY PROFIT -->
-<div id="view-monthlyprofit" class="sec">
-  <button class="back" onclick="showTopSec('stats')"><i class="ti ti-arrow-left"></i> Stats</button>
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
-    <div class="sec-title" style="margin-bottom:0">Monthly profit</div>
-    <button onclick="initMonthlyProfit()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'"><i class="ti ti-refresh"></i> Refresh</button>
-  </div>
-  <div id="monthlyprofit-status" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="monthlyprofit-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="monthlyprofit-status-title">Loading...</div><div class="ph-d" id="monthlyprofit-status-msg"></div></div></div></div>
-  <div id="monthlyprofit-content" style="display:none">
-    <div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px" id="monthlyprofit-kpis"></div>
-    <div class="card card-pad">
-      <div class="sec-title" style="margin:0 0 4px;font-size:15px">Profit by sheet</div>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:14px">This month so far, sorted highest profit first</div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr style="text-align:left;color:var(--text3);font-size:11px;text-transform:uppercase">
-          <th style="padding:6px 8px">Sheet</th><th style="padding:6px 8px">Source</th><th class="r" style="padding:6px 8px">Bets</th>
-          <th class="r" style="padding:6px 8px">Stake</th><th class="r" style="padding:6px 8px">EV</th><th class="r" style="padding:6px 8px">P/L</th>
-        </tr></thead>
-        <tbody id="monthlyprofit-table-body"></tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<!-- TO DO -->
-<div id="view-todo" class="sec">
-  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
-  <div class="sec-title">To Do</div>
-
-  <div id="todo-add-form" class="card card-pad" style="margin-bottom:16px;display:none">
-    <div class="sec-title" style="margin:0 0 4px;font-size:15px">Add request</div>
-    <div style="margin-bottom:12px"><label class="lbl">Note</label><textarea id="todo-note" rows="3" style="width:100%;padding:10px 12px;border:0.5px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:14px;background:var(--surface);color:var(--text);resize:vertical" placeholder="What do you need done?"></textarea></div>
-    <div style="margin-bottom:14px"><label class="lbl">Urgency</label><select id="todo-urgency">
-      <option value="asap">ASAP</option>
-      <option value="today">Today</option>
-      <option value="week">This week</option>
-      <option value="whenever">Whenever</option>
-    </select></div>
-    <button onclick="submitTodo()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:10px 18px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Send request</button>
-    <div id="todo-add-msg" style="margin-top:10px;font-size:13px"></div>
-  </div>
-
-  <div id="todo-problems-section" class="card card-pad" style="margin-bottom:16px;display:none">
-    <div class="sec-title" style="margin:0 0 4px;font-size:15px;color:var(--red)">Problems</div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:12px">Flagged by the Assistant — needs sorting out together.</div>
-    <div id="todo-problems-list">Loading…</div>
-  </div>
-
-  <div class="card card-pad">
-    <div class="sec-title" style="margin:0 0 4px;font-size:15px">Open</div>
-    <div id="todo-open-list">Loading…</div>
-  </div>
-</div>
-
-<!-- ASSISTANT ALL TIME STATS (placeholder — backlog data not yet in) -->
-<div id="view-assistantalltime" class="sec">
-  <button class="back" onclick="showTopSec('stats')"><i class="ti ti-arrow-left"></i> Stats</button>
-  <div class="sec-title">All time stats</div>
-  <div class="card"><div class="ph" style="padding:32px 24px">
-    <div class="ph-ico"><i class="ti ti-history"></i></div>
-    <div class="ph-t">Coming soon</div>
-    <div class="ph-d">All-time Assistant stats will show here once historical data is backfilled.</div>
-  </div></div>
-</div>
-
-<!-- ASSISTANT MONTHLY STATS -->
-<div id="view-assistantmonthly" class="sec">
-  <button class="back" onclick="showTopSec('stats')"><i class="ti ti-arrow-left"></i> Stats</button>
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
-    <div class="sec-title" style="margin-bottom:0">Monthly stats</div>
-    <button onclick="initAssistantMonthly()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'"><i class="ti ti-refresh"></i> Refresh</button>
-  </div>
-  <div id="assistantmonthly-status" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="assistantmonthly-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="assistantmonthly-status-title">Loading...</div><div class="ph-d" id="assistantmonthly-status-msg"></div></div></div></div>
-  <div id="assistantmonthly-content" style="display:none">
-    <div class="kpis" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px" id="assistantmonthly-kpis"></div>
-    <div class="card card-pad">
-      <div class="sec-title" style="margin:0 0 4px;font-size:15px">Profit by sheet</div>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:14px">This month so far, sorted highest profit first</div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr style="text-align:left;color:var(--text3);font-size:11px;text-transform:uppercase">
-          <th style="padding:6px 8px">Sheet</th><th class="r" style="padding:6px 8px">Bets</th>
-          <th class="r" style="padding:6px 8px">EV</th><th class="r" style="padding:6px 8px">P/L</th>
-        </tr></thead>
-        <tbody id="assistantmonthly-table-body"></tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
 <!-- MONTHLY PROBABILITY -->
 <div id="view-monthly" class="sec">
-  <button class="back" onclick="showTopSec('stats')"><i class="ti ti-arrow-left"></i> Stats</button>
+  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
     <div class="sec-title" style="margin-bottom:0">Monthly probability</div>
     <button onclick="initMonthly()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'"><i class="ti ti-refresh"></i> Refresh</button>
@@ -1875,23 +1714,18 @@ input::placeholder{color:var(--text3)}
   <div id="monthly-status" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="monthly-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="monthly-status-title">Loading...</div><div class="ph-d" id="monthly-status-msg"></div></div></div></div>
   <div id="monthly-content" style="display:none">
     <div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px" id="monthly-kpis"></div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:16px">10,000 simulations · EV-based win probability per bet · bets with no usable Odds/EV/Stake are excluded · pure EV simulation, ignores actual results</div>
-    <div class="card" style="max-width:520px;margin:0 auto 20px">
-      <div class="card-h" style="font-size:15px;font-weight:700;text-align:center">All Bets Placed</div>
-      <div style="padding:16px"><table style="width:100%;border-collapse:collapse" id="monthly-static-table"><tbody id="monthly-static-body"></tbody></table></div>
-    </div>
-
-    <div class="card card-pad" style="max-width:520px;margin:0 auto">
-      <div class="sec-title" style="margin:0 0 12px;font-size:15px;text-align:center">By sheet</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-        <div><label class="lbl">User</label><select id="monthly-sheet-group" onchange="onMonthlySheetGroupChange()">
-          <option value="buzzer">Buzzer</option>
-          <option value="assistant">Assistant</option>
-        </select></div>
-        <div><label class="lbl">Sheet</label><select id="monthly-sheet-select" onchange="runSheetProbability()"></select></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:16px">10,000 simulations · EV-based win probability per bet · bets with no usable Odds/EV/Stake are excluded</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px" id="monthly-panels">
+      <div class="card">
+        <div class="card-h" style="font-size:15px;font-weight:700;text-align:center">All Bets Placed</div>
+        <div style="font-size:11px;color:var(--text3);text-align:center;padding:6px 12px 0">Pure EV simulation — ignores actual results</div>
+        <div style="padding:16px"><table style="width:100%;border-collapse:collapse;font-size:12.5px" id="monthly-static-table"><tbody id="monthly-static-body"></tbody></table></div>
       </div>
-      <div id="monthly-sheet-status" style="font-size:12.5px;color:var(--text3);text-align:center;padding:12px 0;display:none"></div>
-      <table style="width:100%;border-collapse:collapse" id="monthly-sheet-table"><tbody id="monthly-sheet-body"></tbody></table>
+      <div class="card">
+        <div class="card-h" style="font-size:15px;font-weight:700;text-align:center">Live</div>
+        <div style="font-size:11px;color:var(--text3);text-align:center;padding:6px 12px 0">Settled P/L locked in — simulates only what's still open</div>
+        <div style="padding:16px"><table style="width:100%;border-collapse:collapse;font-size:12.5px" id="monthly-live-table"><tbody id="monthly-live-body"></tbody></table></div>
+      </div>
     </div>
   </div>
 </div>
@@ -2396,26 +2230,6 @@ const monthly=[['Mar-23',702.54],['Apr-23',710.43],['May-23',1739.72],['Jun-23',
 const avgP=monthly.reduce((s,m)=>s+m[1],0)/monthly.length;
 const bets=[{t:'14:30',match:'Arsenal vs Chelsea',mkt:'AGS',sel:'Saka',fair:3.45,bk:'Bet365',odds:4.00,ev:15.9,stake:50},{t:'14:30',match:'Arsenal vs Chelsea',mkt:'Header',sel:'Gabriel',fair:12.20,bk:'Betway',odds:15.00,ev:22.9,stake:30},{t:'16:00',match:'Man City vs Liverpool',mkt:'AGS',sel:'Haaland',fair:1.85,bk:'William Hill',odds:2.10,ev:13.5,stake:80},{t:'16:00',match:'Man City vs Liverpool',mkt:'First scorer',sel:'Salah',fair:8.40,bk:'Paddy Power',odds:10.00,ev:19.0,stake:40},{t:'16:00',match:'Man City vs Liverpool',mkt:'Header',sel:'Dias',fair:22.50,bk:'Unibet',odds:29.00,ev:28.9,stake:20},{t:'20:00',match:'Spurs vs Everton',mkt:'AGS',sel:'Son',fair:2.95,bk:'Betfair SB',odds:3.50,ev:18.6,stake:60}];
 
-// ── THEME ──
-// The data-theme attribute itself is already applied by the inline script in <head>,
-// before any content renders, to avoid a flash of the wrong theme. This just keeps the
-// toggle icon in sync and handles the actual switch when clicked.
-function applyThemeIcon(theme) {
-  const icon = document.getElementById('theme-toggle-icon');
-  if (icon) icon.className = theme === 'dark' ? 'ti ti-sun' : 'ti ti-moon';
-}
-function toggleTheme() {
-  const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-  const next = current === 'dark' ? 'light' : 'dark';
-  if (next === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-  else document.documentElement.removeAttribute('data-theme');
-  localStorage.setItem('bb_theme', next);
-  applyThemeIcon(next);
-}
-document.addEventListener('DOMContentLoaded', function() {
-  applyThemeIcon(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
-});
-
 // ── LOGIN ──
 let CURRENT_USER_ROLE = null;
 let CURRENT_USERNAME = null;
@@ -2445,7 +2259,6 @@ function checkPin(){
       document.getElementById('pin-overlay').style.display='none';
       document.getElementById('login-passcode').value='';
       applyRoleRestrictions();
-      if (d.role === 'calculator') showTopSec('calc');
     } else {
       errEl.textContent = d.error || 'Incorrect username or passcode — try again';
       errEl.style.display='block';
@@ -2467,53 +2280,16 @@ function checkPin(){
     const o=document.getElementById('pin-overlay');
     if(o)o.style.display='none';
     setTimeout(applyRoleRestrictions, 0);
-    if (CURRENT_USER_ROLE === 'calculator') setTimeout(()=>showTopSec('calc'), 0);
   } else {
     setTimeout(()=>{const i=document.getElementById('login-username');if(i)i.focus();},200);
   }
 })();
 
 // ── NAVIGATION ──
-function goHome(){if(CURRENT_USER_ROLE==='calculator'){showTopSec('calc');return;}document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
-function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();if(name==='ddhh')initDDHH(null);if(name==='bets-combined')initBetsPage();if(name==='monthly')initMonthly();if(name==='monthlyprofit')initMonthlyProfit();if(name==='assistantmonthly')initAssistantMonthly();if(name==='todo')initTodo();}
-const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger',bettracking:'bettracking',stats:'stats-menu'};
-function showTopSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='stats')renderStatsMenu();}
-
-// Admin sees everything — the full Today's Stats and Monthly Profit (all bets, both
-// Buzzer and Assistant), plus the same two Assistant-only views Staff get, so nothing
-// Staff can see is hidden from Admin. Staff see only the Assistant-scoped pair.
-function renderStatsMenu() {
-  const isStaff = CURRENT_USER_ROLE === 'staff';
-  const cards = [];
-  if (!isStaff) {
-    cards.push(`<div class="cat" style="--accent:var(--blue)" onclick="showSec('today')">
-      <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-calendar"></i></div>
-      <div><div class="cat-title">Today's stats</div><div class="cat-desc">Live P&amp;L, profit probability and today's bets — Combined, Buzzer and Assistant</div></div>
-      <i class="ti ti-arrow-right cat-arr"></i>
-    </div>`);
-    cards.push(`<div class="cat" style="--accent:var(--green)" onclick="showSec('monthlyprofit')">
-      <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-chart-histogram"></i></div>
-      <div><div class="cat-title">Monthly profit</div><div class="cat-desc">This month's total bets, EV, profit and a breakdown by sheet — everyone</div></div>
-      <i class="ti ti-arrow-right cat-arr"></i>
-    </div>`);
-    cards.push(`<div class="cat" style="--accent:var(--blue)" onclick="showSec('monthly')">
-      <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-chart-dots"></i></div>
-      <div><div class="cat-title">Monthly probability</div><div class="cat-desc">Static profit/loss band chances for this month — all bets, plus a DogBot breakdown</div></div>
-      <i class="ti ti-arrow-right cat-arr"></i>
-    </div>`);
-  }
-  cards.push(`<div class="cat" style="--accent:var(--purple)" onclick="showSec('assistantalltime')">
-    <div class="cat-ico" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-history"></i></div>
-    <div><div class="cat-title">All time stats</div><div class="cat-desc">Assistant bets, all time</div></div>
-    <i class="ti ti-arrow-right cat-arr"></i>
-  </div>`);
-  cards.push(`<div class="cat" style="--accent:var(--amber)" onclick="showSec('assistantmonthly')">
-    <div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-calendar-stats"></i></div>
-    <div><div class="cat-title">Monthly stats</div><div class="cat-desc">Assistant bets — this month's breakdown by sheet</div></div>
-    <i class="ti ti-arrow-right cat-arr"></i>
-  </div>`);
-  document.getElementById('stats-menu-grid').innerHTML = cards.join('');
-}
+function goHome(){document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
+function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();if(name==='ddhh')initDDHH(null);if(name==='bets-combined')initBetsPage();if(name==='monthly')initMonthly();}
+const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger',bettracking:'bettracking'};
+function showTopSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});}
 function backToBetsMenu(){showTopSec('bets');}
 function backToCalcMenu(){showTopSec('calc');}
 function showLedgerSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-ledger-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='bet-entry')initBetEntry();if(name==='bulk-import')initAccountEntry();if(name==='accounts')initAccountsGrid();if(name==='deposits')initDepositsLog();if(name==='withdrawals')initWithdrawalsPending();if(name==='account-summary')initAccountSummary();if(name==='locked-funds')initLockedFunds();if(name==='archived')initArchived();if(name==='bank-transactions')initBankTransactions();if(name==='money')initMoneyPage();if(name==='dashboard')initDashboard();if(name==='bankroll')initBankroll();if(name==='external-staking')initExternalStaking();}
@@ -2798,8 +2574,6 @@ const BET_TYPE_CONFIG = {
   'Discord':          { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Bet',label:'Bet',type:'text'}], oddsMode:'pairedBlended' },
   'Dogs + Horses':    { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Race',label:'Race',type:'text'},{key:'Horse/Trap',label:'Horse / trap',type:'text'},{key:'Each-Way',label:'Each-way?',type:'checkbox',revealsField:'Terms'},{key:'Terms',label:'Each-way terms (e.g. 1/5)',type:'text',hiddenUnless:'Each-Way'}], oddsMode:'blendedProfit',
                         note:'Fair odds aren\u2019t captured here — this bet is priced at the off (BFEX SP), so EV is calculated at settlement, not at entry.' },
-  'Dogs + Horses (VA)': { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Race',label:'Race',type:'text'},{key:'Horse/Trap',label:'Horse / trap',type:'text'},{key:'Each-Way',label:'Each-way?',type:'checkbox',revealsField:'Terms'},{key:'Terms',label:'Each-way terms (e.g. 1/5)',type:'text',hiddenUnless:'Each-Way'}], oddsMode:'blendedProfit',
-                        note:'Fair odds aren\u2019t captured here — this bet is priced at the off (BFEX SP), so EV is calculated at settlement, not at entry.' },
   'Corners':          { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Team',label:'Team',type:'text'},{key:'Assist',label:'Assist',type:'text'},{key:'Scorer',label:'Scorer',type:'text'}], oddsMode:'blendedProfit' },
   'Ninja Golf BFEX':  { layout:'standard', bookie:true, bookieFieldKey:'Bookie', bookieDefault:'Betfair', stakeFieldKey:'Total Stake', fields:[{key:'Comp',label:'Competition',type:'text'},{key:'Player',label:'Player',type:'text'},{key:'Points Advised',label:'Points advised',type:'number'}], oddsMode:'blendedProfitCommission',
                         note:'The potential profit above already accounts for the 2% commission on this market — apply the same 2% again at settlement.' },
@@ -2811,7 +2585,7 @@ const BET_TYPE_CONFIG = {
   'Casino':           { layout:'balance', bookie:true, bookieFieldKey:'Bookie', hasBetKind:false, fields:[{key:'Offer',label:'Offer',type:'text'},{key:'EV',label:'EV £',type:'number'}], oddsMode:'none', hasStake:false, hasBalanceBoxes:false, casinoExtraAccounts:true },
   'Offers (Personal)': { layout:'balance', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet description',type:'text'}], oddsMode:'pairedSingle', hasStake:true, hasBalanceBoxes:false },
   'Other Bets':       { layout:'standard', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet',type:'text'},{key:'Back Odds',label:'Back odds',type:'number'}] },
-  'Casino (Personal)': { layout:'balance', bookie:true, bookieFieldKey:'Bookie', hasBetKind:false, fields:[{key:'Offer',label:'Offer',type:'text'},{key:'EV',label:'EV £',type:'number'}], oddsMode:'none', hasStake:false, hasBalanceBoxes:false, casinoExtraAccounts:true },
+  'Casino (Personal)': { layout:'balance', bookie:true, bookieFieldKey:'Bookie', hasBetKind:false, fields:[{key:'Offer',label:'Offer',type:'text'},{key:'EV',label:'EV £',type:'number'}], oddsMode:'none', hasStake:false, hasBalanceBoxes:true, balanceBoxStyle:'directPL' },
 };
 
 // Column layout guesses for paste-to-autofill types. `key` becomes the stored field name.
@@ -2898,7 +2672,6 @@ const BET_TYPE_GROUPS = {
     {key:'BB - BT', label:'BB Bet Tracker'},
     {key:'Casino', label:'Casino'},
     {key:'Offers (VA)', label:'Offers'},
-    {key:'Dogs + Horses (VA)', label:'Dogs + Horses DogBot'},
   ],
 };
 
@@ -2917,211 +2690,12 @@ const NINJA_GOLF_COMMISSION = 0.02;
 // from scratch on every load anyway — no separate pass needed for those.
 function applyRoleRestrictions() {
   const isStaff = CURRENT_USER_ROLE === 'staff';
-  const isCalculator = CURRENT_USER_ROLE === 'calculator';
   const profitCard = document.getElementById('home-card-profit');
   if (profitCard) profitCard.style.display = isStaff ? 'none' : '';
   const transferBtn = document.getElementById('money-type-transfer');
   if (transferBtn) transferBtn.style.display = isStaff ? 'none' : '';
   const externalBtn = document.getElementById('money-type-external');
   if (externalBtn) externalBtn.style.display = isStaff ? 'none' : '';
-  const calcBackBtn = document.getElementById('calc-menu-back-btn');
-  if (calcBackBtn) calcBackBtn.style.display = isCalculator ? 'none' : '';
-  if (!isCalculator) startTodoPolling(); // Calculator has no Ledger access at all — polling would just produce repeated 403s
-}
-
-// ── TO DO ──
-// A simple beep-beep tone generated on the fly via the Web Audio API — no sound file
-// needed. Browsers block audio until a genuine user gesture has happened first; logging in
-// counts as one, so the AudioContext gets created there to "unlock" it for later use.
-let TODO_AUDIO_CTX = null;
-// Generic toast banner — fixed top-right, auto-dismisses. Built reusable on purpose since
-// this pattern (sound + banner alert) will likely get used for other things later.
-function showToast(message, opts) {
-  const container = document.getElementById('toast-container');
-  if (!container) return;
-  const color = (opts && opts.color) || 'var(--blue)';
-  const bg = (opts && opts.bg) || 'var(--blue-bg)';
-  const el = document.createElement('div');
-  el.style.cssText = `pointer-events:auto;background:${bg};color:${color};border:0.5px solid ${color};border-radius:var(--radius);padding:12px 16px;font-size:13px;font-weight:500;box-shadow:0 4px 14px rgba(0,0,0,0.15);max-width:300px;opacity:0;transform:translateX(20px);transition:opacity .25s ease,transform .25s ease`;
-  el.innerHTML = `<i class="ti ti-bell" style="margin-right:6px"></i>${escapeHtml(message)}`;
-  container.appendChild(el);
-  requestAnimationFrame(() => { el.style.opacity = '1'; el.style.transform = 'translateX(0)'; });
-  setTimeout(() => {
-    el.style.opacity = '0';
-    el.style.transform = 'translateX(20px)';
-    setTimeout(() => el.remove(), 300);
-  }, 6000);
-}
-
-function unlockTodoAudio() {
-  if (TODO_AUDIO_CTX) return;
-  try { TODO_AUDIO_CTX = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { /* audio unavailable, alerts will just be silent */ }
-}
-function playTodoAlertSound() {
-  if (!TODO_AUDIO_CTX) return;
-  const now = TODO_AUDIO_CTX.currentTime;
-  [0, 0.16].forEach((offset, i) => {
-    const osc = TODO_AUDIO_CTX.createOscillator();
-    const gain = TODO_AUDIO_CTX.createGain();
-    osc.type = 'sine';
-    osc.frequency.value = i === 0 ? 880 : 1046.5;
-    gain.gain.setValueAtTime(0.0001, now + offset);
-    gain.gain.exponentialRampToValueAtTime(0.25, now + offset + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.18);
-    osc.connect(gain).connect(TODO_AUDIO_CTX.destination);
-    osc.start(now + offset);
-    osc.stop(now + offset + 0.2);
-  });
-}
-
-let TODO_POLL_INTERVAL = null;
-let TODO_LAST_OPEN_MAX_ID = null; // null = baseline not yet established, don't alert on first poll
-let TODO_LAST_PROBLEM_MAX_ID = null;
-
-async function pollForNewTodos() {
-  if (!CURRENT_USER_ROLE) return;
-  try {
-    if (CURRENT_USER_ROLE === 'staff') {
-      const d = await ledgerApi('todos?status=open');
-      const rows = (d.ok && d.todos) ? d.todos : [];
-      const maxId = rows.length ? Math.max(...rows.map(r => r.id)) : 0;
-      if (TODO_LAST_OPEN_MAX_ID !== null && maxId > TODO_LAST_OPEN_MAX_ID) { playTodoAlertSound(); showToast('To Do request received'); }
-      TODO_LAST_OPEN_MAX_ID = maxId;
-      updateTodoBadge(rows.length);
-    } else if (CURRENT_USER_ROLE === 'admin') {
-      const d = await ledgerApi('todos?status=problem');
-      const rows = (d.ok && d.todos) ? d.todos : [];
-      const maxId = rows.length ? Math.max(...rows.map(r => r.id)) : 0;
-      if (TODO_LAST_PROBLEM_MAX_ID !== null && maxId > TODO_LAST_PROBLEM_MAX_ID) { playTodoAlertSound(); showToast('Problem flagged on a To Do request'); }
-      TODO_LAST_PROBLEM_MAX_ID = maxId;
-      updateTodoBadge(rows.length);
-    }
-    // If currently viewing the To Do page, keep it live too.
-    if (document.getElementById('view-todo')?.style.display !== 'none') refreshTodoPage();
-  } catch (e) { /* non-fatal — just try again next poll */ }
-}
-
-function updateTodoBadge(count) {
-  const badge = document.getElementById('todo-badge');
-  if (!badge) return;
-  if (count > 0) { badge.textContent = count; badge.style.display = 'inline-block'; }
-  else { badge.style.display = 'none'; }
-}
-
-function startTodoPolling() {
-  unlockTodoAudio();
-  if (TODO_POLL_INTERVAL) clearInterval(TODO_POLL_INTERVAL);
-  pollForNewTodos(); // establishes the baseline silently, no alert on this first check
-  TODO_POLL_INTERVAL = setInterval(pollForNewTodos, 20000);
-}
-
-async function initTodo() {
-  const isAdmin = CURRENT_USER_ROLE === 'admin';
-  document.getElementById('todo-add-form').style.display = isAdmin ? 'block' : 'none';
-  document.getElementById('todo-problems-section').style.display = isAdmin ? 'block' : 'none';
-  await refreshTodoPage();
-}
-
-async function refreshTodoPage() {
-  const isAdmin = CURRENT_USER_ROLE === 'admin';
-  if (isAdmin) renderTodoProblems();
-  renderTodoOpen();
-}
-
-async function renderTodoOpen() {
-  const el = document.getElementById('todo-open-list');
-  const isAdmin = CURRENT_USER_ROLE === 'admin';
-  try {
-    const d = await ledgerApi('todos?status=open');
-    const rows = (d.ok && d.todos) ? d.todos : [];
-    if (!rows.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">Nothing open.</div>'; return; }
-    const urgencyLabel = { asap: 'ASAP', today: 'Today', week: 'This week', whenever: 'Whenever' };
-    const urgencyColor = { asap: 'var(--red)', today: 'var(--amber)', week: 'var(--blue)', whenever: 'var(--text3)' };
-    el.innerHTML = rows.map(r => `<div style="padding:10px 0;border-bottom:0.5px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-      <div style="flex:1">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-          <span style="font-size:10px;font-weight:600;text-transform:uppercase;color:${urgencyColor[r.urgency]};border:0.5px solid ${urgencyColor[r.urgency]};border-radius:4px;padding:1px 6px">${urgencyLabel[r.urgency]}</span>
-          <span style="font-size:11px;color:var(--text3)">${formatLedgerDate(r.created_at)}</span>
-        </div>
-        <div style="font-size:14px">${escapeHtml(r.note)}</div>
-      </div>
-      ${!isAdmin ? `<div style="display:flex;gap:6px;flex-shrink:0">
-        <button class="add-btn" onclick="completeTodo(${r.id})" style="color:var(--green);border-color:var(--green)"><i class="ti ti-check"></i> Done</button>
-        <button class="add-btn" onclick="flagTodoProblem(${r.id})" style="color:var(--red);border-color:var(--red)">Problem</button>
-      </div>` : `<div style="flex-shrink:0">
-        <button class="add-btn" onclick="deleteTodo(${r.id})" style="color:var(--red);border-color:var(--red)">Cancel</button>
-      </div>`}
-    </div>`).join('');
-  } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load.</div>'; }
-}
-
-async function renderTodoProblems() {
-  const el = document.getElementById('todo-problems-list');
-  try {
-    const d = await ledgerApi('todos?status=problem');
-    const rows = (d.ok && d.todos) ? d.todos : [];
-    if (!rows.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No problems flagged.</div>'; return; }
-    el.innerHTML = rows.map(r => `<div style="padding:10px 0;border-bottom:0.5px solid var(--border)">
-      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${formatLedgerDate(r.created_at)}</div>
-      <div style="font-size:14px;margin-bottom:4px">${escapeHtml(r.note)}</div>
-      ${r.problem_note ? `<div style="font-size:13px;color:var(--red);margin-bottom:8px">Problem: ${escapeHtml(r.problem_note)}</div>` : ''}
-      <div style="display:flex;gap:6px">
-        <button class="add-btn" onclick="completeTodo(${r.id})">Mark done</button>
-        <button class="add-btn" onclick="reopenTodo(${r.id})">Send back to open</button>
-        <button class="add-btn" onclick="deleteTodo(${r.id})" style="color:var(--red);border-color:var(--red)">Remove</button>
-      </div>
-    </div>`).join('');
-  } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load.</div>'; }
-}
-
-async function submitTodo() {
-  const note = document.getElementById('todo-note').value.trim();
-  const urgency = document.getElementById('todo-urgency').value;
-  const msgEl = document.getElementById('todo-add-msg');
-  if (!note) { msgEl.innerHTML = '<span style="color:var(--red)">Enter a note.</span>'; return; }
-  msgEl.innerHTML = '<span style="color:var(--text2)">Sending…</span>';
-  try {
-    const d = await ledgerApi('todos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ note, urgency }) });
-    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to send'}</span>`; return; }
-    msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Sent.</span>';
-    document.getElementById('todo-note').value = '';
-    renderTodoOpen();
-  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error.</span>'; }
-}
-
-async function completeTodo(id) {
-  try {
-    const d = await ledgerApi('todos/'+id+'/complete', { method:'PATCH' });
-    if (!d.ok) { alert(d.error || 'Failed to update'); return; }
-    refreshTodoPage();
-  } catch (e) { alert('Network error.'); }
-}
-
-async function flagTodoProblem(id) {
-  const note = prompt('What went wrong? (optional)');
-  if (note === null) return;
-  try {
-    const d = await ledgerApi('todos/'+id+'/problem', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ problem_note: note }) });
-    if (!d.ok) { alert(d.error || 'Failed to flag'); return; }
-    refreshTodoPage();
-  } catch (e) { alert('Network error.'); }
-}
-
-async function reopenTodo(id) {
-  try {
-    const d = await ledgerApi('todos/'+id+'/reopen', { method:'PATCH' });
-    if (!d.ok) { alert(d.error || 'Failed to reopen'); return; }
-    refreshTodoPage();
-  } catch (e) { alert('Network error.'); }
-}
-
-async function deleteTodo(id) {
-  if (!confirm('Remove this request permanently?')) return;
-  try {
-    const d = await ledgerApi('todos/'+id, { method:'DELETE' });
-    if (!d.ok) { alert(d.error || 'Failed to remove'); return; }
-    refreshTodoPage();
-  } catch (e) { alert('Network error.'); }
 }
 
 async function ledgerApi(path, opts) {
@@ -3394,7 +2968,6 @@ function accountOptionsHtml(selectedId, bookieRaw, excludeIds) {
   if (excludeIds && excludeIds.length) {
     list = list.filter(a => String(a.id) === String(selectedId) || !excludeIds.includes(String(a.id)));
   }
-  list = sortAccountsForGrid(list);
   if (!list.length) {
     return bookieRaw && bookieRaw.trim() ? `<option value="">No live accounts for that bookie</option>` : `<option value="">No accounts set up yet</option>`;
   }
@@ -3785,7 +3358,6 @@ async function submitBetEntry() {
   msgEl.innerHTML = '';
 
   if (cfg.casinoExtraAccounts) {
-    CASINO_BALANCE_KEYS.forEach(k => { if (!(k in fields)) fields[k] = null; });
     const extraAccountIds = [...document.querySelectorAll('#bet-entry-casino-extra-accounts .casino-extra-account')]
       .map(el => el.value).filter(Boolean);
     const allAccountIds = [legs[0].account_id, ...extraAccountIds];
@@ -3874,6 +3446,22 @@ let PENDING_ACCOUNT_CELL = null; // { profile, bookie } when creating a brand ne
 
 function acctKey(profile, bookie) { return profile + '|' + bookie; }
 
+// Sheet writes now go through the Ledger backend (direct Google Sheets API, no Apps
+// Script) — same interface as before so every caller (Bulk Entry, deposit/withdraw,
+// blank-cell create, withdrawal confirm) needed zero changes.
+const SHEET_ACTION_PATHS = {
+  fill_account: 'sheet/fill-account',
+  set_cell: 'sheet/set-cell',
+  add_deposit: 'sheet/add-deposit',
+  add_withdrawal: 'sheet/add-withdrawal',
+  confirm_withdrawal: 'sheet/confirm-withdrawal',
+};
+async function accountsSheetApi(payload) {
+  const { action, ...body } = payload;
+  const path = SHEET_ACTION_PATHS[action] || 'sheet/fill-account';
+  return ledgerApi(path, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+}
+
 async function loadAllAccounts(excludeClosed) {
   try {
     const d = await ledgerApi('accounts' + (excludeClosed ? '?excludeClosed=1' : ''));
@@ -3916,18 +3504,15 @@ function toggleAccountsAddForm() {
 async function renderAccountsSummaryRow() {
   const showBanks = document.getElementById('toggle-show-bankbalances').checked;
   const showLocked = document.getElementById('toggle-show-lockedfunds').checked;
-  const showPending = document.getElementById('toggle-show-pendingwithdrawals').checked;
   const el = document.getElementById('accounts-summary-row');
   const cols = [];
   let html = '';
   if (showBanks) { cols.push('1fr'); html += `<div class="card card-pad"><div class="lbl" style="margin-bottom:10px">Live bank balances</div><div id="bank-balances-box" style="display:flex;flex-wrap:wrap;gap:10px">Loading…</div></div>`; }
   if (showLocked) { cols.push('220px'); html += `<div class="card card-pad" style="cursor:pointer" onclick="showLedgerSec('locked-funds')"><div class="lbl" style="margin-bottom:10px">Locked Funds</div><div style="font-size:22px;font-weight:600;color:var(--red)" id="live-accounts-locked-total">£0.00</div></div>`; }
-  if (showPending) { cols.push('220px'); html += `<div class="card card-pad" style="cursor:pointer" onclick="showLedgerSec('money')"><div class="lbl" style="margin-bottom:10px">Pending Withdrawals</div><div style="font-size:22px;font-weight:600;color:var(--amber)" id="live-accounts-pending-total">£0.00</div></div>`; }
   el.style.gridTemplateColumns = cols.length ? cols.join(' ') : '1fr';
   el.innerHTML = html || '';
   if (showBanks) renderBankBalancesBox();
   if (showLocked) renderLiveAccountsLockedTotal();
-  if (showPending) renderLiveAccountsPendingTotal();
 }
 
 // Sums each live account's balance grouped by its linked bank — distinct from the bank's
@@ -4000,13 +3585,11 @@ function renderAccountsGrid() {
   if (!filtered.length) { wrap.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:24px">No accounts match these filters.</div>'; return; }
 
   const cellHtml = (a, mainLabel, suppressBank) => {
-    const cfg = a.is_dormant ? { bg: 'var(--blue-bg)', color: 'var(--blue)' } : (STATUS_CONFIG[a.status] || STATUS_CONFIG.good);
+    const cfg = STATUS_CONFIG[a.status] || STATUS_CONFIG.good;
     const openStake = a.open_stake || 0;
-    const idleDays = a.is_dormant && a.last_activity ? Math.floor((Date.now() - new Date(a.last_activity).getTime()) / 86400000) : null;
-    return `<div class="live-accts-cell" style="background:${cfg.bg};color:${cfg.color}" onclick="openAccountModal(${a.id})" title="${a.is_dormant ? `Dormant — no activity for ${idleDays} days` : ''}">
+    return `<div class="live-accts-cell" style="background:${cfg.bg};color:${cfg.color}" onclick="openAccountModal(${a.id})">
       <div class="id">${escapeHtml(mainLabel)}</div>
       ${showBalance ? `<div class="bal">£${(a.balance||0).toLocaleString('en-GB',{minimumFractionDigits:0,maximumFractionDigits:2})}</div>` : ''}
-      ${a.is_dormant ? `<div style="font-size:9px;font-weight:600">Dormant · ${idleDays}d</div>` : ''}
       ${showOpenStake && openStake>0 ? `<div style="font-size:10px;color:#3b82f6;font-weight:600">+£${openStake.toLocaleString('en-GB',{maximumFractionDigits:2})} open</div>` : ''}
       ${showBank && !suppressBank ? `<div style="font-size:10px;color:var(--text3)">${escapeHtml(a.profile)}</div>` : ''}
       ${(showBalance || showOpenStake || showBank) && a.has_notes ? `<div style="font-size:9px;color:var(--text3);margin-top:2px"><i class="ti ti-note"></i> Note added</div>` : ''}
@@ -4038,19 +3621,14 @@ function renderAccountsGrid() {
       return `<div class="live-accts-col"><div class="live-accts-col-header">${escapeHtml(bookie)}</div>${cells}</div>`;
     }).join('')}</div>`;
   }
-  setTimeout(() => {
-    const spacer = document.getElementById('live-accounts-topscroll-spacer');
-    if (spacer) spacer.style.width = wrap.scrollWidth + 'px';
-  }, 0);
 }
 
-// Grouped by prefix first (all C-IDs, then all D-IDs), numerical order within each group —
-// extracting the numeric part so C2 sorts before C10 regardless of zero-padding.
+// Highest balance first within each column; ties (most commonly a run of £0 balances)
+// fall back to lowest C/D-ID number first, extracting the numeric part so C2 sorts before
+// C10 regardless of zero-padding.
 function sortAccountsForGrid(list) {
   return [...list].sort((a, b) => {
-    const prefixA = (a.account_id||'').replace(/[^A-Za-z]/g,'');
-    const prefixB = (b.account_id||'').replace(/[^A-Za-z]/g,'');
-    if (prefixA !== prefixB) return prefixA.localeCompare(prefixB);
+    if (b.balance !== a.balance) return b.balance - a.balance;
     const numA = parseInt((a.account_id||'').replace(/\D/g,''), 10) || 0;
     const numB = parseInt((b.account_id||'').replace(/\D/g,''), 10) || 0;
     return numA - numB;
@@ -4094,61 +3672,6 @@ function openBankModal(name, remaining, startingBalance) {
 function closeBankModal() {
   document.getElementById('bank-modal-overlay').style.display = 'none';
   ACTIVE_BANK = null;
-}
-
-// ── EDIT LEAGUES (Today's Matches) ──
-function openEditLeaguesModal() {
-  document.getElementById('edit-leagues-modal-overlay').style.display = 'flex';
-  document.getElementById('new-league-id').value = '';
-  document.getElementById('new-league-name').value = '';
-  document.getElementById('edit-leagues-msg').innerHTML = '';
-  loadEditLeaguesList();
-}
-
-function closeEditLeaguesModal() {
-  document.getElementById('edit-leagues-modal-overlay').style.display = 'none';
-}
-
-async function loadEditLeaguesList() {
-  const el = document.getElementById('edit-leagues-list');
-  el.innerHTML = 'Loading…';
-  try {
-    const d = await ledgerApi('fotmob-leagues');
-    const leagues = (d.ok && d.leagues) ? d.leagues : [];
-    if (!leagues.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No leagues added yet.</div>'; return; }
-    el.innerHTML = `<div style="display:grid;grid-template-columns:70px 1fr 28px;gap:8px;font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:6px"><div>League ID</div><div>Exact League Name</div><div></div></div>` +
-      leagues.map(l => `<div style="display:grid;grid-template-columns:70px 1fr 28px;gap:8px;align-items:center;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px">
-        <div>${escapeHtml(l.league_id)}</div>
-        <div>${escapeHtml(l.league_name)}</div>
-        <span class="rm-btn" style="cursor:pointer;text-align:center" onclick="removeLeague(${l.id})" title="Remove">×</span>
-      </div>`).join('');
-  } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load leagues.</div>'; }
-}
-
-async function submitNewLeague() {
-  const league_id = document.getElementById('new-league-id').value.trim();
-  const league_name = document.getElementById('new-league-name').value.trim();
-  const msgEl = document.getElementById('edit-leagues-msg');
-  if (!league_id) { msgEl.innerHTML = '<span style="color:var(--red)">Enter a league ID.</span>'; return; }
-  if (!league_name) { msgEl.innerHTML = '<span style="color:var(--red)">Enter the exact league name.</span>'; return; }
-  msgEl.innerHTML = '<span style="color:var(--text2)">Adding…</span>';
-  try {
-    const d = await ledgerApi('fotmob-leagues', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ league_id, league_name }) });
-    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to add'}</span>`; return; }
-    document.getElementById('new-league-id').value = '';
-    document.getElementById('new-league-name').value = '';
-    msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Added.</span>';
-    loadEditLeaguesList();
-  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error.</span>'; }
-}
-
-async function removeLeague(id) {
-  if (!confirm('Remove this league from Today\'s Matches?')) return;
-  try {
-    const d = await ledgerApi('fotmob-leagues/'+id, { method:'DELETE' });
-    if (!d.ok) { alert(d.error || 'Failed to remove'); return; }
-    loadEditLeaguesList();
-  } catch (e) { alert('Network error.'); }
 }
 
 async function submitBankAdjustment() {
@@ -4204,17 +3727,6 @@ async function renderLiveAccountsLockedTotal() {
   try {
     const d = await ledgerApi('locked-funds');
     const rows = (d.ok && d.locked) ? d.locked : [];
-    const total = rows.reduce((s,r) => s + r.amount, 0);
-    el.textContent = '£' + total.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
-  } catch (e) { el.textContent = '—'; }
-}
-
-async function renderLiveAccountsPendingTotal() {
-  const el = document.getElementById('live-accounts-pending-total');
-  if (!el) return;
-  try {
-    const d = await ledgerApi('withdrawals?status=pending');
-    const rows = (d.ok && d.withdrawals) ? d.withdrawals : [];
     const total = rows.reduce((s,r) => s + r.amount, 0);
     el.textContent = '£' + total.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
   } catch (e) { el.textContent = '—'; }
@@ -4293,66 +3805,30 @@ function setAccountModalTab(tab) {
     document.getElementById('acc-tab-'+t).classList.toggle('active', t === tab);
     document.getElementById('account-modal-tab-'+t).style.display = t === tab ? 'block' : 'none';
   });
-  if (tab === 'transactions' && !accountModalTransactionsLoaded) {
-    populateAccountTxnMonthFilter();
-    loadAccountModalTransactions();
-  }
+  if (tab === 'transactions' && !accountModalTransactionsLoaded) loadAccountModalTransactions();
   if (tab === 'notes' && !accountModalNotesLoaded) preloadAccountModalNotes();
-}
-
-function populateAccountTxnMonthFilter() {
-  const sel = document.getElementById('account-txn-month-filter');
-  const opts = ['<option value="">All (most recent 50)</option>'];
-  const now = new Date();
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const value = d.toISOString().slice(0, 7);
-    const label = d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-    opts.push(`<option value="${value}">${label}</option>`);
-  }
-  sel.innerHTML = opts.join('');
-}
-
-function onAccountTxnFilterChange(source) {
-  if (source === 'month') document.getElementById('account-txn-date-filter').value = '';
-  else document.getElementById('account-txn-month-filter').value = '';
-  loadAccountModalTransactions();
-}
-
-function clearAccountTxnFilter() {
-  document.getElementById('account-txn-month-filter').value = '';
-  document.getElementById('account-txn-date-filter').value = '';
-  loadAccountModalTransactions();
 }
 
 async function loadAccountModalTransactions() {
   if (!ACTIVE_ACCOUNT) return;
   const el = document.getElementById('account-modal-transactions-list');
-  const noteEl = document.getElementById('account-txn-count-note');
-  el.innerHTML = '<tr><td colspan="6" style="padding:16px 6px;color:var(--text3)">Loading…</td></tr>';
-  const month = document.getElementById('account-txn-month-filter').value;
-  const date = document.getElementById('account-txn-date-filter').value;
-  const params = date ? `?date=${date}` : month ? `?month=${month}` : '';
+  el.innerHTML = 'Loading…';
   try {
-    const d = await ledgerApi(`accounts/${ACTIVE_ACCOUNT.id}/full-transactions${params}`);
+    const [depRes, wdRes] = await Promise.all([
+      ledgerApi('deposits?account_id='+ACTIVE_ACCOUNT.id),
+      ledgerApi('withdrawals?account_id='+ACTIVE_ACCOUNT.id),
+    ]);
+    const items = [];
+    (depRes.ok && depRes.deposits ? depRes.deposits : []).forEach(r => items.push({ type:'Deposit', date:r.date, amount:r.amount, sign:1 }));
+    (wdRes.ok && wdRes.withdrawals ? wdRes.withdrawals : []).forEach(r => items.push({ type:`Withdrawal${r.status==='pending'?' (pending)':''}`, date:r.date, amount:r.amount, sign:-1 }));
+    items.sort((a,b) => new Date(b.date) - new Date(a.date));
     accountModalTransactionsLoaded = true;
-    if (!d.ok) { el.innerHTML = `<tr><td colspan="6" style="padding:16px 6px;color:var(--red)">${d.error||'Could not load'}</td></tr>`; return; }
-    const rows = d.transactions || [];
-    if (!rows.length) { el.innerHTML = '<tr><td colspan="6" style="padding:16px 6px;color:var(--text3)">No transactions in this range.</td></tr>'; noteEl.textContent = ''; return; }
-    noteEl.textContent = d.totalMatching > 50 ? `Showing the most recent 50 of ${d.totalMatching} matching transactions.` : `${d.totalMatching} transaction${d.totalMatching===1?'':'s'}.`;
-    el.innerHTML = rows.map(r => {
-      const col = r.amount > 0 ? 'var(--green)' : r.amount < 0 ? 'var(--red)' : 'var(--text2)';
-      const sign = r.amount > 0 ? '+' : r.amount < 0 ? '-' : '';
-      return `<tr style="border-bottom:0.5px solid var(--border)">
-        <td style="padding:6px">${formatLedgerDate(r.date)}</td>
-        <td style="padding:6px">${escapeHtml(r.type)}${r.betType?` <span style="color:var(--text3);font-size:11px">(${escapeHtml(r.betType)})</span>`:''}</td>
-        <td class="r" style="padding:6px">${r.odds!=null?r.odds:'—'}</td>
-        <td class="r" style="padding:6px">${r.stake!=null?'£'+r.stake.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td>
-        <td class="r" style="padding:6px;color:${col};font-weight:600">${sign}£${Math.abs(r.amount).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-        <td class="r" style="padding:6px">£${r.balanceAfter.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-      </tr>`;
-    }).join('');
-  } catch (e) { el.innerHTML = '<tr><td colspan="6" style="padding:16px 6px;color:var(--red)">Could not load transactions.</td></tr>'; }
+    if (!items.length) { el.innerHTML = '<div style="color:var(--text3)">No deposits or withdrawals on this account yet.</div>'; return; }
+    el.innerHTML = items.map(it => `<div style="padding:8px 0;border-bottom:0.5px solid var(--border);display:flex;justify-content:space-between">
+      <div><span style="color:var(--text3);font-size:11px">${formatLedgerDate(it.date)}</span> ${it.type}</div>
+      <div style="font-weight:600;color:${it.sign>0?'var(--green)':'var(--red)'}">${it.sign>0?'+':'-'}£${it.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+    </div>`).join('');
+  } catch (e) { el.innerHTML = '<div style="color:var(--red)">Could not load transactions.</div>'; }
 }
 
 // Just checks quietly whether notes exist so the "Display notes" list can be filled in
@@ -4555,6 +4031,7 @@ async function submitMoneyPrompt() {
 
   msgEl.innerHTML = '<span style="color:var(--text2)">Processing…</span>';
   const acc = ACTIVE_ACCOUNT;
+  const accountName = getAccountDisplayName(acc);
 
   let ld;
   try {
@@ -4574,7 +4051,19 @@ async function submitMoneyPrompt() {
   document.getElementById('account-modal-balance').textContent = '£' + ld.balance.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
   document.getElementById('account-money-prompt').style.display = 'none';
   if (document.getElementById('view-ledger-accounts').style.display !== 'none') { renderAccountsGrid(); renderBankBalancesBox(); }
-  msgEl.innerHTML = `<span style="color:var(--green)"><i class="ti ti-check"></i> ${ACTIVE_MONEY_TYPE==='deposit'?'Deposit':'Withdrawal'} recorded.</span>`;
+
+  const sheetAction = ACTIVE_MONEY_TYPE === 'deposit' ? 'add_deposit' : 'add_withdrawal';
+  try {
+    const sd = await accountsSheetApi({ action: sheetAction, bookie: acc.bookie, profile: acc.profile, accountName, amount });
+    if (sd.ok && sd.row) {
+      await ledgerApi(`${ACTIVE_MONEY_TYPE === 'deposit' ? 'deposits' : 'withdrawals'}/${ld.id}/sheet-row`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sheet_row: sd.row }) });
+    }
+    msgEl.innerHTML = sd.ok
+      ? `<span style="color:var(--green)"><i class="ti ti-check"></i> ${ACTIVE_MONEY_TYPE==='deposit'?'Deposit':'Withdrawal'} recorded — sheet updated.</span>`
+      : `<span style="color:var(--amber)">${ACTIVE_MONEY_TYPE==='deposit'?'Deposit':'Withdrawal'} recorded in the Ledger, but the sheet write failed (${sd.error||'unknown error'}) — add it there manually.</span>`;
+  } catch (e) {
+    msgEl.innerHTML = `<span style="color:var(--amber)">${ACTIVE_MONEY_TYPE==='deposit'?'Deposit':'Withdrawal'} recorded in the Ledger, but the sheet sync failed to even respond — add it there manually.</span>`;
+  }
 }
 
 // ---- DEPOSITS LOG ----
@@ -4609,6 +4098,7 @@ async function reverseDeposit(id) {
   try {
     const d = await ledgerApi('deposits/'+id+'/reverse', { method:'POST' });
     if (!d.ok) { alert('Failed to reverse: ' + (d.error||'unknown error')); return; }
+    if (!d.sheetOk) alert('Reversed in Ledger, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
   } catch (e) { alert('Network error reversing deposit.'); return; }
   initDepositsLog();
 }
@@ -4635,11 +4125,11 @@ function renderPendingWithdrawalRow(r) {
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
       <div>
         <div style="color:var(--text3);font-size:11px">${formatLedgerDate(r.date)}</div>
-        ${r.account_code || '—'} — ${r.bookie} <span style="color:var(--text3)">(${r.profile}) £${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+        ${r.account_code || '—'} — ${r.bookie} <span style="color:var(--text3)">(${r.profile}) £${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>${!r.sheet_row?' <span style="color:var(--amber)">(not linked)</span>':''}
       </div>
     </div>
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-      <button class="add-btn" onclick="confirmWithdrawal(${r.id})"><i class="ti ti-check"></i> Confirm</button>
+      <button class="add-btn" onclick="confirmWithdrawal(${r.id}, ${r.sheet_row||'null'})"><i class="ti ti-check"></i> Confirm</button>
       <button class="add-btn" onclick="reverseWithdrawal(${r.id})"><i class="ti ti-arrow-back-up"></i> Reverse</button>
       <button class="add-btn" onclick="confiscateWithdrawal(${r.id})" style="color:var(--red);border-color:var(--red)"><i class="ti ti-ban"></i> Confiscated</button>
     </div>
@@ -4656,10 +4146,19 @@ function renderProcessedWithdrawalRow(r) {
   </div>`;
 }
 
-async function confirmWithdrawal(id) {
+async function confirmWithdrawal(id, sheetRow) {
   try {
     const ld = await ledgerApi(`withdrawals/${id}/confirm`, { method:'PATCH' });
     if (!ld.ok) { alert('Failed to confirm: ' + (ld.error||'unknown error')); return; }
+    if (sheetRow) {
+      const sd = await accountsSheetApi({ action:'confirm_withdrawal', row: sheetRow });
+      if (sd.ok && sd.processedRow) {
+        await ledgerApi(`withdrawals/${id}/processed-sheet-row`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ processed_sheet_row: sd.processedRow }) });
+      }
+      if (!sd.ok) alert('Confirmed in Ledger, but moving the sheet row failed (' + (sd.error||'unknown error') + ') — move it manually.');
+    } else {
+      alert('Confirmed in Ledger. This withdrawal was never linked to a sheet row, so nothing to move there.');
+    }
   } catch (e) { alert('Network error confirming withdrawal.'); return; }
   initWithdrawalsPending();
 }
@@ -4669,6 +4168,7 @@ async function reverseWithdrawal(id) {
   try {
     const d = await ledgerApi('withdrawals/'+id+'/reverse', { method:'POST' });
     if (!d.ok) { alert('Failed to reverse: ' + (d.error||'unknown error')); return; }
+    if (!d.sheetOk) alert('Reversed in Ledger, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
   } catch (e) { alert('Network error reversing withdrawal.'); return; }
   initWithdrawalsPending();
 }
@@ -4678,6 +4178,7 @@ async function confiscateWithdrawal(id) {
   try {
     const d = await ledgerApi('withdrawals/'+id+'/confiscate', { method:'POST' });
     if (!d.ok) { alert('Failed to confiscate: ' + (d.error||'unknown error')); return; }
+    if (!d.sheetOk) alert('Moved to Locked Funds, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
   } catch (e) { alert('Network error.'); return; }
   initWithdrawalsPending();
 }
@@ -5150,7 +4651,7 @@ async function loadDashboardOpenBets() {
   const el = document.getElementById('dashboard-open-bets');
   el.innerHTML = 'Loading…';
   try {
-    const d = await ledgerApi('bets?status=open&limit=1000&dashboardOpen=1');
+    const d = await ledgerApi('bets?status=open&limit=1000');
     const bets = ((d.ok && d.bets) ? d.bets : []).filter(b => !DASHBOARD_EXCLUDED_BET_TYPES.includes(b.bet_type));
     if (!bets.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No open bets.</div>'; return; }
     el.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">
@@ -5162,7 +4663,7 @@ async function loadDashboardOpenBets() {
       ${bets.map(b => {
         const meta = betTypeMeta(b.bet_type);
         const bookie = b.fields.Bookie || b.fields.Book || b.fields.Bookmaker || '—';
-        const betDesc = (b.fields.Race && b.fields['Horse/Trap']) ? `${b.fields.Race} - ${b.fields['Horse/Trap']}` : b.fields.Bet || b.fields['Bet Description'] || b.fields.Horse || b.fields.Player || b.fields.Offer || '';
+        const betDesc = b.fields.Bet || b.fields['Bet Description'] || b.fields.Horse || b.fields.Player || b.fields.Offer || '';
         return `<tr style="border-bottom:0.5px solid var(--border)">
           <td style="padding:7px 8px">${meta.source}</td>
           <td style="padding:7px 8px">${escapeHtml(meta.label)}</td>
@@ -5195,7 +4696,7 @@ async function loadDashboardPendingWithdrawals() {
           <span style="font-weight:600;margin-left:6px">£${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${CURRENT_USER_ROLE !== 'staff' ? `<button class="add-btn" onclick="dashboardConfirmWithdrawal(${r.id})"><i class="ti ti-check"></i> Confirm</button>` : ''}
+          ${CURRENT_USER_ROLE !== 'staff' ? `<button class="add-btn" onclick="dashboardConfirmWithdrawal(${r.id}, ${r.sheet_row||'null'})"><i class="ti ti-check"></i> Confirm</button>` : ''}
           <button class="add-btn" onclick="dashboardReverseWithdrawal(${r.id})"><i class="ti ti-arrow-back-up"></i> Reverse</button>
           <button class="add-btn" onclick="dashboardConfiscateWithdrawal(${r.id})" style="color:var(--red);border-color:var(--red)"><i class="ti ti-ban"></i> Confiscated</button>
         </div>
@@ -5204,10 +4705,17 @@ async function loadDashboardPendingWithdrawals() {
   } catch (e) { el.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load pending withdrawals.</div>'; }
 }
 
-async function dashboardConfirmWithdrawal(id) {
+async function dashboardConfirmWithdrawal(id, sheetRow) {
   try {
     const ld = await ledgerApi(`withdrawals/${id}/confirm`, { method:'PATCH' });
     if (!ld.ok) { alert('Failed to confirm: ' + (ld.error||'unknown error')); return; }
+    if (sheetRow) {
+      const sd = await accountsSheetApi({ action:'confirm_withdrawal', row: sheetRow });
+      if (sd.ok && sd.processedRow) {
+        await ledgerApi(`withdrawals/${id}/processed-sheet-row`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ processed_sheet_row: sd.processedRow }) });
+      }
+      if (!sd.ok) alert('Confirmed in Ledger, but moving the sheet row failed (' + (sd.error||'unknown error') + ') — move it manually.');
+    }
   } catch (e) { alert('Network error confirming withdrawal.'); return; }
   loadDashboardPendingWithdrawals();
 }
@@ -5217,6 +4725,7 @@ async function dashboardReverseWithdrawal(id) {
   try {
     const d = await ledgerApi('withdrawals/'+id+'/reverse', { method:'POST' });
     if (!d.ok) { alert('Failed to reverse: ' + (d.error||'unknown error')); return; }
+    if (!d.sheetOk) alert('Reversed in Ledger, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
   } catch (e) { alert('Network error reversing withdrawal.'); return; }
   loadDashboardPendingWithdrawals();
 }
@@ -5226,6 +4735,7 @@ async function dashboardConfiscateWithdrawal(id) {
   try {
     const d = await ledgerApi('withdrawals/'+id+'/confiscate', { method:'POST' });
     if (!d.ok) { alert('Failed to confiscate: ' + (d.error||'unknown error')); return; }
+    if (!d.sheetOk) alert('Moved to Locked Funds, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
   } catch (e) { alert('Network error.'); return; }
   loadDashboardPendingWithdrawals();
   loadDashboardLockedFunds();
@@ -5507,15 +5017,26 @@ async function submitMoneyPageTransaction() {
   // Deposit / Withdrawal — account-based
   const accountId = document.getElementById('money-account').value;
   if (!accountId) { msgEl.innerHTML = '<span style="color:var(--red)">Select an account.</span>'; return; }
+  const acc = LEDGER_ACCOUNTS.find(a => String(a.id) === String(accountId));
   msgEl.innerHTML = '<span style="color:var(--text2)">Processing…</span>';
   try {
     const ld = await ledgerApi(`accounts/${accountId}/${moneyPageType}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ amount }) });
     if (!ld.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${ld.error||'Failed'}</span>`; return; }
 
-    if (moneyPageType === 'deposit') {
-      msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Deposit recorded.</span>';
+    const accountName = getAccountDisplayName(acc);
+    const sheetAction = moneyPageType === 'deposit' ? 'add_deposit' : 'add_withdrawal';
+    const sd = await accountsSheetApi({ action: sheetAction, bookie: acc.bookie, profile: acc.profile, accountName, amount });
+    if (sd.ok && sd.row) {
+      await ledgerApi(`${moneyPageType === 'deposit' ? 'deposits' : 'withdrawals'}/${ld.id}/sheet-row`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sheet_row: sd.row }) });
+    }
+    if (sd.ok) {
+      if (moneyPageType === 'deposit') {
+        msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Deposit recorded — sheet updated.</span>';
+      } else {
+        msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Withdrawal logged as pending — no money has moved yet, confirm it below once it lands.</span>';
+      }
     } else {
-      msgEl.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Withdrawal logged as pending — no money has moved yet, confirm it below once it lands.</span>';
+      msgEl.innerHTML = `<span style="color:var(--amber)">Ledger updated, but the sheet write failed (${sd.error||'unknown error'}) — add it there manually.</span>`;
     }
     document.getElementById('money-amount').value = '';
     if (moneyPageType === 'withdrawal') loadMoneyPendingWithdrawals();
@@ -5537,9 +5058,10 @@ async function loadMoneyPendingWithdrawals() {
           <div style="color:var(--text3);font-size:11px">${formatLedgerDate(r.date)}</div>
           ${r.account_code || '—'} — ${r.bookie} <span style="color:var(--text3)">(${r.profile})</span>
           <span style="font-weight:600;margin-left:6px">£${r.amount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+          ${!r.sheet_row?' <span style="color:var(--amber)">(not linked)</span>':''}
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${CURRENT_USER_ROLE !== 'staff' ? `<button class="add-btn" onclick="moneyConfirmWithdrawal(${r.id})"><i class="ti ti-check"></i> Confirm</button>` : ''}
+          ${CURRENT_USER_ROLE !== 'staff' ? `<button class="add-btn" onclick="moneyConfirmWithdrawal(${r.id}, ${r.sheet_row||'null'})"><i class="ti ti-check"></i> Confirm</button>` : ''}
           <button class="add-btn" onclick="moneyReverseWithdrawal(${r.id})"><i class="ti ti-arrow-back-up"></i> Reverse</button>
           <button class="add-btn" onclick="moneyConfiscateWithdrawal(${r.id})" style="color:var(--red);border-color:var(--red)"><i class="ti ti-ban"></i> Confiscated</button>
         </div>
@@ -5626,14 +5148,24 @@ async function moneyReverseDeposit(id) {
   try {
     const d = await ledgerApi('deposits/'+id+'/reverse', { method:'POST' });
     if (!d.ok) { alert('Failed to reverse: ' + (d.error||'unknown error')); return; }
+    if (!d.sheetOk) alert('Reversed in Ledger, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
   } catch (e) { alert('Network error reversing deposit.'); return; }
   loadMoneyHistory();
 }
 
-async function moneyConfirmWithdrawal(id) {
+async function moneyConfirmWithdrawal(id, sheetRow) {
   try {
     const ld = await ledgerApi(`withdrawals/${id}/confirm`, { method:'PATCH' });
     if (!ld.ok) { alert('Failed to confirm: ' + (ld.error||'unknown error')); return; }
+    if (sheetRow) {
+      const sd = await accountsSheetApi({ action:'confirm_withdrawal', row: sheetRow });
+      if (sd.ok && sd.processedRow) {
+        await ledgerApi(`withdrawals/${id}/processed-sheet-row`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ processed_sheet_row: sd.processedRow }) });
+      }
+      if (!sd.ok) alert('Confirmed in Ledger, but moving the sheet row failed (' + (sd.error||'unknown error') + ') — move it manually.');
+    } else {
+      alert('Confirmed in Ledger. This withdrawal was never linked to a sheet row, so nothing to move there.');
+    }
   } catch (e) { alert('Network error confirming withdrawal.'); return; }
   loadMoneyPendingWithdrawals();
   loadMoneyHistory();
@@ -5644,6 +5176,7 @@ async function moneyReverseWithdrawal(id) {
   try {
     const d = await ledgerApi('withdrawals/'+id+'/reverse', { method:'POST' });
     if (!d.ok) { alert('Failed to reverse: ' + (d.error||'unknown error')); return; }
+    if (!d.sheetOk) alert('Reversed in Ledger, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
   } catch (e) { alert('Network error reversing withdrawal.'); return; }
   loadMoneyPendingWithdrawals();
   loadMoneyHistory();
@@ -5654,6 +5187,7 @@ async function moneyConfiscateWithdrawal(id) {
   try {
     const d = await ledgerApi('withdrawals/'+id+'/confiscate', { method:'POST' });
     if (!d.ok) { alert('Failed to confiscate: ' + (d.error||'unknown error')); return; }
+    if (!d.sheetOk) alert('Moved to Locked Funds, but removing the sheet row failed (' + (d.sheetError||'unknown error') + ') — remove it there manually.');
   } catch (e) { alert('Network error.'); return; }
   loadMoneyPendingWithdrawals();
   loadMoneyHistory();
@@ -5701,7 +5235,6 @@ const BET_TRACKING_GROUPS = {
     {key:'BB - BT', label:'BB Bet Tracker'},
     {key:'Casino', label:'Casino'},
     {key:'Offers (VA)', label:'Offers'},
-    {key:'Dogs + Horses (VA)', label:'Dogs + Horses DogBot'},
     {key:'Other', label:'Other'},
   ],
 };
@@ -5710,7 +5243,7 @@ let betTrackingLastGroup = null;
 
 // Manually maintained — add a bet_type key here once you've finished reviewing/fixing its
 // columns, so the list shows which tabs are done vs still need checking.
-const BET_TRACKING_REVIEWED = ['Value', 'Keithbot', 'Dogs + Horses', 'Dogs + Horses (VA)', 'BB Horse', 'BB Golf', 'American Props', 'Freeze', 'Offers (Personal)', 'Casino (Personal)', 'Ninja Golf BFEX', 'Corners', 'Other Bets', 'Discord', 'BB - RTP', 'BB - BT', 'Offers (VA)'];
+const BET_TRACKING_REVIEWED = ['Value', 'Keithbot', 'Dogs + Horses', 'BB Horse', 'BB Golf', 'American Props', 'Freeze', 'Offers (Personal)', 'Casino (Personal)', 'Ninja Golf BFEX', 'Corners', 'Other Bets', 'Discord', 'BB - RTP', 'BB - BT', 'Offers (VA)'];
 
 function showBetTrackingGroup(group) {
   betTrackingLastGroup = group;
@@ -6050,29 +5583,12 @@ async function fetchBtDetailPage() {
     if (!s.count) { tableWrap.innerHTML = '<div style="padding:24px;color:var(--text3);font-size:13px">No bets recorded yet for this type.</div>'; document.getElementById('bt-detail-legend').style.display = 'none'; return; }
     if (!bets.length) { tableWrap.innerHTML = '<div style="padding:24px;color:var(--text3);font-size:13px">No bets on this page.</div>'; return; }
 
-    document.getElementById('bt-detail-legend').style.display = (btDetailType === 'Casino' || btDetailType === 'Casino (Personal)') ? 'flex' : 'none';
+    document.getElementById('bt-detail-legend').style.display = btDetailType === 'Casino' ? 'flex' : 'none';
 
     // Columns are built dynamically from the union of this page's `fields` keys, since each
     // bet type has a different shape — mirrors how the old generic tab handlers worked.
-    let fieldKeys = [];
+    const fieldKeys = [];
     bets.forEach(b => { Object.keys(b.fields||{}).forEach(k => { if (!fieldKeys.includes(k)) fieldKeys.push(k); }); });
-    // Both Casino sheets need a fixed column order regardless of which fields happen to be
-    // filled in yet, or what order they were added in — otherwise filling in balance fields
-    // later visibly reorders the columns, and the two sheets can end up looking different
-    // from each other depending on entry history. Pulls out whichever of these are actually
-    // present, puts them in their fixed order, and reinserts that group back at the
-    // position it originally occupied — every other column stays exactly where discovery
-    // put it.
-    if (btDetailType === 'Casino' || btDetailType === 'Casino (Personal)') {
-      const presentOrdered = CASINO_COLUMN_ORDER.filter(k => fieldKeys.includes(k));
-      if (presentOrdered.length) {
-        const firstIdx = fieldKeys.findIndex(k => CASINO_COLUMN_ORDER.includes(k));
-        const withoutOrdered = fieldKeys.filter(k => !CASINO_COLUMN_ORDER.includes(k));
-        const insertPos = fieldKeys.slice(0, firstIdx).filter(k => !CASINO_COLUMN_ORDER.includes(k)).length;
-        withoutOrdered.splice(insertPos, 0, ...presentOrdered);
-        fieldKeys = withoutOrdered;
-      }
-    }
     BT_DETAIL_STATE.fieldKeys = fieldKeys;
 
     renderBtDetailTable(bets);
@@ -6094,14 +5610,14 @@ function renderBtDetailTable(bets) {
   });
   const colClass = k => colIsNumeric[k] ? ' class="r"' : '';
 
-  const showNotesCol = btDetailType === 'Casino' || btDetailType === 'Casino (Personal)';
-  const showResultCol = !BET_TYPE_CONFIG[btDetailType]?.winningsBasedPL && btDetailType !== 'Casino';
+  const showNotesCol = btDetailType === 'Casino';
+  const showResultCol = !BET_TYPE_CONFIG[btDetailType]?.winningsBasedPL;
   let html = `<table class="dt" style="min-width:720px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr>
     <th>Date</th>${showNotesCol?'<th>Notes</th>':''}${showResultCol?'<th>Result</th>':''}<th>Account ID</th>${fieldKeys.map(k=>`<th${colClass(k)}>${escapeHtml(k)}</th>`).join('')}<th class="r">P/L</th><th></th>
   </tr></thead><tbody>`;
   bets.forEach(b => {
     const resColor = b.result==='won'?'var(--green)':b.result==='lost'?'var(--red)':b.result==='placed'?'var(--blue)':b.result==='void'?'var(--text3)':'var(--amber)';
-    const isCasinoInProgress = (b.bet_type === 'Casino' || b.bet_type === 'Casino (Personal)') && (
+    const isCasinoInProgress = b.bet_type === 'Casino' && (
       b.fields['Bonus Starting Balance'] === undefined || b.fields['Bonus Starting Balance'] === null ||
       b.fields['Bonus Finish Balance'] === undefined || b.fields['Bonus Finish Balance'] === null
     );
@@ -6118,7 +5634,7 @@ function renderBtDetailTable(bets) {
         if (b.bet_type === 'Ninja Golf BFEX' && k === 'Total Stake') {
           return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetStake(${b.id}, ${b.fields[k]||0}, fetchBtDetailPage)" title="Click to correct the stake">${cellContent}</span></td>`;
         }
-        if ((b.bet_type === 'Casino' || b.bet_type === 'Casino (Personal)') && CASINO_BALANCE_KEYS.includes(k)) {
+        if (b.bet_type === 'Casino' && CASINO_BALANCE_KEYS.includes(k)) {
           const isBlank = b.fields[k] === undefined || b.fields[k] === null;
           const display = isBlank ? '<i class="ti ti-plus" style="color:var(--text3)"></i>' : cellContent;
           return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editCasinoBalanceField(${b.id}, '${k}', ${b.fields[k]||0}, fetchBtDetailPage)" title="${isBlank?'Click to add a value':'Click to amend'}">${display}</span></td>`;
@@ -6207,7 +5723,7 @@ async function submitBtLink() {
 let btSettleContext = null; // { betId, refreshFn }
 let btSettleResult = null;
 
-const EACH_WAY_BET_TYPES = ['Dogs + Horses', 'Dogs + Horses (VA)', 'BB Horse', 'BB Golf', 'BB - RTP'];
+const EACH_WAY_BET_TYPES = ['Dogs + Horses', 'BB Horse', 'BB Golf', 'BB - RTP'];
 
 const BET_TYPE_TOGGLE_TABS = ['Offers (Personal)', 'Offers (VA)', 'Other Bets'];
 
@@ -6218,7 +5734,7 @@ function openBtSettleModal(betId, currentResult, currentPl, refreshFn, stake, od
   document.getElementById('bt-delete-msg').innerHTML = '';
   resetBtDeleteButton();
   const bfexWrap = document.getElementById('bt-settle-bfex-wrap');
-  const isDogbot = betType === 'Dogs + Horses' || betType === 'Dogs + Horses (VA)';
+  const isDogbot = betType === 'Dogs + Horses';
   bfexWrap.style.display = isDogbot ? 'block' : 'none';
   document.getElementById('bt-settle-bfex').value = (currentBfexSp !== undefined && currentBfexSp !== null) ? currentBfexSp : '';
   const betTypeWrap = document.getElementById('bt-settle-bettype-wrap');
@@ -6431,10 +5947,6 @@ async function displayBetNote(betId) {
 }
 
 const CASINO_BALANCE_KEYS = ['Wager Starting Balance', 'Wager Finish Balance', 'Bonus Starting Balance', 'Bonus Finish Balance'];
-// Full fixed column order for both Casino sheets — Date/Notes/Account ID are fixed columns
-// handled separately, this covers everything from the dynamic fields onward (P/L is also
-// a separate fixed column, always last, so isn't included here).
-const CASINO_COLUMN_ORDER = ['Bookie', 'Offer', 'EV', ...CASINO_BALANCE_KEYS];
 
 // Quick inline correction for any of Casino's four balance fields — Total P/L is
 // recomputed from the resulting figures, and any linked account balance is properly
@@ -6465,7 +5977,7 @@ async function submitBtSettle() {
   msgEl.innerHTML = '<span style="color:var(--text2)">Saving…</span>';
   try {
     const extraFields = {};
-    if (btSettleContext.betType === 'Dogs + Horses' || btSettleContext.betType === 'Dogs + Horses (VA)') {
+    if (btSettleContext.betType === 'Dogs + Horses') {
       const bfexVal = parseFloat(document.getElementById('bt-settle-bfex').value);
       if (!isNaN(bfexVal)) extraFields['BFEX SP'] = bfexVal;
     }
@@ -6534,18 +6046,8 @@ async function loadBtOpenTable() {
     const bets = d.bets || [];
     if (!bets.length) { tableWrap.innerHTML = '<div style="padding:24px;color:var(--text3);font-size:13px">No open bets here.</div>'; return; }
 
-    let fieldKeys = [];
+    const fieldKeys = [];
     bets.forEach(b => { Object.keys(b.fields||{}).forEach(k => { if (!fieldKeys.includes(k)) fieldKeys.push(k); }); });
-    if (btOpenState.betType === 'Casino' || btOpenState.betType === 'Casino (Personal)') {
-      const presentOrdered2 = CASINO_COLUMN_ORDER.filter(k => fieldKeys.includes(k));
-      if (presentOrdered2.length) {
-        const firstIdx2 = fieldKeys.findIndex(k => CASINO_COLUMN_ORDER.includes(k));
-        const withoutOrdered2 = fieldKeys.filter(k => !CASINO_COLUMN_ORDER.includes(k));
-        const insertPos2 = fieldKeys.slice(0, firstIdx2).filter(k => !CASINO_COLUMN_ORDER.includes(k)).length;
-        withoutOrdered2.splice(insertPos2, 0, ...presentOrdered2);
-        fieldKeys = withoutOrdered2;
-      }
-    }
     const colIsNumeric = {};
     fieldKeys.forEach(k => {
       const numCount = bets.filter(x => typeof x.fields[k] === 'number').length;
@@ -6565,7 +6067,7 @@ async function loadBtOpenTable() {
           if (btOpenState.betType === 'Ninja Golf BFEX' && k === 'Total Stake') {
             return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetStake(${b.id}, ${b.fields[k]||0}, loadBtOpenTabs)" title="Click to correct the stake">${cellContent}</span></td>`;
           }
-          if ((btOpenState.betType === 'Casino' || btOpenState.betType === 'Casino (Personal)') && CASINO_BALANCE_KEYS.includes(k)) {
+          if (btOpenState.betType === 'Casino' && CASINO_BALANCE_KEYS.includes(k)) {
             const isBlank = b.fields[k] === undefined || b.fields[k] === null;
             const display = isBlank ? '<i class="ti ti-plus" style="color:var(--text3)"></i>' : cellContent;
             return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editCasinoBalanceField(${b.id}, '${k}', ${b.fields[k]||0}, loadBtOpenTabs)" title="${isBlank?'Click to add a value':'Click to amend'}">${display}</span></td>`;
@@ -7405,7 +6907,7 @@ async function initToday(){
     }
     const bets = rawBets.map(b => {
       const meta = betTypeMeta(b.bet_type);
-      const betDesc = (b.fields.Race && b.fields["Horse/Trap"]) ? `${b.fields.Race} - ${b.fields["Horse/Trap"]}` : b.fields.Bet || b.fields["Bet Description"] || b.fields.Horse || b.fields.Player || b.fields.Offer || b.fields["Bet 1"] || "";
+      const betDesc = b.fields.Bet || b.fields["Bet Description"] || b.fields.Horse || b.fields.Player || b.fields.Offer || b.fields["Bet 1"] || "";
       const evVal = typeof b.fields.EV === "number" ? b.fields.EV : (typeof b.fields["EV £"] === "number" ? b.fields["EV £"] : 0);
       return {
         source: meta.label,
@@ -7430,142 +6932,6 @@ function showTodayStatus(icon,title,msg){
   document.getElementById('today-status-title').textContent=title;
   document.getElementById('today-status-msg').textContent=msg;
   document.getElementById('today-status').style.display='';
-}
-
-// ── MONTHLY PROFIT ──
-function showMonthlyProfitStatus(icon,title,msg){
-  document.getElementById('monthlyprofit-status-ico').innerHTML=`<i class="ti ${icon}"></i>`;
-  document.getElementById('monthlyprofit-status-title').textContent=title;
-  document.getElementById('monthlyprofit-status-msg').textContent=msg;
-  document.getElementById('monthlyprofit-status').style.display='';
-}
-
-async function initMonthlyProfit(){
-  document.getElementById('monthlyprofit-status').style.display='';
-  document.getElementById('monthlyprofit-content').style.display='none';
-  showMonthlyProfitStatus('ti-loader','Loading...',"Fetching this month's bets.");
-  try {
-    await loadCustomSheets(); // so betTypeMeta correctly resolves custom sheets too
-    const d = await ledgerApi('bets?dateRange=month&limit=5000');
-    if (!d.ok) { showMonthlyProfitStatus('ti-alert-triangle','Could not load bets', d.error||'Unknown error'); return; }
-    const rawBets = d.bets || [];
-    if (!rawBets.length) {
-      showMonthlyProfitStatus('ti-calendar-off','No bets this month','No bets have been logged this month yet.');
-      return;
-    }
-    document.getElementById('monthlyprofit-status').style.display='none';
-
-    const bySheet = {};
-    rawBets.forEach(b => {
-      const meta = betTypeMeta(b.bet_type);
-      const key = b.bet_type;
-      if (!bySheet[key]) bySheet[key] = { label: meta.label, source: meta.source, bets: 0, stake: 0, ev: 0, pl: 0 };
-      const evVal = typeof b.fields.EV === 'number' ? b.fields.EV : (typeof b.fields['EV £'] === 'number' ? b.fields['EV £'] : 0);
-      bySheet[key].bets++;
-      bySheet[key].stake += b.total_stake || 0;
-      bySheet[key].ev += evVal;
-      bySheet[key].pl += b.pl || 0;
-    });
-    const sheetRows = Object.values(bySheet).sort((a,b) => b.pl - a.pl);
-
-    const totalBets = rawBets.length;
-    const totalStake = sheetRows.reduce((s,r) => s+r.stake, 0);
-    const totalEV = sheetRows.reduce((s,r) => s+r.ev, 0);
-    const totalPL = sheetRows.reduce((s,r) => s+r.pl, 0);
-    const plCol = totalPL>=0?'var(--green)':'var(--red)';
-    const evCol = totalEV>=0?'var(--green)':'var(--red)';
-
-    document.getElementById('monthlyprofit-kpis').innerHTML = `
-      <div class="kpi"><div class="kpi-l">Total bets placed</div><div class="kpi-v">${totalBets}</div></div>
-      <div class="kpi"><div class="kpi-l">Total staked</div><div class="kpi-v">£${totalStake.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
-      <div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:${evCol}">${totalEV>=0?'+':''}£${Math.abs(totalEV).toFixed(2)}</div></div>
-      <div class="kpi"><div class="kpi-l">Profit this month</div><div class="kpi-v" style="color:${plCol}">${totalPL>=0?'+':''}£${Math.abs(totalPL).toFixed(2)}</div></div>`;
-
-    document.getElementById('monthlyprofit-table-body').innerHTML = sheetRows.map(r => {
-      const rPlCol = r.pl>=0?'var(--green)':'var(--red)';
-      const rEvCol = r.ev>=0?'var(--green)':'var(--red)';
-      return `<tr style="border-bottom:0.5px solid var(--border)">
-        <td style="padding:7px 8px">${escapeHtml(r.label)}</td>
-        <td style="padding:7px 8px;color:var(--text3);font-size:12px">${r.source}</td>
-        <td class="r" style="padding:7px 8px">${r.bets}</td>
-        <td class="r" style="padding:7px 8px">£${r.stake.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-        <td class="r" style="padding:7px 8px;color:${rEvCol}">${r.ev>=0?'+':''}£${Math.abs(r.ev).toFixed(2)}</td>
-        <td class="r" style="padding:7px 8px;color:${rPlCol};font-weight:600">${r.pl>=0?'+':''}£${Math.abs(r.pl).toFixed(2)}</td>
-      </tr>`;
-    }).join('');
-
-    document.getElementById('monthlyprofit-content').style.display='';
-  } catch (e) {
-    showMonthlyProfitStatus('ti-alert-triangle','Network error','Could not reach the server.');
-  }
-}
-
-// ── ASSISTANT MONTHLY STATS (Staff-visible; Admin also sees this alongside the full
-// Monthly Profit view) ──
-function showAssistantMonthlyStatus(icon,title,msg){
-  document.getElementById('assistantmonthly-status-ico').innerHTML=`<i class="ti ${icon}"></i>`;
-  document.getElementById('assistantmonthly-status-title').textContent=title;
-  document.getElementById('assistantmonthly-status-msg').textContent=msg;
-  document.getElementById('assistantmonthly-status').style.display='';
-}
-
-async function initAssistantMonthly(){
-  document.getElementById('assistantmonthly-status').style.display='';
-  document.getElementById('assistantmonthly-content').style.display='none';
-  showAssistantMonthlyStatus('ti-loader','Loading...',"Fetching this month's bets.");
-  try {
-    await loadCustomSheets();
-    const d = await ledgerApi('bets?dateRange=month&limit=5000');
-    if (!d.ok) { showAssistantMonthlyStatus('ti-alert-triangle','Could not load bets', d.error||'Unknown error'); return; }
-    // Filtered client-side to Assistant bets specifically — for Staff this is redundant
-    // (the backend already excludes Buzzer bets for them) but harmless; for Admin this is
-    // what actually scopes the view down to Assistant-only, since they'd otherwise see
-    // everything.
-    const rawBets = (d.bets || []).filter(b => betTypeMeta(b.bet_type).source === 'Assistant');
-    if (!rawBets.length) {
-      showAssistantMonthlyStatus('ti-calendar-off','No bets this month','No Assistant bets have been logged this month yet.');
-      return;
-    }
-    document.getElementById('assistantmonthly-status').style.display='none';
-
-    const bySheet = {};
-    rawBets.forEach(b => {
-      const meta = betTypeMeta(b.bet_type);
-      const key = b.bet_type;
-      if (!bySheet[key]) bySheet[key] = { label: meta.label, bets: 0, ev: 0, pl: 0 };
-      const evVal = typeof b.fields.EV === 'number' ? b.fields.EV : (typeof b.fields['EV £'] === 'number' ? b.fields['EV £'] : 0);
-      bySheet[key].bets++;
-      bySheet[key].ev += evVal;
-      bySheet[key].pl += b.pl || 0;
-    });
-    const sheetRows = Object.values(bySheet).sort((a,b) => b.pl - a.pl);
-
-    const totalBets = rawBets.length;
-    const totalEV = sheetRows.reduce((s,r) => s+r.ev, 0);
-    const totalPL = sheetRows.reduce((s,r) => s+r.pl, 0);
-    const plCol = totalPL>=0?'var(--green)':'var(--red)';
-    const evCol = totalEV>=0?'var(--green)':'var(--red)';
-
-    document.getElementById('assistantmonthly-kpis').innerHTML = `
-      <div class="kpi"><div class="kpi-l">Total bets placed</div><div class="kpi-v">${totalBets}</div></div>
-      <div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:${evCol}">${totalEV>=0?'+':''}£${Math.abs(totalEV).toFixed(2)}</div></div>
-      <div class="kpi"><div class="kpi-l">Total profit</div><div class="kpi-v" style="color:${plCol}">${totalPL>=0?'+':''}£${Math.abs(totalPL).toFixed(2)}</div></div>`;
-
-    document.getElementById('assistantmonthly-table-body').innerHTML = sheetRows.map(r => {
-      const rPlCol = r.pl>=0?'var(--green)':'var(--red)';
-      const rEvCol = r.ev>=0?'var(--green)':'var(--red)';
-      return `<tr style="border-bottom:0.5px solid var(--border)">
-        <td style="padding:7px 8px">${escapeHtml(r.label)}</td>
-        <td class="r" style="padding:7px 8px">${r.bets}</td>
-        <td class="r" style="padding:7px 8px;color:${rEvCol}">${r.ev>=0?'+':''}£${Math.abs(r.ev).toFixed(2)}</td>
-        <td class="r" style="padding:7px 8px;color:${rPlCol};font-weight:600">${r.pl>=0?'+':''}£${Math.abs(r.pl).toFixed(2)}</td>
-      </tr>`;
-    }).join('');
-
-    document.getElementById('assistantmonthly-content').style.display='';
-  } catch (e) {
-    showAssistantMonthlyStatus('ti-alert-triangle','Network error','Could not reach the server.');
-  }
 }
 
 function renderToday(bets,today){
@@ -7706,43 +7072,18 @@ function evBasedWinProb(odds, ev, stake) {
 const MONTHLY_BANDS = [
   { label: '-£10,000 or lower', value: -10000, direction: 'below' },
   { label: '-£5,000 or lower',  value: -5000,  direction: 'below' },
-  { label: '-£2,500 or lower',  value: -2500,  direction: 'below' },
   { label: 'Break even+',       value: 0,      direction: 'above' },
   { label: '+£2,500+',          value: 2500,   direction: 'above' },
   { label: '+£5,000+',          value: 5000,   direction: 'above' },
   { label: '+£7,500+',          value: 7500,   direction: 'above' },
   { label: '+£10,000+',         value: 10000,  direction: 'above' },
-  { label: '+£12,500+',         value: 12500,  direction: 'above' },
   { label: '+£15,000+',         value: 15000,  direction: 'above' },
-  { label: '+£17,500+',         value: 17500,  direction: 'above' },
   { label: '+£20,000+',         value: 20000,  direction: 'above' },
-  { label: '+£22,500+',         value: 22500,  direction: 'above' },
   { label: '+£25,000+',         value: 25000,  direction: 'above' },
-  { label: '+£27,500+',         value: 27500,  direction: 'above' },
   { label: '+£30,000+',         value: 30000,  direction: 'above' },
 ];
 
-// Smaller-margin bands for a single sheet's own probability — a sheet's totals are naturally
-// much smaller than the all-bets total, so the wide bands above wouldn't show anything
-// meaningful. Same set applied to every sheet for now, not individually tuned per sheet yet.
-const SHEET_BANDS = [
-  { label: '-£2,000 or lower', value: -2000, direction: 'below' },
-  { label: '-£1,500 or lower', value: -1500, direction: 'below' },
-  { label: '-£1,000 or lower', value: -1000, direction: 'below' },
-  { label: '-£500 or lower',   value: -500,  direction: 'below' },
-  { label: 'Break even+',      value: 0,     direction: 'above' },
-  { label: '+£500+',           value: 500,   direction: 'above' },
-  { label: '+£1,000+',         value: 1000,  direction: 'above' },
-  { label: '+£1,500+',         value: 1500,  direction: 'above' },
-  { label: '+£2,000+',         value: 2000,  direction: 'above' },
-  { label: '+£2,500+',         value: 2500,  direction: 'above' },
-  { label: '+£3,000+',         value: 3000,  direction: 'above' },
-  { label: '+£4,000+',         value: 4000,  direction: 'above' },
-  { label: '+£5,000+',         value: 5000,  direction: 'above' },
-];
-
-function monteCarloProfitBands(simBets, lockedInPL, bands) {
-  bands = bands || MONTHLY_BANDS;
+function monteCarloProfitBands(simBets, lockedInPL) {
   const SIMS = 10000;
   const results = [];
   for (let i = 0; i < SIMS; i++) {
@@ -7753,7 +7094,7 @@ function monteCarloProfitBands(simBets, lockedInPL, bands) {
     }
     results.push(total);
   }
-  return bands.map(band => {
+  return MONTHLY_BANDS.map(band => {
     const count = band.direction === 'below'
       ? results.filter(r => r <= band.value).length
       : results.filter(r => r >= band.value).length;
@@ -7767,9 +7108,9 @@ function renderMonthlyTable(elId, bandResults) {
     const pct = Math.round(b.prob * 100);
     const col = pct>=70?'var(--green)':pct>=40?'var(--amber)':'var(--red)';
     return `<tr>
-      <td style="padding:4px 8px;font-size:12px;white-space:nowrap">${b.label}</td>
-      <td style="padding:4px 8px;width:100%"><div style="background:var(--surface2);border-radius:4px;height:6px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${col};border-radius:4px;transition:width .6s ease"></div></div></td>
-      <td style="padding:4px 8px;text-align:right;font-weight:600;color:${col};white-space:nowrap;font-size:12px">${pct}%</td>
+      <td style="padding:6px 8px;font-size:12.5px;white-space:nowrap">${b.label}</td>
+      <td style="padding:6px 8px;width:100%"><div style="background:var(--surface2);border-radius:4px;height:7px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${col};border-radius:4px;transition:width .6s ease"></div></div></td>
+      <td style="padding:6px 8px;text-align:right;font-weight:600;color:${col};white-space:nowrap">${pct}%</td>
     </tr>`;
   }).join('');
 }
@@ -7785,7 +7126,6 @@ async function initMonthly() {
   document.getElementById('monthly-status').style.display='';
   document.getElementById('monthly-content').style.display='none';
   showMonthlyStatus('ti-loader','Loading...',"Fetching this month's bets.");
-  await loadCustomSheets();
   try {
     const d = await ledgerApi('bets?dateRange=month&limit=5000');
     if (!d.ok) { showMonthlyStatus('ti-alert-triangle','Could not load bets', d.error||'Unknown error'); return; }
@@ -7798,7 +7138,7 @@ async function initMonthly() {
       if (odds === null || ev === null || !(stake > 0)) return; // no usable EV — excluded, as agreed
       const winProb = evBasedWinProb(odds, ev, stake);
       if (winProb === null) return;
-      usable.push({ odds, ev, stake, winProb, result: b.result, pl: b.pl || 0, bet_type: b.bet_type });
+      usable.push({ odds, ev, stake, winProb, result: b.result, pl: b.pl || 0 });
     });
     if (!usable.length) {
       showMonthlyStatus('ti-calendar-off','No usable bets this month','No bets with Odds, EV and Stake found for this month.');
@@ -7820,55 +7160,18 @@ async function initMonthly() {
       <div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:${evCol}">${totalEV>=0?'+':''}£${Math.abs(totalEV).toFixed(2)}</div></div>
       <div class="kpi"><div class="kpi-l">Settled P/L so far</div><div class="kpi-v" style="color:${plCol}">${settledPL>=0?'+':''}£${Math.abs(settledPL).toFixed(2)}</div></div>`;
 
-    renderMonthlyTable('monthly-static-body', monteCarloProfitBands(usable, 0, MONTHLY_BANDS));
+    // Static: every usable bet simulated from scratch, ignoring what actually happened.
+    const staticBands = monteCarloProfitBands(usable, 0);
+    // Live: settled P/L locked in exactly as it happened, only open bets get simulated.
+    const liveBands = monteCarloProfitBands(open, settledPL);
+
+    renderMonthlyTable('monthly-static-body', staticBands);
+    renderMonthlyTable('monthly-live-body', liveBands);
 
     document.getElementById('monthly-content').style.display='';
-
-    onMonthlySheetGroupChange(); // populate + auto-run the by-sheet panel below
   } catch (e) {
     showMonthlyStatus('ti-alert-triangle','Network error','Could not reach the server.');
   }
-}
-
-function onMonthlySheetGroupChange() {
-  const group = document.getElementById('monthly-sheet-group').value;
-  const sel = document.getElementById('monthly-sheet-select');
-  const list = BET_TYPE_GROUPS[group] || [];
-  sel.innerHTML = list.map(t => `<option value="${t.key}">${escapeHtml(t.label)}</option>`).join('');
-  runSheetProbability();
-}
-
-// Runs the same static EV simulation as the main panel, scoped to just one sheet — smaller
-// bands, since a single sheet's totals are naturally far smaller than the all-bets total.
-async function runSheetProbability() {
-  const key = document.getElementById('monthly-sheet-select').value;
-  const statusEl = document.getElementById('monthly-sheet-status');
-  const tableEl = document.getElementById('monthly-sheet-table');
-  if (!key) return;
-  statusEl.style.display = 'block';
-  statusEl.textContent = 'Loading…';
-  tableEl.style.display = 'none';
-  try {
-    const d = await ledgerApi(`bets?type=${encodeURIComponent(key)}&dateRange=month&limit=5000`);
-    if (!d.ok) { statusEl.textContent = d.error || 'Could not load'; return; }
-    const usable = [];
-    (d.bets || []).forEach(b => {
-      const odds = typeof b.fields.Odds === 'number' ? b.fields.Odds : null;
-      const ev = typeof b.fields.EV === 'number' ? b.fields.EV : (typeof b.fields['EV £'] === 'number' ? b.fields['EV £'] : null);
-      const stake = b.total_stake || 0;
-      if (odds === null || ev === null || !(stake > 0)) return;
-      const winProb = evBasedWinProb(odds, ev, stake);
-      if (winProb === null) return;
-      usable.push({ odds, ev, stake, winProb });
-    });
-    if (!usable.length) {
-      statusEl.textContent = 'No bets on this sheet this month have a usable Odds/EV/Stake to simulate from.';
-      return;
-    }
-    statusEl.style.display = 'none';
-    tableEl.style.display = '';
-    renderMonthlyTable('monthly-sheet-body', monteCarloProfitBands(usable, 0, SHEET_BANDS));
-  } catch (e) { statusEl.textContent = 'Network error.'; }
 }
 
 
@@ -8793,10 +8096,7 @@ function renderDogsTable(rows,summary){
   <button class="back" onclick="backToCalcMenu()"><i class="ti ti-arrow-left"></i> Menu</button>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
     <div class="sec-title" style="margin-bottom:0">Today's Matches</div>
-    <div style="display:flex;align-items:center;gap:12px">
-      <button onclick="openEditLeaguesModal()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit"><i class="ti ti-list-details"></i> Edit Leagues</button>
-      <span style="font-size:12px;color:var(--text3)" id="matches-count"></span>
-    </div>
+    <span style="font-size:12px;color:var(--text3)" id="matches-count"></span>
   </div>
 
   <!-- Date selector -->
@@ -9548,20 +8848,12 @@ function deriveBfexFair(runner) {
 }
 
 async function runScanCore(matchId, home, away, competition, idsArr) {
-  // Pairs each ID with its market key BEFORE filtering, so gaps (a market with no ID
-  // entered) don't shift positions — the request and the result-parsing below both derive
-  // from this same filtered list, so they always stay in sync regardless of which ones are
-  // actually provided.
-  const OC_MARKET_KEY_ORDER = ['header', 'otb', 'headed_sot', 'sot_otb'];
-  const providedMarkets = OC_MARKET_KEY_ORDER
-    .map((key, i) => ({ key, id: (idsArr[i] || '').trim() }))
-    .filter(m => m.id);
-  const ids = providedMarkets.map(m => m.id).join(',');
-  const hasAnyIds = providedMarkets.length > 0;
+  const ids = idsArr.filter(Boolean).join(',');
+  const hasAllIds = idsArr.filter(Boolean).length === 4;
 
-  // Step 1: Fetch OC odds (only if at least one ID is present), lineups, BB odds and Betfair in parallel
+  // Step 1: Fetch OC odds (only if all 4 IDs present), lineups, BB odds and Betfair in parallel
   const [ocRaw, lineupData, , bfexData] = await Promise.all([
-    hasAnyIds
+    hasAllIds
       ? fetch(`https://www.oddschecker.com/api/markets/v2/all-odds?market-ids=${ids}&repub=OC`).then(r => r.json()).catch(() => [])
       : Promise.resolve([]),
     fetch(`/.netlify/functions/lineups?matchId=${matchId}`)
@@ -9630,15 +8922,15 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
       return { fair, confidence };
     }
 
-    // Step 2: Parse OC odds into lookup by market → player name — uses the same
-    // providedMarkets list the request was built from, so a result's position always maps
-    // to the correct market key regardless of which ones were actually provided.
+    // Step 2: Parse OC odds into lookup by market → player name
+    const MARKET_KEYS = ['header', 'otb', 'headed_sot', 'sot_otb'];
     const ocMarkets = {};
+    const idList = ids.split(',');
 
     for (const mkt of (Array.isArray(ocRaw) ? ocRaw : [])) {
-      const found = providedMarkets.find(m => m.id === String(mkt.marketId));
-      if (!found) continue;
-      const mkey = found.key;
+      const idx = idList.indexOf(String(mkt.marketId));
+      if (idx === -1) continue;
+      const mkey = MARKET_KEYS[idx];
       if (!ocMarkets[mkey]) ocMarkets[mkey] = {};
       const byBet = {};
       for (const bet of (mkt.odds ?? [])) {
@@ -9905,8 +9197,8 @@ async function scanOC(matchId, home, away, competition, btn) {
   try {
     const key = `${slugifyOC(home)}-v-${slugifyOC(away)}`;
     const idsArr = [0,1,2,3].map(i => document.getElementById(`mid-${key}-${i}`)?.value.trim() || '');
-    if (idsArr.filter(Boolean).length === 0) {
-      alert('Please fill in at least one market ID');
+    if (idsArr.filter(Boolean).length !== 4) {
+      alert('Please fill in all 4 market IDs');
       return;
     }
     btn.innerHTML = '<i class="ti ti-loader"></i> Scanning...';
