@@ -4281,8 +4281,8 @@ function openAccountModal(accountId) {
   document.getElementById('account-modal-msg').innerHTML = '';
   accountModalTransactionsLoaded = false;
   accountModalNotesLoaded = false;
-  document.getElementById('account-modal-notes-list').style.display = 'none';
-  document.getElementById('account-notes-display-btn').textContent = 'Display notes';
+  document.getElementById('account-modal-notes-list').innerHTML = 'Loading…';
+  document.getElementById('account-modal-notes-actions').innerHTML = '';
   setAccountModalTab('overview');
   document.getElementById('account-modal-overlay').style.display = 'flex';
 }
