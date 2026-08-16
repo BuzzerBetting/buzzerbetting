@@ -1,4 +1,9 @@
-const PRIMARY_IDS = new Set([
+// Last-resort default — used only if the DO server's league list can't be fetched (down,
+// misconfigured LEDGER_API_KEY, etc.), so Today's Matches degrades gracefully instead of
+// showing nothing. Under normal operation the live list always comes from the DB via
+// fetchLeagueIds() below, so editing leagues through the "Edit Leagues" UI takes effect
+// immediately without redeploying this function.
+const DEFAULT_PRIMARY_IDS = new Set([
   77,  // FIFA World Cup 2026
   47,  // Premier League
   48,  // Championship
@@ -11,10 +16,37 @@ const PRIMARY_IDS = new Set([
   40,  // FA Cup
 ]);
 
+// Read from env vars first so each independent deployment (each with its own DO server)
+// can point at its own backend without editing this file — falls back to the original
+// hardcoded values only if unset, so the existing deployment needs zero changes. Same
+// pattern as netlify/functions/ledger.js.
+const DO_HOST = process.env.LEDGER_DO_HOST || '178.128.40.248';
+const DO_PORT = process.env.LEDGER_DO_PORT ? Number(process.env.LEDGER_DO_PORT) : 3000;
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Content-Type': 'application/json'
 };
+
+// Fetches the current editable league list from the DO server (same DB/route the "Edit
+// Leagues" modal writes to) and returns it as a Set of numeric FotMob league IDs. Falls
+// back to DEFAULT_PRIMARY_IDS on any failure — network error, DO server down, or
+// LEDGER_API_KEY missing — so this endpoint never hard-fails just because the ledger
+// backend is briefly unreachable.
+async function fetchLeagueIds() {
+  if (!process.env.LEDGER_API_KEY) return DEFAULT_PRIMARY_IDS;
+  try {
+    const res = await fetch(`http://${DO_HOST}:${DO_PORT}/api/ledger/fotmob-leagues`, {
+      headers: { 'x-ledger-key': process.env.LEDGER_API_KEY }
+    });
+    if (!res.ok) return DEFAULT_PRIMARY_IDS;
+    const d = await res.json();
+    if (!d.ok || !Array.isArray(d.leagues) || !d.leagues.length) return DEFAULT_PRIMARY_IDS;
+    return new Set(d.leagues.map(l => Number(l.league_id)));
+  } catch (e) {
+    return DEFAULT_PRIMARY_IDS;
+  }
+}
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
@@ -23,6 +55,7 @@ exports.handler = async (event) => {
   const dateFormatted = `${date.slice(0,4)}-${date.slice(4,6)}-${date.slice(6,8)}`;
 
   try {
+    const PRIMARY_IDS = await fetchLeagueIds();
     const url = `https://www.fotmob.com/api/data/matches?date=${date}&timezone=Europe%2FLondon&ccode3=GBR&includeNextDayLateNight=true`;
     const res = await fetch(url, {
       headers: {

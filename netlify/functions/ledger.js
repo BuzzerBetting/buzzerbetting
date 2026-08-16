@@ -26,8 +26,11 @@ const CORS = {
   'Content-Type': 'application/json',
   'Cache-Control': 'no-store'
 };
-const DO_HOST = '178.128.40.248';
-const DO_PORT = 3000;
+// Read from env vars first so each independent deployment (each with its own DO server)
+// can point at its own backend without editing this file — falls back to the original
+// hardcoded values only if unset, so the existing deployment needs zero changes.
+const DO_HOST = process.env.LEDGER_DO_HOST || '178.128.40.248';
+const DO_PORT = process.env.LEDGER_DO_PORT ? Number(process.env.LEDGER_DO_PORT) : 3000;
 exports.handler = async (event) => {
   const method = event.httpMethod || (event.requestContext && event.requestContext.http && event.requestContext.http.method) || 'GET';
   if (method === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
