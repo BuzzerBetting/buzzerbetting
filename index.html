@@ -1132,6 +1132,7 @@ input::placeholder{color:var(--text3)}
       <button class="acc-modal-tab" id="acc-tab-overview" onclick="setAccountModalTab('overview')">Overview</button>
       <button class="acc-modal-tab" id="acc-tab-transactions" onclick="setAccountModalTab('transactions')">Transactions</button>
       <button class="acc-modal-tab" id="acc-tab-notes" onclick="setAccountModalTab('notes')">Notes</button>
+      <button class="acc-modal-tab" id="acc-tab-settlement" onclick="setAccountModalTab('settlement')">Settlement</button>
     </div>
 
     <div id="account-modal-tab-overview">
@@ -1200,6 +1201,11 @@ input::placeholder{color:var(--text3)}
     <div id="account-modal-tab-notes" style="display:none">
       <div id="account-modal-notes-actions" style="display:flex;gap:8px;margin-bottom:14px"></div>
       <div id="account-modal-notes-list" style="font-size:13px">Loading…</div>
+    </div>
+
+    <div id="account-modal-tab-settlement" style="display:none">
+      <div id="account-modal-casino-note" style="display:none;background:var(--amber-bg);color:var(--amber);border:0.5px solid var(--amber);border-radius:var(--radius);padding:10px 12px;font-size:13px;margin-bottom:14px"></div>
+      <div id="account-modal-settlement-list" style="font-size:13px">Loading…</div>
     </div>
 
     <div id="account-modal-msg" style="margin-top:12px;font-size:13px"></div>
@@ -4351,7 +4357,7 @@ let accountModalTransactionsLoaded = false;
 let accountModalNotesLoaded = false;
 
 function setAccountModalTab(tab) {
-  ['overview','transactions','notes'].forEach(t => {
+  ['overview','transactions','notes','settlement'].forEach(t => {
     document.getElementById('acc-tab-'+t).classList.toggle('active', t === tab);
     document.getElementById('account-modal-tab-'+t).style.display = t === tab ? 'block' : 'none';
   });
@@ -4360,6 +4366,7 @@ function setAccountModalTab(tab) {
     loadAccountModalTransactions();
   }
   if (tab === 'notes' && !accountModalNotesLoaded) preloadAccountModalNotes();
+  if (tab === 'settlement') loadAccountModalSettlement(); // always fresh — open bets can change frequently
 }
 
 function populateAccountTxnMonthFilter() {
@@ -4459,6 +4466,45 @@ async function refreshSingleAccountBalance() {
 
 // Just checks quietly whether notes exist so the "Display notes" list can be filled in
 // without an extra round trip once the person actually clicks to view them.
+// ── SETTLEMENT TAB ──
+async function loadAccountModalSettlement() {
+  if (!ACTIVE_ACCOUNT) return;
+  await refreshSingleAccountBalance(); // keeps the balance shown in the modal current, especially useful right after settling something here
+  const noteEl = document.getElementById('account-modal-casino-note');
+  const listEl = document.getElementById('account-modal-settlement-list');
+  noteEl.style.display = 'none';
+  listEl.innerHTML = 'Loading…';
+  try {
+    const d = await ledgerApi('accounts/'+ACTIVE_ACCOUNT.id+'/open-bets');
+    if (!d.ok) { listEl.innerHTML = `<div style="color:var(--red)">${d.error||'Could not load'}</div>`; return; }
+
+    if (d.casinoUnfinishedCount > 0) {
+      noteEl.style.display = 'block';
+      noteEl.innerHTML = `<i class="ti ti-alert-triangle"></i> Casino offer${d.casinoUnfinishedCount>1?'s':''} unfinished (${d.casinoUnfinishedCount})`;
+    }
+
+    const bets = d.openBets || [];
+    if (!bets.length) {
+      listEl.innerHTML = d.casinoUnfinishedCount > 0 ? '' : '<div style="color:var(--text3)">No open bets on this account.</div>';
+      return;
+    }
+
+    listEl.innerHTML = bets.map(b => {
+      const f = b.fields || {};
+      const betDesc = (f.Race && f['Horse/Trap']) ? `${f.Race} - ${f['Horse/Trap']}` : f.Bet || f['Bet Description'] || f.Horse || f.Player || f.Offer || f['Bet 1'] || '';
+      const odds = typeof f.Odds === 'number' ? f.Odds : null;
+      return `<div style="padding:10px 0;border-bottom:0.5px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+        <div style="flex:1">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:2px">${formatLedgerDate(b.date)} · ${escapeHtml(b.bet_type)}</div>
+          <div>${escapeHtml(betDesc)}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">${odds!=null?'Odds '+odds+' · ':''}Stake £${b.stake.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+        </div>
+        <button class="add-btn" onclick="openBtSettleModal(${b.id},'open',0,loadAccountModalSettlement,${b.stake},${odds!=null?odds:'null'},'${b.bet_type.replace(/'/g,"\\'")}',null,${f.Terms?`'${String(f.Terms).replace(/'/g,"\\'")}'`:'null'},${typeof f['Place Odds']==='number'?f['Place Odds']:'null'},null)">Settle</button>
+      </div>`;
+    }).join('');
+  } catch (e) { listEl.innerHTML = '<div style="color:var(--red)">Could not load open bets.</div>'; }
+}
+
 async function preloadAccountModalNotes() {
   accountModalNotesLoaded = true;
   loadAccountModalNotesList();
