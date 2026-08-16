@@ -171,13 +171,16 @@ router.get('/accounts', (req, res) => {
       ? `SELECT * FROM accounts WHERE status NOT IN ('closed','locked') ORDER BY bookie, profile`
       : `SELECT * FROM accounts ORDER BY bookie, profile`;
     const accounts = db.prepare(query).all();
-    const hasNotesStmt = db.prepare(`SELECT 1 FROM account_notes WHERE account_id = ? LIMIT 1`);
+    // Most recent note per account — the notes UI treats this as effectively one note per
+    // account (edit/delete, not a growing history), so this is what "the" note means here.
+    const latestNoteStmt = db.prepare(`SELECT text FROM account_notes WHERE account_id = ? ORDER BY created_at DESC LIMIT 1`);
     const lastActivity = computeLastActivityMap();
     const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
     const withExtras = accounts.map(a => {
       const last = lastActivity[a.id] || a.created_at; // never used at all — dormant clock starts from when it was created
       const isDormant = a.status === 'good' && a.balance > 0 && last < sixtyDaysAgo;
-      return { ...a, open_stake: openStakeFor(a.id), has_notes: !!hasNotesStmt.get(a.id), is_dormant: isDormant, last_activity: last };
+      const latestNote = latestNoteStmt.get(a.id);
+      return { ...a, open_stake: openStakeFor(a.id), has_notes: !!latestNote, note_text: latestNote ? latestNote.text : null, is_dormant: isDormant, last_activity: last };
     });
     res.json({ ok: true, accounts: withExtras });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
@@ -673,18 +676,18 @@ router.get('/accounts/:id/full-transactions', (req, res) => {
     const events = [];
 
     db.prepare(`SELECT * FROM deposits WHERE account_id = ?`).all(req.params.id).forEach(d => {
-      events.push({ date: d.date, type: 'Deposit', amount: d.amount, odds: null, stake: null, betType: null });
+      events.push({ date: d.date, type: 'Deposit', amount: d.amount, odds: null, stake: null, betType: null, sourceType: 'deposit', sourceId: d.id });
     });
 
     db.prepare(`SELECT * FROM withdrawals WHERE account_id = ?`).all(req.params.id).forEach(w => {
-      events.push({ date: w.date, type: 'Withdrawal', amount: -w.amount, odds: null, stake: null, betType: null });
+      events.push({ date: w.date, type: 'Withdrawal', amount: -w.amount, odds: null, stake: null, betType: null, sourceType: 'withdrawal', sourceId: w.id, alreadyReversed: w.status === 'reversed' });
       if (w.status === 'reversed' && w.reversed_at) {
-        events.push({ date: w.reversed_at, type: 'Withdrawal reversed', amount: w.amount, odds: null, stake: null, betType: null });
+        events.push({ date: w.reversed_at, type: 'Withdrawal reversed', amount: w.amount, odds: null, stake: null, betType: null, sourceType: null, sourceId: null });
       }
     });
 
     db.prepare(`SELECT * FROM manual_adjustments WHERE account_id = ?`).all(req.params.id).forEach(a => {
-      events.push({ date: a.date, type: 'Manual adjustment', amount: a.delta, odds: null, stake: null, betType: null });
+      events.push({ date: a.date, type: 'Manual adjustment', amount: a.delta, odds: null, stake: null, betType: null, sourceType: 'manual_adjustment', sourceId: a.id });
     });
 
     const legs = db.prepare(
@@ -696,12 +699,12 @@ router.get('/accounts/:id/full-transactions', (req, res) => {
       const freeBet = hasNoRealStake(leg.bet_type, fields);
       const odds = typeof fields.Odds === 'number' ? fields.Odds : null;
       if (!freeBet) {
-        events.push({ date: leg.bet_date, type: 'Bet placed', amount: -leg.stake, odds, stake: leg.stake, betType: leg.bet_type });
+        events.push({ date: leg.bet_date, type: 'Bet placed', amount: -leg.stake, odds, stake: leg.stake, betType: leg.bet_type, sourceType: 'bet', sourceId: leg.bet_id });
       }
       if (leg.settled && leg.settled_at) {
         const stakeComponent = freeBet ? 0 : leg.stake;
         const creditBack = stakeComponent + (leg.leg_pl || 0);
-        events.push({ date: leg.settled_at, type: 'Bet settled', amount: creditBack, odds, stake: leg.stake, betType: leg.bet_type });
+        events.push({ date: leg.settled_at, type: 'Bet settled', amount: creditBack, odds, stake: leg.stake, betType: leg.bet_type, sourceType: 'bet_settlement', sourceId: leg.bet_id });
       }
     });
 
@@ -719,6 +722,58 @@ router.get('/accounts/:id/full-transactions', (req, res) => {
     else if (month) filtered = events.filter(e => e.date.slice(0, 7) === month);
 
     res.json({ ok: true, transactions: filtered.slice(0, 50), totalMatching: filtered.length });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// DELETE /api/ledger/manual-adjustments/:id — reverses the account balance change and
+// removes the log row entirely, same "undo and delete the record" pattern as reversing a
+// deposit or withdrawal.
+// GET /api/ledger/manual-adjustments — every manual balance override across every account,
+// most recent first. Powers the dedicated Manual Adjustment Log page.
+router.get('/manual-adjustments', (req, res) => {
+  try {
+    const rows = db.prepare(
+      `SELECT ma.*, a.account_id AS card_id, a.bookie
+       FROM manual_adjustments ma JOIN accounts a ON a.id = ma.account_id
+       ORDER BY ma.date DESC LIMIT 500`
+    ).all();
+    res.json({ ok: true, adjustments: rows });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+router.delete('/manual-adjustments/:id', (req, res) => {
+  const doReverse = db.transaction((id) => {
+    const adj = db.prepare(`SELECT * FROM manual_adjustments WHERE id = ?`).get(id);
+    if (!adj) throw new Error('Adjustment not found');
+    db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`).run(adj.delta, adj.account_id);
+    db.prepare(`DELETE FROM manual_adjustments WHERE id = ?`).run(id);
+  });
+  try {
+    doReverse(req.params.id);
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
+// GET /api/ledger/accounts/:id/open-bets — powers the Settlement tab on the account modal.
+// Non-Casino open bets get full detail (date, type, fields, odds, stake) for settling
+// directly from here. Casino is handled separately — since it settles automatically once
+// its balance fields are filled in rather than through a normal Settle action, there's
+// nothing meaningful to show per-bet here — just a count of how many are still unfinished.
+router.get('/accounts/:id/open-bets', (req, res) => {
+  try {
+    const rows = db.prepare(
+      `SELECT b.id, b.bet_type, b.date, b.fields, bl.stake
+       FROM bet_legs bl JOIN bets b ON b.id = bl.bet_id
+       WHERE bl.account_id = ? AND bl.settled = 0 AND b.bet_type NOT IN ('Casino', 'Casino (Personal)')
+       ORDER BY b.date DESC`
+    ).all(req.params.id);
+    const openBets = rows.map(r => ({ id: r.id, bet_type: r.bet_type, date: r.date, stake: r.stake, fields: JSON.parse(r.fields) }));
+
+    const casinoUnfinishedCount = db.prepare(
+      `SELECT COUNT(*) AS n FROM bets WHERE id IN (SELECT bet_id FROM bet_legs WHERE account_id = ?) AND bet_type IN ('Casino', 'Casino (Personal)') AND result = 'open'`
+    ).get(req.params.id).n;
+
+    res.json({ ok: true, openBets, casinoUnfinishedCount });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
@@ -743,6 +798,16 @@ router.post('/accounts/:id/notes', (req, res) => {
 router.delete('/account-notes/:id', (req, res) => {
   try {
     db.prepare(`DELETE FROM account_notes WHERE id = ?`).run(req.params.id);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// PATCH /api/ledger/account-notes/:id — body: { text }
+router.patch('/account-notes/:id', (req, res) => {
+  try {
+    const text = (req.body.text || '').trim();
+    if (!text) return res.status(400).json({ ok: false, error: 'Note text is required' });
+    db.prepare(`UPDATE account_notes SET text = ? WHERE id = ?`).run(text, req.params.id);
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
@@ -1520,8 +1585,15 @@ router.patch('/bets/:id/casino-balance', (req, res) => {
         db.prepare(`UPDATE bet_legs SET leg_pl = ? WHERE id = ?`).run(newLegPl, leg.id);
       }
     } else {
-      const allFourPresent = CASINO_BALANCE_KEYS.every(k => typeof fields[k] === 'number');
-      if (allFourPresent) {
+      // Real Casino offers can be bonus-only or wager-only — requiring all four
+      // unconditionally left bets with a genuinely untouched pair stuck on Open forever.
+      // Settling once either pair is complete (treating the other, if untouched, as
+      // contributing £0) is the safer failure mode: it can always be corrected later if
+      // the other pair does get filled in, whereas staying stuck open has no path to
+      // self-correct at all.
+      const wagerPairComplete = typeof fields['Wager Starting Balance'] === 'number' && typeof fields['Wager Finish Balance'] === 'number';
+      const bonusPairComplete = typeof fields['Bonus Starting Balance'] === 'number' && typeof fields['Bonus Finish Balance'] === 'number';
+      if (wagerPairComplete || bonusPairComplete) {
         // All four balance fields are now complete for the first time — this is the actual
         // moment of settlement. Without this branch the bet stayed on Open forever and its
         // P/L never reached the account, since the block above only ever ran for bets that
