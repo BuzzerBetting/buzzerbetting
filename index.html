@@ -145,12 +145,20 @@ input::placeholder{color:var(--text3)}
 .ledger-grid td.acct-cell{padding:8px 10px;cursor:pointer;transition:filter .12s;min-width:110px}
 .ledger-grid td.acct-cell:hover{filter:brightness(0.94)}
 .ledger-grid td.bal-cell{padding:8px 10px;min-width:90px;text-align:right;font-weight:600}
-.live-accts-col{min-width:150px;flex-shrink:0;background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius-lg)}
-/* overflow:hidden was removed above — it silently defeats position:sticky on the header below,
-   since it makes this column (rather than the page) the header's scrolling reference. Corners
-   are rounded explicitly on the header/last cell instead, to keep the clipped-corner look. */
-.live-accts-col-header{padding:10px 12px;background:var(--surface2);font-weight:600;font-size:12.5px;color:var(--text2);text-align:center;border-bottom:0.5px solid var(--border);position:sticky;top:62px;z-index:2;border-radius:var(--radius-lg) var(--radius-lg) 0 0}
+.live-accts-col{width:150px;flex-shrink:0;background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius-lg)}
+/* Header row is a single element spanning every column, frozen as one unit to the top of
+   #live-accounts-wrap's own scrollport (max-height + overflow-y:auto, see that element — a
+   bounded, self-scrolling grid, not the full page). Deliberately NOT one header nested per
+   column: position:sticky can't stick a header past the end of its own containing block, so a
+   short column (e.g. a bookie with only 1-2 accounts) would lose its frozen name the moment
+   you scroll past that bookie's own last row. A shared row has no such per-column bound —
+   matches how a spreadsheet's frozen top row works, one row for the whole grid, not one per
+   column. Width is fixed (not just min-width) on both this row's cells and .live-accts-col so
+   the two independent flex rows stay pixel-aligned regardless of either row's content. */
+.live-accts-header-row{display:flex;gap:12px;position:sticky;top:0;z-index:3;margin-bottom:8px}
+.live-accts-col-header{width:150px;flex-shrink:0;padding:10px 12px;background:var(--surface2);border:0.5px solid var(--border);font-weight:600;font-size:12.5px;color:var(--text2);text-align:center;border-radius:var(--radius-lg)}
 .live-accts-cell{padding:9px 10px;text-align:center;cursor:pointer;border-bottom:0.5px solid var(--border);transition:filter .12s}
+.live-accts-cell:first-child{border-radius:var(--radius-lg) var(--radius-lg) 0 0}
 .live-accts-cell:last-child{border-radius:0 0 var(--radius-lg) var(--radius-lg)}
 .live-accts-cell:hover{filter:brightness(0.94)}
 .live-accts-cell .id{font-weight:600;font-size:13px}
@@ -708,7 +716,7 @@ input::placeholder{color:var(--text3)}
   </div>
   <div class="wide">
     <div id="live-accounts-topscroll" style="overflow-x:auto;overflow-y:hidden;height:14px;margin-bottom:2px" onscroll="document.getElementById('live-accounts-wrap').scrollLeft=this.scrollLeft"><div id="live-accounts-topscroll-spacer" style="height:1px;width:1px"></div></div>
-    <div id="live-accounts-wrap" style="overflow-x:auto;width:100%;min-width:0" onscroll="document.getElementById('live-accounts-topscroll').scrollLeft=this.scrollLeft"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
+    <div id="live-accounts-wrap" style="overflow-x:auto;overflow-y:auto;max-height:70vh;width:100%;min-width:0" onscroll="document.getElementById('live-accounts-topscroll').scrollLeft=this.scrollLeft"><div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div></div>
   </div>
 </div>
 
@@ -4046,31 +4054,38 @@ function renderAccountsGrid() {
     </div>`;
   };
 
+  // Each group becomes one column — header and cells built separately (rather than one
+  // header nested inside each column, as before) so every header can live in a single shared
+  // row spanning the whole grid. That row freezes as one unit, so a bookie's name stays
+  // visible even once you've scrolled past that bookie's own last account — a header nested
+  // in its own column can never do that, since position:sticky can't outlive its own
+  // containing block, which for a short column (e.g. one with 2 accounts) is reached almost
+  // immediately.
+  let groups;
   if (accountsGroupBy === 'card') {
     const byCard = {};
     filtered.forEach(a => { const key = a.account_id || '—'; (byCard[key] = byCard[key] || []).push(a); });
-    const cardIds = Object.keys(byCard).sort();
-    wrap.innerHTML = `<div style="display:flex;gap:12px;align-items:flex-start">${cardIds.map(cardId => {
-      const cells = sortAccountsForGrid(byCard[cardId]).map(a => cellHtml(a, a.bookie)).join('');
-      return `<div class="live-accts-col"><div class="live-accts-col-header">${escapeHtml(cardId)}</div>${cells}</div>`;
-    }).join('')}</div>`;
+    groups = Object.keys(byCard).sort().map(cardId => ({
+      header: escapeHtml(cardId),
+      cells: sortAccountsForGrid(byCard[cardId]).map(a => cellHtml(a, a.bookie)).join('')
+    }));
   } else if (accountsGroupBy === 'bank') {
     const byBank = {};
     filtered.forEach(a => { const key = a.profile || 'Unknown'; (byBank[key] = byBank[key] || []).push(a); });
-    const bankNames = Object.keys(byBank).sort();
-    wrap.innerHTML = `<div style="display:flex;gap:12px;align-items:flex-start">${bankNames.map(bank => {
-      const cells = sortAccountsForGrid(byBank[bank]).map(a => cellHtml(a, a.account_id || '—', true)).join('');
-      return `<div class="live-accts-col"><div class="live-accts-col-header">${escapeHtml(bank)} <span style="font-weight:400;color:var(--text3)">(${byBank[bank].length})</span></div>${cells}</div>`;
-    }).join('')}</div>`;
+    groups = Object.keys(byBank).sort().map(bank => ({
+      header: `${escapeHtml(bank)} <span style="font-weight:400;color:var(--text3)">(${byBank[bank].length})</span>`,
+      cells: sortAccountsForGrid(byBank[bank]).map(a => cellHtml(a, a.account_id || '—', true)).join('')
+    }));
   } else {
     const byBookie = {};
     filtered.forEach(a => { (byBookie[a.bookie] = byBookie[a.bookie] || []).push(a); });
-    const bookies = Object.keys(byBookie).sort();
-    wrap.innerHTML = `<div style="display:flex;gap:12px;align-items:flex-start">${bookies.map(bookie => {
-      const cells = sortAccountsForGrid(byBookie[bookie]).map(a => cellHtml(a, a.account_id || '—')).join('');
-      return `<div class="live-accts-col"><div class="live-accts-col-header">${escapeHtml(bookie)}</div>${cells}</div>`;
-    }).join('')}</div>`;
+    groups = Object.keys(byBookie).sort().map(bookie => ({
+      header: escapeHtml(bookie),
+      cells: sortAccountsForGrid(byBookie[bookie]).map(a => cellHtml(a, a.account_id || '—')).join('')
+    }));
   }
+  wrap.innerHTML = `<div class="live-accts-header-row">${groups.map(g => `<div class="live-accts-col-header">${g.header}</div>`).join('')}</div>` +
+    `<div style="display:flex;gap:12px;align-items:flex-start">${groups.map(g => `<div class="live-accts-col">${g.cells}</div>`).join('')}</div>`;
   setTimeout(() => {
     const spacer = document.getElementById('live-accounts-topscroll-spacer');
     if (spacer) spacer.style.width = wrap.scrollWidth + 'px';
