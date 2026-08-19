@@ -880,7 +880,11 @@ router.post('/accounts/:id/withdraw', (req, res) => {
   const createPending = db.transaction((accountId, amount) => {
     const account = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(accountId);
     if (!account) throw new Error('Account not found');
-    const newBalance = Math.max(0, account.balance - amount);
+    // No floor at £0 — the site's shown balance can legitimately be stale (e.g. an unsettled
+    // winning bet the account's real balance already reflects but the site doesn't yet), so a
+    // withdrawal larger than the shown balance is allowed to go negative here rather than being
+    // silently capped at 0. It self-corrects once the bet is settled and the balance updates.
+    const newBalance = account.balance - amount;
     db.prepare(`UPDATE accounts SET balance = ?, updated_at = datetime('now') WHERE id = ?`).run(newBalance, accountId);
     const info = db.prepare(`INSERT INTO withdrawals (account_id, amount, balance_after, status) VALUES (?, ?, ?, 'pending')`).run(accountId, amount, newBalance);
     return { newBalance, id: info.lastInsertRowid };
