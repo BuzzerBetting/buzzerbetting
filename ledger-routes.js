@@ -94,8 +94,14 @@ router.use((req, res, next) => {
 // live betting/financial data — so it has no legitimate reason to ever call this API at
 // all. Blocked entirely here, not just hidden in the frontend, so there's no endpoint a
 // Calculator session could reach even by calling the API directly.
+// Exception: /fotmob-leagues lives under this router for historical/routing reasons only —
+// it's part of the Calculations feature set (Today's Matches / Edit Leagues), not financial
+// Ledger data, so it's exempted from this block rather than widening Calculator's access
+// generally.
 router.use((req, res, next) => {
-  if (req.userRole === 'calculator') return res.status(403).json({ ok: false, error: 'This account has no access to the Ledger.' });
+  if (req.userRole === 'calculator' && !req.path.startsWith('/fotmob-leagues')) {
+    return res.status(403).json({ ok: false, error: 'This account has no access to the Ledger.' });
+  }
   next();
 });
 
@@ -1185,6 +1191,26 @@ router.get('/bets', (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// GET /api/ledger/bets/:id/legs — every account actually used on this bet, with each leg's
+// own stake/settlement status, for the "C054 + 4"-style expandable display. NOTE: odds are
+// NOT stored per leg — a bet has exactly one Odds value (bets.fields.Odds), shared across
+// every account on it — so this returns that single bet-level odds value once, alongside
+// each leg, rather than a nonexistent per-account figure.
+router.get('/bets/:id/legs', (req, res) => {
+  try {
+    const bet = db.prepare(`SELECT * FROM bets WHERE id = ?`).get(req.params.id);
+    if (!bet) return res.status(404).json({ ok: false, error: 'Bet not found' });
+    const legs = db.prepare(
+      `SELECT bl.id, bl.account_id, bl.stake, bl.leg_pl, bl.settled,
+              a.account_id AS account_code, a.profile, a.bookie
+       FROM bet_legs bl JOIN accounts a ON a.id = bl.account_id
+       WHERE bl.bet_id = ? ORDER BY bl.id`
+    ).all(req.params.id);
+    const fields = JSON.parse(bet.fields);
+    res.json({ ok: true, legs, odds: typeof fields.Odds === 'number' ? fields.Odds : null, bet_type: bet.bet_type, result: bet.result });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 // POST /api/ledger/bets/:id/legs — attaches an account+stake to an already-existing bet
 // (used for historical open bets migrated without one, linked in case-by-case afterward).
 // Deducts the stake from the account's balance, same as placing a bet normally does.
@@ -2061,8 +2087,9 @@ router.get('/fotmob-leagues', (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
-// POST /api/ledger/fotmob-leagues — body: { league_id, league_name }. Admin only.
-router.post('/fotmob-leagues', requireAdmin, (req, res) => {
+// POST /api/ledger/fotmob-leagues — body: { league_id, league_name }. Open to any role —
+// Edit Leagues is a Calculations tool, not a financial action, so it isn't Admin-gated.
+router.post('/fotmob-leagues', (req, res) => {
   try {
     const { league_id, league_name } = req.body;
     if (!league_id || !String(league_id).trim()) return res.status(400).json({ ok: false, error: 'league_id is required' });
@@ -2074,8 +2101,9 @@ router.post('/fotmob-leagues', requireAdmin, (req, res) => {
   } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
 });
 
-// DELETE /api/ledger/fotmob-leagues/:id — :id is the row id, not the FotMob league_id. Admin only.
-router.delete('/fotmob-leagues/:id', requireAdmin, (req, res) => {
+// DELETE /api/ledger/fotmob-leagues/:id — :id is the row id, not the FotMob league_id. Open
+// to any role — see note on the POST route above.
+router.delete('/fotmob-leagues/:id', (req, res) => {
   try {
     db.prepare(`DELETE FROM fotmob_leagues WHERE id = ?`).run(req.params.id);
     res.json({ ok: true });
