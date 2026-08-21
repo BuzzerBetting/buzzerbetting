@@ -9058,7 +9058,21 @@ function renderDogsTable(rows,summary){
     <!-- Lineup fair odds market selector -->
     <div id="lineup-mkt-selector" style="display:none;margin-bottom:16px">
       <div class="card" style="padding:14px 20px">
-        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;font-weight:600">Show fair odds by method</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:600">Show fair odds by method</div>
+          <div style="position:relative" id="fair-odds-source-wrap">
+            <button onclick="toggleFairOddsSourceMenu()" style="display:flex;align-items:center;gap:6px;background:var(--surface2);border:.5px solid var(--border);border-radius:var(--radius);padding:6px 12px;font-size:12px;font-family:inherit;color:var(--text);cursor:pointer;white-space:nowrap">
+              Fair Odds Source: <span id="fair-odds-source-label" style="font-weight:700;color:var(--brand)"></span>
+              <i class="ti ti-chevron-down" style="font-size:12px"></i>
+            </button>
+            <div id="fair-odds-source-menu" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--surface);border:.5px solid var(--border);border-radius:var(--radius);box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:20;min-width:160px;overflow:hidden">
+              <button class="fos-opt" onclick="selectFairOddsSource('bfex')" style="display:block;width:100%;text-align:left;padding:9px 14px;background:none;border:none;font-size:13px;font-family:inherit;color:var(--text);cursor:pointer">BFEX</button>
+              <button class="fos-opt" onclick="selectFairOddsSource('bb')" style="display:block;width:100%;text-align:left;padding:9px 14px;background:none;border:none;font-size:13px;font-family:inherit;color:var(--text);cursor:pointer">BookieBashing</button>
+              <button class="fos-opt" onclick="selectFairOddsSource('oc')" style="display:block;width:100%;text-align:left;padding:9px 14px;background:none;border:none;font-size:13px;font-family:inherit;color:var(--text);cursor:pointer">Oddschecker</button>
+            </div>
+          </div>
+        </div>
+        <div id="fair-odds-source-note" style="display:none;font-size:12px;color:var(--amber);margin-bottom:10px"></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap" id="mkt-step1-btns">
           <button class="mkt-btn" onclick="selectLineupMarket('goal')">Goal</button>
           <button class="mkt-btn" onclick="selectLineupMarket('shot')">Shot</button>
@@ -9218,14 +9232,16 @@ async function openMatch(matchId, home, away, leagueName, isIntl, started, finis
   document.getElementById('match-detail').style.display='';
   document.getElementById('player-panel').style.display='none';
   document.getElementById('lineups-wrap').innerHTML='';
-  bbMatchOdds=null;lineupMarketType=null;lineupMethodKey=null;
+  bbMatchOdds=null;bfexMatchOdds=null;lineupMarketType=null;lineupMethodKey=null;
   lineupStatsCache={};lineupPlayersAll=[];currentMatchEventId=matchId;
+  currentMatchHome=home;currentMatchAway=away;
   const _lms=document.getElementById('lineup-mkt-selector');
   if(_lms)_lms.style.display='none';
   const _s2=document.getElementById('mkt-step2-btns');
   if(_s2){_s2.style.display='none';_s2.innerHTML='';}
   document.querySelectorAll('#mkt-step1-btns .mkt-btn').forEach(b=>b.classList.remove('active'));
-  fetchBBOdds(matchId, home, away);
+  updateFairOddsSourceUI();
+  loadSourceOdds();
   document.getElementById('match-header').innerHTML=`
     <div class="card" style="padding:16px 20px">
       <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">${leagueName}</div>
@@ -10344,8 +10360,12 @@ function renderCEVResults(home, away, data) {
   resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-let bbMatchOdds=null,lineupMarketType=null,lineupMethodKey=null;
+let bbMatchOdds=null,bfexMatchOdds=null,lineupMarketType=null,lineupMethodKey=null;
 let lineupStatsCache={},lineupPlayersAll=[],currentMatchEventId=null;
+let currentMatchHome=null,currentMatchAway=null;
+
+const FAIR_ODDS_SOURCE_LABELS={bb:'BookieBashing',bfex:'BFEX',oc:'Oddschecker'};
+let fairOddsSource=localStorage.getItem('bb_fair_odds_source')||'bb';
 
 async function fetchBBOdds(eventId, home, away){
   try{
@@ -10358,31 +10378,116 @@ async function fetchBBOdds(eventId, home, away){
   }catch(e){}
 }
 
-function getBBPlayerOdds(playerName){
-  if(!bbMatchOdds)return null;
-  const norm=n=>(n||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+async function fetchBfexOdds(home, away){
+  bfexMatchOdds=null;
+  if(!home||!away)return;
+  try{
+    const r=await fetch(`/.netlify/functions/betfair-proxy?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`);
+    const d=await r.json();
+    if(!d.ok||!d.markets)return;
+    const byName={};
+    for(const[mktName,mkt]of Object.entries(d.markets)){
+      const name=mktName.toLowerCase();
+      const isAGS=name.includes('to score')&&!name.includes('first')&&!name.includes('hat');
+      const isSOT=name.includes('shots on target');
+      if(!isAGS&&!isSOT)continue;
+      for(const p of(mkt.players??[])){
+        if(!p.name||!p.back)continue;
+        if(!byName[p.name])byName[p.name]={name:p.name,ags:null,sot:null};
+        if(isAGS&&(byName[p.name].ags==null||p.back<byName[p.name].ags))byName[p.name].ags=p.back;
+        if(isSOT&&(byName[p.name].sot==null||p.back<byName[p.name].sot))byName[p.name].sot=p.back;
+      }
+    }
+    bfexMatchOdds=Object.values(byName);
+  }catch(e){}
+}
+
+// Shared fuzzy name matcher — FotMob lineup names vs a source's odds list (BB or BFEX
+// use the same {name, ...} shape). Last names must match (or be a 1-char typo away)
+// before anything else, then at least one other word overlaps.
+function findPlayerInOddsList(playerName, list){
+  if(!list)return null;
+  const norm=n=>(n||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
   const na=norm(playerName);
   const wa=na.split(' ');
-  const lastA=wa[wa.length-1]; // last name of FotMob player
+  const lastA=wa[wa.length-1];
 
-  return bbMatchOdds.find(p=>{
+  return list.find(p=>{
     const nb=norm(p.name);
     if(na===nb)return true;
     const wb=nb.split(' ');
-    const lastB=wb[wb.length-1]; // last name of BB player
+    const lastB=wb[wb.length-1];
 
-    // Last names must match (or be very close) before anything else
     const pairMatch=(a,b)=>a.length>=4&&b.length>=4&&Math.abs(a.length-b.length)<=1&&
       [...a].filter((c,i)=>c!==b[i]).length<=1;
     const lastNamesMatch = lastA===lastB || pairMatch(lastA,lastB);
     if(!lastNamesMatch) return false;
 
-    // Last names match — now check at least one other word overlaps
     const firstA=wa.slice(0,-1);
     const firstB=wb.slice(0,-1);
     if(!firstA.length||!firstB.length) return true; // single name — last name match is enough
     return firstA.some(w=>w.length>1&&firstB.some(b=>b===w||pairMatch(w,b)));
   })||null;
+}
+
+function getBBPlayerOdds(playerName){ return findPlayerInOddsList(playerName, bbMatchOdds); }
+function getBfexPlayerOdds(playerName){ return findPlayerInOddsList(playerName, bfexMatchOdds); }
+
+// Dispatches to whichever source is currently selected. Oddschecker isn't wired up for
+// automatic per-fixture lineup odds yet (its market IDs are entered manually elsewhere
+// in the Calculator), so it deliberately returns nothing rather than pretending.
+function getSourcePlayerOdds(playerName){
+  if(fairOddsSource==='bfex')return getBfexPlayerOdds(playerName);
+  if(fairOddsSource==='bb')return getBBPlayerOdds(playerName);
+  return null;
+}
+
+async function loadSourceOdds(){
+  if(fairOddsSource==='bb'){
+    await fetchBBOdds(currentMatchEventId, currentMatchHome, currentMatchAway);
+  }else if(fairOddsSource==='bfex'){
+    await fetchBfexOdds(currentMatchHome, currentMatchAway);
+  }
+  // 'oc': nothing to fetch yet.
+}
+
+function toggleFairOddsSourceMenu(){
+  const m=document.getElementById('fair-odds-source-menu');
+  if(m)m.style.display=(m.style.display==='none'?'block':'none');
+}
+document.addEventListener('click',(e)=>{
+  const wrap=document.getElementById('fair-odds-source-wrap');
+  const menu=document.getElementById('fair-odds-source-menu');
+  if(wrap&&menu&&menu.style.display!=='none'&&!wrap.contains(e.target)) menu.style.display='none';
+});
+
+function updateFairOddsSourceUI(){
+  const lbl=document.getElementById('fair-odds-source-label');
+  if(lbl)lbl.textContent=FAIR_ODDS_SOURCE_LABELS[fairOddsSource];
+  document.querySelectorAll('#fair-odds-source-menu .fos-opt').forEach(b=>{
+    const active=b.getAttribute('onclick').includes(`'${fairOddsSource}'`);
+    b.style.fontWeight=active?'700':'400';
+    b.style.color=active?'var(--brand)':'var(--text)';
+  });
+  const note=document.getElementById('fair-odds-source-note');
+  if(note){
+    if(fairOddsSource==='oc'){
+      note.style.display='';
+      note.textContent='Oddschecker isn’t wired up for automatic lineup fair odds yet — pick BFEX or BookieBashing for now.';
+    }else{
+      note.style.display='none';
+    }
+  }
+}
+
+async function selectFairOddsSource(source){
+  fairOddsSource=source;
+  localStorage.setItem('bb_fair_odds_source', source);
+  const menu=document.getElementById('fair-odds-source-menu');
+  if(menu)menu.style.display='none';
+  updateFairOddsSourceUI();
+  await loadSourceOdds();
+  if(lineupMethodKey)loadAndShowLineupOdds();
 }
 
 function fillBBOdds(field,value){
@@ -10469,7 +10574,7 @@ function calcMethodOdds(stats,method,bbOdds){
 function updatePlayerOddsRow(player,method){
   const rowEl=document.getElementById(`odds-row-${player.id}`);
   if(!rowEl)return;
-  const statsData=lineupStatsCache[player.id],bbOdds=getBBPlayerOdds(player.name);
+  const statsData=lineupStatsCache[player.id],bbOdds=getSourcePlayerOdds(player.name);
   ['currentTeam','currentSeason','lastSeason','last2Seasons'].forEach(tf=>{
     const cell=rowEl.querySelector(`[data-tf="${tf}"]`);
     if(!cell)return;

@@ -114,23 +114,51 @@ exports.handler = async (event) => {
     body: JSON.stringify({ ok: false, error: 'home and away required' })
   };
 
+  // Betfair's own event names are often abbreviated ("Man Utd" vs our "Man United"),
+  // so a literal "home v away" textQuery can miss real matches. Search on the home
+  // team alone (a much broader net) and fuzzy-match both teams client-side instead.
+  function norm(n) {
+    return (n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim()
+      .replace(/\butd\b/g, 'united'); // Betfair favours "Utd" \u2014 normalise so it matches "United"
+  }
+  function fuzzyTeamMatch(a, b) {
+    const na = norm(a), nb = norm(b);
+    if (!na || !nb) return false;
+    if (na === nb || nb.includes(na) || na.includes(nb)) return true;
+    // Word-overlap fallback: every word of the shorter name appears in the longer one
+    const wa = na.split(' '), wb = nb.split(' ');
+    const [shorter, longer] = wa.length <= wb.length ? [wa, nb] : [wb, na];
+    return shorter.filter(w => w.length > 1).every(w => longer.includes(w));
+  }
+
   try {
     const session = await getSessionToken();
 
     const events = await bfCall('listEvents', {
-      filter: { eventTypeIds: ['1'], textQuery: `${home} v ${away}` }
+      filter: { eventTypeIds: ['1'], textQuery: home }
     }, appKey, session);
 
-    if (!events?.length) return {
+    const match = (events || []).find(e => {
+      const parts = (e.event?.name || '').split(' v ');
+      if (parts.length !== 2) return false;
+      return (fuzzyTeamMatch(home, parts[0]) && fuzzyTeamMatch(away, parts[1])) ||
+             (fuzzyTeamMatch(away, parts[0]) && fuzzyTeamMatch(home, parts[1]));
+    });
+
+    if (!match) return {
       statusCode: 200, headers: CORS,
-      body: JSON.stringify({ ok: false, error: `Event not found: ${home} v ${away}` })
+      body: JSON.stringify({
+        ok: false, error: `Event not found: ${home} v ${away}`,
+        available: (events || []).slice(0, 15).map(e => e.event?.name)
+      })
     };
 
-    const eventId = events[0].event.id;
+    const eventId = match.event.id;
 
     const catalogue = await bfCall('listMarketCatalogue', {
       filter: { eventIds: [eventId], marketTypeCodes: ['TO_SCORE', 'SHOTS_ON_TARGET_P1'] },
-      marketProjection: ['RUNNER_DESCRIPTION', 'MARKET_NAME'],
+      marketProjection: ['RUNNER_DESCRIPTION'],
       maxResults: 10
     }, appKey, session);
 
