@@ -1,7 +1,6 @@
 // netlify/functions/betfair.js
 const https = require('https');
-const http = require('http');
-const url = require('url');
+const fs = require('fs');
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -9,36 +8,24 @@ const CORS = {
 };
 const BFEX_BASE = 'https://api.betfair.com/exchange/betting/rest/v1.0';
 
-function proxyFetch(targetUrl, options = {}) {
+// Certificate-based login (identitysso-cert) rather than the delayed-key interactive
+// login — avoids periodic re-login for a long-running process. Cert lives on the DO
+// server only; both files are gitignored/untracked, not part of the repo.
+const CERT = fs.readFileSync('/root/client-2048.crt');
+const KEY  = fs.readFileSync('/root/client-2048.key');
+
+function directFetch(targetUrl, options = {}) {
   return new Promise((resolve, reject) => {
-    const fixieUrl = process.env.FIXIE_URL;
-    const target = new url.URL(targetUrl);
-    let reqOptions;
-    if (fixieUrl) {
-      const proxy = new url.URL(fixieUrl);
-      const auth = Buffer.from(`${proxy.username}:${proxy.password}`).toString('base64');
-      reqOptions = {
-        hostname: proxy.hostname,
-        port: proxy.port || 80,
-        path: targetUrl,
-        method: options.method || 'GET',
-        headers: {
-          ...options.headers,
-          'Host': target.hostname,
-          'Proxy-Authorization': `Basic ${auth}`,
-        }
-      };
-    } else {
-      reqOptions = {
-        hostname: target.hostname,
-        port: target.port || (target.protocol === 'https:' ? 443 : 80),
-        path: target.pathname + target.search,
-        method: options.method || 'GET',
-        headers: options.headers || {}
-      };
-    }
-    const protocol = fixieUrl ? http : https;
-    const req = protocol.request(reqOptions, (res) => {
+    const u = new URL(targetUrl);
+    const reqOptions = {
+      hostname: u.hostname,
+      port: u.port || 443,
+      path: u.pathname + u.search,
+      method: options.method || 'GET',
+      headers: options.headers || {},
+      ...(options.cert ? { cert: options.cert, key: options.key } : {})
+    };
+    const req = https.request(reqOptions, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => resolve({
@@ -56,31 +43,34 @@ function proxyFetch(targetUrl, options = {}) {
 async function getSessionToken() {
   const username = process.env.BFEX_USERNAME;
   const password = process.env.BFEX_PASSWORD;
-  // Use delayed key for login — no cert required
-  const loginKey = process.env.BFEX_DELAY_KEY;
+  const appKey = process.env.BFEX_APP_KEY;
   if (!username || !password) throw new Error('BFEX_USERNAME or BFEX_PASSWORD not set');
-  if (!loginKey) throw new Error('BFEX_DELAY_KEY not set');
 
-  const res = await proxyFetch('https://identitysso.betfair.com/api/login', {
+  const body = `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+
+  const res = await directFetch('https://identitysso-cert.betfair.com/api/certlogin', {
     method: 'POST',
+    cert: CERT,
+    key: KEY,
     headers: {
-      'X-Application': loginKey,
+      'X-Application': appKey,
       'Content-Type': 'application/x-www-form-urlencoded',
-      'Accept': 'application/json'
+      'Content-Length': Buffer.byteLength(body)
     },
-    body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+    body
   });
+
   const text = await res.text();
   console.log('Login response:', text.substring(0, 300));
   let data;
   try { data = JSON.parse(text); }
   catch(e) { throw new Error('Login returned non-JSON: ' + text.substring(0, 200)); }
-  if (data.status !== 'SUCCESS') throw new Error(`Login failed: ${data.status} ${data.error||''}`);
-  return data.token;
+  if (data.loginStatus !== 'SUCCESS') throw new Error(`Login failed: ${data.loginStatus}`);
+  return data.sessionToken;
 }
 
 async function bfCall(method, params, appKey, session) {
-  const res = await proxyFetch(`${BFEX_BASE}/${method}/`, {
+  const res = await directFetch(`${BFEX_BASE}/${method}/`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -101,7 +91,6 @@ async function bfCall(method, params, appKey, session) {
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
 
-  // Live key for API calls
   const appKey = process.env.BFEX_APP_KEY;
   if (!appKey) return {
     statusCode: 200, headers: CORS,
@@ -120,7 +109,7 @@ exports.handler = async (event) => {
   function norm(n) {
     return (n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim()
-      .replace(/\butd\b/g, 'united'); // Betfair favours "Utd" \u2014 normalise so it matches "United"
+      .replace(/\butd\b/g, 'united'); // Betfair favours "Utd" — normalise so it matches "United"
   }
   function fuzzyTeamMatch(a, b) {
     const na = norm(a), nb = norm(b);
@@ -157,7 +146,7 @@ exports.handler = async (event) => {
     const eventId = match.event.id;
 
     const catalogue = await bfCall('listMarketCatalogue', {
-      filter: { eventIds: [eventId], marketTypeCodes: ['TO_SCORE', 'SHOTS_ON_TARGET_P1'] },
+      filter: { eventIds: [eventId], marketTypeCodes: ['TO_SCORE', 'SHOTS_ON_TARGET_P1', 'FIRST_GOAL_SCORER'] },
       marketProjection: ['RUNNER_DESCRIPTION'],
       maxResults: 10
     }, appKey, session);
@@ -184,11 +173,15 @@ exports.handler = async (event) => {
         if (runner.status !== 'ACTIVE') continue;
         const runnerMeta = meta.runners?.find(r => r.selectionId === runner.selectionId);
         const name = runnerMeta?.runnerName ?? `Runner ${runner.selectionId}`;
-        const bestBack = runner.ex?.availableToBack?.[0]?.price ?? null;
-        const lastTraded = runner.lastPriceTraded ?? null;
-        players.push({ name, back: bestBack, lastTraded });
+        players.push({
+          name,
+          totalMatched: runner.totalMatched ?? 0,
+          lastPriceTraded: runner.lastPriceTraded ?? null,
+          back: (runner.ex?.availableToBack ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
+          lay: (runner.ex?.availableToLay ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size }))
+        });
       }
-      players.sort((a, b) => (a.back||999) - (b.back||999));
+      players.sort((a, b) => (a.back[0]?.price || 999) - (b.back[0]?.price || 999));
       markets[meta.marketName] = { marketId: book.marketId, players };
     }
 

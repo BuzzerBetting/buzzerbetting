@@ -10392,10 +10392,11 @@ async function fetchBfexOdds(home, away){
       const isSOT=name.includes('shots on target');
       if(!isAGS&&!isSOT)continue;
       for(const p of(mkt.players??[])){
-        if(!p.name||!p.back)continue;
+        const back=Array.isArray(p.back)?p.back[0]?.price:p.back; // betfair.js returns top-3 back levels, not one number
+        if(!p.name||!back)continue;
         if(!byName[p.name])byName[p.name]={name:p.name,ags:null,sot:null};
-        if(isAGS&&(byName[p.name].ags==null||p.back<byName[p.name].ags))byName[p.name].ags=p.back;
-        if(isSOT&&(byName[p.name].sot==null||p.back<byName[p.name].sot))byName[p.name].sot=p.back;
+        if(isAGS&&(byName[p.name].ags==null||back<byName[p.name].ags))byName[p.name].ags=back;
+        if(isSOT&&(byName[p.name].sot==null||back<byName[p.name].sot))byName[p.name].sot=back;
       }
     }
     bfexMatchOdds=Object.values(byName);
@@ -10407,7 +10408,7 @@ async function fetchBfexOdds(home, away){
 // before anything else, then at least one other word overlaps.
 function findPlayerInOddsList(playerName, list){
   if(!list)return null;
-  const norm=n=>(n||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+  const norm=n=>(n||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
   const na=norm(playerName);
   const wa=na.split(' ');
   const lastA=wa[wa.length-1];
