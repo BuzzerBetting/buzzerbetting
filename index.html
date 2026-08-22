@@ -192,6 +192,9 @@ input::placeholder{color:var(--text3)}
 .odds-tf{font-size:11px;font-variant-numeric:tabular-nums;color:var(--green);font-weight:600;min-width:44px;text-align:right;padding-right:2px;white-space:nowrap}
 .odds-tf.loading{color:var(--text3);font-weight:400}
 .odds-tf.empty{color:var(--text3);font-weight:400}
+.odds-tf.conf-green{color:var(--green)}
+.odds-tf.conf-yellow{color:var(--amber)}
+.odds-tf.conf-red{color:var(--red)}
 .odds-tf-hdr{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;min-width:44px;text-align:right;padding-right:2px}
 </style>
 </head>
@@ -9057,7 +9060,7 @@ function renderDogsTable(rows,summary){
     <div id="match-status"></div>
     <!-- Lineup fair odds market selector -->
     <div id="lineup-mkt-selector" style="display:none;margin-bottom:16px">
-      <div class="card" style="padding:14px 20px">
+      <div class="card" style="padding:14px 20px;overflow:visible">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
           <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:600">Show fair odds by method</div>
           <div style="position:relative" id="fair-odds-source-wrap">
@@ -9065,14 +9068,21 @@ function renderDogsTable(rows,summary){
               Fair Odds Source: <span id="fair-odds-source-label" style="font-weight:700;color:var(--brand)"></span>
               <i class="ti ti-chevron-down" style="font-size:12px"></i>
             </button>
-            <div id="fair-odds-source-menu" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--surface);border:.5px solid var(--border);border-radius:var(--radius);box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:20;min-width:160px;overflow:hidden">
-              <button class="fos-opt" onclick="selectFairOddsSource('bfex')" style="display:block;width:100%;text-align:left;padding:9px 14px;background:none;border:none;font-size:13px;font-family:inherit;color:var(--text);cursor:pointer">BFEX</button>
-              <button class="fos-opt" onclick="selectFairOddsSource('bb')" style="display:block;width:100%;text-align:left;padding:9px 14px;background:none;border:none;font-size:13px;font-family:inherit;color:var(--text);cursor:pointer">BookieBashing</button>
-              <button class="fos-opt" onclick="selectFairOddsSource('oc')" style="display:block;width:100%;text-align:left;padding:9px 14px;background:none;border:none;font-size:13px;font-family:inherit;color:var(--text);cursor:pointer">Oddschecker</button>
+            <div id="fair-odds-source-menu" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--surface);border:.5px solid var(--border);border-radius:var(--radius);box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:20;min-width:130px;overflow:hidden">
+              <button class="fos-opt" onclick="selectFairOddsSource('bfex')" style="display:block;width:100%;text-align:left;padding:5px 10px;background:none;border:none;font-size:11.5px;font-family:inherit;color:var(--text);cursor:pointer">BFEX</button>
+              <button class="fos-opt" onclick="selectFairOddsSource('bb')" style="display:block;width:100%;text-align:left;padding:5px 10px;background:none;border:none;font-size:11.5px;font-family:inherit;color:var(--text);cursor:pointer">BookieBashing</button>
+              <button class="fos-opt" onclick="selectFairOddsSource('oc')" style="display:block;width:100%;text-align:left;padding:5px 10px;background:none;border:none;font-size:11.5px;font-family:inherit;color:var(--text);cursor:pointer">Oddschecker</button>
+              <button class="fos-opt" onclick="selectFairOddsSource('mixed')" style="display:block;width:100%;text-align:left;padding:5px 10px;background:none;border:none;font-size:11.5px;font-family:inherit;color:var(--text);cursor:pointer">Mixed</button>
             </div>
           </div>
         </div>
         <div id="fair-odds-source-note" style="display:none;font-size:12px;color:var(--amber);margin-bottom:10px"></div>
+        <div id="fair-odds-conf-key" style="display:none;align-items:center;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--text3);margin-bottom:10px">
+          <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block"></span>Green — high confidence (£500+ matched, tight spread)</span>
+          <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--amber);display:inline-block"></span>Orange — usable but thinner BFEX data</span>
+          <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--red);display:inline-block"></span>Red — BFEX unreliable, falling back to BookieBashing</span>
+        </div>
+        <div id="lineup-market-note" style="display:none;font-size:12px;color:var(--amber);margin-bottom:10px"></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap" id="mkt-step1-btns">
           <button class="mkt-btn" onclick="selectLineupMarket('goal')">Goal</button>
           <button class="mkt-btn" onclick="selectLineupMarket('shot')">Shot</button>
@@ -9240,6 +9250,8 @@ async function openMatch(matchId, home, away, leagueName, isIntl, started, finis
   const _s2=document.getElementById('mkt-step2-btns');
   if(_s2){_s2.style.display='none';_s2.innerHTML='';}
   document.querySelectorAll('#mkt-step1-btns .mkt-btn').forEach(b=>b.classList.remove('active'));
+  const _mktNote=document.getElementById('lineup-market-note');
+  if(_mktNote)_mktNote.style.display='none';
   updateFairOddsSourceUI();
   loadSourceOdds();
   document.getElementById('match-header').innerHTML=`
@@ -10364,7 +10376,7 @@ let bbMatchOdds=null,bfexMatchOdds=null,lineupMarketType=null,lineupMethodKey=nu
 let lineupStatsCache={},lineupPlayersAll=[],currentMatchEventId=null;
 let currentMatchHome=null,currentMatchAway=null;
 
-const FAIR_ODDS_SOURCE_LABELS={bb:'BookieBashing',bfex:'BFEX',oc:'Oddschecker'};
+const FAIR_ODDS_SOURCE_LABELS={bb:'BookieBashing',bfex:'BFEX',oc:'Oddschecker',mixed:'Mixed'};
 let fairOddsSource=localStorage.getItem('bb_fair_odds_source')||'bb';
 
 async function fetchBBOdds(eventId, home, away){
@@ -10385,6 +10397,10 @@ async function fetchBfexOdds(home, away){
     const r=await fetch(`/.netlify/functions/betfair-proxy?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`);
     const d=await r.json();
     if(!d.ok||!d.markets)return;
+    // Keep the full runner (totalMatched/lastPriceTraded/back/lay) per player rather than
+    // just the best-back price, so deriveBfexFair below can apply the same reliability
+    // criteria (liquidity, matched volume, spread) built for DDHH rather than trusting the
+    // raw best-back price blindly.
     const byName={};
     for(const[mktName,mkt]of Object.entries(d.markets)){
       const name=mktName.toLowerCase();
@@ -10392,14 +10408,19 @@ async function fetchBfexOdds(home, away){
       const isSOT=name.includes('shots on target');
       if(!isAGS&&!isSOT)continue;
       for(const p of(mkt.players??[])){
-        const back=Array.isArray(p.back)?p.back[0]?.price:p.back; // betfair.js returns top-3 back levels, not one number
-        if(!p.name||!back)continue;
-        if(!byName[p.name])byName[p.name]={name:p.name,ags:null,sot:null};
-        if(isAGS&&(byName[p.name].ags==null||back<byName[p.name].ags))byName[p.name].ags=back;
-        if(isSOT&&(byName[p.name].sot==null||back<byName[p.name].sot))byName[p.name].sot=back;
+        if(!p.name)continue;
+        if(!byName[p.name])byName[p.name]={name:p.name,agsRunner:null,sotRunner:null};
+        const entry=byName[p.name];
+        const back=p.back?.[0]?.price;
+        if(isAGS&&(!entry.agsRunner||(back&&back<entry.agsRunner.back?.[0]?.price)))entry.agsRunner=p;
+        if(isSOT&&(!entry.sotRunner||(back&&back<entry.sotRunner.back?.[0]?.price)))entry.sotRunner=p;
       }
     }
-    bfexMatchOdds=Object.values(byName);
+    bfexMatchOdds=Object.values(byName).map(e=>{
+      const ags=deriveBfexFair(e.agsRunner);
+      const sot=deriveBfexFair(e.sotRunner);
+      return {name:e.name, ags:ags.fair, agsConf:ags.confidence, sot:sot.fair, sotConf:sot.confidence};
+    });
   }catch(e){}
 }
 
@@ -10434,13 +10455,39 @@ function findPlayerInOddsList(playerName, list){
 function getBBPlayerOdds(playerName){ return findPlayerInOddsList(playerName, bbMatchOdds); }
 function getBfexPlayerOdds(playerName){ return findPlayerInOddsList(playerName, bfexMatchOdds); }
 
+// Mixed: per stat (AGS/SOT), use BFEX whenever deriveBfexFair rates it green or yellow;
+// otherwise (red, or no BFEX runner at all) fall back to BookieBashing and flag it red so
+// the fallback is visible rather than silent.
+function getMixedPlayerOdds(playerName){
+  const bfex=getBfexPlayerOdds(playerName);
+  const bb=getBBPlayerOdds(playerName);
+  const pick=(bfexVal,bfexConf,bbVal)=>{
+    if(bfexVal!=null&&(bfexConf==='green'||bfexConf==='yellow'))return{val:bfexVal,conf:bfexConf};
+    if(bbVal!=null)return{val:bbVal,conf:'red'};
+    return{val:null,conf:null};
+  };
+  const ags=pick(bfex?.ags,bfex?.agsConf,bb?.ags);
+  const sot=pick(bfex?.sot,bfex?.sotConf,bb?.sot);
+  if(ags.val==null&&sot.val==null)return null;
+  return{ags:ags.val,agsConf:ags.conf,sot:sot.val,sotConf:sot.conf};
+}
+
 // Dispatches to whichever source is currently selected. Oddschecker isn't wired up for
 // automatic per-fixture lineup odds yet (its market IDs are entered manually elsewhere
 // in the Calculator), so it deliberately returns nothing rather than pretending.
 function getSourcePlayerOdds(playerName){
   if(fairOddsSource==='bfex')return getBfexPlayerOdds(playerName);
   if(fairOddsSource==='bb')return getBBPlayerOdds(playerName);
+  if(fairOddsSource==='mixed')return getMixedPlayerOdds(playerName);
   return null;
+}
+
+// Which confidence colour (if any) applies to a given method's derived value — goal and
+// shots methods are both derived from the AGS fair price, SOT methods from the SOT fair
+// price, so the cell inherits whichever stat actually fed the calculation.
+function getMethodConfidence(method,bbOdds){
+  if(!bbOdds)return null;
+  return method.includes('sot')?(bbOdds.sotConf||null):(bbOdds.agsConf||null);
 }
 
 async function loadSourceOdds(){
@@ -10448,6 +10495,11 @@ async function loadSourceOdds(){
     await fetchBBOdds(currentMatchEventId, currentMatchHome, currentMatchAway);
   }else if(fairOddsSource==='bfex'){
     await fetchBfexOdds(currentMatchHome, currentMatchAway);
+  }else if(fairOddsSource==='mixed'){
+    await Promise.all([
+      fetchBBOdds(currentMatchEventId, currentMatchHome, currentMatchAway),
+      fetchBfexOdds(currentMatchHome, currentMatchAway)
+    ]);
   }
   // 'oc': nothing to fetch yet.
 }
@@ -10479,6 +10531,8 @@ function updateFairOddsSourceUI(){
       note.style.display='none';
     }
   }
+  const key=document.getElementById('fair-odds-conf-key');
+  if(key)key.style.display=(fairOddsSource==='bfex'||fairOddsSource==='mixed')?'flex':'none';
 }
 
 async function selectFairOddsSource(source){
@@ -10521,6 +10575,15 @@ function selectLineupMarket(type){
   step2.style.display='flex';
   document.querySelectorAll('.lineup-odds-header').forEach(el=>el.style.display='none');
   document.querySelectorAll('[id^="odds-row-"] .odds-tf').forEach(el=>el.style.display='none');
+  const marketNote=document.getElementById('lineup-market-note');
+  if(marketNote){
+    if(type==='shot'){
+      marketNote.style.display='';
+      marketNote.textContent='Betfair Exchange doesn’t list a Shot market — these fair odds can’t be sourced from BFEX.';
+    }else{
+      marketNote.style.display='none';
+    }
+  }
 }
 
 function selectLineupMethod(key){
@@ -10584,7 +10647,9 @@ function updatePlayerOddsRow(player,method){
     if(!tfStats){cell.textContent='—';cell.className='odds-tf empty';return;}
     const odds=calcMethodOdds(tfStats,method,bbOdds);
     if(odds&&odds>1&&isFinite(odds)){
-      cell.textContent=odds.toFixed(2);cell.className='odds-tf';
+      const conf=getMethodConfidence(method,bbOdds);
+      const confCls=conf==='green'?' conf-green':conf==='yellow'?' conf-yellow':conf==='red'?' conf-red':'';
+      cell.textContent=odds.toFixed(2);cell.className='odds-tf'+confCls;
     }else{
       cell.textContent='0';cell.className='odds-tf empty';
     }
