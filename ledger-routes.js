@@ -1237,6 +1237,102 @@ router.post('/bets/:id/legs', (req, res) => {
   } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
 });
 
+// DELETE /api/ledger/bets/:id/legs/:legId — removes one account from a multi-account bet
+// (e.g. the wrong account was accidentally included when placing). Reverses exactly that
+// leg's effect on its account's balance — the same open-vs-settled reversal math used by
+// DELETE /bets/:id — then rescales the bet's total_stake/pl/EV down to match the remaining
+// legs. Refuses to remove a bet's only leg — that's what "Delete bet" is for.
+router.delete('/bets/:id/legs/:legId', (req, res) => {
+  const removeLeg = db.transaction((betId, legId) => {
+    const bet = db.prepare(`SELECT * FROM bets WHERE id = ?`).get(betId);
+    if (!bet) throw new Error('Bet not found');
+    const legs = db.prepare(`SELECT * FROM bet_legs WHERE bet_id = ?`).all(betId);
+    const leg = legs.find(l => l.id == legId);
+    if (!leg) throw new Error('Leg not found on this bet');
+    if (legs.length <= 1) throw new Error('This is the only account on this bet — delete the whole bet instead.');
+
+    const freeBet = hasNoRealStake(bet.bet_type, bet.fields);
+    if (bet.result === 'open') {
+      if (!freeBet) {
+        db.prepare(`UPDATE accounts SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`)
+          .run(leg.stake, leg.account_id);
+      }
+    } else {
+      // Net effect of creation-deduction + settlement-payout was just the P/L (same reasoning
+      // as DELETE /bets/:id) — reversing this one leg only needs to undo its own leg_pl.
+      db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`)
+        .run(leg.leg_pl || 0, leg.account_id);
+    }
+
+    db.prepare(`DELETE FROM bet_legs WHERE id = ?`).run(leg.id);
+
+    const remainingLegs = legs.filter(l => l.id != legId);
+    const oldStake = bet.total_stake;
+    const newStake = +remainingLegs.reduce((s, l) => s + l.stake, 0).toFixed(2);
+    const newPl = bet.result === 'open' ? 0 : +remainingLegs.reduce((s, l) => s + (l.leg_pl || 0), 0).toFixed(2);
+    const ratio = oldStake > 0 ? newStake / oldStake : 1;
+
+    const fields = JSON.parse(bet.fields);
+    const stakeKey = Object.keys(fields).find(k => k.toLowerCase().replace(/[^a-z]/g,'') === 'stake' || k.toLowerCase().replace(/[^a-z]/g,'') === 'totalstake');
+    if (stakeKey) fields[stakeKey] = newStake;
+    const evKey = ('EV £' in fields) ? 'EV £' : ('EV' in fields ? 'EV' : null);
+    if (evKey && typeof fields[evKey] === 'number') fields[evKey] = +(fields[evKey] * ratio).toFixed(2);
+
+    db.prepare(`UPDATE bets SET total_stake = ?, pl = ?, fields = ? WHERE id = ?`).run(newStake, newPl, JSON.stringify(fields), betId);
+  });
+
+  try {
+    removeLeg(req.params.id, req.params.legId);
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
+// PATCH /api/ledger/bets/:id/legs/:legId/reassign — body: { account_id }
+// Corrects a leg logged against the wrong account (e.g. D086 was typed but D087 was actually
+// used) — moves the leg to the new account, reversing whatever balance effect it currently
+// has on the old account and applying the equivalent effect to the new one. Stake/P&L/EV on
+// the bet itself are untouched — only which account they're attributed to changes. The new
+// account must be on the same bookie (the actual bet was placed with that bookie) and not
+// already have its own leg on this bet.
+router.patch('/bets/:id/legs/:legId/reassign', (req, res) => {
+  const reassign = db.transaction((betId, legId, newAccountId) => {
+    const bet = db.prepare(`SELECT * FROM bets WHERE id = ?`).get(betId);
+    if (!bet) throw new Error('Bet not found');
+    const legs = db.prepare(`SELECT * FROM bet_legs WHERE bet_id = ?`).all(betId);
+    const leg = legs.find(l => l.id == legId);
+    if (!leg) throw new Error('Leg not found on this bet');
+
+    const oldAccount = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(leg.account_id);
+    const newAccount = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(newAccountId);
+    if (!newAccount) throw new Error('New account not found');
+    if (newAccount.id === oldAccount.id) throw new Error('That is already the account on this leg.');
+    if (newAccount.bookie !== oldAccount.bookie) throw new Error(`New account must be on ${oldAccount.bookie} — same as the original.`);
+    if (legs.some(l => l.id != legId && l.account_id === newAccount.id)) throw new Error('That account already has a leg on this bet.');
+
+    const freeBet = hasNoRealStake(bet.bet_type, bet.fields);
+    if (bet.result === 'open') {
+      if (!freeBet) {
+        db.prepare(`UPDATE accounts SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`).run(leg.stake, oldAccount.id);
+        db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`).run(leg.stake, newAccount.id);
+      }
+    } else {
+      // Same net-effect-is-just-the-P/L reasoning as the delete path — reverse it off the old
+      // account, apply the same figure to the new one.
+      db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`).run(leg.leg_pl || 0, oldAccount.id);
+      db.prepare(`UPDATE accounts SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`).run(leg.leg_pl || 0, newAccount.id);
+    }
+
+    db.prepare(`UPDATE bet_legs SET account_id = ? WHERE id = ?`).run(newAccount.id, leg.id);
+  });
+
+  try {
+    const newAccountId = req.body.account_id;
+    if (!newAccountId) return res.status(400).json({ ok: false, error: 'account_id required' });
+    reassign(req.params.id, req.params.legId, newAccountId);
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
 // PATCH /api/ledger/bets/:id/settle — body: { result: 'won'|'lost'|'void', pl: number }
 // pl is the total net profit/loss for the whole bet (negative for a loss, matching your
 // existing sheet convention where P/L already nets out the stake).
