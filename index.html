@@ -4109,10 +4109,16 @@ function renderAccountsGrid() {
   } else {
     const byBookie = {};
     filtered.forEach(a => { (byBookie[a.bookie] = byBookie[a.bookie] || []).push(a); });
-    groups = Object.keys(byBookie).sort().map(bookie => ({
-      header: escapeHtml(bookie),
-      cells: sortAccountsForGrid(byBookie[bookie]).map(a => cellHtml(a, a.account_id || '—')).join('')
-    }));
+    groups = Object.keys(byBookie).sort().map(bookie => {
+      const n = byBookie[bookie].length;
+      return {
+        // Count reflects whatever's currently filtered in (Status filter above) — with
+        // Status set to "All" this is every account ever entered for that bookie, live or
+        // not, which is what a full bankroll check needs.
+        header: `${escapeHtml(bookie)}<div style="font-weight:400;color:var(--text3);font-size:10.5px;margin-top:2px">(${n} account${n===1?'':'s'})</div>`,
+        cells: sortAccountsForGrid(byBookie[bookie]).map(a => cellHtml(a, a.account_id || '—')).join('')
+      };
+    });
   }
   wrap.innerHTML = `<div class="live-accts-header-row">${groups.map(g => `<div class="live-accts-col-header">${g.header}</div>`).join('')}</div>` +
     `<div style="display:flex;gap:12px;align-items:flex-start">${groups.map(g => `<div class="live-accts-col">${g.cells}</div>`).join('')}</div>`;
