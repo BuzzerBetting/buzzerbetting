@@ -67,4 +67,65 @@ app.get('/api/oc-fgs-find', async (req, res) => {
   res.json({ ok: false, error: 'FGS market not found' });
 });
 
+// GET /api/oc-cache — reads pre-scraped AGS/FGS data written by oc-scraper/ (a Python
+// service, see oc-scraper/README.md, running independently under its own systemd timer every
+// 10 minutes — this endpoint just reads whatever it last wrote, never scrapes live itself).
+// Much more reliable than /api/oc-fgs-find above, which live-scrapes on every call with no
+// Cloudflare cookie handling at all.
+//   ?match_id=123        — exact match on the FotMob match id oc-scraper's CSV feed used
+//   ?home=X&away=Y        — fallback fuzzy team-name match against the cached slug
+//   (no params)            — lists every match currently cached, for browsing/debugging
+const fs = require('fs');
+const OC_CACHE_DIR = require('path').join(__dirname, 'oc-scraper', 'data', 'oc_cache');
+
+function ocNorm(n) {
+  return (n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function ocFuzzyMatch(a, b) {
+  const na = ocNorm(a), nb = ocNorm(b);
+  if (!na || !nb) return false;
+  return na === nb || nb.includes(na) || na.includes(nb);
+}
+function readOcCacheFiles() {
+  if (!fs.existsSync(OC_CACHE_DIR)) return [];
+  return fs.readdirSync(OC_CACHE_DIR)
+    .filter(f => f.endsWith('.json'))
+    .map(f => {
+      try { return JSON.parse(fs.readFileSync(require('path').join(OC_CACHE_DIR, f), 'utf8')); }
+      catch (e) { return null; }
+    })
+    .filter(Boolean);
+}
+
+app.get('/api/oc-cache', (req, res) => {
+  const { match_id, home, away } = req.query;
+  const entries = readOcCacheFiles();
+
+  if (!match_id && !home && !away) {
+    return res.json({
+      ok: true,
+      count: entries.length,
+      matches: entries.map(e => ({ match_slug: e.match_slug, match_id: e.match_id || null, market_types: e.market_types, timestamp: e.timestamp }))
+    });
+  }
+
+  let hit = null;
+  if (match_id) {
+    hit = entries.find(e => String(e.match_id) === String(match_id));
+  }
+  if (!hit && home && away) {
+    // Slugs look like "arsenal-v-chelsea" — split on "-v-" and fuzzy-match each side.
+    hit = entries.find(e => {
+      const parts = (e.match_slug || '').split('-v-');
+      if (parts.length !== 2) return false;
+      const [a, b] = parts.map(p => p.replace(/-/g, ' '));
+      return (ocFuzzyMatch(home, a) && ocFuzzyMatch(away, b)) || (ocFuzzyMatch(away, a) && ocFuzzyMatch(home, b));
+    });
+  }
+
+  if (!hit) return res.json({ ok: false, error: 'No cached AGS/FGS data for that match yet — either not scraped, or oc-scraper found no AGS/FGS markets for it.' });
+  res.json({ ok: true, ...hit });
+});
+
 app.listen(PORT, () => console.log(`BuzzerBetting server running on port ${PORT}`));

@@ -1,0 +1,13 @@
+node_modules/
+package-lock.json
+ledger.db
+ledger.db-shm
+ledger.db-wal
+
+# oc-scraper (Python subproject)
+oc-scraper/venv/
+oc-scraper/oc/__pycache__/
+oc-scraper/scripts/__pycache__/
+oc-scraper/oc/cookies.json
+oc-scraper/data/todays_matches.csv
+oc-scraper/data/oc_cache/
