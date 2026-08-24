@@ -2550,32 +2550,19 @@ input::placeholder{color:var(--text3)}
   <div id="calc-dogs" class="calc-view">
     <button class="back" onclick="backToCalcHub()"><i class="ti ti-arrow-left"></i> Calculators</button>
     <div class="sec-title">Greyhound top 2/3 (BFEX)</div>
-    <div class="note"><i class="ti ti-info-circle"></i> Rough fair-odds estimate for top 2 / top 3 / win-without-favourite markets (e.g. Coral), built from live Betfair lay prices via the Harville placement model. A guide for spotting good prices, not gospel — tweakable later.</div>
+    <div class="note"><i class="ti ti-info-circle"></i> Rough fair-odds estimate for top 2 / top 3 / win-without-favourite markets (e.g. Coral), built from live Betfair lay prices via the Harville placement model. A guide for spotting good prices, not gospel — tweakable later. The next 5 races load automatically below — pick anything further out from the list.</div>
 
-    <div class="card">
+    <div class="card wide">
       <div class="card-h" style="display:flex;justify-content:space-between;align-items:center">
         <span>Today's races</span>
         <button class="add-btn" onclick="loadDogRaces()"><i class="ti ti-refresh"></i> Refresh</button>
       </div>
-      <div id="dogs-races-list" style="padding:8px 0;max-height:340px;overflow-y:auto">
+      <div id="dogs-races-list" style="padding:8px 0;max-height:280px;overflow-y:auto">
         <div style="padding:16px 20px;color:var(--text3);font-size:13px">Click Refresh to load today's races.</div>
       </div>
     </div>
 
-    <div id="dogs-race-card" class="card" style="display:none">
-      <div class="card-h" id="dogs-race-title">—</div>
-      <div style="overflow-x:auto">
-        <table class="dt" style="min-width:760px">
-          <thead><tr>
-            <th>Trap</th><th>Dog</th>
-            <th class="r">Back</th><th class="r">Lay</th><th class="r">Last traded</th>
-            <th class="r">Win fair</th><th class="r">Top 2 fair</th><th class="r">Top 3 fair</th><th class="r">WWF fair</th>
-          </tr></thead>
-          <tbody id="dogs-runners-body"></tbody>
-        </table>
-      </div>
-      <div id="dogs-race-msg" style="padding:12px 20px;font-size:12.5px;color:var(--text3)"></div>
-    </div>
+    <div id="dogs-race-cards"></div>
   </div>
 
 </div><!-- /view-calculators -->
@@ -7524,10 +7511,13 @@ function computeGreyhoundFairOdds(runners) {
   return result;
 }
 
+const DOGS_AUTO_LOAD_COUNT = 5;
+
 async function loadDogRaces() {
   const listEl = document.getElementById('dogs-races-list');
+  const cardsEl = document.getElementById('dogs-race-cards');
   listEl.innerHTML = '<div style="padding:16px 20px;color:var(--text2);font-size:13px">Loading…</div>';
-  document.getElementById('dogs-race-card').style.display = 'none';
+  cardsEl.innerHTML = '';
   try {
     const res = await fetch('/.netlify/functions/betfair-dogs-proxy?action=races');
     const d = await res.json();
@@ -7540,32 +7530,57 @@ async function loadDogRaces() {
         <span>${escapeHtml(r.venue)}</span><span style="color:var(--text2);font-size:12.5px">${timeStr}</span>
       </div>`;
     }).join('');
+    // Races come back sorted soonest-first — auto-show the next 5 without waiting for a click.
+    d.races.slice(0, DOGS_AUTO_LOAD_COUNT).forEach(r => loadDogRace(r.marketId));
   } catch (e) {
     listEl.innerHTML = '<div style="padding:16px 20px;color:var(--red);font-size:13px">Network error loading races.</div>';
   }
 }
 
+// Creates the card for a race the first time it's needed (auto-loaded or clicked from the
+// list) — reused on a re-click so the same race never duplicates onto the page twice.
+function ensureDogRaceCard(marketId) {
+  let card = document.getElementById('dogs-race-card-'+marketId);
+  if (card) return card;
+  card = document.createElement('div');
+  card.className = 'card wide';
+  card.id = 'dogs-race-card-'+marketId;
+  card.style.marginTop = '16px';
+  card.innerHTML = `
+    <div class="card-h" id="dogs-race-title-${marketId}">Loading…</div>
+    <div style="overflow-x:auto">
+      <table class="dt" style="width:100%">
+        <thead><tr>
+          <th>Trap</th><th>Dog</th>
+          <th class="r">Back</th><th class="r">Lay</th><th class="r">Last traded</th>
+          <th class="r">Win fair</th><th class="r">Top 2 fair</th><th class="r">Top 3 fair</th><th class="r">WWF fair</th>
+        </tr></thead>
+        <tbody id="dogs-runners-body-${marketId}"></tbody>
+      </table>
+    </div>
+    <div id="dogs-race-msg-${marketId}" style="padding:12px 20px;font-size:12.5px;color:var(--text3)"></div>`;
+  document.getElementById('dogs-race-cards').appendChild(card);
+  return card;
+}
+
 async function loadDogRace(marketId) {
-  const card = document.getElementById('dogs-race-card');
-  const body = document.getElementById('dogs-runners-body');
-  const msgEl = document.getElementById('dogs-race-msg');
-  card.style.display = 'block';
-  document.getElementById('dogs-race-title').textContent = 'Loading…';
-  body.innerHTML = '';
-  msgEl.textContent = '';
+  const card = ensureDogRaceCard(marketId);
+  const titleEl = document.getElementById('dogs-race-title-'+marketId);
+  const body = document.getElementById('dogs-runners-body-'+marketId);
+  const msgEl = document.getElementById('dogs-race-msg-'+marketId);
   card.scrollIntoView({behavior:'smooth', block:'start'});
   try {
     const res = await fetch('/.netlify/functions/betfair-dogs-proxy?action=race&marketId='+encodeURIComponent(marketId));
     const d = await res.json();
     if (!d.ok || !d.race) {
-      document.getElementById('dogs-race-title').textContent = 'Could not load race';
+      titleEl.textContent = 'Could not load race';
       msgEl.innerHTML = `<span style="color:var(--red)">${escapeHtml(d.error||'Unknown error')}</span>`;
       return;
     }
     const race = d.race;
     const t = new Date(race.startTime);
     const timeStr = isNaN(t) ? '' : t.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
-    document.getElementById('dogs-race-title').textContent = `${race.venue} — ${timeStr}`;
+    titleEl.textContent = `${race.venue} — ${timeStr}`;
 
     const computed = computeGreyhoundFairOdds(race.runners || []);
     body.innerHTML = computed.map(r => `<tr${r.isFavourite ? ' style="background:var(--amber-bg)"' : ''}>
@@ -7583,7 +7598,7 @@ async function loadDogRace(marketId) {
       ? '<span style="color:var(--amber)">Not enough runners with a live lay price to compute fair odds yet.</span>'
       : `${(race.runners||[]).length} runners · fair odds from live Betfair lay prices, Harville placement model — rough estimate only.`;
   } catch (e) {
-    document.getElementById('dogs-race-title').textContent = 'Network error';
+    titleEl.textContent = 'Network error';
   }
 }
 function showTracker(name){document.getElementById('tracker-hub').style.display='none';document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.getElementById('tracker-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='overall')openOverallSection();}
