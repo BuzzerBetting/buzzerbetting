@@ -7439,8 +7439,8 @@ async function loadBtOpenTable() {
   } catch (e) { tableWrap.innerHTML = '<div style="padding:24px;color:var(--red);font-size:13px">Could not load open bets.</div>'; }
 }
 
-function showCalc(name){document.getElementById('calc-hub').style.display='none';document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='dutch')initDutch();if(name==='arb')initArb();if(name==='gsm')initGSM();if(name==='kelly')initKelly();if(name==='kellycorr')initKellyCorr();if(name==='dogs')loadDogRaces();}
-function backToCalcHub(){document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
+function showCalc(name){if(name!=='dogs'&&typeof stopDogsAutoRefresh==='function')stopDogsAutoRefresh();document.getElementById('calc-hub').style.display='none';document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='dutch')initDutch();if(name==='arb')initArb();if(name==='gsm')initGSM();if(name==='kelly')initKelly();if(name==='kellycorr')initKellyCorr();if(name==='dogs')loadDogRaces();}
+function backToCalcHub(){if(typeof stopDogsAutoRefresh==='function')stopDogsAutoRefresh();document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
 
 // ==================== GREYHOUND TOP 2/3 (BFEX) ====================
 // Fair odds for top-2/top-3/win-without-favourite, derived from live Betfair lay prices via
@@ -7512,8 +7512,12 @@ function computeGreyhoundFairOdds(runners) {
 }
 
 const DOGS_AUTO_LOAD_COUNT = 5;
+const DOGS_REFRESH_MS = 10000;
+let dogsAutoMarketIds = [];
+let dogsRefreshTimer = null;
 
 async function loadDogRaces() {
+  stopDogsAutoRefresh();
   const listEl = document.getElementById('dogs-races-list');
   const cardsEl = document.getElementById('dogs-race-cards');
   listEl.innerHTML = '<div style="padding:16px 20px;color:var(--text2);font-size:13px">Loading…</div>';
@@ -7526,15 +7530,33 @@ async function loadDogRaces() {
     listEl.innerHTML = d.races.map(r => {
       const t = new Date(r.startTime);
       const timeStr = isNaN(t) ? '' : t.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
-      return `<div style="padding:10px 20px;border-bottom:0.5px solid var(--border);display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="loadDogRace('${r.marketId}')">
+      return `<div style="padding:10px 20px;border-bottom:0.5px solid var(--border);display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="loadDogRace('${r.marketId}', {scroll:true})">
         <span>${escapeHtml(r.venue)}</span><span style="color:var(--text2);font-size:12.5px">${timeStr}</span>
       </div>`;
     }).join('');
-    // Races come back sorted soonest-first — auto-show the next 5 without waiting for a click.
-    d.races.slice(0, DOGS_AUTO_LOAD_COUNT).forEach(r => loadDogRace(r.marketId));
+    // Races come back sorted soonest-first — auto-show the next 5 without waiting for a click,
+    // then keep those exact 5 refreshing every 10s so prices stay live without re-scrolling.
+    dogsAutoMarketIds = d.races.slice(0, DOGS_AUTO_LOAD_COUNT).map(r => r.marketId);
+    dogsAutoMarketIds.forEach(id => loadDogRace(id));
+    startDogsAutoRefresh();
   } catch (e) {
     listEl.innerHTML = '<div style="padding:16px 20px;color:var(--red);font-size:13px">Network error loading races.</div>';
   }
+}
+
+function startDogsAutoRefresh() {
+  stopDogsAutoRefresh();
+  dogsRefreshTimer = setInterval(() => {
+    // Self-cancelling safety net — stops itself the moment this view isn't on screen anymore,
+    // regardless of which navigation path was used to leave it.
+    const view = document.getElementById('calc-dogs');
+    if (!view || view.style.display === 'none') { stopDogsAutoRefresh(); return; }
+    dogsAutoMarketIds.forEach(id => loadDogRace(id));
+  }, DOGS_REFRESH_MS);
+}
+
+function stopDogsAutoRefresh() {
+  if (dogsRefreshTimer) { clearInterval(dogsRefreshTimer); dogsRefreshTimer = null; }
 }
 
 // Creates the card for a race the first time it's needed (auto-loaded or clicked from the
@@ -7563,12 +7585,14 @@ function ensureDogRaceCard(marketId) {
   return card;
 }
 
-async function loadDogRace(marketId) {
+async function loadDogRace(marketId, opts) {
   const card = ensureDogRaceCard(marketId);
   const titleEl = document.getElementById('dogs-race-title-'+marketId);
   const body = document.getElementById('dogs-runners-body-'+marketId);
   const msgEl = document.getElementById('dogs-race-msg-'+marketId);
-  card.scrollIntoView({behavior:'smooth', block:'start'});
+  // Only scroll on an explicit click from the races list — never on the initial auto-load of
+  // 5 or a background 10s refresh, both of which would otherwise yank the page around.
+  if (opts && opts.scroll) card.scrollIntoView({behavior:'smooth', block:'start'});
   try {
     const res = await fetch('/.netlify/functions/betfair-dogs-proxy?action=race&marketId='+encodeURIComponent(marketId));
     const d = await res.json();

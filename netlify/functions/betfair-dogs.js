@@ -162,6 +162,38 @@ async function getRace(marketId, appKey, session) {
   };
 }
 
+// The frontend polls this every 10s across up to 5 races at once (see the "auto-refresh"
+// calculator) — a fresh certlogin on every single call would mean ~5 logins every 10
+// seconds, which is wasteful and risks tripping Betfair's own rate limits. This process runs
+// long-lived on the DO server under PM2 (the only place this file's cert-based login can
+// actually run — see the module comment at the top), so a simple module-level cache is
+// enough: reuse one session across requests, only re-logging in once it's stale or Betfair
+// itself reports it's expired.
+let cachedSession = null; // { token, appKey, obtainedAt }
+const SESSION_TTL_MS = 3 * 60 * 60 * 1000; // conservative — real Betfair sessions last longer
+
+async function getCachedSessionToken(appKey) {
+  if (cachedSession && cachedSession.appKey === appKey && (Date.now() - cachedSession.obtainedAt) < SESSION_TTL_MS) {
+    return cachedSession.token;
+  }
+  const token = await getSessionToken(appKey);
+  cachedSession = { token, appKey, obtainedAt: Date.now() };
+  return token;
+}
+
+async function runAction(action, marketId, appKey, session) {
+  if (action === 'races') {
+    const races = await listRaces(appKey, session);
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, races }) };
+  }
+  if (action === 'race') {
+    if (!marketId) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'marketId required' }) };
+    const race = await getRace(marketId, appKey, session);
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, race }) };
+  }
+  return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'action must be "races" or "race"' }) };
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
 
@@ -174,21 +206,19 @@ exports.handler = async (event) => {
   const { action, marketId } = event.queryStringParameters || {};
 
   try {
-    const session = await getSessionToken(appKey);
-
-    if (action === 'races') {
-      const races = await listRaces(appKey, session);
-      return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, races }) };
+    const session = await getCachedSessionToken(appKey);
+    try {
+      return await runAction(action, marketId, appKey, session);
+    } catch (err) {
+      // Cached session actually expired server-side (Betfair's call, not our TTL guess) —
+      // invalidate it and retry once with a fresh login before giving up.
+      if (err.message === 'SESSION_EXPIRED') {
+        cachedSession = null;
+        const freshSession = await getCachedSessionToken(appKey);
+        return await runAction(action, marketId, appKey, freshSession);
+      }
+      throw err;
     }
-
-    if (action === 'race') {
-      if (!marketId) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'marketId required' }) };
-      const race = await getRace(marketId, appKey, session);
-      return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, race }) };
-    }
-
-    return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'action must be "races" or "race"' }) };
-
   } catch (err) {
     const expired = err.message === 'SESSION_EXPIRED';
     return {
