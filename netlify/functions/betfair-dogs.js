@@ -174,8 +174,10 @@ const SESSION_TTL_MS = 3 * 60 * 60 * 1000; // conservative — real Betfair sess
 
 async function getCachedSessionToken(appKey) {
   if (cachedSession && cachedSession.appKey === appKey && (Date.now() - cachedSession.obtainedAt) < SESSION_TTL_MS) {
+    console.log('[BF-dogs] reusing cached session, age', Math.round((Date.now()-cachedSession.obtainedAt)/1000)+'s');
     return cachedSession.token;
   }
+  console.log('[BF-dogs] logging in fresh (no cached session or expired)');
   const token = await getSessionToken(appKey);
   cachedSession = { token, appKey, obtainedAt: Date.now() };
   return token;
