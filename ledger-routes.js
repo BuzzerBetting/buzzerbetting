@@ -35,12 +35,21 @@ function hasNoRealStake(bet_type, fieldsJsonOrObj) {
   return isCasinoType(bet_type) || isFreeBetFields(fieldsJsonOrObj);
 }
 
+// How much of a Back & Lay leg's balance effect is actually "committed" at placement/
+// settlement time — a back leg commits its stake (same as every other bet type), but a lay
+// leg commits its *liability* (stake × (odds-1)), since that's the amount the exchange
+// account actually has locked up, not the lay stake itself. NULL role (every other bet
+// type) always falls through to the plain stake, so this is a no-op everywhere else.
+function legCommitted(leg) {
+  return leg.role === 'lay' ? leg.stake * (leg.odds - 1) : leg.stake;
+}
+
 // Mirrors the frontend's BET_TYPE_GROUPS, for server-side enforcement of the
 // Staff-can-only-use-Assistant restriction. Custom sheets aren't hardcoded here — their
 // group is looked up from custom_sheets.user_group instead.
 const HARDCODED_BUZZER_TYPES = [
   'Value', 'Keithbot', 'Dogs + Horses', 'BB Horse', 'BB Golf', 'American Props', 'Freeze',
-  'Ninja Golf BFEX', 'Corners', 'Offers (Personal)', 'Other Bets', 'Casino (Personal)'
+  'Ninja Golf BFEX', 'Corners', 'Offers (Personal)', 'Other Bets', 'Casino (Personal)', 'Back & Lay'
 ];
 const HARDCODED_ASSISTANT_TYPES = ['Discord', 'BB - RTP', 'BB - BT', 'Casino', 'Offers (VA)', 'Dogs + Horses (VA)'];
 function getBetTypeGroup(bet_type) {
@@ -1121,6 +1130,169 @@ router.post('/bets', (req, res) => {
   } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
 });
 
+// POST /api/ledger/bets/backlay — dedicated creation route for the "Back & Lay" bet type.
+// Unlike every other bet type, this has two independent groups of legs (backing accounts at
+// the bookie, laying accounts at the exchange), each with its OWN odds — and lay legs also
+// carry their own commission rate. total_stake is the sum of back stakes only (the real
+// money staked at the bookie); a back leg deducts its stake as normal, but a lay leg deducts
+// its *liability* (stake × (odds-1)) — the amount actually locked up at the exchange.
+router.post('/bets/backlay', (req, res) => {
+  const placeBackLay = db.transaction((date, fields, backLegs, layLegs) => {
+    const totalBackStake = +backLegs.reduce((s, l) => s + l.stake, 0).toFixed(2);
+    const info = db.prepare(
+      `INSERT INTO bets (bet_type, date, fields, total_stake, result, pl, settled_at) VALUES ('Back & Lay', ?, ?, ?, 'open', 0, NULL)`
+    ).run(date, JSON.stringify(fields), totalBackStake);
+    const betId = info.lastInsertRowid;
+
+    for (const leg of backLegs) {
+      const account = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(leg.account_id);
+      if (!account) throw new Error(`Account ${leg.account_id} not found`);
+      db.prepare(`INSERT INTO bet_legs (bet_id, account_id, stake, role, odds) VALUES (?, ?, ?, 'back', ?)`)
+        .run(betId, leg.account_id, leg.stake, leg.odds);
+      db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`).run(leg.stake, leg.account_id);
+    }
+    for (const leg of layLegs) {
+      const account = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(leg.account_id);
+      if (!account) throw new Error(`Account ${leg.account_id} not found`);
+      const liability = +(leg.stake * (leg.odds - 1)).toFixed(2);
+      db.prepare(`INSERT INTO bet_legs (bet_id, account_id, stake, role, odds, commission) VALUES (?, ?, ?, 'lay', ?, ?)`)
+        .run(betId, leg.account_id, leg.stake, leg.odds, leg.commission);
+      db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`).run(liability, leg.account_id);
+    }
+    return betId;
+  });
+
+  try {
+    const { date, fields, backLegs, layLegs } = req.body;
+    if (req.userRole === 'staff') return res.status(403).json({ ok: false, error: 'Staff can only log bets under Assistant sheets.' });
+    if (!Array.isArray(backLegs) || backLegs.length === 0) return res.status(400).json({ ok: false, error: 'at least one back (bookie) leg required' });
+    if (!Array.isArray(layLegs) || layLegs.length === 0) return res.status(400).json({ ok: false, error: 'at least one lay (exchange) leg required' });
+    for (const l of backLegs) {
+      if (!l.account_id || !(parseFloat(l.stake) > 0) || !(parseFloat(l.odds) > 1)) return res.status(400).json({ ok: false, error: 'each back leg needs an account, a positive stake, and odds greater than 1' });
+    }
+    for (const l of layLegs) {
+      if (!l.account_id || !(parseFloat(l.stake) > 0) || !(parseFloat(l.odds) > 1)) return res.status(400).json({ ok: false, error: 'each lay leg needs an account, a positive stake, and odds greater than 1' });
+      const c = parseFloat(l.commission);
+      if (isNaN(c) || c < 0 || c >= 1) return res.status(400).json({ ok: false, error: 'each lay leg needs a commission rate between 0 and 100%' });
+    }
+    const betId = placeBackLay(
+      date || new Date().toISOString(),
+      fields || {},
+      backLegs.map(l => ({ account_id: l.account_id, stake: +parseFloat(l.stake).toFixed(2), odds: parseFloat(l.odds) })),
+      layLegs.map(l => ({ account_id: l.account_id, stake: +parseFloat(l.stake).toFixed(2), odds: parseFloat(l.odds), commission: parseFloat(l.commission) }))
+    );
+    const bet = db.prepare(`SELECT * FROM bets WHERE id = ?`).get(betId);
+    const betLegs = db.prepare(`SELECT * FROM bet_legs WHERE bet_id = ?`).all(betId);
+    res.json({ ok: true, bet: { ...bet, fields: JSON.parse(bet.fields), legs: betLegs } });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
+// PATCH /api/ledger/bets/:id/settle-backlay — body: { result, doublePayout, customWinAmount, fundsType }
+// result is one of: 'back_won' (the backed selection won — back legs profit, lay legs pay
+// out their liability), 'lay_won' (the selection lost — back legs lose their stake, lay legs
+// win their stake minus commission), 'void' (both sides void — treated as one shared result
+// for now, see back-lay-bet-input-spec), or 'open' (revert to unsettled).
+//
+// Each leg's P/L is computed directly from its own stored stake/odds/commission — no
+// proportional blending needed, unlike the generic settle route, because (unlike every other
+// bet type) each leg here really does have its own odds.
+//
+// doublePayout overrides the BOOKIE side only: the exchange side always settles on the real
+// result regardless. When true, customWinAmount replaces the normal back-side P/L (split
+// proportionally across back legs by stake share) — fundsType 'free' means no stake is
+// deducted from that figure (nothing real was ever staked to get it back), 'normal' means
+// customWinAmount is the real total return so the stake comes off it as usual.
+router.patch('/bets/:id/settle-backlay', (req, res) => {
+  const settle = db.transaction((betId, result, doublePayout, customWinAmount, fundsType) => {
+    const bet = db.prepare(`SELECT * FROM bets WHERE id = ?`).get(betId);
+    if (!bet) throw new Error('Bet not found');
+    if (bet.bet_type !== 'Back & Lay') throw new Error('Not a Back & Lay bet');
+    const legs = db.prepare(`SELECT * FROM bet_legs WHERE bet_id = ?`).all(betId);
+    const backLegs = legs.filter(l => l.role === 'back');
+    const layLegs = legs.filter(l => l.role === 'lay');
+    const totalBackStake = backLegs.reduce((s, l) => s + l.stake, 0);
+
+    // Reverse whatever this bet is currently applying to account balances, so re-settling
+    // (or an override) never double-counts — same reasoning as the generic /settle route.
+    if (bet.result !== 'open') {
+      for (const leg of legs) {
+        db.prepare(`UPDATE accounts SET balance = balance - ? - ?, updated_at = datetime('now') WHERE id = ?`)
+          .run(legCommitted(leg), leg.leg_pl || 0, leg.account_id);
+      }
+    }
+
+    const fields = JSON.parse(bet.fields);
+
+    if (result === 'open') {
+      for (const leg of legs) {
+        db.prepare(`UPDATE bet_legs SET settled = 0, leg_pl = 0 WHERE id = ?`).run(leg.id);
+        db.prepare(`UPDATE accounts SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`)
+          .run(legCommitted(leg), leg.account_id);
+      }
+      delete fields['Outcome']; delete fields['Double Payout']; delete fields['Double Payout Amount']; delete fields['Double Payout Funds'];
+      db.prepare(`UPDATE bets SET result = 'open', pl = 0, fields = ?, settled_at = NULL WHERE id = ?`).run(JSON.stringify(fields), betId);
+      return { pl: 0, breakdown: null };
+    }
+
+    const legPlMap = {};
+    if (result === 'void') {
+      legs.forEach(l => { legPlMap[l.id] = 0; });
+    } else {
+      layLegs.forEach(l => {
+        legPlMap[l.id] = result === 'back_won'
+          ? -(l.stake * (l.odds - 1))            // lay loses — liability forfeited
+          : (l.stake * (1 - (l.commission || 0))); // lay wins — stake minus commission
+      });
+      if (doublePayout) {
+        const totalBackPl = customWinAmount - (fundsType === 'free' ? 0 : totalBackStake);
+        backLegs.forEach(l => {
+          const share = totalBackStake > 0 ? l.stake / totalBackStake : (backLegs.length ? 1 / backLegs.length : 0);
+          legPlMap[l.id] = totalBackPl * share;
+        });
+      } else {
+        backLegs.forEach(l => {
+          legPlMap[l.id] = result === 'back_won' ? (l.stake * (l.odds - 1)) : -l.stake;
+        });
+      }
+    }
+
+    let bookiePl = 0, exchangePl = 0;
+    for (const leg of legs) {
+      const legPl = +(legPlMap[leg.id] || 0).toFixed(2);
+      db.prepare(`UPDATE bet_legs SET settled = 1, leg_pl = ? WHERE id = ?`).run(legPl, leg.id);
+      db.prepare(`UPDATE accounts SET balance = balance + ? + ?, updated_at = datetime('now') WHERE id = ?`)
+        .run(legCommitted(leg), legPl, leg.account_id);
+      if (leg.role === 'back') bookiePl += legPl; else exchangePl += legPl;
+    }
+    const totalPl = +(bookiePl + exchangePl).toFixed(2);
+
+    fields['Outcome'] = result === 'back_won' ? 'Back Bet Won' : result === 'lay_won' ? 'Lay Bet Won' : 'Void';
+    if (result !== 'void' && doublePayout) {
+      fields['Double Payout'] = 'Yes';
+      fields['Double Payout Amount'] = customWinAmount;
+      fields['Double Payout Funds'] = fundsType === 'free' ? 'Free Bet' : 'Normal Funds';
+    } else {
+      fields['Double Payout'] = 'No';
+      delete fields['Double Payout Amount']; delete fields['Double Payout Funds'];
+    }
+
+    const storedResult = result === 'back_won' ? 'won' : result === 'lay_won' ? 'lost' : 'void';
+    db.prepare(`UPDATE bets SET result = ?, pl = ?, fields = ?, settled_at = datetime('now') WHERE id = ?`)
+      .run(storedResult, totalPl, JSON.stringify(fields), betId);
+
+    return { pl: totalPl, breakdown: { bookie: +bookiePl.toFixed(2), exchange: +exchangePl.toFixed(2) } };
+  });
+
+  try {
+    const { result, doublePayout, customWinAmount, fundsType } = req.body;
+    if (!['back_won', 'lay_won', 'void', 'open'].includes(result)) return res.status(400).json({ ok: false, error: 'result must be back_won, lay_won, void, or open' });
+    if (doublePayout && !(typeof customWinAmount === 'number')) return res.status(400).json({ ok: false, error: 'customWinAmount required when doublePayout is true' });
+    const out = settle(req.params.id, result, !!doublePayout, doublePayout ? customWinAmount : 0, fundsType === 'free' ? 'free' : 'normal');
+    const bet = db.prepare(`SELECT * FROM bets WHERE id = ?`).get(req.params.id);
+    res.json({ ok: true, pl: out.pl, breakdown: out.breakdown, bet: { ...bet, fields: JSON.parse(bet.fields) } });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
 // GET /api/ledger/bets?status=open&type=Value
 router.get('/bets', (req, res) => {
   try {
@@ -1185,7 +1357,29 @@ router.get('/bets', (req, res) => {
       ).all(...ids).forEach(r => { accountCodes[r.bet_id] = r.account_id; });
     }
 
-    const bets = rawBets.map(b => ({ ...b, fields: JSON.parse(b.fields), leg_count: legCounts[b.id] || 0, account_code: accountCodes[b.id] || null }));
+    // Back & Lay has two independent groups of accounts (bookie legs, exchange legs), so the
+    // single account_code/leg_count above can't represent it — build per-role code+count
+    // groups instead, keyed the same "first code + N" way, for its own Bookie ID/Exchange ID
+    // columns. Unused (and harmless) for every other bet type, since role is always NULL there.
+    const backCodes = {}, backCounts = {}, layCodes = {}, layCounts = {};
+    if (rawBets.length && type === 'Back & Lay') {
+      const ids = rawBets.map(b => b.id);
+      const placeholders = ids.map(() => '?').join(',');
+      db.prepare(
+        `SELECT bl.bet_id, bl.role, a.account_id FROM bet_legs bl JOIN accounts a ON a.id = bl.account_id WHERE bl.bet_id IN (${placeholders}) ORDER BY bl.id`
+      ).all(...ids).forEach(r => {
+        const codes = r.role === 'lay' ? layCodes : backCodes;
+        const counts = r.role === 'lay' ? layCounts : backCounts;
+        if (!(r.bet_id in codes)) codes[r.bet_id] = r.account_id;
+        counts[r.bet_id] = (counts[r.bet_id] || 0) + 1;
+      });
+    }
+
+    const bets = rawBets.map(b => ({
+      ...b, fields: JSON.parse(b.fields), leg_count: legCounts[b.id] || 0, account_code: accountCodes[b.id] || null,
+      back_account_code: backCodes[b.id] || null, back_leg_count: backCounts[b.id] || 0,
+      exchange_account_code: layCodes[b.id] || null, exchange_leg_count: layCounts[b.id] || 0,
+    }));
 
     const noteRows = rawBets.length ? db.prepare(`SELECT bet_id FROM bet_notes WHERE bet_id IN (${rawBets.map(()=>'?').join(',')})`).all(...rawBets.map(b=>b.id)) : [];
     const notedIds = new Set(noteRows.map(r => r.bet_id));
@@ -1205,7 +1399,7 @@ router.get('/bets/:id/legs', (req, res) => {
     const bet = db.prepare(`SELECT * FROM bets WHERE id = ?`).get(req.params.id);
     if (!bet) return res.status(404).json({ ok: false, error: 'Bet not found' });
     const legs = db.prepare(
-      `SELECT bl.id, bl.account_id, bl.stake, bl.leg_pl, bl.settled,
+      `SELECT bl.id, bl.account_id, bl.stake, bl.leg_pl, bl.settled, bl.role, bl.odds AS leg_odds, bl.commission,
               a.account_id AS account_code, a.profile, a.bookie
        FROM bet_legs bl JOIN accounts a ON a.id = bl.account_id
        WHERE bl.bet_id = ? ORDER BY bl.id`
@@ -1255,7 +1449,7 @@ router.delete('/bets/:id/legs/:legId', (req, res) => {
     if (bet.result === 'open') {
       if (!freeBet) {
         db.prepare(`UPDATE accounts SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`)
-          .run(leg.stake, leg.account_id);
+          .run(legCommitted(leg), leg.account_id);
       }
     } else {
       // Net effect of creation-deduction + settlement-payout was just the P/L (same reasoning
@@ -1312,8 +1506,8 @@ router.patch('/bets/:id/legs/:legId/reassign', (req, res) => {
     const freeBet = hasNoRealStake(bet.bet_type, bet.fields);
     if (bet.result === 'open') {
       if (!freeBet) {
-        db.prepare(`UPDATE accounts SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`).run(leg.stake, oldAccount.id);
-        db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`).run(leg.stake, newAccount.id);
+        db.prepare(`UPDATE accounts SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`).run(legCommitted(leg), oldAccount.id);
+        db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`).run(legCommitted(leg), newAccount.id);
       }
     } else {
       // Same net-effect-is-just-the-P/L reasoning as the delete path — reverse it off the old
@@ -1436,6 +1630,7 @@ router.patch('/bets/:id/settle', (req, res) => {
   const settleBet = db.transaction((betId, result, pl, extraFields) => {
     const bet = db.prepare(`SELECT * FROM bets WHERE id = ?`).get(betId);
     if (!bet) throw new Error('Bet not found');
+    if (bet.bet_type === 'Back & Lay') throw new Error('Back & Lay bets settle through PATCH /bets/:id/settle-backlay, not this endpoint.');
 
     const legs = db.prepare(`SELECT * FROM bet_legs WHERE bet_id = ?`).all(betId);
 
@@ -1543,7 +1738,7 @@ router.delete('/bets/:id', (req, res) => {
       if (bet.result === 'open') {
         if (!freeBet) {
           db.prepare(`UPDATE accounts SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?`)
-            .run(leg.stake, leg.account_id);
+            .run(legCommitted(leg), leg.account_id);
         }
       } else {
         db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`)

@@ -477,6 +477,55 @@ input::placeholder{color:var(--text3)}
   </div>
 </div>
 
+<!-- BET TRACKING: BACK & LAY SETTLE MODAL -->
+<div id="bt-settle-backlay-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;padding:16px">
+  <div class="card card-pad" style="max-width:420px;width:100%;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="sec-title" style="margin:0;font-size:16px">Settle Back &amp; Lay bet</div>
+      <button class="add-btn" onclick="closeBtSettleBackLayModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="lbl" style="margin-bottom:8px">Result</div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+      <button class="add-btn" id="bt-settle-bl-backwon" onclick="setBtSettleBackLayResult('back_won')">Back bet won (selection won)</button>
+      <button class="add-btn" id="bt-settle-bl-laywon" onclick="setBtSettleBackLayResult('lay_won')">Lay bet won (selection lost)</button>
+      <div style="display:flex;gap:8px">
+        <button class="add-btn" id="bt-settle-bl-void" onclick="setBtSettleBackLayResult('void')" style="flex:1">Void</button>
+        <button class="add-btn" id="bt-settle-bl-open" onclick="setBtSettleBackLayResult('open')" style="flex:1;display:none">Open</button>
+      </div>
+    </div>
+
+    <div style="margin-bottom:16px">
+      <div class="lbl" style="margin-bottom:8px">Double payout? (bookie promo pays out despite a genuine loss)</div>
+      <div style="display:flex;gap:8px">
+        <button class="add-btn" id="bt-settle-bl-dp-no" onclick="setBtSettleDoublePayout(false)" style="flex:1">No</button>
+        <button class="add-btn" id="bt-settle-bl-dp-yes" onclick="setBtSettleDoublePayout(true)" style="flex:1">Yes</button>
+      </div>
+    </div>
+    <div id="bt-settle-bl-dp-fields" style="display:none;margin-bottom:16px">
+      <label class="lbl">Custom bookie win amount (£)</label>
+      <input type="number" id="bt-settle-bl-dp-amount" step="0.01" style="margin-bottom:10px" oninput="recalcBtSettleBackLayPreview()">
+      <label class="lbl">Paid as</label>
+      <select id="bt-settle-bl-dp-funds" onchange="recalcBtSettleBackLayPreview()">
+        <option value="normal">Normal funds</option>
+        <option value="free">Free bet</option>
+      </select>
+    </div>
+
+    <div style="padding:12px 14px;background:var(--surface2);border-radius:var(--radius);margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="color:var(--text2)">Bookie P/L</span><span id="bt-settle-bl-preview-bookie" style="font-weight:600">—</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="color:var(--text2)">Exchange P/L</span><span id="bt-settle-bl-preview-exchange" style="font-weight:600">—</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:14px;padding-top:6px;border-top:0.5px solid var(--border)"><span style="font-weight:600">Total P/L</span><span id="bt-settle-bl-preview-total" style="font-weight:700">—</span></div>
+    </div>
+
+    <button onclick="submitBtSettleBackLay()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:11px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;width:100%">Save</button>
+    <div id="bt-settle-bl-msg" style="margin-top:12px;font-size:13px"></div>
+    <div style="margin-top:18px;padding-top:14px;border-top:0.5px solid var(--border)">
+      <button id="bt-settle-bl-delete-btn" onclick="handleBtSettleBackLayDeleteClick()" style="background:none;border:0.5px solid var(--red);color:var(--red);border-radius:var(--radius);padding:9px 16px;font-size:13px;cursor:pointer;font-family:inherit;width:100%">Delete bet</button>
+      <div id="bt-settle-bl-delete-msg" style="margin-top:8px;font-size:12px"></div>
+    </div>
+  </div>
+</div>
+
 <!-- BET TRACKING: MULTI-ACCOUNT LEGS MODAL (which accounts a "C054 + 4"-style bet actually used) -->
 <div id="bt-legs-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;padding:16px">
   <div class="card card-pad" style="max-width:600px;width:100%">
@@ -610,6 +659,44 @@ input::placeholder{color:var(--text3)}
       <div class="lbl" style="margin-bottom:10px">Accounts &amp; stakes</div>
       <div id="bet-entry-legs"></div>
       <button class="add-btn" id="bet-entry-add-leg-btn" onclick="addBetLegRow()"><i class="ti ti-plus"></i> Add account</button>
+    </div>
+
+    <!-- Back & Lay layout: separate Bookie (back) and Exchange (lay) leg groups, each with
+         their own per-account odds, plus per-exchange-account commission and a live
+         optimal-lay-stake / liability / outcome-table calculator. See back-lay-bet-input-spec
+         memory for the full formula derivation. -->
+    <div id="bet-entry-backlay-section" style="display:none">
+      <div style="margin-bottom:14px"><label class="lbl">Bet description</label><input type="text" id="bef-backlay-desc"></div>
+
+      <div class="lbl" style="margin-bottom:10px">Bookie accounts &amp; back stakes</div>
+      <div id="bet-entry-backlay-back-legs"></div>
+      <button class="add-btn" id="bet-entry-backlay-add-back-btn" onclick="addBackLayLeg('back')"><i class="ti ti-plus"></i> Add bookie account</button>
+
+      <div style="margin-top:20px;margin-bottom:14px"><label class="lbl">Exchange site</label><input type="text" id="bef-backlay-exchange" autocomplete="off" oninput="refreshBackLayAccountDropdowns()"></div>
+
+      <div class="lbl" style="margin-bottom:10px">Exchange accounts &amp; lay stakes</div>
+      <div id="bet-entry-backlay-lay-legs"></div>
+      <button class="add-btn" id="bet-entry-backlay-add-lay-btn" onclick="addBackLayLeg('lay')"><i class="ti ti-plus"></i> Add exchange account</button>
+      <div style="font-size:11.5px;color:var(--text3);margin-top:8px">Lay stake auto-fills with the optimal (fully-covering) amount as soon as a bookie account and an exchange account both have odds entered — still editable if you weren't matched at exactly that price. With more than one exchange account, only the combined total is suggested; split it across accounts yourself.</div>
+
+      <div style="display:flex;gap:28px;flex-wrap:wrap;margin-top:18px;padding:14px 16px;background:var(--surface2);border-radius:var(--radius)">
+        <div><div class="lbl" style="margin-bottom:3px">Back odds (blended)</div><div style="font-size:16px;font-weight:600" id="bet-entry-backlay-back-odds">—</div></div>
+        <div><div class="lbl" style="margin-bottom:3px">Lay odds (blended)</div><div style="font-size:16px;font-weight:600" id="bet-entry-backlay-lay-odds">—</div></div>
+        <div><div class="lbl" style="margin-bottom:3px">Optimal lay stake (£)</div><div style="font-size:16px;font-weight:600" id="bet-entry-backlay-optimal">—</div></div>
+        <div><div class="lbl" style="margin-bottom:3px">Lay liability (£)</div><div style="font-size:16px;font-weight:600" id="bet-entry-backlay-liability">—</div></div>
+      </div>
+
+      <div style="margin-top:16px;overflow-x:auto">
+        <table class="dt" style="min-width:420px">
+          <thead><tr><th></th><th class="r">Bookie</th><th class="r">Exchange</th><th class="r">Total</th></tr></thead>
+          <tbody>
+            <tr><td>Back bet wins</td><td class="r" id="bet-entry-backlay-tbl-backwin-bookie">—</td><td class="r" id="bet-entry-backlay-tbl-backwin-exchange">—</td><td class="r" id="bet-entry-backlay-tbl-backwin-total">—</td></tr>
+            <tr><td>Lay bet wins</td><td class="r" id="bet-entry-backlay-tbl-laywin-bookie">—</td><td class="r" id="bet-entry-backlay-tbl-laywin-exchange">—</td><td class="r" id="bet-entry-backlay-tbl-laywin-total">—</td></tr>
+            <tr><td>Double win</td><td class="r" id="bet-entry-backlay-tbl-doublewin-bookie">—</td><td class="r" id="bet-entry-backlay-tbl-doublewin-exchange">—</td><td class="r" id="bet-entry-backlay-tbl-doublewin-total">—</td></tr>
+          </tbody>
+        </table>
+        <div style="font-size:11.5px;color:var(--text3);margin-top:6px">Double win assumes the bookie promo pays the standard back-win amount — the actual figure (if different) is entered when you settle the bet.</div>
+      </div>
     </div>
 
     <!-- Single-account balance layout (Casino / Offers) -->
@@ -2881,6 +2968,11 @@ const BET_TYPE_CONFIG = {
   'Offers (Personal)': { layout:'balance', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet description',type:'text'}], oddsMode:'pairedSingle', hasStake:true, hasBalanceBoxes:false },
   'Other Bets':       { layout:'standard', bookie:true, hasBetKind:true, fields:[{key:'Bet',label:'Bet',type:'text'},{key:'Back Odds',label:'Back odds',type:'number'}] },
   'Casino (Personal)': { layout:'balance', bookie:true, bookieFieldKey:'Bookie', hasBetKind:false, fields:[{key:'Offer',label:'Offer',type:'text'},{key:'EV',label:'EV £',type:'number'}], oddsMode:'none', hasStake:false, hasBalanceBoxes:false, casinoExtraAccounts:true },
+  // Fully bespoke layout — two independent leg groups (bookie back legs, exchange lay legs),
+  // each with their own per-account odds, exchange legs also carrying their own commission.
+  // Entry form, EV/profit boxes, submit, and settlement all get dedicated handling instead of
+  // going through the generic oddsMode/legs machinery — see back-lay-bet-input-spec memory.
+  'Back & Lay': { layout:'backLay', bookie:true, bookieFieldKey:'Bookie' },
 };
 
 // Column layout guesses for paste-to-autofill types. `key` becomes the stored field name.
@@ -2960,6 +3052,7 @@ const BET_TYPE_GROUPS = {
     {key:'Offers (Personal)', label:'Offers'},
     {key:'Other Bets', label:'Other Bets'},
     {key:'Casino (Personal)', label:'Casino'},
+    {key:'Back & Lay', label:'Back & Lay'},
   ],
   assistant: [
     {key:'Discord', label:'Discord'},
@@ -3274,8 +3367,9 @@ function selectBetType(type, label) {
   document.getElementById('bet-entry-paste-wrap').style.display = cfg.layout === 'paste' ? 'block' : 'none';
   if (cfg.layout === 'paste') document.getElementById('bet-entry-paste-input').value = '';
 
-  document.getElementById('bet-entry-legs-section').style.display = cfg.layout === 'balance' ? 'none' : 'block';
+  document.getElementById('bet-entry-legs-section').style.display = (cfg.layout === 'balance' || cfg.layout === 'backLay') ? 'none' : 'block';
   document.getElementById('bet-entry-balance-section').style.display = cfg.layout === 'balance' ? 'block' : 'none';
+  document.getElementById('bet-entry-backlay-section').style.display = cfg.layout === 'backLay' ? 'block' : 'none';
   document.getElementById('bet-entry-total-row').style.display = 'flex';
   document.getElementById('bet-entry-total-wrap').style.display = (cfg.layout === 'balance' && !cfg.hasStake) ? 'none' : 'block';
   document.getElementById('bet-entry-casino-extra-section').style.display = cfg.casinoExtraAccounts ? 'block' : 'none';
@@ -3286,7 +3380,7 @@ function selectBetType(type, label) {
   let html = '';
 
   if (cfg.event) html += `<div><label class="lbl">Event</label><input type="text" id="bef-Event"></div>`;
-  if (cfg.bookie) html += `<div style="position:relative"><label class="lbl">Bookie</label><input type="text" id="bef-Book" value="${cfg.bookieDefault||''}" autocomplete="off" oninput="refreshLegAccountDropdowns();refreshCasinoAccountDropdowns();showBookieSuggestions(this)" onblur="setTimeout(hideBookieSuggestions,150)" onfocus="showBookieSuggestions(this)"><div id="bef-book-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius);box-shadow:0 4px 14px rgba(0,0,0,0.12);z-index:50;max-height:190px;overflow-y:auto;margin-top:4px"></div></div>`;
+  if (cfg.bookie) html += `<div style="position:relative"><label class="lbl">Bookie</label><input type="text" id="bef-Book" value="${cfg.bookieDefault||''}" autocomplete="off" oninput="refreshLegAccountDropdowns();refreshCasinoAccountDropdowns();refreshBackLayAccountDropdowns();showBookieSuggestions(this)" onblur="setTimeout(hideBookieSuggestions,150)" onfocus="showBookieSuggestions(this)"><div id="bef-book-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius);box-shadow:0 4px 14px rgba(0,0,0,0.12);z-index:50;max-height:190px;overflow-y:auto;margin-top:4px"></div></div>`;
 
   if (cfg.layout === 'paste') {
     PASTE_SPECS[cfg.pasteSpec].columns.forEach(c => {
@@ -3359,6 +3453,8 @@ function selectBetType(type, label) {
       document.getElementById('bef-bonus-start').type = isDirectPL ? 'text' : 'number';
     }
     recalcBalanceDelta();
+  } else if (cfg.layout === 'backLay') {
+    resetBackLaySection();
   } else {
     document.getElementById('bet-entry-legs').innerHTML = '';
     betEntryLegId = 0;
@@ -3447,6 +3543,7 @@ function selectBookieSuggestion(name) {
   hideBookieSuggestions();
   refreshLegAccountDropdowns();
   refreshCasinoAccountDropdowns();
+  refreshBackLayAccountDropdowns();
 }
 
 function hideBookieSuggestions() {
@@ -3551,10 +3648,253 @@ function removeBetLegRow(id) {
   updateBetEntryTotal();
 }
 
+// ==================== BACK & LAY (bespoke layout — see back-lay-bet-input-spec memory) ====================
+let betEntryBackLayId = 0;
+
+function resetBackLaySection() {
+  document.getElementById('bef-backlay-desc').value = '';
+  document.getElementById('bef-backlay-exchange').value = '';
+  document.getElementById('bet-entry-backlay-back-legs').innerHTML = '';
+  document.getElementById('bet-entry-backlay-lay-legs').innerHTML = '';
+  betEntryBackLayId = 0;
+  addBackLayLeg('back');
+  addBackLayLeg('lay');
+}
+
+function addBackLayLeg(side) {
+  const id = ++betEntryBackLayId;
+  const wrap = document.getElementById(side === 'back' ? 'bet-entry-backlay-back-legs' : 'bet-entry-backlay-lay-legs');
+  const row = document.createElement('div');
+  row.className = side + '-leg-row';
+  row.dataset.leg = id;
+  const cols = side === 'back' ? '1fr 110px 90px 32px' : '1fr 110px 90px 90px 32px';
+  row.style.cssText = `display:grid;grid-template-columns:${cols};gap:10px;margin-bottom:8px;align-items:center`;
+  const bookieRaw = side === 'back' ? (document.getElementById('bef-Book')?.value || '') : (document.getElementById('bef-backlay-exchange')?.value || '');
+  row.innerHTML = side === 'back'
+    ? `<select class="back-leg-account" onchange="recalcBackLay()">${accountOptionsHtml(null, bookieRaw)}</select>
+       <input type="number" class="back-leg-stake" placeholder="Stake £" step="0.01" min="0" oninput="recalcBackLay()">
+       <input type="number" class="back-leg-odds" placeholder="Odds" step="0.01" min="1.01" oninput="recalcBackLay()">
+       <button class="rm-btn" onclick="removeBackLayLeg('back',${id})" title="Remove">×</button>`
+    : `<select class="lay-leg-account" onchange="recalcBackLay()">${accountOptionsHtml(null, bookieRaw)}</select>
+       <input type="number" class="lay-leg-stake" placeholder="Lay stake £" step="0.01" min="0" oninput="this.dataset.touched='1';recalcBackLay()">
+       <input type="number" class="lay-leg-odds" placeholder="Lay odds" step="0.01" min="1.01" oninput="recalcBackLay()">
+       <input type="number" class="lay-leg-commission" placeholder="Comm %" step="0.01" min="0" max="100" oninput="recalcBackLay()">
+       <button class="rm-btn" onclick="removeBackLayLeg('lay',${id})" title="Remove">×</button>`;
+  wrap.appendChild(row);
+  refreshBackLayAccountDropdowns();
+  recalcBackLay();
+}
+
+function removeBackLayLeg(side, id) {
+  const wrap = document.getElementById(side === 'back' ? 'bet-entry-backlay-back-legs' : 'bet-entry-backlay-lay-legs');
+  if (wrap.children.length <= 1) return;
+  const row = wrap.querySelector(`[data-leg="${id}"]`);
+  if (row) row.remove();
+  refreshBackLayAccountDropdowns();
+  recalcBackLay();
+}
+
+// Keeps back-leg account dropdowns filtered to the typed Bookie, lay-leg account dropdowns
+// filtered to the typed Exchange Site — same account-can't-repeat behaviour as the other
+// multi-account pickers.
+function refreshBackLayAccountDropdowns() {
+  const backWrap = document.getElementById('bet-entry-backlay-back-legs');
+  const layWrap = document.getElementById('bet-entry-backlay-lay-legs');
+  if (!backWrap || !layWrap) return;
+  const bookieRaw = document.getElementById('bef-Book')?.value || '';
+  const exchangeRaw = document.getElementById('bef-backlay-exchange')?.value || '';
+  const backSels = [...backWrap.querySelectorAll('.back-leg-account')];
+  const backSelected = backSels.map(s => s.value).filter(Boolean);
+  backSels.forEach(sel => { const prev = sel.value; sel.innerHTML = accountOptionsHtml(prev, bookieRaw, backSelected.filter(v => v !== prev)); });
+  const laySels = [...layWrap.querySelectorAll('.lay-leg-account')];
+  const laySelected = laySels.map(s => s.value).filter(Boolean);
+  laySels.forEach(sel => { const prev = sel.value; sel.innerHTML = accountOptionsHtml(prev, exchangeRaw, laySelected.filter(v => v !== prev)); });
+}
+
+// Stake-weighted average odds across every row with both a stake and odds entered.
+function backLayBlendedOdds(rows, stakeClass, oddsClass) {
+  let weightedSum = 0, stakeSum = 0;
+  rows.forEach(r => {
+    const stake = parseFloat(r.querySelector(stakeClass).value) || 0;
+    const odds = parseFloat(r.querySelector(oddsClass).value) || 0;
+    if (stake > 0 && odds > 1) { weightedSum += stake * odds; stakeSum += stake; }
+  });
+  return stakeSum > 0 ? weightedSum / stakeSum : null;
+}
+
+function fmtSignedMoney(v) {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  return (v >= 0 ? '+£' : '-£') + Math.abs(v).toFixed(2);
+}
+
+// Optimal Lay Stake = Σ(Back stake × Back odds) / (Lay odds − Commission) — the standard
+// matched-betting hedge formula, equalizes P/L between the back-wins and lay-wins outcomes.
+// Derivation and worked examples verified in back-lay-bet-input-spec memory.
+function recalcBackLay() {
+  const cfg = BET_TYPE_CONFIG[betEntryType];
+  if (!cfg || cfg.layout !== 'backLay') return;
+  const backRows = [...document.querySelectorAll('#bet-entry-backlay-back-legs .back-leg-row')];
+  const layRows = [...document.querySelectorAll('#bet-entry-backlay-lay-legs .lay-leg-row')];
+  if (!backRows.length || !layRows.length) return;
+
+  const totalBackStake = backRows.reduce((s,r) => s + (parseFloat(r.querySelector('.back-leg-stake').value)||0), 0);
+  let totalBackReturn = 0, anyBackOdds = false;
+  backRows.forEach(r => {
+    const stake = parseFloat(r.querySelector('.back-leg-stake').value) || 0;
+    const odds = parseFloat(r.querySelector('.back-leg-odds').value) || 0;
+    if (stake > 0 && odds > 1) { totalBackReturn += stake * odds; anyBackOdds = true; }
+  });
+
+  const backOdds = backLayBlendedOdds(backRows, '.back-leg-stake', '.back-leg-odds');
+  const layOdds = backLayBlendedOdds(layRows, '.lay-leg-stake', '.lay-leg-odds');
+  document.getElementById('bet-entry-backlay-back-odds').textContent = backOdds ? backOdds.toFixed(2) : '—';
+  document.getElementById('bet-entry-backlay-lay-odds').textContent = layOdds ? layOdds.toFixed(2) : '—';
+
+  let commWeighted = 0, commStakeSum = 0;
+  layRows.forEach(r => {
+    const stake = parseFloat(r.querySelector('.lay-leg-stake').value) || 0;
+    const comm = parseFloat(r.querySelector('.lay-leg-commission').value);
+    if (stake > 0 && !isNaN(comm)) { commWeighted += stake * (comm/100); commStakeSum += stake; }
+  });
+  const firstComm = parseFloat(layRows[0]?.querySelector('.lay-leg-commission')?.value);
+  const blendedCommission = commStakeSum > 0 ? commWeighted / commStakeSum : (isNaN(firstComm) ? 0 : firstComm/100);
+
+  let optimalLay = null;
+  if (anyBackOdds && layOdds && (layOdds - blendedCommission) > 0) {
+    optimalLay = totalBackReturn / (layOdds - blendedCommission);
+  }
+  document.getElementById('bet-entry-backlay-optimal').textContent = optimalLay !== null ? '£' + optimalLay.toFixed(2) : '—';
+
+  // Auto-fill (editable): only with exactly one exchange account — with more than one, only
+  // the total is shown and you distribute it yourself — and only into a row you haven't typed
+  // into directly (dataset.touched, set by the input's own oninput, never by this).
+  if (optimalLay !== null && layRows.length === 1) {
+    const stakeInput = layRows[0].querySelector('.lay-leg-stake');
+    if (!stakeInput.dataset.touched) stakeInput.value = optimalLay.toFixed(2);
+  }
+
+  const totalLayStake = layRows.reduce((s,r) => s + (parseFloat(r.querySelector('.lay-leg-stake').value)||0), 0);
+  const liability = (layOdds && totalLayStake > 0) ? totalLayStake * (layOdds - 1) : null;
+  document.getElementById('bet-entry-backlay-liability').textContent = liability !== null ? '£' + liability.toFixed(2) : '—';
+
+  updateBackLayOutcomeTable(backRows, layRows, totalBackStake);
+  updateBetEntryTotal();
+}
+
+// Live preview only — computed per-leg exactly like the real settlement will be, so it stays
+// accurate even with mixed odds/commission across multiple accounts on either side.
+function updateBackLayOutcomeTable(backRows, layRows, totalBackStake) {
+  const backLegs = backRows.map(r => ({ stake: parseFloat(r.querySelector('.back-leg-stake').value)||0, odds: parseFloat(r.querySelector('.back-leg-odds').value)||0 }));
+  const layLegs = layRows.map(r => ({ stake: parseFloat(r.querySelector('.lay-leg-stake').value)||0, odds: parseFloat(r.querySelector('.lay-leg-odds').value)||0, commission: (parseFloat(r.querySelector('.lay-leg-commission').value)||0)/100 }));
+  const haveBack = backLegs.some(l => l.stake>0 && l.odds>1);
+  const haveLay = layLegs.some(l => l.stake>0 && l.odds>1);
+
+  const set = (id, val) => {
+    const el = document.getElementById(id);
+    el.textContent = fmtSignedMoney(val);
+    el.style.color = (val===null||val===undefined||isNaN(val)) ? '' : (val>=0?'var(--green)':'var(--red)');
+  };
+
+  if (!haveBack || !haveLay) {
+    ['backwin','laywin','doublewin'].forEach(row => ['bookie','exchange','total'].forEach(col => set(`bet-entry-backlay-tbl-${row}-${col}`, null)));
+    return;
+  }
+
+  const backWinBookie = backLegs.reduce((s,l) => s + (l.stake>0 && l.odds>1 ? l.stake*(l.odds-1) : 0), 0);
+  const backWinExchange = -layLegs.reduce((s,l) => s + (l.stake>0 && l.odds>1 ? l.stake*(l.odds-1) : 0), 0);
+  const layWinBookie = -totalBackStake;
+  const layWinExchange = layLegs.reduce((s,l) => s + (l.stake>0 ? l.stake*(1-l.commission) : 0), 0);
+
+  set('bet-entry-backlay-tbl-backwin-bookie', backWinBookie);
+  set('bet-entry-backlay-tbl-backwin-exchange', backWinExchange);
+  set('bet-entry-backlay-tbl-backwin-total', backWinBookie + backWinExchange);
+  set('bet-entry-backlay-tbl-laywin-bookie', layWinBookie);
+  set('bet-entry-backlay-tbl-laywin-exchange', layWinExchange);
+  set('bet-entry-backlay-tbl-laywin-total', layWinBookie + layWinExchange);
+  // Double win defaults to the standard back-win figure combined with the lay-win exchange
+  // figure — the actual custom promo amount (if different) is only entered at settlement.
+  set('bet-entry-backlay-tbl-doublewin-bookie', backWinBookie);
+  set('bet-entry-backlay-tbl-doublewin-exchange', layWinExchange);
+  set('bet-entry-backlay-tbl-doublewin-total', backWinBookie + layWinExchange);
+}
+
+async function submitBackLayBet(msgEl, btn) {
+  const bookie = (document.getElementById('bef-Book')?.value || '').trim();
+  const exchange = (document.getElementById('bef-backlay-exchange')?.value || '').trim();
+  const desc = (document.getElementById('bef-backlay-desc')?.value || '').trim();
+
+  const backRows = [...document.querySelectorAll('#bet-entry-backlay-back-legs .back-leg-row')];
+  const layRows = [...document.querySelectorAll('#bet-entry-backlay-lay-legs .lay-leg-row')];
+
+  const backLegs = backRows.map(r => ({
+    account_id: r.querySelector('.back-leg-account').value,
+    stake: parseFloat(r.querySelector('.back-leg-stake').value) || 0,
+    odds: parseFloat(r.querySelector('.back-leg-odds').value) || 0,
+  }));
+  const layLegs = layRows.map(r => ({
+    account_id: r.querySelector('.lay-leg-account').value,
+    stake: parseFloat(r.querySelector('.lay-leg-stake').value) || 0,
+    odds: parseFloat(r.querySelector('.lay-leg-odds').value) || 0,
+    commission: (parseFloat(r.querySelector('.lay-leg-commission').value) || 0) / 100,
+  }));
+
+  if (!bookie) { msgEl.innerHTML = '<span style="color:var(--red)">Enter a bookie.</span>'; return; }
+  if (!exchange) { msgEl.innerHTML = '<span style="color:var(--red)">Enter an exchange site.</span>'; return; }
+  if (backLegs.some(l => !l.account_id)) { msgEl.innerHTML = '<span style="color:var(--red)">Every bookie row needs an account selected.</span>'; return; }
+  if (backLegs.some(l => !(l.stake > 0))) { msgEl.innerHTML = '<span style="color:var(--red)">Every bookie row needs a stake greater than £0.</span>'; return; }
+  if (backLegs.some(l => !(l.odds > 1))) { msgEl.innerHTML = '<span style="color:var(--red)">Every bookie row needs odds greater than 1.</span>'; return; }
+  if (new Set(backLegs.map(l=>l.account_id)).size !== backLegs.length) { msgEl.innerHTML = '<span style="color:var(--red)">The same bookie account is selected more than once.</span>'; return; }
+  if (layLegs.some(l => !l.account_id)) { msgEl.innerHTML = '<span style="color:var(--red)">Every exchange row needs an account selected.</span>'; return; }
+  if (layLegs.some(l => !(l.stake > 0))) { msgEl.innerHTML = '<span style="color:var(--red)">Every exchange row needs a lay stake greater than £0.</span>'; return; }
+  if (layLegs.some(l => !(l.odds > 1))) { msgEl.innerHTML = '<span style="color:var(--red)">Every exchange row needs lay odds greater than 1.</span>'; return; }
+  if (layLegs.some(l => isNaN(l.commission) || l.commission < 0 || l.commission >= 1)) { msgEl.innerHTML = '<span style="color:var(--red)">Every exchange row needs a commission % between 0 and 100.</span>'; return; }
+  if (new Set(layLegs.map(l=>l.account_id)).size !== layLegs.length) { msgEl.innerHTML = '<span style="color:var(--red)">The same exchange account is selected more than once.</span>'; return; }
+
+  const backOdds = backLayBlendedOdds(backRows, '.back-leg-stake', '.back-leg-odds');
+  const layOdds = backLayBlendedOdds(layRows, '.lay-leg-stake', '.lay-leg-odds');
+  const totalBackStake = backLegs.reduce((s,l)=>s+l.stake,0);
+  const totalLayStake = layLegs.reduce((s,l)=>s+l.stake,0);
+  const liability = layOdds ? totalLayStake * (layOdds - 1) : 0;
+
+  const fields = {
+    'Bookie': bookie,
+    'Exchange Site': exchange,
+    'Bet Description': desc,
+    'Back Odds': backOdds ? +backOdds.toFixed(3) : 0,
+    'Lay Odds': layOdds ? +layOdds.toFixed(3) : 0,
+    'Back Stake': +totalBackStake.toFixed(2),
+    'Lay Stake': +totalLayStake.toFixed(2),
+    'Lay Liability': +liability.toFixed(2),
+  };
+
+  btn.disabled = true; btn.textContent = 'Logging…';
+  msgEl.innerHTML = '';
+  try {
+    const d = await ledgerApi('bets/backlay', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ date: new Date().toISOString(), fields, backLegs, layLegs })
+    });
+    if (d.ok) {
+      msgEl.innerHTML = `<span style="color:var(--green)"><i class="ti ti-check"></i> Bet logged — back stake £${totalBackStake.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`;
+      setTimeout(afterBetLogged, 1600);
+    } else {
+      msgEl.innerHTML = `<span style="color:var(--red)">${d.error || 'Failed to log bet'}</span>`;
+    }
+  } catch (e) {
+    msgEl.innerHTML = '<span style="color:var(--red)">Network error — please try again.</span>';
+  }
+  btn.disabled = false; btn.textContent = 'Log bet';
+}
+
 function currentBetEntryTotal() {
   const cfg = BET_TYPE_CONFIG[betEntryType];
   if (cfg && cfg.layout === 'balance') {
     return parseFloat(document.getElementById('bef-single-stake')?.value) || 0;
+  }
+  if (cfg && cfg.layout === 'backLay') {
+    const stakes = [...document.querySelectorAll('#bet-entry-backlay-back-legs .back-leg-stake')].map(i => parseFloat(i.value) || 0);
+    return stakes.reduce((a,b) => a+b, 0);
   }
   const stakes = [...document.querySelectorAll('#bet-entry-legs .leg-stake')].map(i => parseFloat(i.value) || 0);
   return stakes.reduce((a,b) => a+b, 0);
@@ -3749,6 +4089,7 @@ async function submitBetEntry() {
   const btn = document.getElementById('bet-entry-submit');
   if (!betEntryType) return;
   const cfg = BET_TYPE_CONFIG[betEntryType];
+  if (cfg.layout === 'backLay') { await submitBackLayBet(msgEl, btn); return; }
 
   const fields = {};
   if (cfg.event) fields['Event'] = (document.getElementById('bef-Event')?.value || '').trim();
@@ -4554,7 +4895,7 @@ async function loadAccountModalSettlement() {
           <div>${escapeHtml(betDesc)}</div>
           <div style="font-size:11px;color:var(--text3);margin-top:2px">${odds!=null?'Odds '+odds+' · ':''}Stake £${b.stake.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
         </div>
-        <button class="add-btn" onclick="openBtSettleModal(${b.id},'open',0,loadAccountModalSettlement,${b.stake},${odds!=null?odds:'null'},'${b.bet_type.replace(/'/g,"\\'")}',null,${f.Terms?`'${String(f.Terms).replace(/'/g,"\\'")}'`:'null'},${typeof f['Place Odds']==='number'?f['Place Odds']:'null'},null)">Settle</button>
+        <button class="add-btn" onclick="${b.bet_type === 'Back & Lay' ? `openBtSettleBackLayModal(${b.id}, loadAccountModalSettlement)` : `openBtSettleModal(${b.id},'open',0,loadAccountModalSettlement,${b.stake},${odds!=null?odds:'null'},'${b.bet_type.replace(/'/g,"\\'")}',null,${f.Terms?`'${String(f.Terms).replace(/'/g,"\\'")}'`:'null'},${typeof f['Place Odds']==='number'?f['Place Odds']:'null'},null)`}">Settle</button>
       </div>`;
     }).join('');
   } catch (e) { listEl.innerHTML = '<div style="color:var(--red)">Could not load open bets.</div>'; }
@@ -5507,7 +5848,7 @@ async function loadDashboardOpenBets() {
           <td style="padding:7px 8px">${escapeHtml(betDesc)}</td>
           <td style="padding:7px 8px" class="r">${typeof b.fields.Odds==='number'?b.fields.Odds:'—'}</td>
           <td style="padding:7px 8px" class="r">£${(b.total_stake||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-          <td style="padding:7px 8px">${BET_TYPE_CONFIG[b.bet_type]?.winningsBasedPL
+          <td style="padding:7px 8px">${b.bet_type === 'Back & Lay' ? `<button class="add-btn" onclick="openBtSettleBackLayModal(${b.id}, loadDashboardOpenBets)">Settle</button>` : BET_TYPE_CONFIG[b.bet_type]?.winningsBasedPL
             ? `<button class="add-btn" onclick="editBetWinnings(${b.id}, ${b.fields.Winnings||0}, loadDashboardOpenBets)">Enter Winnings</button>`
             : `<button class="add-btn" onclick="openBtSettleModal(${b.id}, 'open', null, loadDashboardOpenBets, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${b.bet_type.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">Settle</button>`}</td>
         </tr>`;
@@ -6030,6 +6371,7 @@ const BET_TRACKING_GROUPS = {
     {key:'Offers (Personal)', label:'Offers'},
     {key:'Other Bets', label:'Other Bets'},
     {key:'Casino (Personal)', label:'Casino'},
+    {key:'Back & Lay', label:'Back & Lay'},
   ],
   va: [
     {key:'Discord', label:'Discord'},
@@ -6432,8 +6774,12 @@ function renderBtDetailTable(bets) {
 
   const showNotesCol = btDetailType === 'Casino' || btDetailType === 'Casino (Personal)';
   const showResultCol = !BET_TYPE_CONFIG[btDetailType]?.winningsBasedPL && btDetailType !== 'Casino';
+  // Back & Lay has two independent account groups (bookie legs, exchange legs) — needs its
+  // own Bookie ID / Exchange ID columns instead of the generic single Account ID column.
+  const isBackLay = btDetailType === 'Back & Lay';
+  const accountIdHeader = isBackLay ? '<th>Bookie ID</th><th>Exchange ID</th>' : '<th>Account ID</th>';
   let html = `<table class="dt" style="min-width:720px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr>
-    <th>Date</th>${showNotesCol?'<th>Notes</th>':''}${showResultCol?'<th>Result</th>':''}<th>Account ID</th>${fieldKeys.map(k=>`<th${colClass(k)}>${escapeHtml(k)}</th>`).join('')}<th class="r">P/L</th><th></th>
+    <th>Date</th>${showNotesCol?'<th>Notes</th>':''}${showResultCol?'<th>Result</th>':''}${accountIdHeader}${fieldKeys.map(k=>`<th${colClass(k)}>${escapeHtml(k)}</th>`).join('')}<th class="r">P/L</th><th></th>
   </tr></thead><tbody>`;
   bets.forEach(b => {
     const resColor = b.result==='won'?'var(--green)':b.result==='lost'?'var(--red)':b.result==='placed'?'var(--blue)':b.result==='void'?'var(--text3)':'var(--amber)';
@@ -6448,7 +6794,9 @@ function renderBtDetailTable(bets) {
         : `<span style="cursor:pointer;color:var(--text3)" onclick="addBetNotePrompt(${b.id})" title="Add note"><i class="ti ti-plus"></i></span>`
       }</td>` : ''}
       ${showResultCol ? `<td style="color:${resColor};font-weight:600;text-transform:capitalize">${b.result}</td>` : ''}
-      <td>${formatAccountCode(b, 'fetchBtDetailPage')}</td>
+      ${isBackLay
+        ? `<td>${b.back_account_code ? escapeHtml(b.back_account_code) + (b.back_leg_count>1?` + ${b.back_leg_count-1}`:'') : '—'}</td><td>${b.exchange_account_code ? escapeHtml(b.exchange_account_code) + (b.exchange_leg_count>1?` + ${b.exchange_leg_count-1}`:'') : '—'}</td>`
+        : `<td>${formatAccountCode(b, 'fetchBtDetailPage')}</td>`}
       ${fieldKeys.map(k=>{
         const cellContent = formatBetField(k, b.fields[k]);
         if (b.bet_type === 'Ninja Golf BFEX' && k === 'Total Stake') {
@@ -6473,7 +6821,8 @@ function renderBtDetailTable(bets) {
       }).join('')}
       <td class="r" style="color:${(b.pl||0)>=0?'var(--green)':'var(--red)'}">${(b.pl||0)>=0?'+':'-'}£${Math.abs(b.pl||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td style="white-space:nowrap;display:flex;gap:6px">
-        ${BET_TYPE_CONFIG[b.bet_type]?.winningsBasedPL ? `<button class="add-btn" onclick="deleteBetDirect(${b.id}, fetchBtDetailPage)" style="color:var(--red);border-color:var(--red)">Delete</button>` : `<button class="add-btn" onclick="openBtSettleModal(${b.id}, '${b.result}', ${b.pl||0}, fetchBtDetailPage, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${b.bet_type.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">${b.result==='open'?'Settle':'Override'}</button>`}
+        ${isBackLay ? `<button class="add-btn" onclick="openBtSettleBackLayModal(${b.id}, fetchBtDetailPage)">${b.result==='open'?'Settle':'Override'}</button>`
+          : BET_TYPE_CONFIG[b.bet_type]?.winningsBasedPL ? `<button class="add-btn" onclick="deleteBetDirect(${b.id}, fetchBtDetailPage)" style="color:var(--red);border-color:var(--red)">Delete</button>` : `<button class="add-btn" onclick="openBtSettleModal(${b.id}, '${b.result}', ${b.pl||0}, fetchBtDetailPage, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${b.bet_type.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">${b.result==='open'?'Settle':'Override'}</button>`}
         ${b.result==='open' && !b.leg_count ? `<button class="add-btn" onclick="openBtLinkModal(${b.id})">Link account</button>` : ''}
       </td>
     </tr>`;
@@ -6816,6 +7165,150 @@ async function submitBtSettle() {
   } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error</span>'; }
 }
 
+// ==================== BACK & LAY SETTLE MODAL ====================
+let btSettleBackLayContext = null;
+let btSettleBackLayResult = null;
+let btSettleBackLayDoublePayout = false;
+
+async function openBtSettleBackLayModal(betId, refreshFn) {
+  document.getElementById('bt-settle-bl-msg').innerHTML = '<span style="color:var(--text2)">Loading…</span>';
+  document.getElementById('bt-settle-bl-delete-msg').innerHTML = '';
+  resetBtSettleBackLayDeleteButton();
+  document.getElementById('bt-settle-backlay-modal-overlay').style.display = 'flex';
+  try {
+    const d = await ledgerApi('bets/'+betId+'/legs');
+    if (!d.ok || !d.legs) { document.getElementById('bt-settle-bl-msg').innerHTML = '<span style="color:var(--red)">Could not load this bet.</span>'; return; }
+    btSettleBackLayContext = { betId, refreshFn, legs: d.legs };
+    document.getElementById('bt-settle-bl-msg').innerHTML = '';
+    document.getElementById('bt-settle-bl-open').style.display = (d.result && d.result !== 'open') ? 'block' : 'none';
+    document.getElementById('bt-settle-bl-dp-amount').value = '';
+    document.getElementById('bt-settle-bl-dp-funds').value = 'normal';
+    setBtSettleDoublePayout(false);
+    const initialResult = d.result === 'won' ? 'back_won' : d.result === 'lost' ? 'lay_won' : d.result === 'void' ? 'void' : null;
+    setBtSettleBackLayResult(initialResult);
+  } catch (e) {
+    document.getElementById('bt-settle-bl-msg').innerHTML = '<span style="color:var(--red)">Network error.</span>';
+  }
+}
+
+function closeBtSettleBackLayModal() {
+  document.getElementById('bt-settle-backlay-modal-overlay').style.display = 'none';
+  btSettleBackLayContext = null;
+  btSettleBackLayResult = null;
+  btSettleBackLayDoublePayout = false;
+  resetBtSettleBackLayDeleteButton();
+}
+
+function setBtSettleBackLayResult(result) {
+  btSettleBackLayResult = result;
+  const map = { back_won: 'bt-settle-bl-backwon', lay_won: 'bt-settle-bl-laywon', void: 'bt-settle-bl-void', open: 'bt-settle-bl-open' };
+  Object.entries(map).forEach(([r, id]) => {
+    const btn = document.getElementById(id);
+    if (r === result) { btn.style.background = 'var(--brand)'; btn.style.color = '#fff'; btn.style.borderColor = 'var(--brand)'; }
+    else { btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; }
+  });
+  recalcBtSettleBackLayPreview();
+}
+
+// Default the custom win amount to the standard back-win figure (gross return, stake ×
+// odds) the moment Double Payout is switched on — per back-lay-bet-input-spec, you only
+// overtype it when the actual promo payout differs from plain back-odds math.
+function setBtSettleDoublePayout(on) {
+  btSettleBackLayDoublePayout = on;
+  const yesBtn = document.getElementById('bt-settle-bl-dp-yes'), noBtn = document.getElementById('bt-settle-bl-dp-no');
+  yesBtn.style.background = on ? 'var(--brand)' : ''; yesBtn.style.color = on ? '#fff' : ''; yesBtn.style.borderColor = on ? 'var(--brand)' : '';
+  noBtn.style.background = !on ? 'var(--brand)' : ''; noBtn.style.color = !on ? '#fff' : ''; noBtn.style.borderColor = !on ? 'var(--brand)' : '';
+  document.getElementById('bt-settle-bl-dp-fields').style.display = on ? 'block' : 'none';
+  if (on && btSettleBackLayContext) {
+    const amountEl = document.getElementById('bt-settle-bl-dp-amount');
+    if (!amountEl.value) {
+      const backLegs = btSettleBackLayContext.legs.filter(l => l.role === 'back');
+      const standardBackReturn = backLegs.reduce((s,l) => s + l.stake * l.leg_odds, 0);
+      amountEl.value = standardBackReturn.toFixed(2);
+    }
+  }
+  recalcBtSettleBackLayPreview();
+}
+
+// Live preview only — mirrors the exact per-leg math the settle-backlay endpoint runs, so
+// what's shown here is what actually gets saved.
+function recalcBtSettleBackLayPreview() {
+  const bookieEl = document.getElementById('bt-settle-bl-preview-bookie');
+  const exchangeEl = document.getElementById('bt-settle-bl-preview-exchange');
+  const totalEl = document.getElementById('bt-settle-bl-preview-total');
+  const set = (el, v) => { el.textContent = fmtSignedMoney(v); el.style.color = (v===null||v===undefined||isNaN(v)) ? '' : (v>=0?'var(--green)':'var(--red)'); };
+  if (!btSettleBackLayContext || !btSettleBackLayResult || btSettleBackLayResult === 'open') { set(bookieEl,null); set(exchangeEl,null); set(totalEl,null); return; }
+  if (btSettleBackLayResult === 'void') { set(bookieEl,0); set(exchangeEl,0); set(totalEl,0); return; }
+
+  const { legs } = btSettleBackLayContext;
+  const backLegs = legs.filter(l => l.role === 'back');
+  const layLegs = legs.filter(l => l.role === 'lay');
+  const totalBackStake = backLegs.reduce((s,l) => s+l.stake, 0);
+
+  const exchangePl = layLegs.reduce((s,l) => s + (btSettleBackLayResult === 'back_won' ? -(l.stake*(l.leg_odds-1)) : l.stake*(1-(l.commission||0))), 0);
+  let bookiePl;
+  if (btSettleBackLayDoublePayout) {
+    const amount = parseFloat(document.getElementById('bt-settle-bl-dp-amount').value) || 0;
+    const fundsType = document.getElementById('bt-settle-bl-dp-funds').value;
+    bookiePl = amount - (fundsType === 'free' ? 0 : totalBackStake);
+  } else {
+    bookiePl = backLegs.reduce((s,l) => s + (btSettleBackLayResult === 'back_won' ? l.stake*(l.leg_odds-1) : -l.stake), 0);
+  }
+  set(bookieEl, bookiePl);
+  set(exchangeEl, exchangePl);
+  set(totalEl, bookiePl + exchangePl);
+}
+
+async function submitBtSettleBackLay() {
+  if (!btSettleBackLayContext) return;
+  const msgEl = document.getElementById('bt-settle-bl-msg');
+  if (!btSettleBackLayResult) { msgEl.innerHTML = '<span style="color:var(--red)">Pick a result.</span>'; return; }
+  const doublePayout = btSettleBackLayDoublePayout && btSettleBackLayResult !== 'void' && btSettleBackLayResult !== 'open';
+  let customWinAmount = null, fundsType = 'normal';
+  if (doublePayout) {
+    customWinAmount = parseFloat(document.getElementById('bt-settle-bl-dp-amount').value);
+    if (isNaN(customWinAmount) || customWinAmount < 0) { msgEl.innerHTML = '<span style="color:var(--red)">Enter a valid custom win amount.</span>'; return; }
+    fundsType = document.getElementById('bt-settle-bl-dp-funds').value;
+  }
+  msgEl.innerHTML = '<span style="color:var(--text2)">Saving…</span>';
+  try {
+    const d = await ledgerApi('bets/'+btSettleBackLayContext.betId+'/settle-backlay', {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ result: btSettleBackLayResult, doublePayout, customWinAmount, fundsType })
+    });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to settle'}</span>`; return; }
+    const refreshFn = btSettleBackLayContext.refreshFn;
+    closeBtSettleBackLayModal();
+    if (refreshFn) refreshFn();
+  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error</span>'; }
+}
+
+let btSettleBackLayDeleteConfirming = false;
+function resetBtSettleBackLayDeleteButton() {
+  btSettleBackLayDeleteConfirming = false;
+  const btn = document.getElementById('bt-settle-bl-delete-btn');
+  if (btn) btn.textContent = 'Delete bet';
+}
+async function handleBtSettleBackLayDeleteClick() {
+  if (!btSettleBackLayContext) return;
+  const btn = document.getElementById('bt-settle-bl-delete-btn');
+  const msgEl = document.getElementById('bt-settle-bl-delete-msg');
+  if (!btSettleBackLayDeleteConfirming) {
+    btSettleBackLayDeleteConfirming = true;
+    btn.textContent = 'Click again to confirm delete';
+    msgEl.innerHTML = '<span style="color:var(--red)">This permanently removes the bet and reverses any linked account balance. Cannot be undone.</span>';
+    return;
+  }
+  btn.textContent = 'Deleting…';
+  try {
+    const d = await ledgerApi('bets/'+btSettleBackLayContext.betId, { method: 'DELETE' });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to delete'}</span>`; resetBtSettleBackLayDeleteButton(); return; }
+    const refreshFn = btSettleBackLayContext.refreshFn;
+    closeBtSettleBackLayModal();
+    if (refreshFn) refreshFn();
+  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error</span>'; resetBtSettleBackLayDeleteButton(); }
+}
+
 // ---- OPEN BETS (Personal / VA) ----
 let btOpenState = { group: null, betType: null };
 
@@ -6913,7 +7406,7 @@ async function loadBtOpenTable() {
           const promptVal = (rawVal === undefined || rawVal === null) ? '' : rawVal;
           return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetFieldGeneric(${b.id}, '${k.replace(/'/g,"\\'")}', '${String(promptVal).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}', loadBtOpenTabs)" title="Click to amend">${cellContent || '<i class="ti ti-plus" style="color:var(--text3)"></i>'}</span></td>`;
         }).join('')}
-        <td><button class="add-btn" onclick="openBtSettleModal(${b.id}, 'open', null, loadBtOpenTabs, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${btOpenState.betType.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">Settle</button></td>
+        <td><button class="add-btn" onclick="${btOpenState.betType === 'Back & Lay' ? `openBtSettleBackLayModal(${b.id}, loadBtOpenTabs)` : `openBtSettleModal(${b.id}, 'open', null, loadBtOpenTabs, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${btOpenState.betType.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})`}">Settle</button></td>
       </tr>`;
     });
     html += '</tbody></table>';

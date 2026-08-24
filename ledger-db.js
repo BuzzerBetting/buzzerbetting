@@ -330,4 +330,12 @@ CREATE TABLE IF NOT EXISTS fotmob_leagues (
 // only creates a brand new table, it never adds columns to one that's already there.
 try { db.exec(`ALTER TABLE withdrawals ADD COLUMN reversed_at TEXT`); } catch (e) { /* already exists */ }
 
+// Back & Lay support — every other bet type shares one bet-level Odds value across all its
+// legs (bets.fields.Odds), but Back & Lay needs its own odds per leg (back accounts and
+// exchange accounts are priced independently), plus which side of the bet each leg is on,
+// plus a per-exchange-leg commission rate. NULL/unused for every other bet type.
+try { db.exec(`ALTER TABLE bet_legs ADD COLUMN role TEXT`); } catch (e) { /* already exists */ }
+try { db.exec(`ALTER TABLE bet_legs ADD COLUMN odds REAL`); } catch (e) { /* already exists */ }
+try { db.exec(`ALTER TABLE bet_legs ADD COLUMN commission REAL`); } catch (e) { /* already exists */ }
+
 module.exports = db;
