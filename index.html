@@ -2193,6 +2193,11 @@ input::placeholder{color:var(--text3)}
         <div><div class="cat-title">Arbitrage finder</div><div class="cat-desc">Detect cross-bookie arbs and split stakes</div></div>
         <i class="ti ti-arrow-right cat-arr"></i>
       </div>
+      <div class="cat" onclick="showCalc('dogs')">
+        <div class="cat-ico" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-paw"></i></div>
+        <div><div class="cat-title">Greyhound top 2/3 (BFEX)</div><div class="cat-desc">Live Betfair lay prices → fair odds for top 2, top 3, win without fav</div></div>
+        <i class="ti ti-arrow-right cat-arr"></i>
+      </div>
     </div>
   </div>
 
@@ -2539,6 +2544,38 @@ input::placeholder{color:var(--text3)}
         </div>
       </div>
     </div></div>
+  </div>
+
+  <!-- GREYHOUND TOP 2/3 (BFEX) -->
+  <div id="calc-dogs" class="calc-view">
+    <button class="back" onclick="backToCalcHub()"><i class="ti ti-arrow-left"></i> Calculators</button>
+    <div class="sec-title">Greyhound top 2/3 (BFEX)</div>
+    <div class="note"><i class="ti ti-info-circle"></i> Rough fair-odds estimate for top 2 / top 3 / win-without-favourite markets (e.g. Coral), built from live Betfair lay prices via the Harville placement model. A guide for spotting good prices, not gospel — tweakable later.</div>
+
+    <div class="card">
+      <div class="card-h" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Today's races</span>
+        <button class="add-btn" onclick="loadDogRaces()"><i class="ti ti-refresh"></i> Refresh</button>
+      </div>
+      <div id="dogs-races-list" style="padding:8px 0;max-height:340px;overflow-y:auto">
+        <div style="padding:16px 20px;color:var(--text3);font-size:13px">Click Refresh to load today's races.</div>
+      </div>
+    </div>
+
+    <div id="dogs-race-card" class="card" style="display:none">
+      <div class="card-h" id="dogs-race-title">—</div>
+      <div style="overflow-x:auto">
+        <table class="dt" style="min-width:760px">
+          <thead><tr>
+            <th>Trap</th><th>Dog</th>
+            <th class="r">Back</th><th class="r">Lay</th><th class="r">Last traded</th>
+            <th class="r">Win fair</th><th class="r">Top 2 fair</th><th class="r">Top 3 fair</th><th class="r">WWF fair</th>
+          </tr></thead>
+          <tbody id="dogs-runners-body"></tbody>
+        </table>
+      </div>
+      <div id="dogs-race-msg" style="padding:12px 20px;font-size:12.5px;color:var(--text3)"></div>
+    </div>
   </div>
 
 </div><!-- /view-calculators -->
@@ -7415,8 +7452,140 @@ async function loadBtOpenTable() {
   } catch (e) { tableWrap.innerHTML = '<div style="padding:24px;color:var(--red);font-size:13px">Could not load open bets.</div>'; }
 }
 
-function showCalc(name){document.getElementById('calc-hub').style.display='none';document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='dutch')initDutch();if(name==='arb')initArb();if(name==='gsm')initGSM();if(name==='kelly')initKelly();if(name==='kellycorr')initKellyCorr();}
+function showCalc(name){document.getElementById('calc-hub').style.display='none';document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='dutch')initDutch();if(name==='arb')initArb();if(name==='gsm')initGSM();if(name==='kelly')initKelly();if(name==='kellycorr')initKellyCorr();if(name==='dogs')loadDogRaces();}
 function backToCalcHub(){document.querySelectorAll('.calc-view').forEach(v=>v.style.display='none');document.getElementById('calc-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
+
+// ==================== GREYHOUND TOP 2/3 (BFEX) ====================
+// Fair odds for top-2/top-3/win-without-favourite, derived from live Betfair lay prices via
+// the Harville placement model — the standard way to extend win probabilities to placement
+// probabilities. Deliberately a rough estimate (per user: "just want a rough estimation to
+// what prices are good") — see fair-odds-source-project memory for context/next steps.
+function fmtDogOdds(v) { return (v===null || v===undefined || !isFinite(v)) ? '—' : v.toFixed(2); }
+
+// runners: full race runner list (some may have no live lay price — those get null fair-odds
+// fields but stay in the returned array so they still show up in the table). Only runners
+// with a valid best lay price feed the probability model.
+function computeGreyhoundFairOdds(runners) {
+  const blank = r => ({ ...r, winProb:null, top2Prob:null, top3Prob:null, wwfProb:null, isFavourite:false, winFairOdds:null, top2FairOdds:null, top3FairOdds:null, wwfFairOdds:null });
+
+  const idxValid = [];
+  const p1raw = [];
+  runners.forEach((r, i) => {
+    const lp = r.lay && r.lay[0] ? r.lay[0].price : null;
+    if (lp > 1) { idxValid.push(i); p1raw.push(1/lp); }
+  });
+  if (idxValid.length < 2) return runners.map(blank);
+
+  // Normalize out the exchange's own overround so probabilities sum to 1.
+  const overround = p1raw.reduce((a,b) => a+b, 0);
+  const p1 = p1raw.map(x => x/overround);
+  const n = p1.length;
+
+  const p2 = new Array(n).fill(0);
+  for (let i = 0; i < n; i++) {
+    p2[i] = p1[i];
+    for (let j = 0; j < n; j++) {
+      if (j === i) continue;
+      p2[i] += p1[j] * p1[i] / (1 - p1[j]);
+    }
+  }
+  const p3 = new Array(n).fill(0);
+  for (let i = 0; i < n; i++) {
+    p3[i] = p2[i];
+    for (let j = 0; j < n; j++) {
+      if (j === i) continue;
+      for (let k = 0; k < n; k++) {
+        if (k === i || k === j) continue;
+        const denom1 = 1 - p1[j];
+        const denom2 = 1 - p1[j] - p1[k];
+        if (!(denom1 > 0) || !(denom2 > 0)) continue;
+        p3[i] += p1[j] * (p1[k]/denom1) * (p1[i]/denom2);
+      }
+    }
+  }
+
+  const favLocalIdx = p1.indexOf(Math.max(...p1));
+  const pFav = p1[favLocalIdx];
+
+  const result = runners.map(blank);
+  idxValid.forEach((origIdx, li) => {
+    const isFav = li === favLocalIdx;
+    result[origIdx] = {
+      ...result[origIdx],
+      winProb: p1[li], top2Prob: p2[li], top3Prob: Math.min(p3[li], 1),
+      wwfProb: isFav ? null : p1[li]/(1-pFav),
+      isFavourite: isFav,
+      winFairOdds: 1/p1[li],
+      top2FairOdds: p2[li] > 0 ? 1/p2[li] : null,
+      top3FairOdds: p3[li] > 0 ? 1/p3[li] : null,
+      wwfFairOdds: (isFav || !(1-pFav > 0)) ? null : 1/(p1[li]/(1-pFav)),
+    };
+  });
+  return result;
+}
+
+async function loadDogRaces() {
+  const listEl = document.getElementById('dogs-races-list');
+  listEl.innerHTML = '<div style="padding:16px 20px;color:var(--text2);font-size:13px">Loading…</div>';
+  document.getElementById('dogs-race-card').style.display = 'none';
+  try {
+    const res = await fetch('/.netlify/functions/betfair-dogs-proxy?action=races');
+    const d = await res.json();
+    if (!d.ok) { listEl.innerHTML = `<div style="padding:16px 20px;color:var(--red);font-size:13px">${escapeHtml(d.error||'Could not load races')}</div>`; return; }
+    if (!d.races || !d.races.length) { listEl.innerHTML = '<div style="padding:16px 20px;color:var(--text3);font-size:13px">No greyhound races found in the next 6 hours.</div>'; return; }
+    listEl.innerHTML = d.races.map(r => {
+      const t = new Date(r.startTime);
+      const timeStr = isNaN(t) ? '' : t.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+      return `<div style="padding:10px 20px;border-bottom:0.5px solid var(--border);display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="loadDogRace('${r.marketId}')">
+        <span>${escapeHtml(r.venue)}</span><span style="color:var(--text2);font-size:12.5px">${timeStr}</span>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    listEl.innerHTML = '<div style="padding:16px 20px;color:var(--red);font-size:13px">Network error loading races.</div>';
+  }
+}
+
+async function loadDogRace(marketId) {
+  const card = document.getElementById('dogs-race-card');
+  const body = document.getElementById('dogs-runners-body');
+  const msgEl = document.getElementById('dogs-race-msg');
+  card.style.display = 'block';
+  document.getElementById('dogs-race-title').textContent = 'Loading…';
+  body.innerHTML = '';
+  msgEl.textContent = '';
+  card.scrollIntoView({behavior:'smooth', block:'start'});
+  try {
+    const res = await fetch('/.netlify/functions/betfair-dogs-proxy?action=race&marketId='+encodeURIComponent(marketId));
+    const d = await res.json();
+    if (!d.ok || !d.race) {
+      document.getElementById('dogs-race-title').textContent = 'Could not load race';
+      msgEl.innerHTML = `<span style="color:var(--red)">${escapeHtml(d.error||'Unknown error')}</span>`;
+      return;
+    }
+    const race = d.race;
+    const t = new Date(race.startTime);
+    const timeStr = isNaN(t) ? '' : t.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+    document.getElementById('dogs-race-title').textContent = `${race.venue} — ${timeStr}`;
+
+    const computed = computeGreyhoundFairOdds(race.runners || []);
+    body.innerHTML = computed.map(r => `<tr${r.isFavourite ? ' style="background:var(--amber-bg)"' : ''}>
+      <td>${r.trap ?? '—'}</td>
+      <td>${escapeHtml(r.name)}${r.isFavourite ? ' <span style="font-size:10px;color:var(--amber);font-weight:600">FAV</span>' : ''}</td>
+      <td class="r">${r.back && r.back[0] ? r.back[0].price.toFixed(2) : '—'}</td>
+      <td class="r">${r.lay && r.lay[0] ? r.lay[0].price.toFixed(2) : '—'}</td>
+      <td class="r">${r.lastPriceTraded ? Number(r.lastPriceTraded).toFixed(2) : '—'}</td>
+      <td class="r">${fmtDogOdds(r.winFairOdds)}</td>
+      <td class="r">${fmtDogOdds(r.top2FairOdds)}</td>
+      <td class="r">${fmtDogOdds(r.top3FairOdds)}</td>
+      <td class="r">${fmtDogOdds(r.wwfFairOdds)}</td>
+    </tr>`).join('');
+    msgEl.innerHTML = (race.runners || []).length < 2
+      ? '<span style="color:var(--amber)">Not enough runners with a live lay price to compute fair odds yet.</span>'
+      : `${(race.runners||[]).length} runners · fair odds from live Betfair lay prices, Harville placement model — rough estimate only.`;
+  } catch (e) {
+    document.getElementById('dogs-race-title').textContent = 'Network error';
+  }
+}
 function showTracker(name){document.getElementById('tracker-hub').style.display='none';document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.getElementById('tracker-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='overall')openOverallSection();}
 function backToTrackerHub(){document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('tracker-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
 function showTrackerSection(parent,name){document.getElementById('tracker-'+parent).style.display='none';document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('ts-'+parent+'-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(parent==='personal'&&name==='dogs')openDogsSection();if(parent==='personal'&&name==='american')openAmericanSection();if(parent==='personal'&&name==='value')openValueSection();if(parent==='personal'&&name==='keithbot')openKeithbotSection();if(parent==='personal'&&name==='bbhorses')openBBHorseSection();if(parent==='personal'&&name==='bbgolf')openBBGolfSection();if(parent==='personal'&&name==='freeze')openFreezeSection();if(parent==='personal'&&name==='ninja')openNinjaSection();if(parent==='personal'&&name==='corners')openCornersSection();if(parent==='personal'&&name==='other')openOtherSection();if(parent==='va'&&name==='discord')openVADiscordSection();if(parent==='va'&&name==='racing')openVARacingSection();if(parent==='va'&&name==='bettracker')openVABetTrackerSection();if(parent==='va'&&name==='casino')openVACasinoSection();if(parent==='va'&&name==='offers')openVAOffersSection();if(parent==='va'&&name==='other')openVAOtherSection();if(parent==='personal'&&name==='monthly')openPersonalMonthlySection();if(parent==='va'&&name==='monthly')openVAMonthlySection();}
