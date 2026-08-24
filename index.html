@@ -2547,12 +2547,12 @@ input::placeholder{color:var(--text3)}
   </div>
 
   <!-- GREYHOUND TOP 2/3 (BFEX) -->
-  <div id="calc-dogs" class="calc-view">
+  <div id="calc-dogs" class="calc-view" style="max-width:1080px">
     <button class="back" onclick="backToCalcHub()"><i class="ti ti-arrow-left"></i> Calculators</button>
     <div class="sec-title">Greyhound top 2/3 (BFEX)</div>
     <div class="note"><i class="ti ti-info-circle"></i> Rough fair-odds estimate for top 2 / top 3 / win-without-favourite markets (e.g. Coral), built from live Betfair lay prices via the Harville placement model. A guide for spotting good prices, not gospel — tweakable later. The next 5 races load automatically below — pick anything further out from the list.</div>
 
-    <div class="card wide">
+    <div class="card">
       <div class="card-h" style="display:flex;justify-content:space-between;align-items:center">
         <span>Today's races</span>
         <button class="add-btn" onclick="loadDogRaces()"><i class="ti ti-refresh"></i> Refresh</button>
@@ -7543,7 +7543,7 @@ function ensureDogRaceCard(marketId) {
   let card = document.getElementById('dogs-race-card-'+marketId);
   if (card) return card;
   card = document.createElement('div');
-  card.className = 'card wide';
+  card.className = 'card';
   card.id = 'dogs-race-card-'+marketId;
   card.style.marginTop = '16px';
   card.innerHTML = `
