@@ -2055,7 +2055,10 @@ input::placeholder{color:var(--text3)}
 <!-- ODDSCHECKER -->
 <div id="view-oddschecker" class="sec">
   <button class="back" onclick="backToCalcMenu()"><i class="ti ti-arrow-left"></i> Menu</button>
-  <div class="sec-title">Oddschecker +EV</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0">
+    <div class="sec-title" style="margin-bottom:0">Oddschecker +EV</div>
+    <button onclick="refreshOddscheckerEV(this)" id="oc-ev-refresh-btn" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+  </div>
   <div class="smeta"><span class="pulse"></span><strong id="oc-ev-smeta-count" style="color:var(--green);font-weight:500">Loading…</strong>&nbsp;· <span id="oc-ev-smeta-refreshed"></span></div>
   <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:600px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">BFex fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="scanner-body"></tbody></table></div></div>
   <div class="note"><i class="ti ti-info-circle"></i> Auto-refreshes every 60s. Scanning starts once a match's lineup is confirmed and runs every 10 minutes until kickoff — First Goalscorer, Anytime Goalscorer and Player Shown a Card markets, sorted by EV%.</div>
@@ -7661,7 +7664,7 @@ loadTotalBetsStat();
 // Real data — GET /.netlify/functions/oc-ev proxies to the DO server's /api/oc-ev, which
 // just reads whatever oc-scraper's ev_engine.py last wrote (scan cadence, lineup-confirm
 // gating, and the BFEX-fair-vs-Oddschecker EV% comparison all happen server-side there).
-let ocEvBets=[],ocEvRefreshTimer=null;
+let ocEvBets=[],ocEvRefreshTimer=null,ocEvLastUpdated=null,ocEvManualRefreshTimer=null;
 
 const OC_EV_MARKET_BADGE={
   'AGS':'background:var(--green-bg);color:var(--green)',
@@ -7689,6 +7692,7 @@ async function loadOddscheckerEV(){
     const r=await fetch('/.netlify/functions/oc-ev');
     const d=await r.json();
     ocEvBets=(d.ok&&Array.isArray(d.bets))?d.bets:[];
+    ocEvLastUpdated=d.updated||ocEvLastUpdated;
     const countEl=document.getElementById('oc-ev-smeta-count');
     const refEl=document.getElementById('oc-ev-smeta-refreshed');
     const tagEl=document.getElementById('oc-ev-menu-tag');
@@ -7696,10 +7700,43 @@ async function loadOddscheckerEV(){
     if(refEl)refEl.textContent=d.updated?`updated ${new Date(d.updated).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`:(d.ok?'no scan yet':'could not reach scanner');
     if(tagEl)tagEl.textContent=`${ocEvBets.length} bet${ocEvBets.length===1?'':'s'} today`;
     renderOddscheckerEV();
+    return d.updated||null;
   }catch(e){
     const countEl=document.getElementById('oc-ev-smeta-count');
     if(countEl)countEl.textContent='Could not load';
+    return null;
   }
+}
+
+// Manual refresh: triggers a fresh scrape on the DO server (POST /.netlify/functions/oc-ev
+// → /api/oc-ev/refresh, fire-and-forget — a full scan takes 15-60s, too long for Netlify's
+// own function timeout to wait on), then polls GET every few seconds until the `updated`
+// timestamp actually moves past whatever it was before triggering, and re-renders.
+async function refreshOddscheckerEV(btn){
+  if(ocEvManualRefreshTimer)return; // already refreshing
+  const startedFrom=ocEvLastUpdated;
+  const origLabel=btn.innerHTML;
+  btn.disabled=true;
+  btn.innerHTML='<i class="ti ti-loader-2"></i> Refreshing…';
+  try{
+    await fetch('/.netlify/functions/oc-ev',{method:'POST'});
+  }catch(e){}
+  const deadline=Date.now()+90000; // matches the DO server's own scrape ceiling
+  const poll=async()=>{
+    const updated=await loadOddscheckerEV();
+    if(updated&&updated!==startedFrom){
+      btn.disabled=false;btn.innerHTML=origLabel;
+      ocEvManualRefreshTimer=null;
+      return;
+    }
+    if(Date.now()>deadline){
+      btn.disabled=false;btn.innerHTML=origLabel;
+      ocEvManualRefreshTimer=null;
+      return;
+    }
+    ocEvManualRefreshTimer=setTimeout(poll,3000);
+  };
+  ocEvManualRefreshTimer=setTimeout(poll,3000);
 }
 
 function initOddscheckerEV(){
@@ -7715,6 +7752,7 @@ function initOddscheckerEV(){
 }
 function stopOddscheckerEVRefresh(){
   if(ocEvRefreshTimer){clearInterval(ocEvRefreshTimer);ocEvRefreshTimer=null;}
+  if(ocEvManualRefreshTimer){clearTimeout(ocEvManualRefreshTimer);ocEvManualRefreshTimer=null;}
 }
 
 // ── CHART ──
@@ -10650,11 +10688,13 @@ function deriveBfexFair(runner) {
   const bestLay = runner.lay?.[0]?.price ?? null;
   const bestLaySize = runner.lay?.[0]?.size ?? 0;
   let fair = lpm;
+  let usedFallback = true;
   if (bestBack && bestBack > lpm && bestBackSize >= 100) {
     fair = bestBack;
+    usedFallback = false;
   } else if (bestBack && bestLay && bestLaySize >= 10) {
     const spread = (bestLay - bestBack) / lpm;
-    if (spread <= 0.15) fair = parseFloat(((bestBack + bestLay) / 2).toFixed(2));
+    if (spread <= 0.15) { fair = parseFloat(((bestBack + bestLay) / 2).toFixed(2)); usedFallback = false; }
   }
   const wideSpread = bestBack && bestLay ? (bestLay - bestBack) / lpm > 0.15 : true;
   let confidence;
@@ -10662,6 +10702,14 @@ function deriveBfexFair(runner) {
     confidence = 'green';
   } else {
     confidence = 'yellow';
+  }
+  // If neither branch above fired, `fair` is just the raw last-traded price — only trust
+  // that as "fair" if it's still inside the current live back/lay range. Confirmed live:
+  // a player showed lastPriceTraded below the then-current best-back, i.e. a stale print
+  // the market had already moved past — treating that as fair produced a bad number.
+  if (usedFallback && bestBack && bestLay) {
+    const lo = Math.min(bestBack, bestLay), hi = Math.max(bestBack, bestLay);
+    if (fair < lo || fair > hi) confidence = 'red';
   }
   return { fair, confidence };
 }
@@ -10726,15 +10774,17 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
 
       // Determine fair price
       let fair = lpm;
+      let usedFallback = true;
 
       // If back price is higher than LPM with £100+ available, use back price
       if (bestBack && bestBack > lpm && bestBackSize >= 100) {
         fair = bestBack;
+        usedFallback = false;
       }
       // If clean spread (back and lay within 15% of LPM) with lay liquidity, use midpoint
       else if (bestBack && bestLay && bestLaySize >= 10) {
         const spread = (bestLay - bestBack) / lpm;
-        if (spread <= 0.15) fair = parseFloat(((bestBack + bestLay) / 2).toFixed(2));
+        if (spread <= 0.15) { fair = parseFloat(((bestBack + bestLay) / 2).toFixed(2)); usedFallback = false; }
       }
 
       // Confidence level
@@ -10744,6 +10794,15 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
         confidence = 'green';
       } else {
         confidence = 'yellow';
+      }
+
+      // If neither branch above fired, `fair` is just the raw last-traded price — only
+      // trust it if still inside the current live back/lay range (a stale print the
+      // market has already moved past shouldn't count as fair — confirmed live on a case
+      // where lastPriceTraded sat below the then-current best-back).
+      if (usedFallback && bestBack && bestLay) {
+        const lo = Math.min(bestBack, bestLay), hi = Math.max(bestBack, bestLay);
+        if (fair < lo || fair > hi) confidence = 'red';
       }
 
       return { fair, confidence };

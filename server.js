@@ -143,4 +143,26 @@ app.get('/api/oc-ev', (req, res) => {
   }
 });
 
+// POST /api/oc-ev/refresh — kicks off the same run_pipeline.sh the systemd timer fires every
+// 10 minutes, on demand. Deliberately fire-and-forget (returns immediately, doesn't wait for
+// the scrape to finish) rather than blocking the request: a full run takes 15-60s depending
+// on how many matches are live, well past Netlify functions' ~10-26s timeout, so the proxy
+// (oc-ev.js) awaiting this synchronously would time out mid-scrape. The frontend instead
+// polls GET /api/oc-ev afterward and re-renders once `updated` moves past the timestamp it
+// had before triggering — see initOddscheckerEV/refreshOddscheckerEV in index.html.
+const { spawn } = require('child_process');
+const OC_SCRAPER_DIR = require('path').join(__dirname, 'oc-scraper');
+let ocEvRefreshInFlight = false;
+app.post('/api/oc-ev/refresh', (req, res) => {
+  if (ocEvRefreshInFlight) {
+    return res.json({ ok: true, started: false, alreadyRunning: true });
+  }
+  ocEvRefreshInFlight = true;
+  const child = spawn('bash', ['run_pipeline.sh'], { cwd: OC_SCRAPER_DIR, stdio: 'ignore', detached: true });
+  child.on('error', (e) => { ocEvRefreshInFlight = false; console.error('[oc-ev refresh] failed to start:', e.message); });
+  child.on('exit', () => { ocEvRefreshInFlight = false; });
+  child.unref();
+  res.json({ ok: true, started: true });
+});
+
 app.listen(PORT, () => console.log(`BuzzerBetting server running on port ${PORT}`));

@@ -1,10 +1,15 @@
 // netlify/functions/oc-ev.js
 //
-// Thin proxy to the DO server's GET /api/oc-ev (server.js), which just reads whatever
+// Thin proxy to the DO server's /api/oc-ev (server.js). GET just reads whatever
 // oc-scraper's ev_engine.py last wrote to data/oc_ev_bets.json — the actual comparison
 // (lineup-confirm gating, BFEX fair-odds derivation, Oddschecker scraping, EV% filtering)
 // all happens server-side on the DO droplet, same as /api/oc-cache. No API key needed —
 // this route isn't behind LEDGER_API_KEY on the DO server, same as oc-cache.
+//
+// POST proxies to /api/oc-ev/refresh, which only *starts* a fresh scrape and returns
+// immediately (fire-and-forget) — a full scan can take well past Netlify's own function
+// timeout, so this deliberately doesn't wait for it to finish. The frontend polls GET
+// afterward for a newer `updated` timestamp instead.
 //
 // Same DO_HOST/DO_PORT env-var pattern as ledger.js/fixtures.js, so each independent
 // deployment can point at its own backend without editing this file.
@@ -19,8 +24,11 @@ const CORS = {
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
 
+  const path = event.httpMethod === 'POST' ? '/api/oc-ev/refresh' : '/api/oc-ev';
+  const method = event.httpMethod === 'POST' ? 'POST' : 'GET';
+
   try {
-    const res = await fetch(`http://${DO_HOST}:${DO_PORT}/api/oc-ev`);
+    const res = await fetch(`http://${DO_HOST}:${DO_PORT}${path}`, { method });
     if (!res.ok) throw new Error(`DO server returned HTTP ${res.status}`);
     const d = await res.json();
     return { statusCode: 200, headers: CORS, body: JSON.stringify(d) };
