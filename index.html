@@ -437,6 +437,61 @@ input::placeholder{color:var(--text3)}
   </div>
 </div>
 
+<!-- BET TRACKING: ADD ACCOUNT MODAL (folds a 2nd/3rd bookmaker+account onto one open bet —
+     combined stake, stake-weighted blended odds, relabelled bookie) -->
+<div id="bt-addacc-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;padding:16px">
+  <div class="card card-pad" style="max-width:400px;width:100%">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="sec-title" style="margin:0;font-size:16px">Add account</div>
+      <button class="add-btn" onclick="closeBtAddAccountModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="bt-addacc-fair" style="font-size:12.5px;color:var(--text3);margin-bottom:14px"></div>
+    <label class="lbl">Bookmaker</label>
+    <input type="text" id="bt-addacc-bookie" placeholder="e.g. Betfred" oninput="filterBtAddAccountAccounts()" style="margin-bottom:14px">
+    <label class="lbl">Account</label>
+    <select id="bt-addacc-account" style="margin-bottom:14px"></select>
+    <label class="lbl">Stake £</label>
+    <input type="number" id="bt-addacc-stake" step="0.01" style="margin-bottom:14px">
+    <label class="lbl">Odds</label>
+    <input type="number" id="bt-addacc-odds" step="0.01" style="margin-bottom:14px">
+    <div id="bt-addacc-placeodds-wrap" style="display:none">
+      <label class="lbl">Place odds</label>
+      <input type="number" id="bt-addacc-placeodds" step="0.01" style="margin-bottom:14px">
+    </div>
+    <button onclick="submitBtAddAccount()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:11px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;width:100%">Add account</button>
+    <div id="bt-addacc-msg" style="margin-top:12px;font-size:13px"></div>
+  </div>
+</div>
+
+<!-- BET TRACKING: ADD ACCOUNT MODAL — Back & Lay (separate: role toggle, own odds, no
+     blending — each leg already carries its own real odds in this bet type) -->
+<div id="bt-addacc-bl-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;padding:16px">
+  <div class="card card-pad" style="max-width:400px;width:100%">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="sec-title" style="margin:0;font-size:16px">Add account</div>
+      <button class="add-btn" onclick="closeBtAddAccountBackLayModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button class="add-btn" id="bt-addacc-bl-role-back" onclick="setBtAddAccountBackLayRole('back')" style="flex:1">Bookie (back)</button>
+      <button class="add-btn" id="bt-addacc-bl-role-lay" onclick="setBtAddAccountBackLayRole('lay')" style="flex:1">Exchange (lay)</button>
+    </div>
+    <label class="lbl">Bookmaker</label>
+    <input type="text" id="bt-addacc-bl-bookie" placeholder="e.g. Betfair Exchange" oninput="filterBtAddAccountBackLayAccounts()" style="margin-bottom:14px">
+    <label class="lbl">Account</label>
+    <select id="bt-addacc-bl-account" style="margin-bottom:14px"></select>
+    <label class="lbl">Stake £</label>
+    <input type="number" id="bt-addacc-bl-stake" step="0.01" style="margin-bottom:14px">
+    <label class="lbl">Odds</label>
+    <input type="number" id="bt-addacc-bl-odds" step="0.01" style="margin-bottom:14px">
+    <div id="bt-addacc-bl-commission-wrap" style="display:none">
+      <label class="lbl">Commission %</label>
+      <input type="number" id="bt-addacc-bl-commission" step="0.1" placeholder="e.g. 2" style="margin-bottom:14px">
+    </div>
+    <button onclick="submitBtAddAccountBackLay()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:11px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;width:100%">Add account</button>
+    <div id="bt-addacc-bl-msg" style="margin-top:12px;font-size:13px"></div>
+  </div>
+</div>
+
 <!-- BET TRACKING: SETTLE MODAL (shared — used for open bets, and to override an already-settled result) -->
 <div id="bt-settle-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;padding:16px">
   <div class="card card-pad" style="max-width:380px;width:100%">
@@ -3006,6 +3061,17 @@ const BET_TYPE_CONFIG = {
   // going through the generic oddsMode/legs machinery — see back-lay-bet-input-spec memory.
   'Back & Lay': { layout:'backLay', bookie:true, bookieFieldKey:'Bookie' },
 };
+
+// Bet types the "Add Account" button (merges a 2nd/3rd bookmaker+account onto one bet row —
+// combined stake, stake-weighted blended odds, relabelled bookie) is offered for. Mirrors
+// ADD_ACCOUNT_TYPES in ledger-routes.js exactly — kept in sync there, not derived from
+// BET_TYPE_CONFIG, since the deciding factor (a single blendable Odds figure) isn't something
+// that config currently expresses on its own. Back & Lay gets its own separate button/modal
+// (see openBtAddAccountBackLayModal) since it never blends odds at all.
+const ADD_ACCOUNT_TYPES = [
+  'Value', 'Keithbot', 'American Props', 'Corners', 'Discord', 'Offers (Personal)',
+  'Offers (VA)', 'Other Bets', 'Dogs + Horses', 'Dogs + Horses (VA)', 'BB - BT',
+];
 
 // Column layout guesses for paste-to-autofill types. `key` becomes the stored field name.
 const PASTE_SPECS = {
@@ -6855,6 +6921,8 @@ function renderBtDetailTable(bets) {
       <td style="white-space:nowrap;display:flex;gap:6px">
         ${isBackLay ? `<button class="add-btn" onclick="openBtSettleBackLayModal(${b.id}, fetchBtDetailPage)">${b.result==='open'?'Settle':'Override'}</button>`
           : BET_TYPE_CONFIG[b.bet_type]?.winningsBasedPL ? `<button class="add-btn" onclick="deleteBetDirect(${b.id}, fetchBtDetailPage)" style="color:var(--red);border-color:var(--red)">Delete</button>` : `<button class="add-btn" onclick="openBtSettleModal(${b.id}, '${b.result}', ${b.pl||0}, fetchBtDetailPage, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${b.bet_type.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">${b.result==='open'?'Settle':'Override'}</button>`}
+        ${b.result==='open' && isBackLay ? `<button class="add-btn" onclick="openBtAddAccountBackLayModal(${b.id})">Add account</button>` : ''}
+        ${b.result==='open' && !isBackLay && ADD_ACCOUNT_TYPES.includes(b.bet_type) ? `<button class="add-btn" onclick="openBtAddAccountModal(${b.id}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, ${typeof b.fields.Fairs==='number'?b.fields.Fairs:'null'}, ${b.fields['Each-Way']===true}, '${(BET_TYPE_CONFIG[b.bet_type]?.bookieFieldKey||'Bookie').replace(/'/g,"\\'")}')">Add account</button>` : ''}
         ${b.result==='open' && !b.leg_count ? `<button class="add-btn" onclick="openBtLinkModal(${b.id})">Link account</button>` : ''}
       </td>
     </tr>`;
@@ -6916,6 +6984,137 @@ async function submitBtLink() {
     const d = await ledgerApi('bets/'+btLinkBetId+'/legs', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ account_id: accountId, stake }) });
     if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to link'}</span>`; return; }
     closeBtLinkModal();
+    loadBetTrackingDetail();
+  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error</span>'; }
+}
+
+// ---- ADD ACCOUNT MODAL (folds a 2nd/3rd bookmaker+account onto one open bet — combined
+// stake, stake-weighted blended odds, relabelled bookie; fair odds shown for reference only,
+// never re-entered) ----
+let btAddAccState = null; // { betId, bookieFieldKey, allAccounts }
+
+async function openBtAddAccountModal(betId, currentOdds, fairs, isEachWay, bookieFieldKey) {
+  btAddAccState = { betId, bookieFieldKey, allAccounts: [] };
+  document.getElementById('bt-addacc-msg').innerHTML = '';
+  document.getElementById('bt-addacc-bookie').value = '';
+  document.getElementById('bt-addacc-stake').value = '';
+  document.getElementById('bt-addacc-odds').value = '';
+  document.getElementById('bt-addacc-placeodds').value = '';
+  document.getElementById('bt-addacc-placeodds-wrap').style.display = isEachWay ? 'block' : 'none';
+  const fairEl = document.getElementById('bt-addacc-fair');
+  fairEl.textContent = `Current odds ${currentOdds!=null?currentOdds.toFixed(2):'—'} · Fair odds ${fairs!=null?fairs.toFixed(2):'—'} (unchanged — combining accounts doesn't re-price the bet)`;
+  const sel = document.getElementById('bt-addacc-account');
+  sel.innerHTML = '<option value="">Loading…</option>';
+  try {
+    const d = await ledgerApi('accounts?excludeClosed=1');
+    btAddAccState.allAccounts = (d.ok && d.accounts) ? d.accounts : [];
+    filterBtAddAccountAccounts();
+  } catch (e) { sel.innerHTML = '<option value="">Could not load accounts</option>'; }
+  document.getElementById('bt-addacc-modal-overlay').style.display = 'flex';
+}
+
+function filterBtAddAccountAccounts() {
+  if (!btAddAccState) return;
+  const bookieText = document.getElementById('bt-addacc-bookie').value.trim().toLowerCase();
+  const sel = document.getElementById('bt-addacc-account');
+  const matches = bookieText
+    ? btAddAccState.allAccounts.filter(a => (a.bookie||'').toLowerCase().includes(bookieText))
+    : btAddAccState.allAccounts;
+  sel.innerHTML = matches.length
+    ? '<option value="">Select account…</option>' + matches.map(a=>`<option value="${a.id}">${a.account_id||a.profile} (${a.bookie})</option>`).join('')
+    : `<option value="">${bookieText?'No accounts on that bookie':'No live accounts'}</option>`;
+}
+
+function closeBtAddAccountModal() {
+  document.getElementById('bt-addacc-modal-overlay').style.display = 'none';
+  btAddAccState = null;
+}
+
+async function submitBtAddAccount() {
+  if (!btAddAccState) return;
+  const accountId = document.getElementById('bt-addacc-account').value;
+  const stake = parseFloat(document.getElementById('bt-addacc-stake').value);
+  const odds = parseFloat(document.getElementById('bt-addacc-odds').value);
+  const placeOddsRaw = document.getElementById('bt-addacc-placeodds').value;
+  const placeOdds = placeOddsRaw !== '' ? parseFloat(placeOddsRaw) : null;
+  const msgEl = document.getElementById('bt-addacc-msg');
+  if (!accountId) { msgEl.innerHTML = '<span style="color:var(--red)">Select an account.</span>'; return; }
+  if (!(stake>0)) { msgEl.innerHTML = '<span style="color:var(--red)">Enter a stake greater than £0.</span>'; return; }
+  if (!(odds>1)) { msgEl.innerHTML = '<span style="color:var(--red)">Enter odds greater than 1.</span>'; return; }
+  msgEl.innerHTML = '<span style="color:var(--text2)">Adding…</span>';
+  try {
+    const d = await ledgerApi('bets/'+btAddAccState.betId+'/add-account', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ account_id: accountId, stake, odds, placeOdds, bookieFieldKey: btAddAccState.bookieFieldKey }) });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to add account'}</span>`; return; }
+    closeBtAddAccountModal();
+    loadBetTrackingDetail();
+  } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error</span>'; }
+}
+
+// ---- ADD ACCOUNT MODAL — BACK & LAY (separate: role toggle, own odds, no blending) ----
+let btAddAccBlState = null; // { betId, role, allAccounts }
+
+async function openBtAddAccountBackLayModal(betId) {
+  btAddAccBlState = { betId, role: 'back', allAccounts: [] };
+  document.getElementById('bt-addacc-bl-msg').innerHTML = '';
+  document.getElementById('bt-addacc-bl-bookie').value = '';
+  document.getElementById('bt-addacc-bl-stake').value = '';
+  document.getElementById('bt-addacc-bl-odds').value = '';
+  document.getElementById('bt-addacc-bl-commission').value = '';
+  setBtAddAccountBackLayRole('back');
+  const sel = document.getElementById('bt-addacc-bl-account');
+  sel.innerHTML = '<option value="">Loading…</option>';
+  try {
+    const d = await ledgerApi('accounts?excludeClosed=1');
+    btAddAccBlState.allAccounts = (d.ok && d.accounts) ? d.accounts : [];
+    filterBtAddAccountBackLayAccounts();
+  } catch (e) { sel.innerHTML = '<option value="">Could not load accounts</option>'; }
+  document.getElementById('bt-addacc-bl-modal-overlay').style.display = 'flex';
+}
+
+function setBtAddAccountBackLayRole(role) {
+  if (!btAddAccBlState) return;
+  btAddAccBlState.role = role;
+  document.getElementById('bt-addacc-bl-role-back').style.background = role==='back'?'var(--brand)':'';
+  document.getElementById('bt-addacc-bl-role-back').style.color = role==='back'?'#fff':'';
+  document.getElementById('bt-addacc-bl-role-lay').style.background = role==='lay'?'var(--brand)':'';
+  document.getElementById('bt-addacc-bl-role-lay').style.color = role==='lay'?'#fff':'';
+  document.getElementById('bt-addacc-bl-commission-wrap').style.display = role==='lay'?'block':'none';
+}
+
+function filterBtAddAccountBackLayAccounts() {
+  if (!btAddAccBlState) return;
+  const bookieText = document.getElementById('bt-addacc-bl-bookie').value.trim().toLowerCase();
+  const sel = document.getElementById('bt-addacc-bl-account');
+  const matches = bookieText
+    ? btAddAccBlState.allAccounts.filter(a => (a.bookie||'').toLowerCase().includes(bookieText))
+    : btAddAccBlState.allAccounts;
+  sel.innerHTML = matches.length
+    ? '<option value="">Select account…</option>' + matches.map(a=>`<option value="${a.id}">${a.account_id||a.profile} (${a.bookie})</option>`).join('')
+    : `<option value="">${bookieText?'No accounts on that bookie':'No live accounts'}</option>`;
+}
+
+function closeBtAddAccountBackLayModal() {
+  document.getElementById('bt-addacc-bl-modal-overlay').style.display = 'none';
+  btAddAccBlState = null;
+}
+
+async function submitBtAddAccountBackLay() {
+  if (!btAddAccBlState) return;
+  const accountId = document.getElementById('bt-addacc-bl-account').value;
+  const stake = parseFloat(document.getElementById('bt-addacc-bl-stake').value);
+  const odds = parseFloat(document.getElementById('bt-addacc-bl-odds').value);
+  const role = btAddAccBlState.role;
+  const commission = role==='lay' ? parseFloat(document.getElementById('bt-addacc-bl-commission').value)/100 : undefined;
+  const msgEl = document.getElementById('bt-addacc-bl-msg');
+  if (!accountId) { msgEl.innerHTML = '<span style="color:var(--red)">Select an account.</span>'; return; }
+  if (!(stake>0)) { msgEl.innerHTML = '<span style="color:var(--red)">Enter a stake greater than £0.</span>'; return; }
+  if (!(odds>1)) { msgEl.innerHTML = '<span style="color:var(--red)">Enter odds greater than 1.</span>'; return; }
+  if (role==='lay' && !(commission>=0 && commission<1)) { msgEl.innerHTML = '<span style="color:var(--red)">Enter a commission rate between 0 and 100%.</span>'; return; }
+  msgEl.innerHTML = '<span style="color:var(--text2)">Adding…</span>';
+  try {
+    const d = await ledgerApi('bets/'+btAddAccBlState.betId+'/add-account/backlay', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ role, account_id: accountId, stake, odds, commission }) });
+    if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to add account'}</span>`; return; }
+    closeBtAddAccountBackLayModal();
     loadBetTrackingDetail();
   } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error</span>'; }
 }

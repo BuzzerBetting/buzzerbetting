@@ -1431,6 +1431,147 @@ router.post('/bets/:id/legs', (req, res) => {
   } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
 });
 
+// Bet types this "Add Account" merge feature supports — a stake-weighted blended Odds/Place
+// Odds figure only makes sense for types with that single-Odds shape. Casino (balance-based,
+// no odds), each-way BB Horse/Golf/RTP (two odds columns with their own blending question),
+// Ninja Golf BFEX, and Freeze (singleLegOnly) are deliberately excluded. Back & Lay has its
+// own separate endpoint below, since it never blends odds at all.
+const ADD_ACCOUNT_TYPES = [
+  'Value', 'Keithbot', 'American Props', 'Corners', 'Discord', 'Offers (Personal)',
+  'Offers (VA)', 'Other Bets', 'Dogs + Horses', 'Dogs + Horses (VA)', 'BB - BT',
+];
+
+// POST /api/ledger/bets/:id/add-account — folds a second (third, ...) bookmaker/account leg
+// into an already-placed bet: combined stake, a stake-weighted "neutral" odds. This blend is
+// exact, not approximate — the app's settle route only ever needs one overall Odds figure and
+// a stake-share split (never each leg's individual odds — confirmed against PATCH
+// /bets/:id/settle), so combinedStake × neutralOdds on a win reproduces the true sum
+// stake1×odds1 + stake2×odds2. Bookie identity is read from the ACCOUNT, not from `fields` —
+// bookieFieldKey (and whether a bookie field exists at all — BB - BT has none) varies by bet
+// type, but every account always has a real `bookie`.
+router.post('/bets/:id/add-account', (req, res) => {
+  const addAccount = db.transaction((betId, accountId, stake, odds, placeOdds, bookieFieldKey) => {
+    const bet = db.prepare(`SELECT * FROM bets WHERE id = ?`).get(betId);
+    if (!bet) throw new Error('Bet not found');
+    if (!ADD_ACCOUNT_TYPES.includes(bet.bet_type)) throw new Error(`Add Account isn't supported for ${bet.bet_type}.`);
+    if (bet.result !== 'open') throw new Error('Only open bets can have an account added — settle/override happens once, on the combined row.');
+
+    const newAccount = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(accountId);
+    if (!newAccount) throw new Error('Account not found');
+
+    const legs = db.prepare(
+      `SELECT bl.*, a.bookie AS account_bookie FROM bet_legs bl JOIN accounts a ON a.id = bl.account_id
+       WHERE bl.bet_id = ? ORDER BY bl.id`
+    ).all(betId);
+
+    const parsed = JSON.parse(bet.fields);
+    const freeBet = hasNoRealStake(bet.bet_type, parsed);
+    if (!freeBet) {
+      db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`).run(stake, accountId);
+    }
+
+    // Which fields key holds the odds number — 'Odds' for almost everything, 'Back Odds' for
+    // Other Bets (the one type without a plain 'Odds' field).
+    const oddsKey = typeof parsed.Odds === 'number' ? 'Odds' : (typeof parsed['Back Odds'] === 'number' ? 'Back Odds' : 'Odds');
+    const currentOdds = typeof parsed[oddsKey] === 'number' ? parsed[oddsKey] : odds;
+    const existingStake = bet.total_stake || 0;
+
+    // First time this bet gets a second account: lock each existing leg's real odds in
+    // before the bet-level figure changes to a blend — pure record-keeping (settlement never
+    // reads leg.odds for this bet shape), so the legs modal can still show what each account
+    // actually got.
+    if (legs.length && !legs.some(l => typeof l.odds === 'number')) {
+      for (const leg of legs) {
+        db.prepare(`UPDATE bet_legs SET odds = ? WHERE id = ?`).run(currentOdds, leg.id);
+      }
+    }
+
+    db.prepare(`INSERT INTO bet_legs (bet_id, account_id, stake, odds) VALUES (?, ?, ?, ?)`).run(betId, accountId, stake, odds);
+
+    const newTotalStake = +(existingStake + stake).toFixed(2);
+    const blendedOdds = existingStake > 0
+      ? +(((existingStake * currentOdds) + (stake * odds)) / newTotalStake).toFixed(2)
+      : odds;
+    parsed[oddsKey] = blendedOdds;
+
+    if (parsed['Each-Way'] === true && typeof placeOdds === 'number' && typeof parsed['Place Odds'] === 'number') {
+      parsed['Place Odds'] = +(((existingStake * parsed['Place Odds']) + (stake * placeOdds)) / newTotalStake).toFixed(2);
+    }
+
+    // Also update whichever field holds the displayed stake, matching the same dynamic
+    // lookup the leg-delete endpoint uses (varies: 'Stake' vs 'Total Stake' by bet type).
+    const stakeKey = Object.keys(parsed).find(k => k.toLowerCase().replace(/[^a-z]/g, '') === 'stake' || k.toLowerCase().replace(/[^a-z]/g, '') === 'totalstake');
+    if (stakeKey) parsed[stakeKey] = newTotalStake;
+
+    const firstLegBookie = legs.length ? legs[0].account_bookie : newAccount.bookie;
+    if (newAccount.bookie !== firstLegBookie) {
+      const newLegCount = legs.length + 1;
+      parsed[bookieFieldKey] = `${firstLegBookie} + ${newLegCount - 1}`;
+    }
+
+    db.prepare(`UPDATE bets SET total_stake = ?, fields = ? WHERE id = ?`).run(newTotalStake, JSON.stringify(parsed), betId);
+  });
+
+  try {
+    const { account_id, stake, odds, placeOdds, bookieFieldKey } = req.body;
+    const stakeAmt = parseFloat(stake);
+    const oddsAmt = parseFloat(odds);
+    const placeOddsAmt = placeOdds != null && placeOdds !== '' ? parseFloat(placeOdds) : null;
+    if (!account_id) return res.status(400).json({ ok: false, error: 'account_id required' });
+    if (!(stakeAmt > 0)) return res.status(400).json({ ok: false, error: 'stake must be a positive number' });
+    if (!(oddsAmt > 1)) return res.status(400).json({ ok: false, error: 'odds must be greater than 1' });
+    addAccount(req.params.id, account_id, stakeAmt, oddsAmt, placeOddsAmt, bookieFieldKey || 'Bookie');
+    const bet = db.prepare(`SELECT * FROM bets WHERE id = ?`).get(req.params.id);
+    res.json({ ok: true, bet: { ...bet, fields: JSON.parse(bet.fields) } });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/bets/:id/add-account/backlay — Back & Lay's own leg-add endpoint. Unlike
+// the generic one above, no blending happens at all — each leg already carries its own real
+// odds (and lay legs their own commission), exactly mirroring how POST /bets/backlay creates
+// the first set of legs. total_stake only grows for back legs (lay legs represent the
+// hedge/liability, not additional staked money — matches creation-time behaviour). The row's
+// "+N" account-code labels are already fully driven by bet_legs counts, not `fields`, so
+// nothing there needs updating either.
+router.post('/bets/:id/add-account/backlay', (req, res) => {
+  const addLeg = db.transaction((betId, role, accountId, stake, odds, commission) => {
+    const bet = db.prepare(`SELECT * FROM bets WHERE id = ?`).get(betId);
+    if (!bet) throw new Error('Bet not found');
+    if (bet.bet_type !== 'Back & Lay') throw new Error('This endpoint is only for Back & Lay bets.');
+    if (bet.result !== 'open') throw new Error('Only open bets can have an account added — settle/override happens once, on the combined row.');
+
+    const account = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(accountId);
+    if (!account) throw new Error('Account not found');
+
+    if (role === 'back') {
+      db.prepare(`INSERT INTO bet_legs (bet_id, account_id, stake, role, odds) VALUES (?, ?, ?, 'back', ?)`).run(betId, accountId, stake, odds);
+      db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`).run(stake, accountId);
+      db.prepare(`UPDATE bets SET total_stake = total_stake + ? WHERE id = ?`).run(stake, betId);
+    } else {
+      const liability = +(stake * (odds - 1)).toFixed(2);
+      db.prepare(`INSERT INTO bet_legs (bet_id, account_id, stake, role, odds, commission) VALUES (?, ?, ?, 'lay', ?, ?)`).run(betId, accountId, stake, odds, commission);
+      db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`).run(liability, accountId);
+    }
+  });
+
+  try {
+    const { role, account_id, stake, odds, commission } = req.body;
+    if (!['back', 'lay'].includes(role)) return res.status(400).json({ ok: false, error: 'role must be back or lay' });
+    if (!account_id) return res.status(400).json({ ok: false, error: 'account_id required' });
+    const stakeAmt = parseFloat(stake);
+    const oddsAmt = parseFloat(odds);
+    if (!(stakeAmt > 0) || !(oddsAmt > 1)) return res.status(400).json({ ok: false, error: 'each leg needs a positive stake and odds greater than 1' });
+    let commissionAmt = 0;
+    if (role === 'lay') {
+      commissionAmt = parseFloat(commission);
+      if (isNaN(commissionAmt) || commissionAmt < 0 || commissionAmt >= 1) return res.status(400).json({ ok: false, error: 'lay leg needs a commission rate between 0 and 100%' });
+    }
+    addLeg(req.params.id, role, account_id, stakeAmt, oddsAmt, commissionAmt);
+    const bet = db.prepare(`SELECT * FROM bets WHERE id = ?`).get(req.params.id);
+    res.json({ ok: true, bet: { ...bet, fields: JSON.parse(bet.fields) } });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
 // DELETE /api/ledger/bets/:id/legs/:legId — removes one account from a multi-account bet
 // (e.g. the wrong account was accidentally included when placing). Reverses exactly that
 // leg's effect on its account's balance — the same open-vs-settled reversal math used by
