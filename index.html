@@ -82,6 +82,7 @@ header{background:var(--header);height:62px;display:flex;align-items:center;just
 .kpi-s{font-size:12px;color:var(--text2);margin-top:3px}
 .dt{width:100%;border-collapse:collapse;font-size:13px}
 .dt th{padding:9px 16px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;border-bottom:0.5px solid var(--border);white-space:nowrap}
+.dt th.r{text-align:right}
 .dt td{padding:12px 16px;border-bottom:0.5px solid var(--border);color:var(--text)}
 .dt tr:last-child td{border-bottom:none}
 .dt tr:hover td{background:var(--surface2)}
@@ -2060,7 +2061,11 @@ input::placeholder{color:var(--text3)}
     <button onclick="refreshOddscheckerEV(this)" id="oc-ev-refresh-btn" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
   </div>
   <div class="smeta"><span class="pulse"></span><strong id="oc-ev-smeta-count" style="color:var(--green);font-weight:500">Loading…</strong>&nbsp;· <span id="oc-ev-smeta-refreshed"></span></div>
-  <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:600px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">BFex fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="scanner-body"></tbody></table></div></div>
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--text3);margin-bottom:10px">
+    <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block"></span>BFex fair — high confidence (£500+ matched, tight spread)</span>
+    <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--amber);display:inline-block"></span>Usable but thinner BFEX data</span>
+  </div>
+  <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">BFex fair</th><th class="r">Last traded</th><th class="r">Total traded</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="scanner-body"></tbody></table></div></div>
   <div class="note"><i class="ti ti-info-circle"></i> Auto-refreshes every 60s. Scanning starts once a match's lineup is confirmed and runs every 10 minutes until kickoff — First Goalscorer, Anytime Goalscorer, Player Shown a Card and Player Shots on Target markets, sorted by EV%.</div>
 </div>
 
@@ -7679,12 +7684,18 @@ function renderOddscheckerEV(){
   ocEvBets.forEach(b=>{
     const mS=OC_EV_MARKET_BADGE[b.mkt]||'background:var(--surface2);color:var(--text2)';
     const eS=b.ev>=20?'background:var(--green-bg);color:var(--green)':'background:var(--amber-bg);color:var(--amber)';
+    // Colour the fair price by the same confidence deriveBfexFair judged it with — matches
+    // the green/orange/red key already used on the lineup fair-odds view (only green/yellow
+    // ever reach here; red/none are filtered out server-side before a bet is even alerted).
+    const fairColor=b.conf==='green'?'var(--green)':(b.conf==='yellow'?'var(--amber)':'var(--text2)');
+    const lastTraded=(typeof b.lastTraded==='number')?b.lastTraded.toFixed(2):'—';
+    const matched=(typeof b.matched==='number')?`£${b.matched.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}`:'—';
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:var(--text2)">${b.fair.toFixed(2)}</td><td class="r" style="color:var(--text2);font-size:12px">${b.bk}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td>`;
+    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:${fairColor};font-weight:500">${b.fair.toFixed(2)}</td><td class="r tn" style="color:var(--text2)">${lastTraded}</td><td class="r tn" style="color:var(--text2)">${matched}</td><td class="r" style="color:var(--text2);font-size:12px">${b.bk}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td>`;
     sb.appendChild(tr);
   });
   if(!ocEvBets.length){
-    sb.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No 5%+ value bets right now — either no lineups confirmed yet, or nothing clears the threshold.</td></tr>';
+    sb.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No 5%+ value bets right now — either no lineups confirmed yet, or nothing clears the threshold.</td></tr>';
   }
 }
 
