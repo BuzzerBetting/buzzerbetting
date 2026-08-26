@@ -146,7 +146,7 @@ exports.handler = async (event) => {
     const eventId = match.event.id;
 
     const catalogue = await bfCall('listMarketCatalogue', {
-      filter: { eventIds: [eventId], marketTypeCodes: ['TO_SCORE', 'SHOTS_ON_TARGET_P1', 'FIRST_GOAL_SCORER'] },
+      filter: { eventIds: [eventId], marketTypeCodes: ['TO_SCORE', 'SHOTS_ON_TARGET_P1', 'FIRST_GOAL_SCORER', 'SHOWN_A_CARD'] },
       marketProjection: ['RUNNER_DESCRIPTION'],
       maxResults: 10
     }, appKey, session);

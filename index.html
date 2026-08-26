@@ -284,7 +284,7 @@ input::placeholder{color:var(--text3)}
   <div class="grid">
     <div class="cat" onclick="showSec('oddschecker')">
       <div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-bolt"></i></div>
-      <div><div class="cat-title">Oddschecker +EV</div><div class="cat-desc">Live value bets pulled from Oddschecker vs BFex fairs</div><div class="cat-tag" style="background:var(--amber-bg);color:var(--amber)">6 bets today</div></div>
+      <div><div class="cat-title">Oddschecker +EV</div><div class="cat-desc">Live value bets pulled from Oddschecker vs BFex fairs</div><div class="cat-tag" id="oc-ev-menu-tag" style="background:var(--amber-bg);color:var(--amber)">—</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
     <div class="cat" onclick="showSec('ddhh')">
@@ -2056,9 +2056,9 @@ input::placeholder{color:var(--text3)}
 <div id="view-oddschecker" class="sec">
   <button class="back" onclick="backToCalcMenu()"><i class="ti ti-arrow-left"></i> Menu</button>
   <div class="sec-title">Oddschecker +EV</div>
-  <div class="smeta"><span class="pulse"></span><strong style="color:var(--green);font-weight:500">6 value bets found</strong>&nbsp;· sample data · refreshed 14:22</div>
-  <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:660px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">BFex fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th class="r">Stake</th></tr></thead><tbody id="scanner-body"></tbody></table></div></div>
-  <div class="note"><i class="ti ti-info-circle"></i> In the live version, this auto-refreshes from Betfair Exchange API + Oddschecker scraper data, sorted by EV%.</div>
+  <div class="smeta"><span class="pulse"></span><strong id="oc-ev-smeta-count" style="color:var(--green);font-weight:500">Loading…</strong>&nbsp;· <span id="oc-ev-smeta-refreshed"></span></div>
+  <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:600px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">BFex fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="scanner-body"></tbody></table></div></div>
+  <div class="note"><i class="ti ti-info-circle"></i> Auto-refreshes every 60s. Scanning starts once a match's lineup is confirmed and runs every 10 minutes until kickoff — First Goalscorer, Anytime Goalscorer and Player Shown a Card markets, sorted by EV%.</div>
 </div>
 
 <!-- DDHH -->
@@ -2655,9 +2655,9 @@ function checkPin(){
 
 // ── NAVIGATION ──
 function goHome(){if(CURRENT_USER_ROLE==='calculator'){showTopSec('calc');return;}document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
-function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();if(name==='ddhh')initDDHH(null);if(name==='bets-combined')initBetsPage();if(name==='monthly')initMonthly();if(name==='monthlyprofit')initMonthlyProfit();if(name==='assistantmonthly')initAssistantMonthly();if(name==='todo')initTodo();}
+function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();if(name==='ddhh')initDDHH(null);if(name==='bets-combined')initBetsPage();if(name==='monthly')initMonthly();if(name==='monthlyprofit')initMonthlyProfit();if(name==='assistantmonthly')initAssistantMonthly();if(name==='todo')initTodo();if(name==='oddschecker')initOddscheckerEV();else stopOddscheckerEVRefresh();}
 const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger',bettracking:'bettracking',stats:'stats-menu'};
-function showTopSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='stats')renderStatsMenu();}
+function showTopSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='stats')renderStatsMenu();if(name==='calc')loadOddscheckerEV();stopOddscheckerEVRefresh();}
 
 // Admin sees everything — the full Today's Stats and Monthly Profit (all bets, both
 // Buzzer and Assistant), plus the same two Assistant-only views Staff get, so nothing
@@ -7657,8 +7657,65 @@ loadTotalBetsStat();
 // ── MONTHLY TABLE ──
 (function(){const tb=document.getElementById('monthly-tbody');[...monthly].reverse().forEach(([m,p])=>{const vs=((p-avgP)/avgP*100),pos=vs>=0;const tr=document.createElement('tr');tr.innerHTML=`<td>${m}</td><td class="r tn" style="color:var(--green)">£${p.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="r" style="color:var(--${pos?'green':'red'})">${pos?'+':''}${vs.toFixed(1)}%</td>`;tb.appendChild(tr);});})();
 
-// ── SCANNER TABLE ──
-(function(){const sb=document.getElementById('scanner-body');bets.forEach(b=>{const isH=b.mkt==='Header';const mS=isH?'background:var(--blue-bg);color:var(--blue)':'background:var(--green-bg);color:var(--green)';const eS=b.ev>=20?'background:var(--green-bg);color:var(--green)':'background:var(--amber-bg);color:var(--amber)';const tr=document.createElement('tr');tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:var(--text2)">${b.fair.toFixed(2)}</td><td class="r" style="color:var(--text2);font-size:12px">${b.bk}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td><td class="r tn" style="color:var(--green)">£${b.stake}</td>`;sb.appendChild(tr);});})();
+// ── SCANNER TABLE (Oddschecker +EV) ──
+// Real data — GET /.netlify/functions/oc-ev proxies to the DO server's /api/oc-ev, which
+// just reads whatever oc-scraper's ev_engine.py last wrote (scan cadence, lineup-confirm
+// gating, and the BFEX-fair-vs-Oddschecker EV% comparison all happen server-side there).
+let ocEvBets=[],ocEvRefreshTimer=null;
+
+const OC_EV_MARKET_BADGE={
+  'AGS':'background:var(--green-bg);color:var(--green)',
+  'First scorer':'background:var(--blue-bg);color:var(--blue)',
+  'Cards':'background:var(--purple-bg);color:var(--purple)'
+};
+
+function renderOddscheckerEV(){
+  const sb=document.getElementById('scanner-body');
+  sb.innerHTML='';
+  ocEvBets.forEach(b=>{
+    const mS=OC_EV_MARKET_BADGE[b.mkt]||'background:var(--surface2);color:var(--text2)';
+    const eS=b.ev>=20?'background:var(--green-bg);color:var(--green)':'background:var(--amber-bg);color:var(--amber)';
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:var(--text2)">${b.fair.toFixed(2)}</td><td class="r" style="color:var(--text2);font-size:12px">${b.bk}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td>`;
+    sb.appendChild(tr);
+  });
+  if(!ocEvBets.length){
+    sb.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No 5%+ value bets right now — either no lineups confirmed yet, or nothing clears the threshold.</td></tr>';
+  }
+}
+
+async function loadOddscheckerEV(){
+  try{
+    const r=await fetch('/.netlify/functions/oc-ev');
+    const d=await r.json();
+    ocEvBets=(d.ok&&Array.isArray(d.bets))?d.bets:[];
+    const countEl=document.getElementById('oc-ev-smeta-count');
+    const refEl=document.getElementById('oc-ev-smeta-refreshed');
+    const tagEl=document.getElementById('oc-ev-menu-tag');
+    if(countEl)countEl.textContent=`${ocEvBets.length} value bet${ocEvBets.length===1?'':'s'} found`;
+    if(refEl)refEl.textContent=d.updated?`updated ${new Date(d.updated).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`:(d.ok?'no scan yet':'could not reach scanner');
+    if(tagEl)tagEl.textContent=`${ocEvBets.length} bet${ocEvBets.length===1?'':'s'} today`;
+    renderOddscheckerEV();
+  }catch(e){
+    const countEl=document.getElementById('oc-ev-smeta-count');
+    if(countEl)countEl.textContent='Could not load';
+  }
+}
+
+function initOddscheckerEV(){
+  loadOddscheckerEV();
+  stopOddscheckerEVRefresh();
+  ocEvRefreshTimer=setInterval(()=>{
+    // Self-cancels if the user has navigated away without going through showSec (e.g. the
+    // Menu back button, which calls showTopSec rather than showSec).
+    const view=document.getElementById('view-oddschecker');
+    if(!view||view.style.display==='none'){stopOddscheckerEVRefresh();return;}
+    loadOddscheckerEV();
+  },60000);
+}
+function stopOddscheckerEVRefresh(){
+  if(ocEvRefreshTimer){clearInterval(ocEvRefreshTimer);ocEvRefreshTimer=null;}
+}
 
 // ── CHART ──
 let chartBuilt=false;

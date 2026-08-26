@@ -128,4 +128,19 @@ app.get('/api/oc-cache', (req, res) => {
   res.json({ ok: true, ...hit });
 });
 
+// GET /api/oc-ev — reads the pre-computed Oddschecker-vs-BFEX +EV bet list written by
+// oc-scraper's ev_engine.py (same scraper/timer as /api/oc-cache above — see its README).
+// Only ever a read of the last completed run's output; the comparison itself (lineup-confirm
+// gating, BFEX fair-odds derivation, EV% filtering) all happens in the Python service.
+const OC_EV_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'oc_ev_bets.json');
+app.get('/api/oc-ev', (req, res) => {
+  if (!fs.existsSync(OC_EV_PATH)) return res.json({ ok: true, updated: null, bets: [] });
+  try {
+    const payload = JSON.parse(fs.readFileSync(OC_EV_PATH, 'utf8'));
+    res.json({ ok: true, updated: payload.updated || null, bets: payload.bets || [] });
+  } catch (e) {
+    res.json({ ok: false, error: 'Failed reading oc_ev_bets.json: ' + e.message });
+  }
+});
+
 app.listen(PORT, () => console.log(`BuzzerBetting server running on port ${PORT}`));

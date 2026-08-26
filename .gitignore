@@ -4,10 +4,9 @@ ledger.db
 ledger.db-shm
 ledger.db-wal
 
-# oc-scraper (Python subproject)
-oc-scraper/venv/
-oc-scraper/oc/__pycache__/
-oc-scraper/scripts/__pycache__/
-oc-scraper/oc/cookies.json
-oc-scraper/data/todays_matches.csv
-oc-scraper/data/oc_cache/
+# oc-scraper — deployed directly to the DO server over SSH, deliberately NOT tracked in this
+# shared repo (it does Cloudflare-bypass/cookie-harvesting to reach Oddschecker's real API,
+# and this repo is shared with a second, independent operator's instance — see
+# PROJECT_CONTEXT.md). It still reads/writes against the app via /api/fixtures and
+# /api/oc-cache (server.js), those integration points are tracked normally.
+oc-scraper/
