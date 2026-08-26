@@ -2061,7 +2061,7 @@ input::placeholder{color:var(--text3)}
   </div>
   <div class="smeta"><span class="pulse"></span><strong id="oc-ev-smeta-count" style="color:var(--green);font-weight:500">Loading…</strong>&nbsp;· <span id="oc-ev-smeta-refreshed"></span></div>
   <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:600px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">BFex fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="scanner-body"></tbody></table></div></div>
-  <div class="note"><i class="ti ti-info-circle"></i> Auto-refreshes every 60s. Scanning starts once a match's lineup is confirmed and runs every 10 minutes until kickoff — First Goalscorer, Anytime Goalscorer and Player Shown a Card markets, sorted by EV%.</div>
+  <div class="note"><i class="ti ti-info-circle"></i> Auto-refreshes every 60s. Scanning starts once a match's lineup is confirmed and runs every 10 minutes until kickoff — First Goalscorer, Anytime Goalscorer, Player Shown a Card and Player Shots on Target markets, sorted by EV%.</div>
 </div>
 
 <!-- DDHH -->
@@ -7669,7 +7669,8 @@ let ocEvBets=[],ocEvRefreshTimer=null,ocEvLastUpdated=null,ocEvManualRefreshTime
 const OC_EV_MARKET_BADGE={
   'AGS':'background:var(--green-bg);color:var(--green)',
   'First scorer':'background:var(--blue-bg);color:var(--blue)',
-  'Cards':'background:var(--purple-bg);color:var(--purple)'
+  'Cards':'background:var(--purple-bg);color:var(--purple)',
+  'SOT':'background:var(--red-bg);color:var(--red)'
 };
 
 function renderOddscheckerEV(){
