@@ -662,13 +662,17 @@ input::placeholder{color:var(--text3)}
     <div class="sec-title" style="margin:0;font-size:16px"><i class="ti ti-bolt"></i> Quick Bet</div>
     <div style="font-size:12.5px;color:var(--text3);margin:4px 0 12px">Paste a screenshot of your placed corner bet (Betfred). It reads the players, stake and odds and logs it to the Corners sheet.</div>
 
-    <div id="qb-paste" tabindex="0" onpaste="qbHandlePaste(event)" onclick="document.getElementById('qb-file').click()"
+    <div id="qb-paste" tabindex="0"
+         onfocus="this.style.borderColor='var(--brand)';document.getElementById('qb-paste-hint').textContent='Ready — press Ctrl+V now'"
+         onblur="this.style.borderColor='var(--border)';document.getElementById('qb-paste-hint').textContent='Click here, then press Ctrl+V'"
          ondragover="event.preventDefault();this.style.borderColor='var(--brand)'"
          ondragleave="this.style.borderColor='var(--border)'"
          ondrop="qbHandleDrop(event)"
+         onclick="this.focus()"
          style="border:1.5px dashed var(--border);border-radius:var(--radius);padding:20px 16px;text-align:center;color:var(--text3);font-size:13px;cursor:pointer;outline:none;transition:border-color .15s">
       <i class="ti ti-clipboard" style="font-size:20px;display:block;margin-bottom:6px"></i>
-      Click here, then press <b>Ctrl+V</b> &nbsp;·&nbsp; or drop / choose an image
+      <span id="qb-paste-hint">Click here, then press Ctrl+V</span>
+      <div style="margin-top:6px;font-size:12px">or <button type="button" onclick="event.stopPropagation();document.getElementById('qb-file').click()" style="background:none;border:none;color:var(--brand);text-decoration:underline;cursor:pointer;font-family:inherit;font-size:12px">choose an image file</button></div>
     </div>
     <input type="file" id="qb-file" accept="image/*" style="display:none" onchange="qbHandleFile(this.files&&this.files[0])">
 
@@ -6762,12 +6766,29 @@ function initBetsPage() {
 }
 
 // ── QUICK BET: screenshot → Corners bet ──────────────────────────────────────
+let qbPasteListenerInstalled = false;
 async function initQuickBet() {
   const card = document.getElementById('quick-bet-card');
   if (!card) return;
   if (CURRENT_USER_ROLE !== 'admin') { card.style.display = 'none'; return; }
   card.style.display = 'block';
   qbReset();
+  // Document-level paste catcher — the onpaste on the box alone is unreliable unless it has
+  // focus. This fires as long as the Quick Bet card is visible and the clipboard has an image.
+  if (!qbPasteListenerInstalled) {
+    document.addEventListener('paste', (e) => {
+      const c = document.getElementById('quick-bet-card');
+      if (!c || c.style.display === 'none') return;
+      const items = (e.clipboardData && e.clipboardData.items) || [];
+      let file = null;
+      for (const it of items) if (it.type && it.type.indexOf('image') === 0) file = it.getAsFile();
+      if (!file) return;
+      e.preventDefault();
+      document.getElementById('qb-paste')?.blur();
+      qbProcessImage(file);
+    });
+    qbPasteListenerInstalled = true;
+  }
   try {
     const d = await ledgerApi('accounts?excludeClosed=1');
     const accts = (d.ok && d.accounts) ? d.accounts : [];
@@ -6790,12 +6811,6 @@ function qbReset() {
   const msg = document.getElementById('qb-submit-msg'); if (msg) msg.textContent = '';
 }
 
-function qbHandlePaste(e) {
-  const items = (e.clipboardData || e.originalEvent?.clipboardData)?.items || [];
-  for (const it of items) {
-    if (it.type && it.type.indexOf('image') === 0) { e.preventDefault(); qbProcessImage(it.getAsFile()); return; }
-  }
-}
 function qbHandleDrop(e) {
   e.preventDefault();
   document.getElementById('qb-paste').style.borderColor = 'var(--border)';
