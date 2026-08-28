@@ -25,6 +25,13 @@ exports.handler = async (event) => {
 
     if (!lineup) throw new Error('No lineup data available yet');
 
+    // FotMob lineupType is only a real, announced XI when it's not one of these placeholders:
+    // 'predicted' (predicted XI), 'lastStarting11' (last match's XI shown before the predicted
+    // one is ready), 'unavailable'/'none'/null. Everything else ('standard', 'confirmed', …)
+    // means the actual XI is out.
+    const UNCONFIRMED_LINEUP = new Set(['predicted', 'lastStarting11', 'unavailable', 'none', '']);
+    const lineupConfirmed = !UNCONFIRMED_LINEUP.has(lineup.lineupType || '');
+
     const parseTeam = (team) => {
       if (!team) return null;
       const starters = (team.starters || team.players || []).map(p => ({
@@ -49,7 +56,7 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         ok: true,
         matchId,
-        confirmed: lineup.lineupType !== 'predicted',
+        confirmed: lineupConfirmed,
         lineupType: lineup.lineupType,
         home: {
           id:     lineup.homeTeam?.id,

@@ -2593,8 +2593,17 @@ async function mpGetLineup(matchId) {
   return lineup;
 }
 
-const _mpPredCache = new Map(); // `${matchId}|${lineupType}` -> { home, away }
+const _mpPredCache = new Map(); // `${matchId}|${lineupType}|${started}` -> { home, away }
 const _fixturesHandler = require('./netlify/functions/fixtures').handler;
+
+// FotMob lineupType values that are NOT a real confirmed XI: 'predicted' (predicted XI),
+// 'lastStarting11' (last match's XI shown as a placeholder before the predicted one),
+// 'unavailable' / 'none' / null (nothing yet). Anything else ('standard', 'confirmed', …)
+// only appears once the actual XI is out.
+const MP_UNCONFIRMED_LINEUP = new Set(['predicted', 'lastStarting11', 'unavailable', 'none', '']);
+function mpLineupConfirmed(lineupType) {
+  return !MP_UNCONFIRMED_LINEUP.has(lineupType || '');
+}
 
 function mpSide(lineupSide, confirmed) {
   const teamId = lineupSide ? String(lineupSide.id) : null;
@@ -2628,8 +2637,10 @@ router.get('/match-predictions', async (req, res) => {
       await Promise.all(slice.map(async m => {
         const lu = await mpGetLineup(m.id);
         const lineupType = lu && lu.lineupType || 'none';
-        const confirmed = !!lu && lineupType !== 'predicted' && lineupType !== 'none';
-        const cacheKey = `${m.id}|${lineupType}`;
+        // Green only for a genuinely announced XI on a match that has NOT kicked off.
+        // Once started (and after it finishes) it goes back to not-confirmed.
+        const confirmed = !!lu && mpLineupConfirmed(lineupType) && !m.started;
+        const cacheKey = `${m.id}|${lineupType}|${m.started ? 1 : 0}`;
         let pred = _mpPredCache.get(cacheKey);
         if (pred && Date.now() - pred._at > 6 * 3600 * 1000) pred = null; // re-derive against fresher harvest data
         if (!pred) {
