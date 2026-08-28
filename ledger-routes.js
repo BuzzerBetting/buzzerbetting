@@ -2631,8 +2631,9 @@ router.get('/match-predictions', async (req, res) => {
         const confirmed = !!lu && lineupType !== 'predicted' && lineupType !== 'none';
         const cacheKey = `${m.id}|${lineupType}`;
         let pred = _mpPredCache.get(cacheKey);
+        if (pred && Date.now() - pred._at > 6 * 3600 * 1000) pred = null; // re-derive against fresher harvest data
         if (!pred) {
-          pred = { home: mpSide(lu && lu.homeTeam, confirmed), away: mpSide(lu && lu.awayTeam, confirmed) };
+          pred = { _at: Date.now(), home: mpSide(lu && lu.homeTeam, confirmed), away: mpSide(lu && lu.awayTeam, confirmed) };
           // fill team names from the fixture when there's no lineup object yet
           if (!pred.home.teamName) pred.home.teamName = m.home;
           if (!pred.away.teamName) pred.away.teamName = m.away;
