@@ -2715,9 +2715,12 @@ router.post('/parse-betslip', requireAdmin, async (req, res) => {
     const media = /jpe?g/i.test(mediaType || '') ? 'image/jpeg'
       : /webp/i.test(mediaType || '') ? 'image/webp' : 'image/png';
 
+    // effort:low keeps the round-trip within the Netlify function timeout (~10s) for this
+    // simple extraction; the frontend proxies through /.netlify/functions/ledger.
     const msg = await client.messages.create({
       model: BETSLIP_MODEL,
       max_tokens: 1024,
+      output_config: { effort: 'low' },
       messages: [{
         role: 'user',
         content: [

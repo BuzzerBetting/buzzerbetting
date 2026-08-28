@@ -6769,6 +6769,7 @@ function initBetsPage() {
 let qbPasteListenerInstalled = false;
 async function initQuickBet() {
   const card = document.getElementById('quick-bet-card');
+  console.log('[qb] initQuickBet, role =', CURRENT_USER_ROLE, 'card el =', !!card);
   if (!card) return;
   if (CURRENT_USER_ROLE !== 'admin') { card.style.display = 'none'; return; }
   card.style.display = 'block';
@@ -6776,17 +6777,7 @@ async function initQuickBet() {
   // Document-level paste catcher — the onpaste on the box alone is unreliable unless it has
   // focus. This fires as long as the Quick Bet card is visible and the clipboard has an image.
   if (!qbPasteListenerInstalled) {
-    document.addEventListener('paste', (e) => {
-      const c = document.getElementById('quick-bet-card');
-      if (!c || c.style.display === 'none') return;
-      const items = (e.clipboardData && e.clipboardData.items) || [];
-      let file = null;
-      for (const it of items) if (it.type && it.type.indexOf('image') === 0) file = it.getAsFile();
-      if (!file) return;
-      e.preventDefault();
-      document.getElementById('qb-paste')?.blur();
-      qbProcessImage(file);
-    });
+    document.addEventListener('paste', qbOnPaste, true);
     qbPasteListenerInstalled = true;
   }
   try {
@@ -6811,13 +6802,46 @@ function qbReset() {
   const msg = document.getElementById('qb-submit-msg'); if (msg) msg.textContent = '';
 }
 
+function qbOnPaste(e) {
+  const card = document.getElementById('quick-bet-card');
+  console.log('[qb] paste event; card visible =', !!card && card.style.display !== 'none');
+  if (!card || card.style.display === 'none') return;
+  const dt = e.clipboardData || window.clipboardData;
+  if (!dt) return;
+  let file = null;
+  // 1) items API
+  for (const it of (dt.items || [])) {
+    if (it.kind === 'file' && it.type && it.type.indexOf('image') === 0) { file = it.getAsFile(); break; }
+  }
+  // 2) files API fallback
+  if (!file) for (const f of (dt.files || [])) { if (f.type && f.type.indexOf('image') === 0) { file = f; break; } }
+  const statusEl = document.getElementById('qb-status');
+  if (!file) {
+    // only nag if they weren't pasting text into one of the form fields
+    const t = e.target;
+    if (!(t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) {
+      statusEl.style.display = 'block';
+      statusEl.innerHTML = '<span style="color:var(--amber)">Nothing image-like in that paste — copy the screenshot to your clipboard, then Ctrl+V here.</span>';
+    }
+    return;
+  }
+  console.log('[qb] image found on paste:', file.type, file.size, 'bytes');
+  e.preventDefault();
+  document.getElementById('qb-paste')?.blur();
+  qbProcessImage(file);
+}
+
 function qbHandleDrop(e) {
   e.preventDefault();
   document.getElementById('qb-paste').style.borderColor = 'var(--border)';
-  const f = e.dataTransfer?.files?.[0];
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
   if (f && f.type.indexOf('image') === 0) qbProcessImage(f);
+  else { const s = document.getElementById('qb-status'); s.style.display = 'block'; s.innerHTML = '<span style="color:var(--amber)">That wasn\'t an image file.</span>'; }
 }
-function qbHandleFile(f) { if (f) qbProcessImage(f); }
+function qbHandleFile(f) {
+  if (f && f.type && f.type.indexOf('image') === 0) qbProcessImage(f);
+  else { const s = document.getElementById('qb-status'); s.style.display = 'block'; s.innerHTML = '<span style="color:var(--amber)">Pick an image file.</span>'; }
+}
 
 async function qbProcessImage(blob) {
   if (!blob) return;
