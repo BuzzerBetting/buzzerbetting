@@ -1,7 +1,7 @@
 const express = require('express');
 const app = express();
 const ledgerRouter = require('./ledger-routes');
-app.use(express.json());
+app.use(express.json({ limit: '8mb' })); // headroom for the base64 screenshot in POST /api/ledger/parse-betslip
 
 // CORS
 app.use((req, res, next) => {

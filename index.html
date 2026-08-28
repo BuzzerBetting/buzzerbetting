@@ -657,6 +657,43 @@ input::placeholder{color:var(--text3)}
     <button class="add-btn" onclick="openNewSheetModal()"><i class="ti ti-plus"></i> Add New Sheet</button>
   </div>
 
+  <!-- QUICK BET — screenshot -> Corners bet (admin only) -->
+  <div id="quick-bet-card" class="card card-pad" style="margin:14px 0 16px;display:none">
+    <div class="sec-title" style="margin:0;font-size:16px"><i class="ti ti-bolt"></i> Quick Bet</div>
+    <div style="font-size:12.5px;color:var(--text3);margin:4px 0 12px">Paste a screenshot of your placed corner bet (Betfred). It reads the players, stake and odds and logs it to the Corners sheet.</div>
+
+    <div id="qb-paste" tabindex="0" onpaste="qbHandlePaste(event)" onclick="document.getElementById('qb-file').click()"
+         ondragover="event.preventDefault();this.style.borderColor='var(--brand)'"
+         ondragleave="this.style.borderColor='var(--border)'"
+         ondrop="qbHandleDrop(event)"
+         style="border:1.5px dashed var(--border);border-radius:var(--radius);padding:20px 16px;text-align:center;color:var(--text3);font-size:13px;cursor:pointer;outline:none;transition:border-color .15s">
+      <i class="ti ti-clipboard" style="font-size:20px;display:block;margin-bottom:6px"></i>
+      Click here, then press <b>Ctrl+V</b> &nbsp;·&nbsp; or drop / choose an image
+    </div>
+    <input type="file" id="qb-file" accept="image/*" style="display:none" onchange="qbHandleFile(this.files&&this.files[0])">
+
+    <div id="qb-preview" style="display:none;margin-top:12px"></div>
+    <div id="qb-status" style="display:none;margin-top:10px;font-size:13px;color:var(--text2)"></div>
+
+    <div id="qb-form" style="display:none;margin-top:14px">
+      <div id="qb-warnings" style="display:none;margin-bottom:12px;padding:10px 12px;background:var(--amber-bg);color:var(--amber);border-radius:var(--radius);font-size:12.5px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div><label class="lbl">Account *</label><select id="qb-account"></select></div>
+        <div><label class="lbl">Bookie</label><input id="qb-bookie" type="text"></div>
+        <div><label class="lbl">Team</label><input id="qb-team" type="text"></div>
+        <div><label class="lbl">Assist</label><input id="qb-assist" type="text"></div>
+        <div><label class="lbl">Scorer</label><input id="qb-scorer" type="text"></div>
+        <div><label class="lbl">Odds (decimal)</label><input id="qb-odds" type="number" step="0.01"></div>
+        <div><label class="lbl">Stake £</label><input id="qb-stake" type="number" step="0.01"></div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap">
+        <button id="qb-submit" class="add-btn" onclick="submitQuickBet()" style="background:var(--brand);color:#fff;border-color:var(--brand)"><i class="ti ti-check"></i> Log bet</button>
+        <button class="add-btn" onclick="qbReset()">Clear</button>
+        <span id="qb-submit-msg" style="font-size:13px"></span>
+      </div>
+    </div>
+  </div>
+
   <div class="card card-pad" style="margin-bottom:16px">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
       <div>
@@ -6721,6 +6758,151 @@ function initBetsPage() {
       banner.innerHTML = `<i class="ti ti-user"></i> Logging this bet on behalf of <strong>${escapeHtml(window.pendingStakeForPerson)}</strong> — their debt will update automatically once it's settled.`;
     }
   });
+  initQuickBet();
+}
+
+// ── QUICK BET: screenshot → Corners bet ──────────────────────────────────────
+async function initQuickBet() {
+  const card = document.getElementById('quick-bet-card');
+  if (!card) return;
+  if (CURRENT_USER_ROLE !== 'admin') { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  qbReset();
+  try {
+    const d = await ledgerApi('accounts?excludeClosed=1');
+    const accts = (d.ok && d.accounts) ? d.accounts : [];
+    const sel = document.getElementById('qb-account');
+    sel.innerHTML = '<option value="">Select account…</option>' + accts
+      .map(a => `<option value="${a.id}">${escapeHtml(getAccountDisplayName(a))} — ${escapeHtml(a.bookie || '')}</option>`)
+      .join('');
+  } catch (e) { /* leave empty */ }
+}
+
+function qbReset() {
+  ['qb-preview', 'qb-status', 'qb-form', 'qb-warnings'].forEach(id => {
+    const el = document.getElementById(id); if (el) { el.style.display = 'none'; el.innerHTML = ''; }
+  });
+  ['qb-bookie', 'qb-team', 'qb-assist', 'qb-scorer', 'qb-odds', 'qb-stake'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const acc = document.getElementById('qb-account'); if (acc) acc.value = '';
+  const f = document.getElementById('qb-file'); if (f) f.value = '';
+  const msg = document.getElementById('qb-submit-msg'); if (msg) msg.textContent = '';
+}
+
+function qbHandlePaste(e) {
+  const items = (e.clipboardData || e.originalEvent?.clipboardData)?.items || [];
+  for (const it of items) {
+    if (it.type && it.type.indexOf('image') === 0) { e.preventDefault(); qbProcessImage(it.getAsFile()); return; }
+  }
+}
+function qbHandleDrop(e) {
+  e.preventDefault();
+  document.getElementById('qb-paste').style.borderColor = 'var(--border)';
+  const f = e.dataTransfer?.files?.[0];
+  if (f && f.type.indexOf('image') === 0) qbProcessImage(f);
+}
+function qbHandleFile(f) { if (f) qbProcessImage(f); }
+
+async function qbProcessImage(blob) {
+  if (!blob) return;
+  const statusEl = document.getElementById('qb-status');
+  const previewEl = document.getElementById('qb-preview');
+  document.getElementById('qb-form').style.display = 'none';
+  statusEl.style.display = 'block';
+  statusEl.innerHTML = '<i class="ti ti-loader"></i> Reading screenshot…';
+
+  let dataUrl;
+  try {
+    dataUrl = await qbDownscale(blob, 1600, 0.85);
+  } catch (e) {
+    statusEl.innerHTML = '<span style="color:var(--red)">Could not read that image.</span>'; return;
+  }
+  previewEl.style.display = 'block';
+  previewEl.innerHTML = `<img src="${dataUrl}" style="max-width:100%;max-height:220px;border:0.5px solid var(--border);border-radius:var(--radius)">`;
+
+  try {
+    const d = await ledgerApi('parse-betslip', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: dataUrl, mediaType: 'image/jpeg' }),
+    });
+    if (!d.ok) { statusEl.innerHTML = `<span style="color:var(--red)">${escapeHtml(d.error || 'Could not parse the screenshot.')}</span>`; return; }
+    statusEl.style.display = 'none';
+    qbFillForm(d.parsed || {}, d.warnings || []);
+  } catch (e) {
+    statusEl.innerHTML = '<span style="color:var(--red)">Network error reaching the parser.</span>';
+  }
+}
+
+// Draw the image onto a canvas capped at maxW wide, return a JPEG data URL.
+function qbDownscale(blob, maxW, quality) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxW / img.width);
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(blob);
+  });
+}
+
+function qbFillForm(parsed, warnings) {
+  document.getElementById('qb-bookie').value = parsed.bookmaker || 'Betfred';
+  document.getElementById('qb-team').value = (parsed.teamGuess && parsed.teamGuess.team) || '';
+  document.getElementById('qb-assist').value = parsed.assist || '';
+  document.getElementById('qb-scorer').value = (parsed.scorerFirstHalf && parsed.scorer)
+    ? `${parsed.scorer} 1st HALF` : (parsed.scorer || '');
+  document.getElementById('qb-odds').value = parsed.oddsDecimal != null ? parsed.oddsDecimal : '';
+  document.getElementById('qb-stake').value = parsed.stake != null ? parsed.stake : '';
+
+  const warnEl = document.getElementById('qb-warnings');
+  if (warnings && warnings.length) {
+    warnEl.innerHTML = '<i class="ti ti-alert-triangle"></i> ' + warnings.map(escapeHtml).join('<br>');
+    warnEl.style.display = 'block';
+  } else warnEl.style.display = 'none';
+
+  document.getElementById('qb-submit-msg').textContent = '';
+  document.getElementById('qb-form').style.display = 'block';
+}
+
+async function submitQuickBet() {
+  const msg = document.getElementById('qb-submit-msg');
+  const btn = document.getElementById('qb-submit');
+  const account_id = document.getElementById('qb-account').value;
+  const stake = parseFloat(document.getElementById('qb-stake').value);
+  const odds = parseFloat(document.getElementById('qb-odds').value);
+  if (!account_id) { msg.innerHTML = '<span style="color:var(--red)">Pick an account.</span>'; return; }
+  if (!(stake > 0)) { msg.innerHTML = '<span style="color:var(--red)">Stake must be greater than £0.</span>'; return; }
+  if (!(odds > 1)) { msg.innerHTML = '<span style="color:var(--red)">Odds must be greater than 1.</span>'; return; }
+
+  const fields = {
+    Bookie: document.getElementById('qb-bookie').value.trim() || 'Betfred',
+    Team: document.getElementById('qb-team').value.trim(),
+    Assist: document.getElementById('qb-assist').value.trim(),
+    Scorer: document.getElementById('qb-scorer').value.trim(),
+    Odds: +odds.toFixed(3),
+    Stake: +stake.toFixed(2),
+  };
+  btn.disabled = true; msg.innerHTML = 'Logging…';
+  try {
+    const d = await ledgerApi('bets', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bet_type: 'Corners', fields, legs: [{ account_id, stake: +stake.toFixed(2) }] }),
+    });
+    if (d.ok) {
+      msg.innerHTML = `<span style="color:var(--green)"><i class="ti ti-check"></i> Logged — £${d.bet.total_stake.toFixed(2)} on ${escapeHtml(fields.Scorer || fields.Team || 'Corners')}</span>`;
+      setTimeout(qbReset, 1800);
+    } else {
+      msg.innerHTML = `<span style="color:var(--red)">${escapeHtml(d.error || 'Could not log the bet.')}</span>`;
+    }
+  } catch (e) {
+    msg.innerHTML = '<span style="color:var(--red)">Network error logging the bet.</span>';
+  } finally { btn.disabled = false; }
 }
 
 // ================== CUSTOM SHEETS (user-defined bet trackers) ==================

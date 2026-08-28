@@ -83,7 +83,9 @@ router.use((req, res, next) => {
   next();
 });
 
-router.use(express.json());
+// 8mb ceiling so POST /parse-betslip can carry a base64 screenshot; every other route's
+// payload is tiny, so this is a no-op for them.
+router.use(express.json({ limit: '8mb' }));
 
 // ---- session resolution (per-user identity, layered on top of the server-level gate
 // above) — attaches req.userRole/req.username if a valid session token is present, but
@@ -2657,6 +2659,119 @@ router.get('/match-predictions', async (req, res) => {
     if (_mpPredCache.size > 400) _mpPredCache.clear();
     res.json({ ok: true, date, matches });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// ================== QUICK BET — parse a placed-bet screenshot ==================
+//
+// POST /api/ledger/parse-betslip  { image: "<base64>", mediaType: "image/png" }
+// Sends the screenshot to Claude vision and returns the assist player, header scorer, first-half
+// flag, stake and odds for a corner bet-builder — plus a best-guess Team from corner_model.db.
+// The frontend Quick Bet form then saves it via the normal POST /bets as a 'Corners' bet.
+// Admin-only (Corners is a Buzzer sheet). Needs ANTHROPIC_API_KEY in the server env; without it
+// the route returns a clean "not configured" message rather than erroring.
+let _anthropicClient = null;
+function getAnthropic() {
+  if (_anthropicClient) return _anthropicClient;
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  try {
+    const Anthropic = require('@anthropic-ai/sdk');
+    _anthropicClient = new Anthropic();
+    return _anthropicClient;
+  } catch (e) { console.error('[parse-betslip] @anthropic-ai/sdk not available:', e.message); return null; }
+}
+let _playerLookup = null;
+try { _playerLookup = require('./corner-model/players'); } catch (e) { /* team autofill just disabled */ }
+
+const BETSLIP_MODEL = process.env.BETSLIP_MODEL || 'claude-opus-5';
+const BETSLIP_PROMPT = `You are reading a screenshot of a football bet that has just been placed (usually a Betfred bet builder / same-game multi).
+Respond with ONLY a JSON object, no prose, no markdown fences, with exactly these keys:
+- "bookmaker": sportsbook name if visible (e.g. "Betfred"), else null.
+- "betType": e.g. "Bet Builder", "Single", "Acca", else null.
+- "legs": array of every selection line as {"player": <player the leg is about, or null>, "market": <market wording e.g. "To Assist", "To Score a Header", "Anytime Goalscorer", "To Score in 1st Half">}.
+- "assistPlayer": the player whose leg is an ASSIST market; null if there is no assist leg.
+- "scorerPlayer": the player whose leg is a GOAL/HEADER market (to score a header, anytime goalscorer, to score); null if none.
+- "scorerFirstHalf": true ONLY if there is a leg for scorerPlayer about scoring in the FIRST HALF ("to score in 1st half", "first half goalscorer"); otherwise false.
+- "stake": total stake in pounds, number only; null if not shown.
+- "oddsFractional": combined/total odds if shown fractional (e.g. "45/1"); else null.
+- "oddsDecimal": combined/total odds in decimal. If only fractional shown, convert (a/b -> a/b + 1). If only decimal shown, put it here. null if neither shown.
+- "potentialReturn": total potential returns in pounds if shown; else null.
+- "confidenceNotes": brief note of anything unreadable/ambiguous; null if all clean.
+Read only what is visible. Never guess player names or numbers.`;
+
+function fractionalToDecimal(str) {
+  const m = String(str || '').match(/(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/);
+  if (!m || +m[2] === 0) return null;
+  return +(Number(m[1]) / Number(m[2]) + 1).toFixed(3);
+}
+
+router.post('/parse-betslip', requireAdmin, async (req, res) => {
+  try {
+    const client = getAnthropic();
+    if (!client) return res.json({ ok: false, error: 'Screenshot parsing is not configured on the server yet.' });
+
+    const { image, mediaType } = req.body || {};
+    if (!image || typeof image !== 'string') return res.status(400).json({ ok: false, error: 'image (base64) required' });
+    const data = image.replace(/^data:[^,]+,/, '');
+    const media = /jpe?g/i.test(mediaType || '') ? 'image/jpeg'
+      : /webp/i.test(mediaType || '') ? 'image/webp' : 'image/png';
+
+    const msg = await client.messages.create({
+      model: BETSLIP_MODEL,
+      max_tokens: 1024,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: media, data } },
+          { type: 'text', text: BETSLIP_PROMPT },
+        ],
+      }],
+    });
+
+    const text = (msg.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
+    let parsed;
+    try { parsed = JSON.parse(text); }
+    catch (e) {
+      const m = text.match(/\{[\s\S]*\}/);
+      try { parsed = JSON.parse(m ? m[0] : ''); }
+      catch (e2) { return res.json({ ok: false, error: 'Could not read the screenshot — try a clearer crop.' }); }
+    }
+
+    if (parsed.oddsDecimal == null && parsed.oddsFractional) parsed.oddsDecimal = fractionalToDecimal(parsed.oddsFractional);
+
+    let teamGuess = null;
+    if (_playerLookup && parsed.scorerPlayer) {
+      try { const g = _playerLookup.guessTeam(parsed.scorerPlayer); if (g && g.team) teamGuess = g; } catch (e) {}
+    }
+
+    const warnings = [];
+    if (!parsed.stake) warnings.push('Stake not detected — check it before saving.');
+    if (!parsed.oddsDecimal) warnings.push('Odds not detected — enter them manually.');
+    if (!parsed.assistPlayer) warnings.push('No assist leg found on the slip.');
+    if (!parsed.scorerPlayer) warnings.push('No scorer leg found on the slip.');
+    if (parsed.bookmaker && !/betfred/i.test(parsed.bookmaker)) warnings.push(`Bookmaker reads as "${parsed.bookmaker}", not Betfred.`);
+    if (parsed.confidenceNotes) warnings.push(String(parsed.confidenceNotes));
+
+    res.json({
+      ok: true,
+      parsed: {
+        bookmaker: parsed.bookmaker || 'Betfred',
+        betType: parsed.betType || null,
+        stake: parsed.stake ?? null,
+        oddsFractional: parsed.oddsFractional || null,
+        oddsDecimal: parsed.oddsDecimal ?? null,
+        potentialReturn: parsed.potentialReturn ?? null,
+        assist: parsed.assistPlayer || null,
+        scorer: parsed.scorerPlayer || null,
+        scorerFirstHalf: !!parsed.scorerFirstHalf,
+        teamGuess,
+        legs: Array.isArray(parsed.legs) ? parsed.legs : [],
+      },
+      warnings,
+    });
+  } catch (err) {
+    console.error('[parse-betslip]', err && err.message);
+    res.json({ ok: false, error: 'Screenshot read failed: ' + (err && err.message || 'unknown error') });
+  }
 });
 
 // ================== FOTMOB LEAGUES (Today's Matches league list) ==================
