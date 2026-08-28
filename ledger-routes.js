@@ -2696,6 +2696,7 @@ Respond with ONLY a JSON object, no prose, no markdown fences, with exactly thes
 - "oddsDecimal": combined/total odds in decimal. If only fractional shown, convert (a/b -> a/b + 1). If only decimal shown, put it here. null if neither shown.
 - "potentialReturn": total potential returns in pounds if shown; else null.
 - "confidenceNotes": brief note of anything unreadable/ambiguous; null if all clean.
+Give every player name in natural "Firstname Surname" order even if the slip shows "Surname, Firstname" or "Surname F." — expand it to the full name as best you can read it.
 Read only what is visible. Never guess player names or numbers.`;
 
 function fractionalToDecimal(str) {
