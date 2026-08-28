@@ -1368,6 +1368,12 @@ input::placeholder{color:var(--text3)}
         <select id="account-txn-month-filter" onchange="onAccountTxnFilterChange('month')" style="font-size:12.5px;padding:6px 10px"></select>
         <span style="font-size:11px;color:var(--text3)">or</span>
         <input type="date" id="account-txn-date-filter" onchange="onAccountTxnFilterChange('date')" style="font-size:12.5px;padding:5px 10px">
+        <select id="account-txn-type-filter" onchange="loadAccountModalTransactions()" style="font-size:12.5px;padding:6px 10px">
+          <option value="">All types</option>
+          <option value="deposits">Deposits only</option>
+          <option value="withdrawals">Withdrawals only</option>
+          <option value="bets">Bet transactions only</option>
+        </select>
         <button class="add-btn" onclick="clearAccountTxnFilter()" style="font-size:12px">Clear filter</button>
       </div>
       <div id="account-txn-count-note" style="font-size:11px;color:var(--text3);margin-bottom:8px"></div>
@@ -4885,6 +4891,7 @@ function onAccountTxnFilterChange(source) {
 function clearAccountTxnFilter() {
   document.getElementById('account-txn-month-filter').value = '';
   document.getElementById('account-txn-date-filter').value = '';
+  document.getElementById('account-txn-type-filter').value = '';
   loadAccountModalTransactions();
 }
 
@@ -4895,7 +4902,12 @@ async function loadAccountModalTransactions() {
   el.innerHTML = '<tr><td colspan="7" style="padding:16px 6px;color:var(--text3)">Loading…</td></tr>';
   const month = document.getElementById('account-txn-month-filter').value;
   const date = document.getElementById('account-txn-date-filter').value;
-  const params = date ? `?date=${date}` : month ? `?month=${month}` : '';
+  const type = document.getElementById('account-txn-type-filter').value;
+  const qs = [];
+  if (date) qs.push(`date=${date}`);
+  else if (month) qs.push(`month=${month}`);
+  if (type) qs.push(`type=${type}`);
+  const params = qs.length ? `?${qs.join('&')}` : '';
   try {
     const d = await ledgerApi(`accounts/${ACTIVE_ACCOUNT.id}/full-transactions${params}`);
     accountModalTransactionsLoaded = true;

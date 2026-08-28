@@ -673,6 +673,7 @@ router.get('/accounts/:id', (req, res) => {
 
 // GET /api/ledger/accounts/:id/notes
 // GET /api/ledger/accounts/:id/full-transactions?month=YYYY-MM or ?date=YYYY-MM-DD
+//   &type=deposits|withdrawals|bets — optional, combinable with month/date
 // Every event that's ever moved this account's balance by a penny, in one unified list:
 // deposits, withdrawals (deducted at request time under the current model, so shown
 // regardless of pending/confirmed status), bet placement (stake leaving), bet settlement
@@ -731,10 +732,18 @@ router.get('/accounts/:id/full-transactions', (req, res) => {
       running = +(running - e.amount).toFixed(2);
     });
 
-    const { month, date } = req.query;
+    const { month, date, type } = req.query;
     let filtered = events;
     if (date) filtered = events.filter(e => e.date.slice(0, 10) === date);
     else if (month) filtered = events.filter(e => e.date.slice(0, 7) === month);
+
+    // Optional transaction-type filter, combinable with the month/date filter above.
+    const TYPE_GROUPS = {
+      deposits: ['Deposit'],
+      withdrawals: ['Withdrawal', 'Withdrawal reversed'],
+      bets: ['Bet placed', 'Bet settled'],
+    };
+    if (type && TYPE_GROUPS[type]) filtered = filtered.filter(e => TYPE_GROUPS[type].includes(e.type));
 
     res.json({ ok: true, transactions: filtered.slice(0, 50), totalMatching: filtered.length });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
