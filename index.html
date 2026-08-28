@@ -10309,6 +10309,16 @@ function renderDogsTable(rows,summary){
     </div>
   </div>
 
+  <div id="matches-pred-toggles" style="display:flex;gap:18px;align-items:center;margin-bottom:16px;font-size:12.5px;color:var(--text2)">
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none">
+      <input type="checkbox" id="pred-corners-toggle" onchange="setPredToggle('corners',this.checked)"> Corner predictions
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none">
+      <input type="checkbox" id="pred-pens-toggle" onchange="setPredToggle('pens',this.checked)"> Penalty taker prediction
+    </label>
+    <span id="matches-pred-note" style="font-size:11px;color:var(--text3)"></span>
+  </div>
+
   <!-- Date selector -->
   <div id="date-btns" style="display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap"></div>
 
@@ -10375,6 +10385,40 @@ function renderDogsTable(rows,summary){
 let currentMatchType = 'club';
 let MATCHES_LEAGUES = null; // last-loaded fixtures, kept so the sort toggle can re-render without refetching
 
+// ── Corner / penalty predictions (GET /api/ledger/match-predictions) ──
+let MATCH_PREDICTIONS = {};        // matchId -> { home:{lineupConfirmed,cornerTakers,penTaker,...}, away:{...} }
+let MATCH_PRED_DATE = null;        // the fixture date the current MATCH_PREDICTIONS belong to
+let MATCH_PRED_INTERVAL = null;
+function predCornersOn(){ return localStorage.getItem('bb_pred_corners') === '1'; }
+function predPensOn(){ return localStorage.getItem('bb_pred_pens') === '1'; }
+function syncPredToggles(){
+  const c = document.getElementById('pred-corners-toggle'); if (c) c.checked = predCornersOn();
+  const p = document.getElementById('pred-pens-toggle'); if (p) p.checked = predPensOn();
+}
+function setPredToggle(which, on){
+  localStorage.setItem(which === 'corners' ? 'bb_pred_corners' : 'bb_pred_pens', on ? '1' : '0');
+  if (MATCHES_LEAGUES) renderFixtures(MATCHES_LEAGUES);
+  if (on && !MATCH_PRED_DATE && CURRENT_FIXTURE_DATE) loadMatchPredictions(CURRENT_FIXTURE_DATE);
+}
+
+let CURRENT_FIXTURE_DATE = null;
+async function loadMatchPredictions(date){
+  try{
+    const d = await ledgerApi('match-predictions?date=' + date);
+    if (!d || !d.ok || date !== CURRENT_FIXTURE_DATE) return;
+    const map = {};
+    (d.matches || []).forEach(m => { map[String(m.matchId)] = m; });
+    MATCH_PREDICTIONS = map;
+    MATCH_PRED_DATE = date;
+    const note = document.getElementById('matches-pred-note');
+    if (note){
+      const conf = (d.matches||[]).filter(m => m.home?.lineupConfirmed || m.away?.lineupConfirmed).length;
+      note.textContent = conf ? `${conf} match${conf===1?'':'es'} with confirmed lineups` : 'no confirmed lineups yet';
+    }
+    if (MATCHES_LEAGUES) renderFixtures(MATCHES_LEAGUES);
+  }catch(e){ /* non-fatal */ }
+}
+
 function getMatchesSort(){ return localStorage.getItem('bb_matches_sort') || 'league'; }
 function syncMatchesSortToggle(){
   const cur = getMatchesSort();
@@ -10395,6 +10439,7 @@ function initMatches(){
   const wrap=document.getElementById('date-btns');
   wrap.innerHTML='';
   syncMatchesSortToggle();
+  syncPredToggles();
   closeMatch();
   const now=new Date();
   for(let i=-1;i<5;i++){
@@ -10427,6 +10472,16 @@ function fmtDateParam(d){
 }
 
 async function loadFixtures(date,btn){
+  CURRENT_FIXTURE_DATE = date;
+  MATCH_PREDICTIONS = {}; MATCH_PRED_DATE = null;
+  const _predNote=document.getElementById('matches-pred-note'); if(_predNote)_predNote.textContent='';
+  if(MATCH_PRED_INTERVAL) clearInterval(MATCH_PRED_INTERVAL);
+  MATCH_PRED_INTERVAL = setInterval(()=>{
+    const v=document.getElementById('view-matches');
+    if(!v || v.style.display==='none'){ clearInterval(MATCH_PRED_INTERVAL); MATCH_PRED_INTERVAL=null; return; }
+    if(document.getElementById('match-detail').style.display!=='none') return; // paused while viewing a match
+    if(CURRENT_FIXTURE_DATE) loadMatchPredictions(CURRENT_FIXTURE_DATE);
+  }, 120000);
   document.querySelectorAll('#date-btns button').forEach(b=>{
     b.style.background='var(--surface)';b.style.color='var(--text2)';b.style.fontWeight='400';
   });
@@ -10445,6 +10500,7 @@ async function loadFixtures(date,btn){
     }
     document.getElementById('matches-count').textContent=`${data.total} matches across ${data.leagues.length} competitions`;
     renderFixtures(data.leagues);
+    loadMatchPredictions(date); // green names + corner/pen sub-rows (independent of the toggles for green)
   }catch(err){
     document.getElementById('matches-status').innerHTML=`<div class="card"><div class="ph" style="padding:28px 24px"><div class="ph-ico"><i class="ti ti-wifi-off"></i></div><div class="ph-t">Failed to load</div><div class="ph-d">${err.message}</div></div></div>`;
   }
@@ -10456,7 +10512,36 @@ const INTL_LEAGUES = new Set([77, 78, 79, 80]); // World Cup, Nations League etc
 // across every card, instead of drifting with each card's longest team name.
 const MATCH_TBL_COLGROUP='<col style="width:78px"><col><col style="width:70px"><col><col style="width:34px">';
 
+function predSideBlock(side, align){
+  if(!side) return '';
+  const parts=[];
+  if(predCornersOn()){
+    if(Array.isArray(side.cornerTakers) && side.cornerTakers.length){
+      const t=side.cornerTakers.map(c=>{
+        const s=c.side?` <span style="color:var(--text3)">${c.side}</span>`:'';
+        const n=c.note?` <span style="color:var(--text3)">· ${escapeHtml(c.note)}</span>`:'';
+        return `${escapeHtml(c.name)} <b style="color:var(--brand)">${c.pct}%</b>${s}${n}`;
+      }).join(' &nbsp; ');
+      parts.push(`<div><span style="color:var(--text3)">Corner:</span> ${t}</div>`);
+    } else {
+      parts.push(`<div><span style="color:var(--text3)">Corner:</span> —</div>`);
+    }
+    const threat = side.cornerThreat==null ? '— (not built)' : escapeHtml(String(side.cornerThreat));
+    parts.push(`<div><span style="color:var(--text3)">Threat:</span> ${threat}</div>`);
+  }
+  if(predPensOn()){
+    const p=side.penTaker;
+    parts.push(`<div><span style="color:var(--text3)">Pen:</span> ${p?`${escapeHtml(p.name)} <b style="color:var(--brand)">${p.pct}%</b>${p.note?` <span style="color:var(--text3)">· ${escapeHtml(p.note)}</span>`:''}`:'—'}</div>`);
+  }
+  return `<div style="flex:1;min-width:0;text-align:${align};font-size:11.5px;line-height:1.5">${parts.join('')}</div>`;
+}
+
 function buildMatchRow(m, leagueName, isIntl, leagueCcode){
+  const frag=document.createDocumentFragment();
+  const pred = MATCH_PREDICTIONS[String(m.id)] || null;
+  const homeGreen = pred && pred.home && pred.home.lineupConfirmed;
+  const awayGreen = pred && pred.away && pred.away.lineupConfirmed;
+
   const tr=document.createElement('tr');
   tr.style.cursor='pointer';
   tr.title='Click to view lineups';
@@ -10479,7 +10564,7 @@ function buildMatchRow(m, leagueName, isIntl, leagueCcode){
     <td style="font-size:12px;color:var(--text3);white-space:nowrap;padding-left:14px;padding-right:6px">${statusDot}${timeStr}${leagueTag}</td>
     <td style="text-align:right;font-weight:500;font-size:13px;padding-left:4px;padding-right:10px">
       <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0">
-        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.home}</span>
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap${homeGreen?';color:var(--green)':''}">${m.home}</span>
         <img src="https://images.fotmob.com/image_resources/logo/teamlogo/${m.homeId}.png" style="width:18px;height:18px;object-fit:contain;flex-shrink:0" onerror="this.style.display='none'">
       </div>
     </td>
@@ -10487,11 +10572,27 @@ function buildMatchRow(m, leagueName, isIntl, leagueCcode){
     <td style="font-weight:500;font-size:13px;padding-left:10px;padding-right:4px">
       <div style="display:flex;align-items:center;gap:6px;min-width:0">
         <img src="https://images.fotmob.com/image_resources/logo/teamlogo/${m.awayId}.png" style="width:18px;height:18px;object-fit:contain;flex-shrink:0" onerror="this.style.display='none'">
-        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.away}</span>
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap${awayGreen?';color:var(--green)':''}">${m.away}</span>
       </div>
     </td>
     <td style="text-align:right;color:var(--text3);font-size:12px;padding-left:2px;padding-right:12px"><i class="ti ti-chevron-right"></i></td>`;
-  return tr;
+  frag.appendChild(tr);
+
+  // Prediction sub-row: only when a toggle is on and at least one side's lineup is confirmed.
+  if(pred && (predCornersOn()||predPensOn()) && (homeGreen||awayGreen)){
+    const sub=document.createElement('tr');
+    const td=document.createElement('td');
+    td.colSpan=5;
+    td.style.cssText='padding:6px 14px 10px;border-bottom:0.5px solid var(--border);background:var(--surface2)';
+    td.innerHTML=`<div style="display:flex;gap:24px;align-items:flex-start">
+      ${predSideBlock(homeGreen?pred.home:null,'right') || '<div style="flex:1"></div>'}
+      <div style="width:1px;background:var(--border);align-self:stretch"></div>
+      ${predSideBlock(awayGreen?pred.away:null,'left') || '<div style="flex:1"></div>'}
+    </div>`;
+    sub.appendChild(td);
+    frag.appendChild(sub);
+  }
+  return frag;
 }
 
 function renderFixtures(leagues){
@@ -10560,6 +10661,7 @@ async function openMatch(matchId, home, away, leagueName, isIntl, started, finis
   document.getElementById('date-btns').style.display='none';
   document.getElementById('matches-count').style.display='none';
   const _sortT=document.getElementById('matches-sort-toggle'); if(_sortT)_sortT.style.display='none';
+  const _predT=document.getElementById('matches-pred-toggles'); if(_predT)_predT.style.display='none';
   document.getElementById('match-detail').style.display='';
   document.getElementById('player-panel').style.display='none';
   document.getElementById('lineups-wrap').innerHTML='';
@@ -10615,6 +10717,7 @@ function closeMatch(){
   document.getElementById('date-btns').style.display='flex';
   document.getElementById('matches-count').style.display='';
   const _sortT=document.getElementById('matches-sort-toggle'); if(_sortT)_sortT.style.display='flex';
+  const _predT=document.getElementById('matches-pred-toggles'); if(_predT)_predT.style.display='flex';
 }
 
 function renderLineups(data){

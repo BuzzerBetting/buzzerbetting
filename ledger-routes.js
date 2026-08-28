@@ -111,7 +111,8 @@ router.use((req, res, next) => {
 router.use((req, res, next) => {
   if (req.userRole === 'calculator'
       && !req.path.startsWith('/fotmob-leagues')
-      && !req.path.startsWith('/notifications')) {
+      && !req.path.startsWith('/notifications')
+      && !req.path.startsWith('/match-predictions')) {
     return res.status(403).json({ ok: false, error: 'This account has no access to the Ledger.' });
   }
   next();
@@ -2558,6 +2559,91 @@ router.get('/notifications', (req, res) => {
        WHERE audience IN (${placeholders}) ORDER BY id DESC LIMIT 200`
     ).all(...audiences);
     res.json({ ok: true, notifications: rows });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// ================== MATCH PREDICTIONS (Today's Matches corner/pen takers) ==================
+//
+// GET /api/ledger/match-predictions?date=YYYYMMDD
+// For every fixture that day: lineup-confirmed status for each side (drives the green team
+// names) plus, once a side's XI is confirmed, predicted corner taker(s) and penalty taker
+// from the corner-model. corner-model/ is deployed separately to the DO box (like oc-scraper)
+// so its absence is non-fatal — the route still returns lineup status.
+const cornerModel = (() => {
+  try { return require('./corner-model/predict'); }
+  catch (e) { console.error('[match-predictions] corner-model not loaded:', e.message); return null; }
+})();
+
+// matchDetails fetch with a short in-memory TTL cache — pre-match lineups flip
+// predicted -> confirmed, so this is deliberately NOT the immutable disk cache.
+const _mpFotmobHdrs = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept': 'application/json', 'Referer': 'https://www.fotmob.com/',
+};
+const _mpLineupCache = new Map(); // matchId -> { at, lineup }
+async function mpGetLineup(matchId) {
+  const hit = _mpLineupCache.get(String(matchId));
+  if (hit && Date.now() - hit.at < 150000) return hit.lineup;
+  let lineup = null;
+  try {
+    const r = await fetch(`https://www.fotmob.com/api/data/matchDetails?matchId=${matchId}`, { headers: _mpFotmobHdrs });
+    if (r.ok) { const d = await r.json(); lineup = d && d.content && d.content.lineup || null; }
+  } catch (e) { /* leave null */ }
+  _mpLineupCache.set(String(matchId), { at: Date.now(), lineup });
+  return lineup;
+}
+
+const _mpPredCache = new Map(); // `${matchId}|${lineupType}` -> { home, away }
+const _fixturesHandler = require('./netlify/functions/fixtures').handler;
+
+function mpSide(lineupSide, confirmed) {
+  const teamId = lineupSide ? String(lineupSide.id) : null;
+  const teamName = lineupSide ? lineupSide.name : null;
+  let cornerTakers = null, penTaker = null, cornerThreat = null;
+  if (confirmed && teamId && cornerModel && lineupSide && Array.isArray(lineupSide.starters)) {
+    const xi = lineupSide.starters.map(p => ({ id: p.id, name: p.name, positionId: p.positionId }));
+    try {
+      const p = cornerModel.predictForTeam({ teamId, xi, asOfDate: new Date().toISOString() });
+      cornerTakers = p.cornerTakers; penTaker = p.penTaker; cornerThreat = p.cornerThreat;
+    } catch (e) { cornerTakers = [{ name: 'error', pct: 0, side: null, note: e.message }]; }
+  }
+  return { teamId, teamName, lineupConfirmed: !!confirmed, cornerTakers, penTaker, cornerThreat };
+}
+
+router.get('/match-predictions', async (req, res) => {
+  try {
+    const date = String(req.query.date || '').replace(/[^0-9]/g, '')
+      || new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const fxRaw = await _fixturesHandler({ httpMethod: 'GET', queryStringParameters: { date } });
+    let fx = null; try { fx = JSON.parse(fxRaw.body); } catch (e) {}
+    if (!fx || !fx.ok || !Array.isArray(fx.leagues)) return res.json({ ok: true, date, matches: [] });
+
+    const fixtures = [];
+    for (const lg of fx.leagues) for (const m of (lg.matches || [])) fixtures.push(m);
+
+    const matches = [];
+    // small concurrency pool over the lineup fetches
+    for (let i = 0; i < fixtures.length; i += 8) {
+      const slice = fixtures.slice(i, i + 8);
+      await Promise.all(slice.map(async m => {
+        const lu = await mpGetLineup(m.id);
+        const lineupType = lu && lu.lineupType || 'none';
+        const confirmed = !!lu && lineupType !== 'predicted' && lineupType !== 'none';
+        const cacheKey = `${m.id}|${lineupType}`;
+        let pred = _mpPredCache.get(cacheKey);
+        if (!pred) {
+          pred = { home: mpSide(lu && lu.homeTeam, confirmed), away: mpSide(lu && lu.awayTeam, confirmed) };
+          // fill team names from the fixture when there's no lineup object yet
+          if (!pred.home.teamName) pred.home.teamName = m.home;
+          if (!pred.away.teamName) pred.away.teamName = m.away;
+          _mpPredCache.set(cacheKey, pred);
+        }
+        matches.push({ matchId: String(m.id), home: pred.home, away: pred.away });
+      }));
+    }
+    // keep the pred cache from growing unbounded across days
+    if (_mpPredCache.size > 400) _mpPredCache.clear();
+    res.json({ ok: true, date, matches });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 

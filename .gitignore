@@ -10,3 +10,8 @@ ledger.db-wal
 # PROJECT_CONTEXT.md). It still reads/writes against the app via /api/fixtures and
 # /api/oc-cache (server.js), those integration points are tracked normally.
 oc-scraper/
+
+# corner-model — same deal as oc-scraper: deployed straight to the DO droplet over SSH,
+# not tracked in this shared repo. Harvests FotMob set-piece data into corner_model.db and
+# feeds GET /api/ledger/match-predictions (see ledger-routes.js). Cron-refreshed on the box.
+corner-model/
