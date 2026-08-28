@@ -2705,7 +2705,9 @@ function fractionalToDecimal(str) {
 }
 
 router.post('/parse-betslip', requireAdmin, async (req, res) => {
+  const t0 = Date.now();
   try {
+    console.log('[parse-betslip] request received, body image chars =', (req.body && req.body.image || '').length);
     const client = getAnthropic();
     if (!client) return res.json({ ok: false, error: 'Screenshot parsing is not configured on the server yet.' });
 
@@ -2730,6 +2732,7 @@ router.post('/parse-betslip', requireAdmin, async (req, res) => {
       }],
     });
 
+    console.log('[parse-betslip] model replied in', ((Date.now() - t0) / 1000).toFixed(1) + 's, stop=' + msg.stop_reason);
     const text = (msg.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
     let parsed;
     try { parsed = JSON.parse(text); }
@@ -2754,6 +2757,7 @@ router.post('/parse-betslip', requireAdmin, async (req, res) => {
     if (parsed.bookmaker && !/betfred/i.test(parsed.bookmaker)) warnings.push(`Bookmaker reads as "${parsed.bookmaker}", not Betfred.`);
     if (parsed.confidenceNotes) warnings.push(String(parsed.confidenceNotes));
 
+    console.log('[parse-betslip] done in', ((Date.now() - t0) / 1000).toFixed(1) + 's — assist=' + (parsed.assistPlayer || '?') + ' scorer=' + (parsed.scorerPlayer || '?') + ' stake=' + parsed.stake + ' odds=' + parsed.oddsDecimal);
     res.json({
       ok: true,
       parsed: {

@@ -6851,25 +6851,32 @@ async function qbProcessImage(blob) {
   statusEl.style.display = 'block';
   statusEl.innerHTML = '<i class="ti ti-loader"></i> Reading screenshot…';
 
-  let dataUrl;
+  let dataUrl, mediaType = 'image/jpeg';
   try {
     dataUrl = await qbDownscale(blob, 1600, 0.85);
+    console.log('[qb] downscaled to', dataUrl.length, 'chars');
   } catch (e) {
-    statusEl.innerHTML = '<span style="color:var(--red)">Could not read that image.</span>'; return;
+    console.warn('[qb] downscale failed, sending raw', e);
+    dataUrl = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
+    mediaType = blob.type || 'image/png';
   }
   previewEl.style.display = 'block';
   previewEl.innerHTML = `<img src="${dataUrl}" style="max-width:100%;max-height:220px;border:0.5px solid var(--border);border-radius:var(--radius)">`;
 
+  statusEl.innerHTML = '<i class="ti ti-loader"></i> Reading screenshot… (a few seconds)';
   try {
+    console.log('[qb] POST parse-betslip, body chars =', dataUrl.length);
     const d = await ledgerApi('parse-betslip', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: dataUrl, mediaType: 'image/jpeg' }),
+      body: JSON.stringify({ image: dataUrl, mediaType }),
     });
-    if (!d.ok) { statusEl.innerHTML = `<span style="color:var(--red)">${escapeHtml(d.error || 'Could not parse the screenshot.')}</span>`; return; }
+    console.log('[qb] parse-betslip response:', d);
+    if (!d || !d.ok) { statusEl.innerHTML = `<span style="color:var(--red)">${escapeHtml((d && d.error) || 'Could not parse the screenshot.')}</span>`; return; }
     statusEl.style.display = 'none';
     qbFillForm(d.parsed || {}, d.warnings || []);
   } catch (e) {
-    statusEl.innerHTML = '<span style="color:var(--red)">Network error reaching the parser.</span>';
+    console.error('[qb] parse-betslip failed:', e);
+    statusEl.innerHTML = `<span style="color:var(--red)">Request failed: ${escapeHtml(e && e.message || 'unknown')}. Check the console.</span>`;
   }
 }
 
