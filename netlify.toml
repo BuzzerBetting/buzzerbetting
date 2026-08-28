@@ -4,3 +4,13 @@
 
 [functions]
   node_bundler = "esbuild"
+
+# index.html is the whole app — never let a browser/CDN serve a stale copy after a deploy.
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
