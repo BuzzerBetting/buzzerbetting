@@ -6791,8 +6791,13 @@ async function initQuickBet() {
 }
 
 function qbReset() {
+  // hide the sections (do NOT wipe #qb-form's innerHTML — that would delete the inputs)
   ['qb-preview', 'qb-status', 'qb-form', 'qb-warnings'].forEach(id => {
-    const el = document.getElementById(id); if (el) { el.style.display = 'none'; el.innerHTML = ''; }
+    const el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
+  // clear only the content containers
+  ['qb-preview', 'qb-status', 'qb-warnings'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.innerHTML = '';
   });
   ['qb-bookie', 'qb-team', 'qb-assist', 'qb-scorer', 'qb-odds', 'qb-stake'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
@@ -6898,13 +6903,13 @@ function qbDownscale(blob, maxW, quality) {
 }
 
 function qbFillForm(parsed, warnings) {
-  document.getElementById('qb-bookie').value = parsed.bookmaker || 'Betfred';
-  document.getElementById('qb-team').value = (parsed.teamGuess && parsed.teamGuess.team) || '';
-  document.getElementById('qb-assist').value = parsed.assist || '';
-  document.getElementById('qb-scorer').value = (parsed.scorerFirstHalf && parsed.scorer)
-    ? `${parsed.scorer} 1st HALF` : (parsed.scorer || '');
-  document.getElementById('qb-odds').value = parsed.oddsDecimal != null ? parsed.oddsDecimal : '';
-  document.getElementById('qb-stake').value = parsed.stake != null ? parsed.stake : '';
+  const setV = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  setV('qb-bookie', parsed.bookmaker || 'Betfred');
+  setV('qb-team', (parsed.teamGuess && parsed.teamGuess.team) || '');
+  setV('qb-assist', parsed.assist || '');
+  setV('qb-scorer', (parsed.scorerFirstHalf && parsed.scorer) ? `${parsed.scorer} 1st HALF` : (parsed.scorer || ''));
+  setV('qb-odds', parsed.oddsDecimal != null ? parsed.oddsDecimal : '');
+  setV('qb-stake', parsed.stake != null ? parsed.stake : '');
 
   const warnEl = document.getElementById('qb-warnings');
   if (warnings && warnings.length) {
