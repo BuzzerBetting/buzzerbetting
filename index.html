@@ -10300,6 +10300,10 @@ function renderDogsTable(rows,summary){
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
     <div class="sec-title" style="margin-bottom:0">Today's Matches</div>
     <div style="display:flex;align-items:center;gap:12px">
+      <div id="matches-sort-toggle" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden">
+        <button onclick="setMatchesSort('league')" data-sort="league" style="background:none;border:none;padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">By league</button>
+        <button onclick="setMatchesSort('time')" data-sort="time" style="background:none;border:none;border-left:0.5px solid var(--border);padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">By time</button>
+      </div>
       <button onclick="openEditLeaguesModal()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit"><i class="ti ti-list-details"></i> Edit Leagues</button>
       <span style="font-size:12px;color:var(--text3)" id="matches-count"></span>
     </div>
@@ -10369,10 +10373,28 @@ function renderDogsTable(rows,summary){
 <script>
 // ── TODAY'S MATCHES ──
 let currentMatchType = 'club';
+let MATCHES_LEAGUES = null; // last-loaded fixtures, kept so the sort toggle can re-render without refetching
+
+function getMatchesSort(){ return localStorage.getItem('bb_matches_sort') || 'league'; }
+function syncMatchesSortToggle(){
+  const cur = getMatchesSort();
+  document.querySelectorAll('#matches-sort-toggle button').forEach(b=>{
+    const on = b.dataset.sort === cur;
+    b.style.background = on ? 'var(--brand)' : 'none';
+    b.style.color = on ? '#fff' : 'var(--text2)';
+    b.style.fontWeight = on ? '600' : '400';
+  });
+}
+function setMatchesSort(mode){
+  localStorage.setItem('bb_matches_sort', mode);
+  syncMatchesSortToggle();
+  if (MATCHES_LEAGUES) renderFixtures(MATCHES_LEAGUES);
+}
 
 function initMatches(){
   const wrap=document.getElementById('date-btns');
   wrap.innerHTML='';
+  syncMatchesSortToggle();
   closeMatch();
   const now=new Date();
   for(let i=-1;i<5;i++){
@@ -10430,9 +10452,79 @@ async function loadFixtures(date,btn){
 
 const INTL_LEAGUES = new Set([77, 78, 79, 80]); // World Cup, Nations League etc.
 
+// Fixed layout + explicit column widths so the centre score column lines up vertically
+// across every card, instead of drifting with each card's longest team name.
+const MATCH_TBL_COLGROUP='<col style="width:78px"><col><col style="width:70px"><col><col style="width:34px">';
+
+function buildMatchRow(m, leagueName, isIntl, leagueCcode){
+  const tr=document.createElement('tr');
+  tr.style.cursor='pointer';
+  tr.title='Click to view lineups';
+  tr.onmouseenter=()=>tr.style.background='var(--surface2)';
+  tr.onmouseleave=()=>tr.style.background='';
+  tr.onclick=()=>openMatch(m.id, m.home, m.away, leagueName, isIntl, m.started, m.finished, m.homeId, m.awayId);
+  const timeStr=m.utcTime?fmtKickoff(m.utcTime):'TBC';
+  const isLive=m.started&&!m.finished;
+  const statusDot=isLive?`<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);margin-right:4px;vertical-align:middle"></span>`:'';
+  const leagueTag=leagueCcode?`<div style="font-size:9.5px;line-height:1.3;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">${leagueCcode}</div>`:'';
+  let scoreHtml;
+  if(m.score&&m.score!=='-'&&(m.started||m.finished)){
+    const parts=m.score.split(' - ');
+    const c=m.finished?'var(--text1)':'var(--green)';
+    scoreHtml=`<span style="font-weight:700;color:${c};white-space:nowrap;font-size:14px">${parts[0]||0} - ${parts[1]||0}</span>`;
+  }else{
+    scoreHtml=`<span style="color:var(--text3);font-size:12px;white-space:nowrap">vs</span>`;
+  }
+  tr.innerHTML=`
+    <td style="font-size:12px;color:var(--text3);white-space:nowrap;padding-left:14px;padding-right:6px">${statusDot}${timeStr}${leagueTag}</td>
+    <td style="text-align:right;font-weight:500;font-size:13px;padding-left:4px;padding-right:10px">
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.home}</span>
+        <img src="https://images.fotmob.com/image_resources/logo/teamlogo/${m.homeId}.png" style="width:18px;height:18px;object-fit:contain;flex-shrink:0" onerror="this.style.display='none'">
+      </div>
+    </td>
+    <td style="text-align:center;white-space:nowrap;padding-left:2px;padding-right:2px">${scoreHtml}</td>
+    <td style="font-weight:500;font-size:13px;padding-left:10px;padding-right:4px">
+      <div style="display:flex;align-items:center;gap:6px;min-width:0">
+        <img src="https://images.fotmob.com/image_resources/logo/teamlogo/${m.awayId}.png" style="width:18px;height:18px;object-fit:contain;flex-shrink:0" onerror="this.style.display='none'">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.away}</span>
+      </div>
+    </td>
+    <td style="text-align:right;color:var(--text3);font-size:12px;padding-left:2px;padding-right:12px"><i class="ti ti-chevron-right"></i></td>`;
+  return tr;
+}
+
 function renderFixtures(leagues){
+  MATCHES_LEAGUES = leagues;
   const wrap=document.getElementById('matches-content');
   wrap.innerHTML='';
+
+  if(getMatchesSort()==='time'){
+    // One flat list, every match sorted by kick-off — soonest first, finished games sink to the bottom.
+    const rows=[];
+    leagues.forEach(league=>{
+      const isIntl=INTL_LEAGUES.has(Number(league.id));
+      (league.matches||[]).forEach(m=>rows.push({m, leagueName:league.name, ccode:league.ccode, isIntl}));
+    });
+    rows.sort((a,b)=>{
+      const af=a.m.finished?1:0, bf=b.m.finished?1:0;
+      if(af!==bf) return af-bf;
+      const at=a.m.utcTime?new Date(a.m.utcTime).getTime():Infinity;
+      const bt=b.m.utcTime?new Date(b.m.utcTime).getTime():Infinity;
+      return at-bt;
+    });
+    const card=document.createElement('div');
+    card.className='card';
+    const tbl=document.createElement('table');
+    tbl.className='dt'; tbl.style.width='100%'; tbl.style.tableLayout='fixed';
+    tbl.innerHTML='<colgroup>'+MATCH_TBL_COLGROUP+'</colgroup>';
+    rows.forEach(r=>tbl.appendChild(buildMatchRow(r.m, r.leagueName, r.isIntl, r.ccode)));
+    card.appendChild(tbl);
+    wrap.appendChild(card);
+    return;
+  }
+
+  // Default: grouped into a card per league.
   leagues.forEach(league=>{
     const card=document.createElement('div');
     card.className='card';
@@ -10444,49 +10536,10 @@ function renderFixtures(leagues){
     const tbl=document.createElement('table');
     tbl.className='dt';
     tbl.style.width='100%';
-    // Fixed layout + explicit column widths so the centre score column lines up vertically
-    // across every league card, instead of drifting with each card's longest team name.
     tbl.style.tableLayout='fixed';
-    const cg=document.createElement('colgroup');
-    cg.innerHTML='<col style="width:78px"><col><col style="width:70px"><col><col style="width:34px">';
-    tbl.appendChild(cg);
+    tbl.innerHTML='<colgroup>'+MATCH_TBL_COLGROUP+'</colgroup>';
     const isIntl = INTL_LEAGUES.has(Number(league.id));
-    league.matches.forEach(m=>{
-      const tr=document.createElement('tr');
-      tr.style.cursor='pointer';
-      tr.title='Click to view lineups';
-      tr.onmouseenter=()=>tr.style.background='var(--surface2)';
-      tr.onmouseleave=()=>tr.style.background='';
-      tr.onclick=()=>openMatch(m.id, m.home, m.away, league.name, isIntl, m.started, m.finished, m.homeId, m.awayId);
-      const timeStr=m.utcTime?fmtKickoff(m.utcTime):'TBC';
-      const isLive=m.started&&!m.finished;
-      const statusDot=isLive?`<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);margin-right:4px;vertical-align:middle"></span>`:'';
-      let scoreHtml;
-      if(m.score&&m.score!=='-'&&(m.started||m.finished)){
-        const parts=m.score.split(' - ');
-        const c=m.finished?'var(--text1)':'var(--green)';
-        scoreHtml=`<span style="font-weight:700;color:${c};white-space:nowrap;font-size:14px">${parts[0]||0} - ${parts[1]||0}</span>`;
-      }else{
-        scoreHtml=`<span style="color:var(--text3);font-size:12px;white-space:nowrap">vs</span>`;
-      }
-      tr.innerHTML=`
-        <td style="font-size:12px;color:var(--text3);white-space:nowrap;padding-left:14px;padding-right:6px">${statusDot}${timeStr}</td>
-        <td style="text-align:right;font-weight:500;font-size:13px;padding-left:4px;padding-right:10px">
-          <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0">
-            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.home}</span>
-            <img src="https://images.fotmob.com/image_resources/logo/teamlogo/${m.homeId}.png" style="width:18px;height:18px;object-fit:contain;flex-shrink:0" onerror="this.style.display='none'">
-          </div>
-        </td>
-        <td style="text-align:center;white-space:nowrap;padding-left:2px;padding-right:2px">${scoreHtml}</td>
-        <td style="font-weight:500;font-size:13px;padding-left:10px;padding-right:4px">
-          <div style="display:flex;align-items:center;gap:6px;min-width:0">
-            <img src="https://images.fotmob.com/image_resources/logo/teamlogo/${m.awayId}.png" style="width:18px;height:18px;object-fit:contain;flex-shrink:0" onerror="this.style.display='none'">
-            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.away}</span>
-          </div>
-        </td>
-        <td style="text-align:right;color:var(--text3);font-size:12px;padding-left:2px;padding-right:12px"><i class="ti ti-chevron-right"></i></td>`;
-      tbl.appendChild(tr);
-    });
+    (league.matches||[]).forEach(m=>tbl.appendChild(buildMatchRow(m, league.name, isIntl, null)));
     card.appendChild(tbl);
     wrap.appendChild(card);
   });
@@ -10506,6 +10559,7 @@ async function openMatch(matchId, home, away, leagueName, isIntl, started, finis
   document.getElementById('matches-content').style.display='none';
   document.getElementById('date-btns').style.display='none';
   document.getElementById('matches-count').style.display='none';
+  const _sortT=document.getElementById('matches-sort-toggle'); if(_sortT)_sortT.style.display='none';
   document.getElementById('match-detail').style.display='';
   document.getElementById('player-panel').style.display='none';
   document.getElementById('lineups-wrap').innerHTML='';
@@ -10560,6 +10614,7 @@ function closeMatch(){
   document.getElementById('matches-content').style.display='';
   document.getElementById('date-btns').style.display='flex';
   document.getElementById('matches-count').style.display='';
+  const _sortT=document.getElementById('matches-sort-toggle'); if(_sortT)_sortT.style.display='flex';
 }
 
 function renderLineups(data){
