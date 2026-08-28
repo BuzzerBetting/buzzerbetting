@@ -106,9 +106,12 @@ router.use((req, res, next) => {
 // Exception: /fotmob-leagues lives under this router for historical/routing reasons only —
 // it's part of the Calculations feature set (Today's Matches / Edit Leagues), not financial
 // Ledger data, so it's exempted from this block rather than widening Calculator's access
-// generally.
+// generally. /notifications is likewise exempt — the header notification bell is available
+// to every role, and the route itself only ever returns 'all'-audience rows to a Calculator.
 router.use((req, res, next) => {
-  if (req.userRole === 'calculator' && !req.path.startsWith('/fotmob-leagues')) {
+  if (req.userRole === 'calculator'
+      && !req.path.startsWith('/fotmob-leagues')
+      && !req.path.startsWith('/notifications')) {
     return res.status(403).json({ ok: false, error: 'This account has no access to the Ledger.' });
   }
   next();
@@ -2484,6 +2487,7 @@ router.post('/todos', requireAdmin, (req, res) => {
     if (!note || !note.trim()) return res.status(400).json({ ok: false, error: 'note is required' });
     if (!['asap', 'today', 'week', 'whenever'].includes(urgency)) return res.status(400).json({ ok: false, error: 'urgency must be asap, today, week, or whenever' });
     const info = db.prepare(`INSERT INTO todos (note, urgency, created_by) VALUES (?, ?, ?)`).run(note.trim(), urgency, req.username || null);
+    pushNotification('todo', 'staff', 'To Do request received', note.trim());
     res.json({ ok: true, id: info.lastInsertRowid });
   } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
 });
@@ -2501,6 +2505,7 @@ router.patch('/todos/:id/problem', (req, res) => {
   try {
     const { problem_note } = req.body;
     db.prepare(`UPDATE todos SET status = 'problem', problem_note = ? WHERE id = ?`).run(problem_note || null, req.params.id);
+    pushNotification('todo', 'admin', 'Problem flagged on a To Do request', problem_note || null);
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
@@ -2519,6 +2524,40 @@ router.delete('/todos/:id', requireAdmin, (req, res) => {
   try {
     db.prepare(`DELETE FROM todos WHERE id = ?`).run(req.params.id);
     res.json({ ok: true });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// ================== NOTIFICATION FEED (header bell) ==================
+
+// Insert one row into the notification feed. Best-effort — a feed write must never break the
+// action that triggered it, so failures are swallowed. Shared by the To-Do hooks above; the
+// lineup poller (notifications-poller.js) writes its own rows directly against the same table.
+function pushNotification(type, audience, title, body) {
+  try {
+    db.prepare(`INSERT INTO notifications (type, audience, title, body) VALUES (?, ?, ?, ?)`)
+      .run(type, audience || 'all', title, body || null);
+  } catch (e) { /* non-fatal */ }
+}
+
+// GET /api/ledger/notifications — the header bell's feed. Open to every role (Calculator
+// included, via the gate exception above). Rows older than 24h are pruned on read, giving
+// the "clears every day" behaviour without a scheduler. audience gates visibility:
+//   admin  -> all + admin + staff (nothing Staff sees is hidden from Admin)
+//   staff  -> all + staff
+//   others -> all only
+router.get('/notifications', (req, res) => {
+  try {
+    db.prepare(`DELETE FROM notifications WHERE created_at < datetime('now', '-24 hours')`).run();
+    db.prepare(`DELETE FROM lineup_notify_state WHERE notified_at < datetime('now', '-24 hours')`).run();
+    const audiences = req.userRole === 'admin' ? ['all', 'admin', 'staff']
+      : req.userRole === 'staff' ? ['all', 'staff']
+      : ['all'];
+    const placeholders = audiences.map(() => '?').join(',');
+    const rows = db.prepare(
+      `SELECT id, type, title, body, created_at FROM notifications
+       WHERE audience IN (${placeholders}) ORDER BY id DESC LIMIT 200`
+    ).all(...audiences);
+    res.json({ ok: true, notifications: rows });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 

@@ -166,3 +166,6 @@ app.post('/api/oc-ev/refresh', (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`BuzzerBetting server running on port ${PORT}`));
+
+// Background: watch FotMob for lineups flipping to confirmed and feed the header bell.
+require('./notifications-poller').startLineupNotifier();

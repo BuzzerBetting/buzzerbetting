@@ -221,7 +221,37 @@ input::placeholder{color:var(--text3)}
     <div class="brand-icon"><i class="ti ti-bolt"></i></div>
     <div class="brand-name">Buzzer<em>Betting</em></div>
   </div>
-  <div class="hdr-right"><div class="live-dot"></div><span id="hdr-date"></span></div>
+  <div class="hdr-right">
+    <div id="notif-wrap" style="position:relative;display:flex;align-items:center">
+      <button id="notif-bell" onclick="toggleNotifPanel(event)" title="Notifications" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.55);font-size:18px;padding:4px;display:flex;align-items:center;position:relative;line-height:1">
+        <i class="ti ti-bell"></i>
+        <span id="notif-dot" style="display:none;position:absolute;top:1px;right:1px;width:8px;height:8px;background:#ef4444;border-radius:50%;border:1.5px solid var(--header)"></span>
+      </button>
+      <div id="notif-panel" style="display:none;position:absolute;right:0;top:calc(100% + 12px);width:324px;background:var(--surface);border:0.5px solid var(--border);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,0.22);z-index:200;overflow:hidden">
+        <div style="padding:12px 14px;border-bottom:0.5px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:13px;font-weight:600;color:var(--text)">Notifications</span>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer;user-select:none">
+            <input type="checkbox" id="notif-master" onchange="onNotifToggle('master',this.checked)"> On
+          </label>
+        </div>
+        <div style="padding:10px 14px;border-bottom:0.5px solid var(--border);display:flex;flex-direction:column;gap:8px">
+          <label style="display:flex;align-items:center;justify-content:space-between;font-size:12.5px;color:var(--text2);cursor:pointer;user-select:none">
+            <span>Lineups Confirmed</span>
+            <input type="checkbox" id="notif-sec-lineup" onchange="onNotifToggle('lineup',this.checked)">
+          </label>
+          <label id="notif-sec-todo-row" style="display:none;align-items:center;justify-content:space-between;font-size:12.5px;color:var(--text2);cursor:pointer;user-select:none">
+            <span>To Do requests</span>
+            <input type="checkbox" id="notif-sec-todo" onchange="onNotifToggle('todo',this.checked)">
+          </label>
+        </div>
+        <div style="padding:6px 6px 8px">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);padding:6px 10px 8px">Last 24 hours</div>
+          <div id="notif-list" style="max-height:300px;overflow-y:auto"></div>
+        </div>
+      </div>
+    </div>
+    <div class="live-dot"></div><span id="hdr-date"></span>
+  </div>
 </header>
 
 <div class="page">
@@ -3193,6 +3223,7 @@ function applyRoleRestrictions() {
   const calcBackBtn = document.getElementById('calc-menu-back-btn');
   if (calcBackBtn) calcBackBtn.style.display = isCalculator ? 'none' : '';
   if (!isCalculator) startTodoPolling(); // Calculator has no Ledger access at all — polling would just produce repeated 403s
+  startNotifPolling(); // header notification bell — every role, Calculator included (GET /notifications is allowed for it)
 }
 
 // ── TO DO ──
@@ -3216,7 +3247,7 @@ function showToast(message, opts) {
     el.style.opacity = '0';
     el.style.transform = 'translateX(20px)';
     setTimeout(() => el.remove(), 300);
-  }, 6000);
+  }, (opts && opts.duration) || 6000);
 }
 
 function unlockTodoAudio() {
@@ -3241,25 +3272,19 @@ function playTodoAlertSound() {
 }
 
 let TODO_POLL_INTERVAL = null;
-let TODO_LAST_OPEN_MAX_ID = null; // null = baseline not yet established, don't alert on first poll
-let TODO_LAST_PROBLEM_MAX_ID = null;
 
 async function pollForNewTodos() {
   if (!CURRENT_USER_ROLE) return;
   try {
+    // Banners/sounds for To Do activity are handled by the notification poller
+    // (pollNotifications) now — this just keeps the To Do page badge count live.
     if (CURRENT_USER_ROLE === 'staff') {
       const d = await ledgerApi('todos?status=open');
       const rows = (d.ok && d.todos) ? d.todos : [];
-      const maxId = rows.length ? Math.max(...rows.map(r => r.id)) : 0;
-      if (TODO_LAST_OPEN_MAX_ID !== null && maxId > TODO_LAST_OPEN_MAX_ID) { playTodoAlertSound(); showToast('To Do request received'); }
-      TODO_LAST_OPEN_MAX_ID = maxId;
       updateTodoBadge(rows.length);
     } else if (CURRENT_USER_ROLE === 'admin') {
       const d = await ledgerApi('todos?status=problem');
       const rows = (d.ok && d.todos) ? d.todos : [];
-      const maxId = rows.length ? Math.max(...rows.map(r => r.id)) : 0;
-      if (TODO_LAST_PROBLEM_MAX_ID !== null && maxId > TODO_LAST_PROBLEM_MAX_ID) { playTodoAlertSound(); showToast('Problem flagged on a To Do request'); }
-      TODO_LAST_PROBLEM_MAX_ID = maxId;
       updateTodoBadge(rows.length);
     }
     // If currently viewing the To Do page, keep it live too.
@@ -3280,6 +3305,132 @@ function startTodoPolling() {
   pollForNewTodos(); // establishes the baseline silently, no alert on this first check
   TODO_POLL_INTERVAL = setInterval(pollForNewTodos, 20000);
 }
+
+// ── NOTIFICATIONS (header bell) ──────────────────────────────────────────────
+// Feed is served by GET /api/ledger/notifications (rolling 24h, role-filtered). This poller
+// drives the 5s banner + the bell's history list + the unread dot. Two sections: "Lineups
+// Confirmed" (all roles) and "To Do requests" (admin/staff only). Master + per-section
+// on/off live in localStorage. Lineup alerts are silent; To Do alerts keep the beep.
+let NOTIF_POLL_INTERVAL = null;
+let NOTIF_LATEST = [];
+
+function notifPrefs() {
+  const get = (k, def) => { const v = localStorage.getItem(k); return v === null ? def : v === '1'; };
+  return {
+    master: get('bb_notif_enabled', true),
+    lineup: get('bb_notif_sec_lineup', true),
+    todo:   get('bb_notif_sec_todo', true),
+  };
+}
+function onNotifToggle(which, checked) {
+  const key = which === 'master' ? 'bb_notif_enabled'
+    : which === 'lineup' ? 'bb_notif_sec_lineup' : 'bb_notif_sec_todo';
+  localStorage.setItem(key, checked ? '1' : '0');
+}
+function syncNotifCheckboxes() {
+  const p = notifPrefs();
+  document.getElementById('notif-master').checked = p.master;
+  document.getElementById('notif-sec-lineup').checked = p.lineup;
+  document.getElementById('notif-sec-todo').checked = p.todo;
+}
+function loadNotifSeen() { try { return JSON.parse(localStorage.getItem('bb_notif_seen_ids') || '[]'); } catch (e) { return []; } }
+function saveNotifSeen(arr) { try { localStorage.setItem('bb_notif_seen_ids', JSON.stringify(arr.slice(-300))); } catch (e) {} }
+function nowSqlish() { return new Date().toISOString().slice(0, 19).replace('T', ' '); }
+function notifRelTime(s) {
+  if (!s) return '';
+  const t = new Date(s.replace(' ', 'T') + 'Z').getTime();
+  const diff = Date.now() - t;
+  if (diff < 60000) return 'just now';
+  const m = Math.floor(diff / 60000);
+  if (m < 60) return m + 'm ago';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + 'h ago';
+  return Math.floor(h / 24) + 'd ago';
+}
+function isNotifPanelOpen() { return document.getElementById('notif-panel')?.style.display === 'block'; }
+
+function toggleNotifPanel(e) {
+  if (e) e.stopPropagation();
+  const p = document.getElementById('notif-panel');
+  if (!p) return;
+  if (p.style.display === 'block') { p.style.display = 'none'; return; }
+  syncNotifCheckboxes();
+  const canTodo = CURRENT_USER_ROLE === 'admin' || CURRENT_USER_ROLE === 'staff';
+  document.getElementById('notif-sec-todo-row').style.display = canTodo ? 'flex' : 'none';
+  renderNotifList();
+  p.style.display = 'block';
+  localStorage.setItem('bb_notif_opened_at', nowSqlish());
+  updateNotifDot();
+}
+function renderNotifList() {
+  const el = document.getElementById('notif-list');
+  if (!el) return;
+  if (!NOTIF_LATEST.length) {
+    el.innerHTML = '<div style="padding:14px 10px;color:var(--text3);font-size:12.5px">No notifications.</div>';
+    return;
+  }
+  el.innerHTML = NOTIF_LATEST.map(n => {
+    const icon = n.type === 'lineup' ? 'ti-clipboard-check' : 'ti-checklist';
+    const col = n.type === 'lineup' ? 'var(--green)' : 'var(--amber)';
+    return `<div style="display:flex;gap:10px;padding:8px 10px">
+      <i class="ti ${icon}" style="color:${col};font-size:15px;margin-top:1px;flex-shrink:0"></i>
+      <div style="min-width:0">
+        <div style="font-size:12.5px;color:var(--text);line-height:1.35">${escapeHtml(n.title)}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${notifRelTime(n.created_at)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function updateNotifDot() {
+  const dot = document.getElementById('notif-dot');
+  if (!dot) return;
+  const opened = localStorage.getItem('bb_notif_opened_at');
+  const hasUnread = NOTIF_LATEST.some(n => !opened || n.created_at > opened);
+  dot.style.display = hasUnread ? 'block' : 'none';
+}
+
+async function pollNotifications() {
+  if (!CURRENT_USER_ROLE) return;
+  let d;
+  try { d = await ledgerApi('notifications'); } catch (e) { return; }
+  if (!d || !d.ok || !Array.isArray(d.notifications)) return;
+  NOTIF_LATEST = d.notifications;
+
+  const firstEver = !localStorage.getItem('bb_notif_init');
+  const seen = loadNotifSeen();
+  const seenSet = new Set(seen);
+  const prefs = notifPrefs();
+
+  if (!firstEver) {
+    // Oldest-first so the newest banner ends up on top of the stack.
+    [...d.notifications].filter(n => !seenSet.has(n.id)).reverse().forEach(n => {
+      const sectionOn = n.type === 'todo' ? prefs.todo : prefs.lineup;
+      if (prefs.master && sectionOn) {
+        showToast(n.title, { duration: 5000 });
+        if (n.type === 'todo') playTodoAlertSound();
+      }
+    });
+  }
+
+  const newIds = d.notifications.map(n => n.id).filter(id => !seenSet.has(id));
+  if (newIds.length) saveNotifSeen(seen.concat(newIds));
+  localStorage.setItem('bb_notif_init', '1');
+
+  updateNotifDot();
+  if (isNotifPanelOpen()) renderNotifList();
+}
+
+function startNotifPolling() {
+  if (NOTIF_POLL_INTERVAL) clearInterval(NOTIF_POLL_INTERVAL);
+  pollNotifications();
+  NOTIF_POLL_INTERVAL = setInterval(pollNotifications, 30000);
+}
+
+document.addEventListener('click', (e) => {
+  const wrap = document.getElementById('notif-wrap');
+  const p = document.getElementById('notif-panel');
+  if (p && p.style.display === 'block' && wrap && !wrap.contains(e.target)) p.style.display = 'none';
+});
 
 async function initTodo() {
   const isAdmin = CURRENT_USER_ROLE === 'admin';
@@ -10293,6 +10444,12 @@ function renderFixtures(leagues){
     const tbl=document.createElement('table');
     tbl.className='dt';
     tbl.style.width='100%';
+    // Fixed layout + explicit column widths so the centre score column lines up vertically
+    // across every league card, instead of drifting with each card's longest team name.
+    tbl.style.tableLayout='fixed';
+    const cg=document.createElement('colgroup');
+    cg.innerHTML='<col style="width:78px"><col><col style="width:70px"><col><col style="width:34px">';
+    tbl.appendChild(cg);
     const isIntl = INTL_LEAGUES.has(Number(league.id));
     league.matches.forEach(m=>{
       const tr=document.createElement('tr');
@@ -10313,21 +10470,21 @@ function renderFixtures(leagues){
         scoreHtml=`<span style="color:var(--text3);font-size:12px;white-space:nowrap">vs</span>`;
       }
       tr.innerHTML=`
-        <td style="width:55px;font-size:12px;color:var(--text3);white-space:nowrap">${statusDot}${timeStr}</td>
-        <td style="text-align:right;font-weight:500;font-size:13px;padding-right:10px">
-          <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px">
-            <span>${m.home}</span>
-            <img src="https://images.fotmob.com/image_resources/logo/teamlogo/${m.homeId}.png" style="width:18px;height:18px;object-fit:contain" onerror="this.style.display='none'">
+        <td style="font-size:12px;color:var(--text3);white-space:nowrap;padding-left:14px;padding-right:6px">${statusDot}${timeStr}</td>
+        <td style="text-align:right;font-weight:500;font-size:13px;padding-left:4px;padding-right:10px">
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.home}</span>
+            <img src="https://images.fotmob.com/image_resources/logo/teamlogo/${m.homeId}.png" style="width:18px;height:18px;object-fit:contain;flex-shrink:0" onerror="this.style.display='none'">
           </div>
         </td>
-        <td style="text-align:center;width:70px;white-space:nowrap">${scoreHtml}</td>
-        <td style="font-weight:500;font-size:13px;padding-left:10px">
-          <div style="display:flex;align-items:center;gap:6px">
-            <img src="https://images.fotmob.com/image_resources/logo/teamlogo/${m.awayId}.png" style="width:18px;height:18px;object-fit:contain" onerror="this.style.display='none'">
-            <span>${m.away}</span>
+        <td style="text-align:center;white-space:nowrap;padding-left:2px;padding-right:2px">${scoreHtml}</td>
+        <td style="font-weight:500;font-size:13px;padding-left:10px;padding-right:4px">
+          <div style="display:flex;align-items:center;gap:6px;min-width:0">
+            <img src="https://images.fotmob.com/image_resources/logo/teamlogo/${m.awayId}.png" style="width:18px;height:18px;object-fit:contain;flex-shrink:0" onerror="this.style.display='none'">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.away}</span>
           </div>
         </td>
-        <td style="width:36px;text-align:right;color:var(--text3);font-size:12px"><i class="ti ti-chevron-right"></i></td>`;
+        <td style="text-align:right;color:var(--text3);font-size:12px;padding-left:2px;padding-right:12px"><i class="ti ti-chevron-right"></i></td>`;
       tbl.appendChild(tr);
     });
     card.appendChild(tbl);

@@ -322,6 +322,27 @@ CREATE TABLE IF NOT EXISTS fotmob_leagues (
   league_name TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- In-app notification feed powering the header bell. Rows are pruned to a rolling 24h on
+-- every read (GET /notifications) and by the lineup poller. audience gates who sees a row:
+-- 'all' = every role incl. calculator, 'admin'/'staff' = that role (admin also sees staff).
+CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  type TEXT NOT NULL,                     -- 'lineup' | 'todo'
+  audience TEXT NOT NULL DEFAULT 'all',   -- 'all' | 'admin' | 'staff'
+  title TEXT NOT NULL,
+  body TEXT,
+  meta TEXT,                              -- JSON, e.g. {"matchId":123}
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Dedupe guard for the server-side lineup poller: one row per match once its "Lineups
+-- Confirmed" notification has been emitted, so re-scanning the same match never re-alerts.
+-- Pruned to 24h alongside notifications.
+CREATE TABLE IF NOT EXISTS lineup_notify_state (
+  match_id TEXT PRIMARY KEY,
+  notified_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `);
 
 // Safe migration — ALTER TABLE ADD COLUMN errors if the column already exists, so this is
