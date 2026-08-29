@@ -10549,8 +10549,13 @@ function renderDogsTable(rows,summary){
     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none">
       <input type="checkbox" id="pred-pens-toggle" onchange="setPredToggle('pens',this.checked)"> Penalty taker prediction
     </label>
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none">
+      <input type="checkbox" id="pred-bet-stats-toggle" onchange="setPredToggle('bet-stats',this.checked)"> Corner bet stats
+    </label>
     <span id="matches-pred-note" style="font-size:11px;color:var(--text3)"></span>
   </div>
+
+  <div id="corner-bet-stats-panel" style="display:none;margin:-8px 0 16px;padding:10px 14px;border-radius:var(--radius);border:.5px solid var(--border);background:var(--surface);font-size:12.5px;color:var(--text2)"></div>
 
   <!-- Date selector -->
   <div id="date-btns" style="display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap"></div>
@@ -10624,14 +10629,46 @@ let MATCH_PRED_DATE = null;        // the fixture date the current MATCH_PREDICT
 let MATCH_PRED_INTERVAL = null;
 function predCornersOn(){ return localStorage.getItem('bb_pred_corners') === '1'; }
 function predPensOn(){ return localStorage.getItem('bb_pred_pens') === '1'; }
+function predBetStatsOn(){ return localStorage.getItem('bb_pred_bet_stats') === '1'; }
 function syncPredToggles(){
   const c = document.getElementById('pred-corners-toggle'); if (c) c.checked = predCornersOn();
   const p = document.getElementById('pred-pens-toggle'); if (p) p.checked = predPensOn();
+  const b = document.getElementById('pred-bet-stats-toggle'); if (b) b.checked = predBetStatsOn();
+  const panel = document.getElementById('corner-bet-stats-panel');
+  if (panel) panel.style.display = predBetStatsOn() ? 'block' : 'none';
 }
 function setPredToggle(which, on){
-  localStorage.setItem(which === 'corners' ? 'bb_pred_corners' : 'bb_pred_pens', on ? '1' : '0');
+  const key = which === 'corners' ? 'bb_pred_corners' : which === 'pens' ? 'bb_pred_pens' : 'bb_pred_bet_stats';
+  localStorage.setItem(key, on ? '1' : '0');
   if (MATCHES_LEAGUES) renderFixtures(MATCHES_LEAGUES);
+  if (which === 'bet-stats') {
+    const panel = document.getElementById('corner-bet-stats-panel');
+    if (panel) panel.style.display = on ? 'block' : 'none';
+    if (on && CURRENT_FIXTURE_DATE) loadCornerBetStats(CURRENT_FIXTURE_DATE);
+    return;
+  }
   if (on && !MATCH_PRED_DATE && CURRENT_FIXTURE_DATE) loadMatchPredictions(CURRENT_FIXTURE_DATE);
+}
+
+// "N assist -> header pairs predicted" + which teams, for the corner-bet-stats toggle. Reads
+// corner-model's temporary prediction log (populated as a side-effect of loadMatchPredictions
+// hitting /match-predictions) rather than computing anything itself, so this is always cheap.
+async function loadCornerBetStats(date){
+  const panel = document.getElementById('corner-bet-stats-panel');
+  if (!panel || !predBetStatsOn()) return;
+  try{
+    const d = await ledgerApi('corner-bet-stats?date=' + date);
+    if (!d || !d.ok || date !== CURRENT_FIXTURE_DATE) return;
+    if (!d.count){
+      panel.innerHTML = `<span style="color:var(--text3)">No assist → header pairs predicted yet for this date.</span>`;
+      return;
+    }
+    const rows = d.predictions.map(p => {
+      const odds = p.headerOdds != null ? ` <b style="color:var(--brand)">(${p.headerOdds.toFixed(2)})</b>` : '';
+      return `<div style="padding:3px 0">${escapeHtml(p.team)}<span style="color:var(--text3)"> vs ${escapeHtml(p.opponent||'?')} — </span>${escapeHtml(p.assistPlayer)} <span style="color:var(--text3)">(${p.assistPct}%) →</span> ${escapeHtml(p.headerPlayer)}${odds}</div>`;
+    }).join('');
+    panel.innerHTML = `<div style="font-weight:600;margin-bottom:4px">${d.count} assist → header pair${d.count===1?'':'s'} predicted</div>${rows}`;
+  }catch(e){ /* non-fatal */ }
 }
 
 let CURRENT_FIXTURE_DATE = null;
@@ -10649,6 +10686,7 @@ async function loadMatchPredictions(date){
       note.textContent = conf ? `${conf} match${conf===1?'':'es'} with confirmed lineups` : 'no confirmed lineups yet';
     }
     if (MATCHES_LEAGUES) renderFixtures(MATCHES_LEAGUES);
+    if (predBetStatsOn()) loadCornerBetStats(date);
   }catch(e){ /* non-fatal */ }
 }
 

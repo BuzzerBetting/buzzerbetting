@@ -2575,6 +2575,14 @@ const cornerModel = (() => {
   try { return require('./corner-model/predict'); }
   catch (e) { console.error('[match-predictions] corner-model not loaded:', e.message); return null; }
 })();
+// Temporary "assist -> header" corner-bet prediction log — see corner-model/predictionLog.js.
+// Same optional-require pattern as cornerModel above; its absence just means no logging, not a
+// broken match-predictions route.
+const predictionLog = (() => {
+  try { return require('./corner-model/predictionLog'); }
+  catch (e) { return null; }
+})();
+const CORNER_BET_SENTINEL_NAMES = new Set(['error', 'no data', 'unknown', 'no clear taker']);
 
 // matchDetails fetch with a short in-memory TTL cache — pre-match lineups flip
 // predicted -> confirmed, so this is deliberately NOT the immutable disk cache.
@@ -2607,7 +2615,7 @@ function mpLineupConfirmed(lineupType) {
   return !MP_UNCONFIRMED_LINEUP.has(lineupType || '');
 }
 
-function mpSide(lineupSide, confirmed, homeTeamName, awayTeamName) {
+function mpSide(lineupSide, confirmed, homeTeamName, awayTeamName, matchId, date) {
   const teamId = lineupSide ? String(lineupSide.id) : null;
   const teamName = lineupSide ? lineupSide.name : null;
   let cornerTakers = null, penTaker = null, cornerThreat = null;
@@ -2619,6 +2627,20 @@ function mpSide(lineupSide, confirmed, homeTeamName, awayTeamName) {
       // corner-model/oc-ags.js. Passed for both sides regardless of which one this call is for.
       const p = cornerModel.predictForTeam({ teamId, xi, asOfDate: new Date().toISOString(), homeTeamName, awayTeamName });
       cornerTakers = p.cornerTakers; penTaker = p.penTaker; cornerThreat = p.cornerThreat;
+      // Log a complete "assist -> header" pairing — only when BOTH halves have real signal (not
+      // a sentinel/placeholder). This only runs when a FRESH prediction was just computed (the
+      // caller only reaches mpSide on a cache miss), so it naturally logs once per prediction,
+      // not once per 2-min UI poll. See corner-model/predictionLog.js.
+      const taker = Array.isArray(cornerTakers) ? cornerTakers[0] : null;
+      const target = Array.isArray(p.cornerThreatTargets) ? p.cornerThreatTargets[0] : null;
+      if (predictionLog && taker && target && taker.pct > 0 && !CORNER_BET_SENTINEL_NAMES.has(taker.name)) {
+        predictionLog.recordPrediction({
+          matchId, teamId, date, teamName,
+          opponentName: teamName === homeTeamName ? awayTeamName : homeTeamName,
+          assistPlayer: taker.name, assistPct: taker.pct,
+          headerPlayer: target.name, headerOdds: target.odds,
+        });
+      }
     } catch (e) { cornerTakers = [{ name: 'error', pct: 0, side: null, note: e.message }]; }
   }
   return { teamId, teamName, lineupConfirmed: !!confirmed, cornerTakers, penTaker, cornerThreat };
@@ -2649,7 +2671,9 @@ router.get('/match-predictions', async (req, res) => {
         let pred = _mpPredCache.get(cacheKey);
         if (pred && Date.now() - pred._at > 6 * 3600 * 1000) pred = null; // re-derive against fresher harvest data
         if (!pred) {
-          pred = { _at: Date.now(), home: mpSide(lu && lu.homeTeam, confirmed, m.home, m.away), away: mpSide(lu && lu.awayTeam, confirmed, m.home, m.away) };
+          pred = { _at: Date.now(),
+            home: mpSide(lu && lu.homeTeam, confirmed, m.home, m.away, m.id, date),
+            away: mpSide(lu && lu.awayTeam, confirmed, m.home, m.away, m.id, date) };
           // fill team names from the fixture when there's no lineup object yet
           if (!pred.home.teamName) pred.home.teamName = m.home;
           if (!pred.away.teamName) pred.away.teamName = m.away;
@@ -2662,6 +2686,19 @@ router.get('/match-predictions', async (req, res) => {
     if (_mpPredCache.size > 400) _mpPredCache.clear();
     res.json({ ok: true, date, matches });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// GET /api/ledger/corner-bet-stats?date=YYYYMMDD — how many complete "assist -> header" corner
+// bet-builder pairings have been predicted today (or the given date), and which teams they're
+// for. Backs the "Corner bet stats" toggle in Today's Matches. Reads corner-model's temporary
+// prediction log (see corner-model/predictionLog.js) — a side-effect of match-predictions above,
+// not computed fresh here, so this is always instant regardless of how many fixtures there are.
+router.get('/corner-bet-stats', (req, res) => {
+  const date = String(req.query.date || '').replace(/[^0-9]/g, '')
+    || new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  if (!predictionLog) return res.json({ ok: true, date, count: 0, predictions: [] });
+  try { res.json({ ok: true, ...predictionLog.getStats(date) }); }
+  catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
 // ================== QUICK BET — parse a placed-bet screenshot ==================
