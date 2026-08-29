@@ -10667,26 +10667,30 @@ function setPredToggle(which, on){
   if (on && !MATCH_PRED_DATE && CURRENT_FIXTURE_DATE) loadMatchPredictions(CURRENT_FIXTURE_DATE);
 }
 
-// Which "assist -> header" corner-bet combos actually WON, and in which game — only winners are
-// shown, per the ask (not the full predicted list). Reads corner-model's temporary prediction
-// log, settled server-side against real post-match results (see GET /corner-bet-stats).
+// Which "assist -> header" corner-bet combos actually WON, and in which game — winners are
+// listed in full, per the ask — plus the total number of combos predicted today (every
+// assist-candidate x header-candidate pairing across every team, exactly what gets staked under
+// the cross-betting strategy), so wins-vs-predicted gives a running read on what average odds
+// this needs to hit over time to be worth it. Reads corner-model's temporary prediction log,
+// settled server-side against real post-match results (see GET /corner-bet-stats).
 async function loadCornerBetStats(date){
   const panel = document.getElementById('corner-bet-stats-panel');
   if (!panel || !predBetStatsOn()) return;
   try{
     const d = await ledgerApi('corner-bet-stats?date=' + date);
     if (!d || !d.ok || date !== CURRENT_FIXTURE_DATE) return;
-    const pending = d.predictedCount - d.settledCount;
-    const pendingNote = pending > 0 ? ` <span style="color:var(--text3)">(${pending} still to finish)</span>` : '';
-    if (!d.winCount){
-      panel.innerHTML = `<span style="color:var(--text3)">No corner bet wins yet today${pendingNote}.</span>`;
+    if (!d.predictedCount){
+      panel.innerHTML = `<span style="color:var(--text3)">No corner bets predicted yet today.</span>`;
       return;
     }
+    const pending = d.predictedCount - d.settledCount;
+    const pendingNote = pending > 0 ? ` <span style="color:var(--text3)">(${pending} still to finish)</span>` : '';
+    const header = `<div style="font-weight:600;margin-bottom:4px"><span style="color:var(--brand)">${d.winCount}</span> win${d.winCount===1?'':'s'} <span style="color:var(--text3);font-weight:400"> / ${d.predictedCount} bet${d.predictedCount===1?'':'s'} predicted today</span>${pendingNote}</div>`;
     const rows = d.wins.map(p => {
       const odds = p.headerOdds != null ? ` <b style="color:var(--brand)">(${p.headerOdds.toFixed(2)})</b>` : '';
       return `<div style="padding:3px 0">${escapeHtml(p.team)}<span style="color:var(--text3)"> vs ${escapeHtml(p.opponent||'?')} — </span>${escapeHtml(p.assistPlayer)} <span style="color:var(--text3)">(${p.assistPct}%) →</span> ${escapeHtml(p.headerPlayer)}${odds}</div>`;
     }).join('');
-    panel.innerHTML = `<div style="font-weight:600;margin-bottom:4px;color:var(--brand)">${d.winCount} corner bet win${d.winCount===1?'':'s'} today${pendingNote}</div>${rows}`;
+    panel.innerHTML = header + rows;
   }catch(e){ /* non-fatal */ }
 }
 
