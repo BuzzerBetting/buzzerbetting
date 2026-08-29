@@ -2619,18 +2619,29 @@ function mpLineupConfirmed(lineupType) {
   return !MP_UNCONFIRMED_LINEUP.has(lineupType || '');
 }
 
-function mpSide(lineupSide, confirmed, homeTeamName, awayTeamName, matchId, date) {
+// xiKnown vs confirmed are deliberately different: xiKnown is true from the moment the XI is
+// announced right through kickoff, the match, and after full-time — the starting XI doesn't
+// change once announced, so it's valid to predict/log against for as long as the match exists.
+// confirmed is the narrower "announced AND not yet kicked off" window that drives the frontend's
+// green-name highlight — predicting is still USEFUL once a match has started (you already know
+// who started), but showing it as a still-actionable "prediction" stops being meaningful, so the
+// display fields (cornerTakers/penTaker/cornerThreat returned below) stay gated on `confirmed`,
+// unchanged from before. Only the LOGGING (for corner-bet-stats settlement) needed widening to
+// xiKnown — otherwise a match that kicked off without match-predictions ever being polled in
+// that narrow pre-kickoff window would silently never get logged at all, even though the XI
+// was fully known and the match has since finished. Confirmed missing in exactly this way for a
+// live Levante vs Betis game (2026-08-29) — this is the fix for that.
+function mpSide(lineupSide, confirmed, xiKnown, isHome, homeTeamName, awayTeamName, matchId, date) {
   const teamId = lineupSide ? String(lineupSide.id) : null;
   const teamName = lineupSide ? lineupSide.name : null;
   let cornerTakers = null, penTaker = null, cornerThreat = null;
-  if (confirmed && teamId && cornerModel && lineupSide && Array.isArray(lineupSide.starters)) {
+  if (xiKnown && teamId && cornerModel && lineupSide && Array.isArray(lineupSide.starters)) {
     const xi = lineupSide.starters.map(p => ({ id: p.id, name: p.name, positionId: p.positionId }));
     try {
       // homeTeamName/awayTeamName (the fixture's own names, not the lineup object's) are what
       // cornerThreat needs to find this fixture's cached Anytime Goalscorer odds — see
       // corner-model/oc-ags.js. Passed for both sides regardless of which one this call is for.
       const p = cornerModel.predictForTeam({ teamId, xi, asOfDate: new Date().toISOString(), homeTeamName, awayTeamName, matchId });
-      cornerTakers = p.cornerTakers; penTaker = p.penTaker; cornerThreat = p.cornerThreat;
       // Log every (assist candidate x header candidate) combo — the actual staking strategy
       // cross-bets all of them (2x2 = 4 bets). This only runs when a FRESH prediction was just
       // computed (the caller only reaches mpSide on a cache miss), so it naturally logs once per
@@ -2638,11 +2649,14 @@ function mpSide(lineupSide, confirmed, homeTeamName, awayTeamName, matchId, date
       if (predictionLog) {
         predictionLog.recordPredictions({
           matchId, teamId, date, teamName,
-          opponentName: teamName === homeTeamName ? awayTeamName : homeTeamName,
-          cornerTakers, headerTargets: p.cornerThreatTargets,
+          opponentName: isHome ? awayTeamName : homeTeamName, // by side, not by name match — team
+          // names come from two different sources (full lineup name vs fixtures.js's often-
+          // abbreviated name) and comparing them directly silently produced "Team vs Team" rows.
+          cornerTakers: p.cornerTakers, headerTargets: p.cornerThreatTargets,
         });
       }
-    } catch (e) { cornerTakers = [{ name: 'error', pct: 0, side: null, note: e.message }]; }
+      if (confirmed) { cornerTakers = p.cornerTakers; penTaker = p.penTaker; cornerThreat = p.cornerThreat; }
+    } catch (e) { if (confirmed) cornerTakers = [{ name: 'error', pct: 0, side: null, note: e.message }]; }
   }
   return { teamId, teamName, lineupConfirmed: !!confirmed, cornerTakers, penTaker, cornerThreat };
 }
@@ -2665,16 +2679,19 @@ router.get('/match-predictions', async (req, res) => {
       await Promise.all(slice.map(async m => {
         const lu = await mpGetLineup(m.id);
         const lineupType = lu && lu.lineupType || 'none';
-        // Green only for a genuinely announced XI on a match that has NOT kicked off.
-        // Once started (and after it finishes) it goes back to not-confirmed.
-        const confirmed = !!lu && mpLineupConfirmed(lineupType) && !m.started;
+        // xiKnown: the XI is announced (true from announcement onward, incl. mid-match/finished
+        // — used for predicting/logging). confirmed: additionally not yet kicked off (the
+        // narrower window driving the green-name highlight and what's shown in the UI). See the
+        // comment on mpSide for why these are no longer the same thing.
+        const xiKnown = !!lu && mpLineupConfirmed(lineupType);
+        const confirmed = xiKnown && !m.started;
         const cacheKey = `${m.id}|${lineupType}|${m.started ? 1 : 0}`;
         let pred = _mpPredCache.get(cacheKey);
         if (pred && Date.now() - pred._at > 6 * 3600 * 1000) pred = null; // re-derive against fresher harvest data
         if (!pred) {
           pred = { _at: Date.now(),
-            home: mpSide(lu && lu.homeTeam, confirmed, m.home, m.away, m.id, date),
-            away: mpSide(lu && lu.awayTeam, confirmed, m.home, m.away, m.id, date) };
+            home: mpSide(lu && lu.homeTeam, confirmed, xiKnown, true, m.home, m.away, m.id, date),
+            away: mpSide(lu && lu.awayTeam, confirmed, xiKnown, false, m.home, m.away, m.id, date) };
           // fill team names from the fixture when there's no lineup object yet
           if (!pred.home.teamName) pred.home.teamName = m.home;
           if (!pred.away.teamName) pred.away.teamName = m.away;
