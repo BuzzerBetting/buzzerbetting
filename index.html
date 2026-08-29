@@ -2197,7 +2197,7 @@ input::placeholder{color:var(--text3)}
     <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block"></span>BFex fair — high confidence (£500+ matched, tight spread)</span>
     <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--amber);display:inline-block"></span>Usable but thinner BFEX data</span>
   </div>
-  <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">BFex fair</th><th class="r">Last traded</th><th class="r">Total traded</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="scanner-body"></tbody></table></div></div>
+  <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">BFex fair</th><th class="r">Last traded</th><th class="r">Total traded</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th></th></tr></thead><tbody id="scanner-body"></tbody></table></div></div>
   <div class="note"><i class="ti ti-info-circle"></i> Auto-refreshes every 60s. Scanning starts once a match's lineup is confirmed and runs every 10 minutes until kickoff — First Goalscorer, Anytime Goalscorer, Player Shown a Card and Player Shots on Target markets, sorted by EV%.</div>
 </div>
 
@@ -8273,10 +8273,26 @@ const OC_EV_MARKET_BADGE={
   'SOT':'background:var(--red-bg);color:var(--red)'
 };
 
+// The line copyOddscheckerLine() puts on the clipboard — kept in one place so the button and
+// any future "copy all" both build it the same way.
+function oddscheckerLineText(b){
+  return `${b.t} ${b.match} — ${b.mkt}: ${b.sel} @ ${b.odds.toFixed(2)} (${b.bk}) — fair ${b.fair.toFixed(2)} — +${b.ev.toFixed(1)}% EV`;
+}
+async function copyOddscheckerLine(i,btn){
+  const b=ocEvBets[i]; if(!b)return;
+  try{
+    await navigator.clipboard.writeText(oddscheckerLineText(b));
+    const orig=btn.innerHTML;
+    btn.innerHTML='<i class="ti ti-check" style="color:var(--green)"></i>';
+    btn.disabled=true;
+    setTimeout(()=>{ btn.innerHTML=orig; btn.disabled=false; },1200);
+  }catch(e){ /* clipboard API blocked (e.g. non-HTTPS) — button just does nothing */ }
+}
+
 function renderOddscheckerEV(){
   const sb=document.getElementById('scanner-body');
   sb.innerHTML='';
-  ocEvBets.forEach(b=>{
+  ocEvBets.forEach((b,i)=>{
     const mS=OC_EV_MARKET_BADGE[b.mkt]||'background:var(--surface2);color:var(--text2)';
     const eS=b.ev>=20?'background:var(--green-bg);color:var(--green)':'background:var(--amber-bg);color:var(--amber)';
     // Colour the fair price by the same confidence deriveBfexFair judged it with — matches
@@ -8286,11 +8302,11 @@ function renderOddscheckerEV(){
     const lastTraded=(typeof b.lastTraded==='number')?b.lastTraded.toFixed(2):'—';
     const matched=(typeof b.matched==='number')?`£${b.matched.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}`:'—';
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:${fairColor};font-weight:500">${b.fair.toFixed(2)}</td><td class="r tn" style="color:var(--text2)">${lastTraded}</td><td class="r tn" style="color:var(--text2)">${matched}</td><td class="r" style="color:var(--text2);font-size:12px">${b.bk}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td>`;
+    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:${fairColor};font-weight:500">${b.fair.toFixed(2)}</td><td class="r tn" style="color:var(--text2)">${lastTraded}</td><td class="r tn" style="color:var(--text2)">${matched}</td><td class="r" style="color:var(--text2);font-size:12px">${b.bk}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td><td class="r"><button onclick="copyOddscheckerLine(${i},this)" title="Copy line" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td>`;
     sb.appendChild(tr);
   });
   if(!ocEvBets.length){
-    sb.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No 5%+ value bets right now — either no lineups confirmed yet, or nothing clears the threshold.</td></tr>';
+    sb.innerHTML='<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No 5%+ value bets right now — either no lineups confirmed yet, or nothing clears the threshold.</td></tr>';
   }
 }
 
