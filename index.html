@@ -6782,7 +6782,11 @@ async function initQuickBet() {
   }
   try {
     const d = await ledgerApi('accounts?excludeClosed=1');
-    const accts = (d.ok && d.accounts) ? d.accounts : [];
+    const all = (d.ok && d.accounts) ? d.accounts : [];
+    // Quick Bet is Betfred-only (the whole flow assumes a pasted Betfred betslip screenshot —
+    // see the "(Betfred)" note above the paste box) — other bookies were showing here because
+    // this never actually filtered by bookie, just excluded closed accounts.
+    const accts = all.filter(a => (a.bookie || '').toLowerCase().includes('betfred'));
     const sel = document.getElementById('qb-account');
     sel.innerHTML = '<option value="">Select account…</option>' + accts
       .map(a => `<option value="${a.id}">${escapeHtml(getAccountDisplayName(a))} — ${escapeHtml(a.bookie || '')}</option>`)
