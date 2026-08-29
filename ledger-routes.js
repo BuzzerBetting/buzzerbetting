@@ -2625,7 +2625,7 @@ function mpSide(lineupSide, confirmed, homeTeamName, awayTeamName, matchId, date
       // homeTeamName/awayTeamName (the fixture's own names, not the lineup object's) are what
       // cornerThreat needs to find this fixture's cached Anytime Goalscorer odds — see
       // corner-model/oc-ags.js. Passed for both sides regardless of which one this call is for.
-      const p = cornerModel.predictForTeam({ teamId, xi, asOfDate: new Date().toISOString(), homeTeamName, awayTeamName });
+      const p = cornerModel.predictForTeam({ teamId, xi, asOfDate: new Date().toISOString(), homeTeamName, awayTeamName, matchId });
       cornerTakers = p.cornerTakers; penTaker = p.penTaker; cornerThreat = p.cornerThreat;
       // Log a complete "assist -> header" pairing — only when BOTH halves have real signal (not
       // a sentinel/placeholder). This only runs when a FRESH prediction was just computed (the
