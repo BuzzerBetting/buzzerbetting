@@ -657,10 +657,12 @@ input::placeholder{color:var(--text3)}
     <button class="add-btn" onclick="openNewSheetModal()"><i class="ti ti-plus"></i> Add New Sheet</button>
   </div>
 
-  <!-- QUICK BET — screenshot -> Corners bet (admin only) -->
+  <!-- QUICK BET — screenshot(s) -> Corners bet(s) (admin only) -->
   <div id="quick-bet-card" class="card card-pad" style="margin:14px 0 16px;display:none">
     <div class="sec-title" style="margin:0;font-size:16px"><i class="ti ti-bolt"></i> Quick Bet</div>
-    <div style="font-size:12.5px;color:var(--text3);margin:4px 0 12px">Paste a screenshot of your placed corner bet (Betfred). It reads the players, stake and odds and logs it to the Corners sheet.</div>
+    <div style="font-size:12.5px;color:var(--text3);margin:4px 0 12px">Paste screenshots of placed corner bets (Betfred) — one at a time or several in a row, they queue up below. It reads the players, stake and odds off each and logs them all to the Corners sheet under one account.</div>
+
+    <div style="max-width:340px;margin-bottom:12px"><label class="lbl">Account *</label><select id="qb-account"></select></div>
 
     <div id="qb-paste" tabindex="0"
          onfocus="this.style.borderColor='var(--brand)';document.getElementById('qb-paste-hint').textContent='Ready — press Ctrl+V now'"
@@ -671,30 +673,17 @@ input::placeholder{color:var(--text3)}
          onclick="this.focus()"
          style="border:1.5px dashed var(--border);border-radius:var(--radius);padding:20px 16px;text-align:center;color:var(--text3);font-size:13px;cursor:pointer;outline:none;transition:border-color .15s">
       <i class="ti ti-clipboard" style="font-size:20px;display:block;margin-bottom:6px"></i>
-      <span id="qb-paste-hint">Click here, then press Ctrl+V</span>
-      <div style="margin-top:6px;font-size:12px">or <button type="button" onclick="event.stopPropagation();document.getElementById('qb-file').click()" style="background:none;border:none;color:var(--brand);text-decoration:underline;cursor:pointer;font-family:inherit;font-size:12px">choose an image file</button></div>
+      <span id="qb-paste-hint">Click here, then press Ctrl+V — paste as many as you like</span>
+      <div style="margin-top:6px;font-size:12px">or <button type="button" onclick="event.stopPropagation();document.getElementById('qb-file').click()" style="background:none;border:none;color:var(--brand);text-decoration:underline;cursor:pointer;font-family:inherit;font-size:12px">choose image file(s)</button></div>
     </div>
-    <input type="file" id="qb-file" accept="image/*" style="display:none" onchange="qbHandleFile(this.files&&this.files[0])">
+    <input type="file" id="qb-file" accept="image/*" multiple style="display:none" onchange="qbHandleFiles(this.files)">
 
-    <div id="qb-preview" style="display:none;margin-top:12px"></div>
-    <div id="qb-status" style="display:none;margin-top:10px;font-size:13px;color:var(--text2)"></div>
+    <div id="qb-batch-list" style="margin-top:14px"></div>
 
-    <div id="qb-form" style="display:none;margin-top:14px">
-      <div id="qb-warnings" style="display:none;margin-bottom:12px;padding:10px 12px;background:var(--amber-bg);color:var(--amber);border-radius:var(--radius);font-size:12.5px"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div><label class="lbl">Account *</label><select id="qb-account"></select></div>
-        <div><label class="lbl">Bookie</label><input id="qb-bookie" type="text"></div>
-        <div><label class="lbl">Team</label><input id="qb-team" type="text"></div>
-        <div><label class="lbl">Assist</label><input id="qb-assist" type="text"></div>
-        <div><label class="lbl">Scorer</label><input id="qb-scorer" type="text"></div>
-        <div><label class="lbl">Odds (decimal)</label><input id="qb-odds" type="number" step="0.01"></div>
-        <div><label class="lbl">Stake £</label><input id="qb-stake" type="number" step="0.01"></div>
-      </div>
-      <div style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap">
-        <button id="qb-submit" class="add-btn" onclick="submitQuickBet()" style="background:var(--brand);color:#fff;border-color:var(--brand)"><i class="ti ti-check"></i> Log bet</button>
-        <button class="add-btn" onclick="qbReset()">Clear</button>
-        <span id="qb-submit-msg" style="font-size:13px"></span>
-      </div>
+    <div id="qb-batch-actions" style="display:none;gap:10px;align-items:center;margin-top:4px;flex-wrap:wrap">
+      <button id="qb-submit-all" class="add-btn" onclick="submitQuickBetBatch()" style="background:var(--brand);color:#fff;border-color:var(--brand)"><i class="ti ti-check"></i> Log all (<span id="qb-batch-count">0</span>)</button>
+      <button class="add-btn" onclick="qbReset()">Clear all</button>
+      <span id="qb-submit-msg" style="font-size:13px"></span>
     </div>
   </div>
 
@@ -6794,26 +6783,26 @@ async function initQuickBet() {
   } catch (e) { /* leave empty */ }
 }
 
+// Batch state — one entry per pasted/uploaded screenshot. Each entry owns its own mini-form
+// (rendered by qbRenderBatch); values are read straight off the DOM at submit time rather than
+// kept in sync in JS, same pattern the old single-bet form used, just once per entry now.
+let qbBatch = [];       // [{ id, dataUrl, status:'parsing'|'done'|'error', warnings, error, parsed, blob }]
+let qbBatchSeq = 0;
+
+// Deliberately does NOT clear the selected account — the whole point of batching is staying on
+// one account across many screenshots, so clearing the queue (manually or after a batch
+// finishes) shouldn't force re-picking it each time. initQuickBet() rebuilds the account
+// dropdown's options fresh on every visit to this section regardless, so a stale selection can't
+// carry over between different visits.
 function qbReset() {
-  // hide the sections (do NOT wipe #qb-form's innerHTML — that would delete the inputs)
-  ['qb-preview', 'qb-status', 'qb-form', 'qb-warnings'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.style.display = 'none';
-  });
-  // clear only the content containers
-  ['qb-preview', 'qb-status', 'qb-warnings'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.innerHTML = '';
-  });
-  ['qb-bookie', 'qb-team', 'qb-assist', 'qb-scorer', 'qb-odds', 'qb-stake'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.value = '';
-  });
-  const acc = document.getElementById('qb-account'); if (acc) acc.value = '';
+  qbBatch = [];
+  qbRenderBatch();
   const f = document.getElementById('qb-file'); if (f) f.value = '';
   const msg = document.getElementById('qb-submit-msg'); if (msg) msg.textContent = '';
 }
 
 function qbOnPaste(e) {
   const card = document.getElementById('quick-bet-card');
-  console.log('[qb] paste event; card visible =', !!card && card.style.display !== 'none');
   if (!card || card.style.display === 'none') return;
   const dt = e.clipboardData || window.clipboardData;
   if (!dt) return;
@@ -6824,69 +6813,69 @@ function qbOnPaste(e) {
   }
   // 2) files API fallback
   if (!file) for (const f of (dt.files || [])) { if (f.type && f.type.indexOf('image') === 0) { file = f; break; } }
-  const statusEl = document.getElementById('qb-status');
   if (!file) {
     // only nag if they weren't pasting text into one of the form fields
     const t = e.target;
     if (!(t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) {
-      statusEl.style.display = 'block';
-      statusEl.innerHTML = '<span style="color:var(--amber)">Nothing image-like in that paste — copy the screenshot to your clipboard, then Ctrl+V here.</span>';
+      const msg = document.getElementById('qb-submit-msg');
+      if (msg) msg.innerHTML = '<span style="color:var(--amber)">Nothing image-like in that paste — copy a screenshot to your clipboard, then Ctrl+V here.</span>';
     }
     return;
   }
   console.log('[qb] image found on paste:', file.type, file.size, 'bytes');
   e.preventDefault();
   document.getElementById('qb-paste')?.blur();
-  qbProcessImage(file);
+  qbAddImage(file);
 }
 
 function qbHandleDrop(e) {
   e.preventDefault();
   document.getElementById('qb-paste').style.borderColor = 'var(--border)';
-  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-  if (f && f.type.indexOf('image') === 0) qbProcessImage(f);
-  else { const s = document.getElementById('qb-status'); s.style.display = 'block'; s.innerHTML = '<span style="color:var(--amber)">That wasn\'t an image file.</span>'; }
+  const files = (e.dataTransfer && e.dataTransfer.files) || [];
+  let any = false;
+  for (const f of files) { if (f.type && f.type.indexOf('image') === 0) { qbAddImage(f); any = true; } }
+  if (!any) { const msg = document.getElementById('qb-submit-msg'); if (msg) msg.innerHTML = '<span style="color:var(--amber)">That wasn\'t an image file.</span>'; }
 }
-function qbHandleFile(f) {
-  if (f && f.type && f.type.indexOf('image') === 0) qbProcessImage(f);
-  else { const s = document.getElementById('qb-status'); s.style.display = 'block'; s.innerHTML = '<span style="color:var(--amber)">Pick an image file.</span>'; }
+function qbHandleFiles(fileList) {
+  const files = Array.from(fileList || []);
+  let any = false;
+  for (const f of files) { if (f.type && f.type.indexOf('image') === 0) { qbAddImage(f); any = true; } }
+  if (!any) { const msg = document.getElementById('qb-submit-msg'); if (msg) msg.innerHTML = '<span style="color:var(--amber)">Pick image file(s).</span>'; }
 }
 
-async function qbProcessImage(blob) {
+// Adds one screenshot to the batch — renders a "reading…" placeholder immediately, then fills
+// it in once parse-betslip replies. Each call is independent, so pasting several in a row fires
+// several parses concurrently rather than making you wait for each one before the next.
+async function qbAddImage(blob) {
   if (!blob) return;
-  const statusEl = document.getElementById('qb-status');
-  const previewEl = document.getElementById('qb-preview');
-  document.getElementById('qb-form').style.display = 'none';
-  statusEl.style.display = 'block';
-  statusEl.innerHTML = '<i class="ti ti-loader"></i> Reading screenshot…';
+  const entry = { id: 'qb' + (++qbBatchSeq), status: 'parsing', dataUrl: null, warnings: [], error: null, parsed: {} };
+  qbBatch.push(entry);
+  qbRenderBatch();
 
   let dataUrl, mediaType = 'image/jpeg';
   try {
     dataUrl = await qbDownscale(blob, 1600, 0.85);
-    console.log('[qb] downscaled to', dataUrl.length, 'chars');
   } catch (e) {
     console.warn('[qb] downscale failed, sending raw', e);
     dataUrl = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
     mediaType = blob.type || 'image/png';
   }
-  previewEl.style.display = 'block';
-  previewEl.innerHTML = `<img src="${dataUrl}" style="max-width:100%;max-height:220px;border:0.5px solid var(--border);border-radius:var(--radius)">`;
+  entry.dataUrl = dataUrl;
+  qbRenderBatch();
 
-  statusEl.innerHTML = '<i class="ti ti-loader"></i> Reading screenshot… (a few seconds)';
   try {
-    console.log('[qb] POST parse-betslip, body chars =', dataUrl.length);
     const d = await ledgerApi('parse-betslip', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image: dataUrl, mediaType }),
     });
     console.log('[qb] parse-betslip response:', d);
-    if (!d || !d.ok) { statusEl.innerHTML = `<span style="color:var(--red)">${escapeHtml((d && d.error) || 'Could not parse the screenshot.')}</span>`; return; }
-    statusEl.style.display = 'none';
-    qbFillForm(d.parsed || {}, d.warnings || []);
+    if (!d || !d.ok) { entry.status = 'error'; entry.error = (d && d.error) || 'Could not parse the screenshot.'; }
+    else { entry.status = 'done'; entry.parsed = d.parsed || {}; entry.warnings = d.warnings || []; }
   } catch (e) {
     console.error('[qb] parse-betslip failed:', e);
-    statusEl.innerHTML = `<span style="color:var(--red)">Request failed: ${escapeHtml(e && e.message || 'unknown')}. Check the console.</span>`;
+    entry.status = 'error'; entry.error = 'Request failed: ' + (e && e.message || 'unknown');
   }
+  qbRenderBatch();
 }
 
 // Draw the image onto a canvas capped at maxW wide, return a JPEG data URL.
@@ -6906,58 +6895,121 @@ function qbDownscale(blob, maxW, quality) {
   });
 }
 
-function qbFillForm(parsed, warnings) {
-  const setV = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
-  setV('qb-bookie', parsed.bookmaker || 'Betfred');
-  setV('qb-team', (parsed.teamGuess && parsed.teamGuess.team) || '');
-  setV('qb-assist', parsed.assist || '');
-  setV('qb-scorer', (parsed.scorerFirstHalf && parsed.scorer) ? `${parsed.scorer} 1st HALF` : (parsed.scorer || ''));
-  setV('qb-odds', parsed.oddsDecimal != null ? parsed.oddsDecimal : '');
-  setV('qb-stake', parsed.stake != null ? parsed.stake : '');
-
-  const warnEl = document.getElementById('qb-warnings');
-  if (warnings && warnings.length) {
-    warnEl.innerHTML = '<i class="ti ti-alert-triangle"></i> ' + warnings.map(escapeHtml).join('<br>');
-    warnEl.style.display = 'block';
-  } else warnEl.style.display = 'none';
-
-  document.getElementById('qb-submit-msg').textContent = '';
-  document.getElementById('qb-form').style.display = 'block';
+function qbRemoveEntry(id) {
+  qbBatch = qbBatch.filter(e => e.id !== id);
+  qbRenderBatch();
 }
 
-async function submitQuickBet() {
-  const msg = document.getElementById('qb-submit-msg');
-  const btn = document.getElementById('qb-submit');
-  const account_id = document.getElementById('qb-account').value;
-  const stake = parseFloat(document.getElementById('qb-stake').value);
-  const odds = parseFloat(document.getElementById('qb-odds').value);
-  if (!account_id) { msg.innerHTML = '<span style="color:var(--red)">Pick an account.</span>'; return; }
-  if (!(stake > 0)) { msg.innerHTML = '<span style="color:var(--red)">Stake must be greater than £0.</span>'; return; }
-  if (!(odds > 1)) { msg.innerHTML = '<span style="color:var(--red)">Odds must be greater than 1.</span>'; return; }
+function qbRetryEntry(id) {
+  // no original blob kept once downscaled — simplest correct retry is just to re-send the
+  // already-downscaled dataUrl again as a fresh parse-betslip call.
+  const entry = qbBatch.find(e => e.id === id);
+  if (!entry || !entry.dataUrl) return;
+  entry.status = 'parsing'; entry.error = null;
+  qbRenderBatch();
+  (async () => {
+    try {
+      const d = await ledgerApi('parse-betslip', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: entry.dataUrl, mediaType: 'image/jpeg' }),
+      });
+      if (!d || !d.ok) { entry.status = 'error'; entry.error = (d && d.error) || 'Could not parse the screenshot.'; }
+      else { entry.status = 'done'; entry.parsed = d.parsed || {}; entry.warnings = d.warnings || []; }
+    } catch (e) { entry.status = 'error'; entry.error = 'Request failed: ' + (e && e.message || 'unknown'); }
+    qbRenderBatch();
+  })();
+}
 
-  const fields = {
-    Bookie: document.getElementById('qb-bookie').value.trim() || 'Betfred',
-    Team: document.getElementById('qb-team').value.trim(),
-    Assist: document.getElementById('qb-assist').value.trim(),
-    Scorer: document.getElementById('qb-scorer').value.trim(),
-    Odds: +odds.toFixed(3),
-    Stake: +stake.toFixed(2),
-  };
-  btn.disabled = true; msg.innerHTML = 'Logging…';
-  try {
-    const d = await ledgerApi('bets', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bet_type: 'Corners', fields, legs: [{ account_id, stake: +stake.toFixed(2) }] }),
-    });
-    if (d.ok) {
-      msg.innerHTML = `<span style="color:var(--green)"><i class="ti ti-check"></i> Logged — £${d.bet.total_stake.toFixed(2)} on ${escapeHtml(fields.Scorer || fields.Team || 'Corners')}</span>`;
-      setTimeout(qbReset, 1800);
+function qbRenderBatch() {
+  const list = document.getElementById('qb-batch-list');
+  const actions = document.getElementById('qb-batch-actions');
+  const countEl = document.getElementById('qb-batch-count');
+  if (!list) return;
+
+  list.innerHTML = qbBatch.map(entry => {
+    const p = entry.parsed || {};
+    const scorerDefault = (p.scorerFirstHalf && p.scorer) ? `${p.scorer} 1st HALF` : (p.scorer || '');
+    const thumb = entry.dataUrl ? `<img src="${entry.dataUrl}" style="width:76px;height:auto;border-radius:6px;border:0.5px solid var(--border);flex-shrink:0">` : `<div style="width:76px;height:76px;border-radius:6px;border:0.5px solid var(--border);flex-shrink:0"></div>`;
+    let body;
+    if (entry.status === 'parsing') {
+      body = `<div style="color:var(--text2);font-size:13px"><i class="ti ti-loader"></i> Reading screenshot…</div>`;
+    } else if (entry.status === 'error') {
+      body = `<div style="color:var(--red);font-size:12.5px;margin-bottom:8px">${escapeHtml(entry.error || 'Could not parse the screenshot.')}</div>
+        <button class="add-btn" onclick="qbRetryEntry('${entry.id}')" style="font-size:12px;padding:5px 10px">Retry</button>`;
     } else {
-      msg.innerHTML = `<span style="color:var(--red)">${escapeHtml(d.error || 'Could not log the bet.')}</span>`;
+      const warn = entry.warnings.length ? `<div style="color:var(--amber);font-size:11.5px;margin-bottom:6px"><i class="ti ti-alert-triangle"></i> ${entry.warnings.map(escapeHtml).join(' · ')}</div>` : '';
+      const submitted = entry.status === 'submitted' ? `<div style="color:var(--green);font-size:12.5px;margin-top:6px"><i class="ti ti-check"></i> Logged</div>` : '';
+      const submitError = entry.submitError ? `<div style="color:var(--red);font-size:12.5px;margin-top:6px">${escapeHtml(entry.submitError)}</div>` : '';
+      const dis = entry.status === 'submitted' ? 'disabled' : '';
+      body = `${warn}<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><label class="lbl">Bookie</label><input id="${entry.id}-bookie" type="text" ${dis} value="${escapeHtml(p.bookmaker || 'Betfred')}"></div>
+        <div><label class="lbl">Team</label><input id="${entry.id}-team" type="text" ${dis} value="${escapeHtml((p.teamGuess && p.teamGuess.team) || '')}"></div>
+        <div><label class="lbl">Assist</label><input id="${entry.id}-assist" type="text" ${dis} value="${escapeHtml(p.assist || '')}"></div>
+        <div><label class="lbl">Scorer</label><input id="${entry.id}-scorer" type="text" ${dis} value="${escapeHtml(scorerDefault)}"></div>
+        <div><label class="lbl">Odds (decimal)</label><input id="${entry.id}-odds" type="number" step="0.01" ${dis} value="${p.oddsDecimal != null ? p.oddsDecimal : ''}"></div>
+        <div><label class="lbl">Stake £</label><input id="${entry.id}-stake" type="number" step="0.01" ${dis} value="${p.stake != null ? p.stake : ''}"></div>
+      </div>${submitted}${submitError}`;
     }
-  } catch (e) {
-    msg.innerHTML = '<span style="color:var(--red)">Network error logging the bet.</span>';
-  } finally { btn.disabled = false; }
+    return `<div class="card" style="padding:12px;margin-bottom:10px;border:0.5px solid var(--border);display:flex;gap:12px;align-items:flex-start">
+      ${thumb}
+      <div style="flex:1;min-width:0">${body}</div>
+      ${entry.status !== 'submitted' ? `<button onclick="qbRemoveEntry('${entry.id}')" title="Remove" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;line-height:1;padding:2px">×</button>` : ''}
+    </div>`;
+  }).join('');
+
+  const readyCount = qbBatch.filter(e => e.status === 'done').length;
+  if (countEl) countEl.textContent = readyCount;
+  if (actions) actions.style.display = qbBatch.length ? 'flex' : 'none';
+  const submitBtn = document.getElementById('qb-submit-all');
+  if (submitBtn) submitBtn.disabled = readyCount === 0;
+}
+
+// Logs every 'done' entry under the one shared account, sequentially (so the status of each
+// updates in place as it completes rather than firing a burst of simultaneous writes). Entries
+// that fail stay in the list with the error shown, so nothing silently gets lost — everything
+// else is removed after a short pause once the whole batch finishes.
+async function submitQuickBetBatch() {
+  const msg = document.getElementById('qb-submit-msg');
+  const btn = document.getElementById('qb-submit-all');
+  const account_id = document.getElementById('qb-account').value;
+  if (!account_id) { msg.innerHTML = '<span style="color:var(--red)">Pick an account.</span>'; return; }
+
+  const toSubmit = qbBatch.filter(e => e.status === 'done');
+  if (!toSubmit.length) { msg.innerHTML = '<span style="color:var(--amber)">Nothing ready to log yet.</span>'; return; }
+
+  btn.disabled = true;
+  let ok = 0, failed = 0;
+  for (let i = 0; i < toSubmit.length; i++) {
+    const entry = toSubmit[i];
+    msg.innerHTML = `Logging ${i + 1}/${toSubmit.length}…`;
+    const stake = parseFloat(document.getElementById(`${entry.id}-stake`).value);
+    const odds = parseFloat(document.getElementById(`${entry.id}-odds`).value);
+    if (!(stake > 0)) { entry.submitError = 'Stake must be greater than £0.'; failed++; qbRenderBatch(); continue; }
+    if (!(odds > 1)) { entry.submitError = 'Odds must be greater than 1.'; failed++; qbRenderBatch(); continue; }
+    const fields = {
+      Bookie: document.getElementById(`${entry.id}-bookie`).value.trim() || 'Betfred',
+      Team: document.getElementById(`${entry.id}-team`).value.trim(),
+      Assist: document.getElementById(`${entry.id}-assist`).value.trim(),
+      Scorer: document.getElementById(`${entry.id}-scorer`).value.trim(),
+      Odds: +odds.toFixed(3),
+      Stake: +stake.toFixed(2),
+    };
+    try {
+      const d = await ledgerApi('bets', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bet_type: 'Corners', fields, legs: [{ account_id, stake: +stake.toFixed(2) }] }),
+      });
+      if (d.ok) { entry.status = 'submitted'; entry.submitError = null; ok++; }
+      else { entry.submitError = d.error || 'Could not log the bet.'; failed++; }
+    } catch (e) { entry.submitError = 'Network error logging the bet.'; failed++; }
+    qbRenderBatch();
+  }
+  btn.disabled = false;
+  msg.innerHTML = failed
+    ? `<span style="color:var(--amber)">${ok} logged, ${failed} failed — see below.</span>`
+    : `<span style="color:var(--green)"><i class="ti ti-check"></i> ${ok} bet${ok === 1 ? '' : 's'} logged.</span>`;
+  if (!failed) setTimeout(qbReset, 1800);
+  else { qbBatch = qbBatch.filter(e => e.status !== 'submitted'); qbRenderBatch(); } // clear the successful ones, keep failures for retry
 }
 
 // ================== CUSTOM SHEETS (user-defined bet trackers) ==================
