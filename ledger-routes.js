@@ -2607,14 +2607,17 @@ function mpLineupConfirmed(lineupType) {
   return !MP_UNCONFIRMED_LINEUP.has(lineupType || '');
 }
 
-function mpSide(lineupSide, confirmed) {
+function mpSide(lineupSide, confirmed, homeTeamName, awayTeamName) {
   const teamId = lineupSide ? String(lineupSide.id) : null;
   const teamName = lineupSide ? lineupSide.name : null;
   let cornerTakers = null, penTaker = null, cornerThreat = null;
   if (confirmed && teamId && cornerModel && lineupSide && Array.isArray(lineupSide.starters)) {
     const xi = lineupSide.starters.map(p => ({ id: p.id, name: p.name, positionId: p.positionId }));
     try {
-      const p = cornerModel.predictForTeam({ teamId, xi, asOfDate: new Date().toISOString() });
+      // homeTeamName/awayTeamName (the fixture's own names, not the lineup object's) are what
+      // cornerThreat needs to find this fixture's cached Anytime Goalscorer odds — see
+      // corner-model/oc-ags.js. Passed for both sides regardless of which one this call is for.
+      const p = cornerModel.predictForTeam({ teamId, xi, asOfDate: new Date().toISOString(), homeTeamName, awayTeamName });
       cornerTakers = p.cornerTakers; penTaker = p.penTaker; cornerThreat = p.cornerThreat;
     } catch (e) { cornerTakers = [{ name: 'error', pct: 0, side: null, note: e.message }]; }
   }
@@ -2646,7 +2649,7 @@ router.get('/match-predictions', async (req, res) => {
         let pred = _mpPredCache.get(cacheKey);
         if (pred && Date.now() - pred._at > 6 * 3600 * 1000) pred = null; // re-derive against fresher harvest data
         if (!pred) {
-          pred = { _at: Date.now(), home: mpSide(lu && lu.homeTeam, confirmed), away: mpSide(lu && lu.awayTeam, confirmed) };
+          pred = { _at: Date.now(), home: mpSide(lu && lu.homeTeam, confirmed, m.home, m.away), away: mpSide(lu && lu.awayTeam, confirmed, m.home, m.away) };
           // fill team names from the fixture when there's no lineup object yet
           if (!pred.home.teamName) pred.home.teamName = m.home;
           if (!pred.away.teamName) pred.away.teamName = m.away;
