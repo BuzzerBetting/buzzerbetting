@@ -10650,24 +10650,26 @@ function setPredToggle(which, on){
   if (on && !MATCH_PRED_DATE && CURRENT_FIXTURE_DATE) loadMatchPredictions(CURRENT_FIXTURE_DATE);
 }
 
-// "N assist -> header pairs predicted" + which teams, for the corner-bet-stats toggle. Reads
-// corner-model's temporary prediction log (populated as a side-effect of loadMatchPredictions
-// hitting /match-predictions) rather than computing anything itself, so this is always cheap.
+// Which "assist -> header" corner-bet combos actually WON, and in which game — only winners are
+// shown, per the ask (not the full predicted list). Reads corner-model's temporary prediction
+// log, settled server-side against real post-match results (see GET /corner-bet-stats).
 async function loadCornerBetStats(date){
   const panel = document.getElementById('corner-bet-stats-panel');
   if (!panel || !predBetStatsOn()) return;
   try{
     const d = await ledgerApi('corner-bet-stats?date=' + date);
     if (!d || !d.ok || date !== CURRENT_FIXTURE_DATE) return;
-    if (!d.count){
-      panel.innerHTML = `<span style="color:var(--text3)">No assist → header pairs predicted yet for this date.</span>`;
+    const pending = d.predictedCount - d.settledCount;
+    const pendingNote = pending > 0 ? ` <span style="color:var(--text3)">(${pending} still to finish)</span>` : '';
+    if (!d.winCount){
+      panel.innerHTML = `<span style="color:var(--text3)">No corner bet wins yet today${pendingNote}.</span>`;
       return;
     }
-    const rows = d.predictions.map(p => {
+    const rows = d.wins.map(p => {
       const odds = p.headerOdds != null ? ` <b style="color:var(--brand)">(${p.headerOdds.toFixed(2)})</b>` : '';
       return `<div style="padding:3px 0">${escapeHtml(p.team)}<span style="color:var(--text3)"> vs ${escapeHtml(p.opponent||'?')} — </span>${escapeHtml(p.assistPlayer)} <span style="color:var(--text3)">(${p.assistPct}%) →</span> ${escapeHtml(p.headerPlayer)}${odds}</div>`;
     }).join('');
-    panel.innerHTML = `<div style="font-weight:600;margin-bottom:4px">${d.count} assist → header pair${d.count===1?'':'s'} predicted</div>${rows}`;
+    panel.innerHTML = `<div style="font-weight:600;margin-bottom:4px;color:var(--brand)">${d.winCount} corner bet win${d.winCount===1?'':'s'} today${pendingNote}</div>${rows}`;
   }catch(e){ /* non-fatal */ }
 }
 
