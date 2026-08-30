@@ -2634,7 +2634,7 @@ function mpLineupConfirmed(lineupType) {
 function mpSide(lineupSide, confirmed, xiKnown, isHome, homeTeamName, awayTeamName, matchId, date) {
   const teamId = lineupSide ? String(lineupSide.id) : null;
   const teamName = lineupSide ? lineupSide.name : null;
-  let cornerTakers = null, penTaker = null, cornerThreat = null;
+  let cornerTakers = null, penTaker = null, cornerThreat = null, cornerThreatTargets = null;
   if (xiKnown && teamId && cornerModel && lineupSide && Array.isArray(lineupSide.starters)) {
     const xi = lineupSide.starters.map(p => ({ id: p.id, name: p.name, positionId: p.positionId }));
     try {
@@ -2655,10 +2655,10 @@ function mpSide(lineupSide, confirmed, xiKnown, isHome, homeTeamName, awayTeamNa
           cornerTakers: p.cornerTakers, headerTargets: p.cornerThreatTargets,
         });
       }
-      if (confirmed) { cornerTakers = p.cornerTakers; penTaker = p.penTaker; cornerThreat = p.cornerThreat; }
+      if (confirmed) { cornerTakers = p.cornerTakers; penTaker = p.penTaker; cornerThreat = p.cornerThreat; cornerThreatTargets = p.cornerThreatTargets; }
     } catch (e) { if (confirmed) cornerTakers = [{ name: 'error', pct: 0, side: null, note: e.message }]; }
   }
-  return { teamId, teamName, lineupConfirmed: !!confirmed, cornerTakers, penTaker, cornerThreat };
+  return { teamId, teamName, lineupConfirmed: !!confirmed, cornerTakers, penTaker, cornerThreat, cornerThreatTargets };
 }
 
 router.get('/match-predictions', async (req, res) => {

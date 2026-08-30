@@ -10899,7 +10899,17 @@ function predSideBlock(side, align){
     } else {
       parts.push(`<div><span style="color:var(--text3)">Corner:</span> —</div>`);
     }
-    const threat = side.cornerThreat==null ? '— (small data)' : escapeHtml(String(side.cornerThreat));
+    let threat;
+    if(Array.isArray(side.cornerThreatTargets) && side.cornerThreatTargets.length){
+      // name (fair 1st-half header odds) [headed goals from corners, this season + last — orange]
+      threat = side.cornerThreatTargets.map(t=>{
+        const odds = t.odds!=null ? ` (${Number(t.odds).toFixed(2)})` : '';
+        const g = t.cornerHeaderGoals>0 ? ` <span style="color:var(--amber)">[${t.cornerHeaderGoals}]</span>` : '';
+        return `${escapeHtml(t.name)}${odds}${g}`;
+      }).join(' · ');
+    } else {
+      threat = side.cornerThreat==null ? '— (small data)' : escapeHtml(String(side.cornerThreat));
+    }
     parts.push(`<div><span style="color:var(--text3)">Threat:</span> ${threat}</div>`);
   }
   if(predPensOn()){
