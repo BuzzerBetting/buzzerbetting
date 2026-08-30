@@ -10735,15 +10735,20 @@ async function loadCornerBetStats(date){
   try{
     const d = await ledgerApi('corner-bet-stats?date=' + date);
     if (!d || !d.ok || date !== CURRENT_FIXTURE_DATE) return;
+    const isToday = date === fmtDateParam(new Date());
+    const fhXg = Number(d.firstHalfHeadedXg || 0);
+    const xgLine = `<div style="margin-bottom:6px;color:var(--text3)">1st-half headed xG from ${isToday ? "today's" : "the day's"} targets: <b style="color:var(--text2)">${fhXg.toFixed(2)}</b>${d.firstHalfHeadedShots ? ` <span style="color:var(--text3)">(${d.firstHalfHeadedShots} shot${d.firstHalfHeadedShots===1?'':'s'})</span>` : ''}</div>`;
     if (!d.predictedCount){
-      panel.innerHTML = `<span style="color:var(--text3)">No corner bets predicted yet today.</span>`;
+      // No combos for this date — either nothing predicted yet (today), or the combos have
+      // pruned away and only the persisted xG snapshot remains (past days).
+      panel.innerHTML = (fhXg > 0 || d.firstHalfHeadedShots)
+        ? xgLine
+        : `<span style="color:var(--text3)">No corner bets predicted ${isToday ? 'yet today' : 'that day'}.</span>`;
       return;
     }
     const pending = d.predictedCount - d.settledCount;
     const pendingNote = pending > 0 ? ` <span style="color:var(--text3)">(${pending} still to finish)</span>` : '';
-    const header = `<div style="font-weight:600;margin-bottom:4px"><span style="color:var(--brand)">${d.winCount}</span> win${d.winCount===1?'':'s'} <span style="color:var(--text3);font-weight:400"> / ${d.predictedCount} bet${d.predictedCount===1?'':'s'} predicted today</span>${pendingNote}</div>`;
-    const fhXg = Number(d.firstHalfHeadedXg || 0);
-    const xgLine = `<div style="margin-bottom:6px;color:var(--text3)">1st-half headed xG from today's targets: <b style="color:var(--text2)">${fhXg.toFixed(2)}</b>${d.firstHalfHeadedShots ? ` <span style="color:var(--text3)">(${d.firstHalfHeadedShots} shot${d.firstHalfHeadedShots===1?'':'s'})</span>` : ''}</div>`;
+    const header = `<div style="font-weight:600;margin-bottom:4px"><span style="color:var(--brand)">${d.winCount}</span> win${d.winCount===1?'':'s'} <span style="color:var(--text3);font-weight:400"> / ${d.predictedCount} bet${d.predictedCount===1?'':'s'} predicted ${isToday ? 'today' : 'that day'}</span>${pendingNote}</div>`;
     const rows = d.wins.map(p => {
       const odds = p.headerOdds != null ? ` <b style="color:var(--brand)">(${p.headerOdds.toFixed(2)})</b>` : '';
       return `<div style="padding:3px 0">${escapeHtml(p.team)}<span style="color:var(--text3)"> vs ${escapeHtml(p.opponent||'?')} — </span>${escapeHtml(p.assistPlayer)} <span style="color:var(--text3)">(${p.assistPct}%) →</span> ${escapeHtml(p.headerPlayer)}${odds}</div>`;
