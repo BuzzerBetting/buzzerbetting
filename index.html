@@ -10742,11 +10742,13 @@ async function loadCornerBetStats(date){
     const pending = d.predictedCount - d.settledCount;
     const pendingNote = pending > 0 ? ` <span style="color:var(--text3)">(${pending} still to finish)</span>` : '';
     const header = `<div style="font-weight:600;margin-bottom:4px"><span style="color:var(--brand)">${d.winCount}</span> win${d.winCount===1?'':'s'} <span style="color:var(--text3);font-weight:400"> / ${d.predictedCount} bet${d.predictedCount===1?'':'s'} predicted today</span>${pendingNote}</div>`;
+    const fhXg = Number(d.firstHalfHeadedXg || 0);
+    const xgLine = `<div style="margin-bottom:6px;color:var(--text3)">1st-half headed xG from today's targets: <b style="color:var(--text2)">${fhXg.toFixed(2)}</b>${d.firstHalfHeadedShots ? ` <span style="color:var(--text3)">(${d.firstHalfHeadedShots} shot${d.firstHalfHeadedShots===1?'':'s'})</span>` : ''}</div>`;
     const rows = d.wins.map(p => {
       const odds = p.headerOdds != null ? ` <b style="color:var(--brand)">(${p.headerOdds.toFixed(2)})</b>` : '';
       return `<div style="padding:3px 0">${escapeHtml(p.team)}<span style="color:var(--text3)"> vs ${escapeHtml(p.opponent||'?')} — </span>${escapeHtml(p.assistPlayer)} <span style="color:var(--text3)">(${p.assistPct}%) →</span> ${escapeHtml(p.headerPlayer)}${odds}</div>`;
     }).join('');
-    panel.innerHTML = header + rows;
+    panel.innerHTML = header + xgLine + rows;
   }catch(e){ /* non-fatal */ }
 }
 
@@ -10892,7 +10894,7 @@ function predSideBlock(side, align){
     } else {
       parts.push(`<div><span style="color:var(--text3)">Corner:</span> —</div>`);
     }
-    const threat = side.cornerThreat==null ? '— (not built)' : escapeHtml(String(side.cornerThreat));
+    const threat = side.cornerThreat==null ? '— (small data)' : escapeHtml(String(side.cornerThreat));
     parts.push(`<div><span style="color:var(--text3)">Threat:</span> ${threat}</div>`);
   }
   if(predPensOn()){
