@@ -10744,7 +10744,8 @@ async function loadCornerBetStats(date){
     // branch below fires, since it's a global figure, not specific to `date`.
     const allTimePredicted = Number(d.allTimePredictedCount || 0);
     const allTimeXg = Number(d.allTimeFirstHalfHeadedXg || 0);
-    const allTimeLine = `<div style="margin-top:6px;padding-top:6px;border-top:.5px solid var(--border);color:var(--text3)">All-time: <b style="color:var(--text2)">${allTimePredicted}</b> bet${allTimePredicted===1?'':'s'} predicted &middot; <b style="color:var(--text2)">${allTimeXg.toFixed(2)}</b> xG accumulated</div>`;
+    const allTimeWins = Number(d.allTimeWinCount || 0);
+    const allTimeLine = `<div style="margin-top:6px;padding-top:6px;border-top:.5px solid var(--border);color:var(--text3)">All-time: <b style="color:var(--brand)">${allTimeWins}</b> win${allTimeWins===1?'':'s'} &middot; <b style="color:var(--text2)">${allTimePredicted}</b> bet${allTimePredicted===1?'':'s'} predicted &middot; <b style="color:var(--text2)">${allTimeXg.toFixed(2)}</b> xG accumulated</div>`;
     if (!d.predictedCount){
       // No combos for this date — either nothing predicted yet (today), or the combos have
       // pruned away and only the persisted xG snapshot remains (past days).
