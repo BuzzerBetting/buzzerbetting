@@ -2715,7 +2715,7 @@ router.get('/match-predictions', async (req, res) => {
 router.get('/corner-bet-stats', async (req, res) => {
   const date = String(req.query.date || '').replace(/[^0-9]/g, '')
     || new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  if (!predictionLog) return res.json({ ok: true, date, predictedCount: 0, settledCount: 0, winCount: 0, firstHalfHeadedXg: 0, firstHalfHeadedShots: 0, targetCount: 0, wins: [] });
+  if (!predictionLog) return res.json({ ok: true, date, predictedCount: 0, settledCount: 0, winCount: 0, firstHalfHeadedXg: 0, firstHalfHeadedShots: 0, targetCount: 0, allTimePredictedCount: 0, allTimeFirstHalfHeadedXg: 0, allTimeWinCount: 0, wins: [] });
   try {
     if (cornerBetSettle) { try { await cornerBetSettle.settleDate(date); } catch (e) { /* leave unsettled, try again next read */ } }
     res.json({ ok: true, ...predictionLog.getStats(date) });

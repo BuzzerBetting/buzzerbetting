@@ -10738,12 +10738,19 @@ async function loadCornerBetStats(date){
     const isToday = date === fmtDateParam(new Date());
     const fhXg = Number(d.firstHalfHeadedXg || 0);
     const xgLine = `<div style="margin-bottom:6px;color:var(--text3)">1st-half headed xG from ${isToday ? "today's" : "the day's"} targets: <b style="color:var(--text2)">${fhXg.toFixed(2)}</b>${d.firstHalfHeadedShots ? ` <span style="color:var(--text3)">(${d.firstHalfHeadedShots} shot${d.firstHalfHeadedShots===1?'':'s'})</span>` : ''}</div>`;
+    // Running totals since the day corner_bet_xg_daily started snapshotting these — unlike the
+    // per-date figures above, these survive corner_bet_predictions' PRUNE_DAYS prune, so they
+    // keep accumulating across days/months rather than resetting. Shown regardless of which
+    // branch below fires, since it's a global figure, not specific to `date`.
+    const allTimePredicted = Number(d.allTimePredictedCount || 0);
+    const allTimeXg = Number(d.allTimeFirstHalfHeadedXg || 0);
+    const allTimeLine = `<div style="margin-top:6px;padding-top:6px;border-top:.5px solid var(--border);color:var(--text3)">All-time: <b style="color:var(--text2)">${allTimePredicted}</b> bet${allTimePredicted===1?'':'s'} predicted &middot; <b style="color:var(--text2)">${allTimeXg.toFixed(2)}</b> xG accumulated</div>`;
     if (!d.predictedCount){
       // No combos for this date — either nothing predicted yet (today), or the combos have
       // pruned away and only the persisted xG snapshot remains (past days).
-      panel.innerHTML = (fhXg > 0 || d.firstHalfHeadedShots)
+      panel.innerHTML = ((fhXg > 0 || d.firstHalfHeadedShots)
         ? xgLine
-        : `<span style="color:var(--text3)">No corner bets predicted ${isToday ? 'yet today' : 'that day'}.</span>`;
+        : `<span style="color:var(--text3)">No corner bets predicted ${isToday ? 'yet today' : 'that day'}.</span>`) + allTimeLine;
       return;
     }
     const pending = d.predictedCount - d.settledCount;
@@ -10753,7 +10760,7 @@ async function loadCornerBetStats(date){
       const odds = p.headerOdds != null ? ` <b style="color:var(--brand)">(${p.headerOdds.toFixed(2)})</b>` : '';
       return `<div style="padding:3px 0">${escapeHtml(p.team)}<span style="color:var(--text3)"> vs ${escapeHtml(p.opponent||'?')} — </span>${escapeHtml(p.assistPlayer)} <span style="color:var(--text3)">(${p.assistPct}%) →</span> ${escapeHtml(p.headerPlayer)}${odds}</div>`;
     }).join('');
-    panel.innerHTML = header + xgLine + rows;
+    panel.innerHTML = header + xgLine + rows + allTimeLine;
   }catch(e){ /* non-fatal */ }
 }
 
