@@ -10746,12 +10746,19 @@ async function loadCornerBetStats(date){
     const allTimeXg = Number(d.allTimeFirstHalfHeadedXg || 0);
     const allTimeWins = Number(d.allTimeWinCount || 0);
     const allTimeLine = `<div style="margin-top:6px;padding-top:6px;border-top:.5px solid var(--border);color:var(--text3)">All-time: <b style="color:var(--brand)">${allTimeWins}</b> win${allTimeWins===1?'':'s'} &middot; <b style="color:var(--text2)">${allTimePredicted}</b> bet${allTimePredicted===1?'':'s'} predicted &middot; <b style="color:var(--text2)">${allTimeXg.toFixed(2)}</b> xG accumulated</div>`;
+    // Your actual placed Corners bets (all-time), not the model's predicted combos above —
+    // same first-half headed xG idea, but measured against the specific match each scorer
+    // pick was bet on. See corner-model/realBetXg.js.
+    const realCount = Number(d.realBetsCount || 0);
+    const realAvgOdds = d.realBetsAvgOdds != null ? Number(d.realBetsAvgOdds) : null;
+    const realXg = Number(d.realBetsFirstHalfXg || 0);
+    const realLine = realCount ? `<div style="margin-top:6px;padding-top:6px;border-top:.5px solid var(--border);color:var(--text3)">Your placed bets: <b style="color:var(--text2)">${realCount}</b> bet${realCount===1?'':'s'} placed${realAvgOdds!=null?` &middot; avg odds <b style="color:var(--text2)">${realAvgOdds.toFixed(2)}</b>`:''} &middot; <b style="color:var(--text2)">${realXg.toFixed(2)}</b> xG from scorer picks (1st half)</div>` : '';
     if (!d.predictedCount){
       // No combos for this date — either nothing predicted yet (today), or the combos have
       // pruned away and only the persisted xG snapshot remains (past days).
       panel.innerHTML = ((fhXg > 0 || d.firstHalfHeadedShots)
         ? xgLine
-        : `<span style="color:var(--text3)">No corner bets predicted ${isToday ? 'yet today' : 'that day'}.</span>`) + allTimeLine;
+        : `<span style="color:var(--text3)">No corner bets predicted ${isToday ? 'yet today' : 'that day'}.</span>`) + allTimeLine + realLine;
       return;
     }
     const pending = d.predictedCount - d.settledCount;
@@ -10761,7 +10768,7 @@ async function loadCornerBetStats(date){
       const odds = p.headerOdds != null ? ` <b style="color:var(--brand)">(${p.headerOdds.toFixed(2)})</b>` : '';
       return `<div style="padding:3px 0">${escapeHtml(p.team)}<span style="color:var(--text3)"> vs ${escapeHtml(p.opponent||'?')} — </span>${escapeHtml(p.assistPlayer)} <span style="color:var(--text3)">(${p.assistPct}%) →</span> ${escapeHtml(p.headerPlayer)}${odds}</div>`;
     }).join('');
-    panel.innerHTML = header + xgLine + rows + allTimeLine;
+    panel.innerHTML = header + xgLine + rows + allTimeLine + realLine;
   }catch(e){ /* non-fatal */ }
 }
 

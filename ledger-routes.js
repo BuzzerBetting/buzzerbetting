@@ -2587,6 +2587,12 @@ const cornerBetSettle = (() => {
   try { return require('./corner-model/settle'); }
   catch (e) { return null; }
 })();
+// Stats over the REAL Corners bets you've placed (as opposed to predictionLog's model
+// predictions) — see corner-model/realBetXg.js.
+const realCornerBetStats = (() => {
+  try { return require('./corner-model/realBetXg'); }
+  catch (e) { return null; }
+})();
 
 // matchDetails fetch with a short in-memory TTL cache — pre-match lineups flip
 // predicted -> confirmed, so this is deliberately NOT the immutable disk cache.
@@ -2715,10 +2721,20 @@ router.get('/match-predictions', async (req, res) => {
 router.get('/corner-bet-stats', async (req, res) => {
   const date = String(req.query.date || '').replace(/[^0-9]/g, '')
     || new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  if (!predictionLog) return res.json({ ok: true, date, predictedCount: 0, settledCount: 0, winCount: 0, firstHalfHeadedXg: 0, firstHalfHeadedShots: 0, targetCount: 0, allTimePredictedCount: 0, allTimeFirstHalfHeadedXg: 0, allTimeWinCount: 0, wins: [] });
+  // Real placed-bet figures are independent of predictionLog (a different data source
+  // entirely — the ledger's own bets table) so compute them regardless of whether the
+  // prediction model loaded, with safe zeroed defaults if realCornerBetStats itself failed.
+  let realBets = { count: 0, avgOdds: null, firstHalfScorerXg: 0, firstHalfScorerShots: 0, matchedCount: 0 };
+  if (realCornerBetStats) { try { realBets = realCornerBetStats.getStats(); } catch (e) { /* keep zeroed defaults */ } }
+  const realBetFields = {
+    realBetsCount: realBets.count, realBetsAvgOdds: realBets.avgOdds,
+    realBetsFirstHalfXg: realBets.firstHalfScorerXg, realBetsFirstHalfShots: realBets.firstHalfScorerShots,
+    realBetsMatchedCount: realBets.matchedCount,
+  };
+  if (!predictionLog) return res.json({ ok: true, date, predictedCount: 0, settledCount: 0, winCount: 0, firstHalfHeadedXg: 0, firstHalfHeadedShots: 0, targetCount: 0, allTimePredictedCount: 0, allTimeFirstHalfHeadedXg: 0, allTimeWinCount: 0, wins: [], ...realBetFields });
   try {
     if (cornerBetSettle) { try { await cornerBetSettle.settleDate(date); } catch (e) { /* leave unsettled, try again next read */ } }
-    res.json({ ok: true, ...predictionLog.getStats(date) });
+    res.json({ ok: true, ...predictionLog.getStats(date), ...realBetFields });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
