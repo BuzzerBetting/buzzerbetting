@@ -662,7 +662,19 @@ input::placeholder{color:var(--text3)}
     <div class="sec-title" style="margin:0;font-size:16px"><i class="ti ti-bolt"></i> Quick Bet</div>
     <div style="font-size:12.5px;color:var(--text3);margin:4px 0 12px">Paste screenshots of placed corner bets (Betfred) — one at a time or several in a row, they queue up below. It reads the players, stake and odds off each and logs them all to the Corners sheet under one account.</div>
 
-    <div style="max-width:340px;margin-bottom:12px"><label class="lbl">Account *</label><select id="qb-account"></select></div>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:12px">
+      <div style="max-width:340px;flex:1;min-width:200px"><label class="lbl">Account *</label><select id="qb-account"></select></div>
+      <div>
+        <label class="lbl" style="visibility:hidden">Modify date</label>
+        <div style="display:flex;align-items:center;gap:10px;height:38px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;font-size:13px;color:var(--text2);white-space:nowrap">
+            <input type="checkbox" id="qb-modify-date-toggle" onchange="onQbModifyDateToggle()"> Modify date
+          </label>
+          <input type="text" id="qb-modify-date" placeholder="DDMMYYYY" maxlength="8" inputmode="numeric" autocomplete="off" oninput="this.value=this.value.replace(/[^0-9]/g,'')" style="display:none;width:120px;padding:8px 10px;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit">
+        </div>
+        <span id="qb-modify-date-err" style="display:none;color:var(--red);font-size:11.5px"></span>
+      </div>
+    </div>
 
     <div id="qb-paste" tabindex="0"
          onfocus="this.style.borderColor='var(--brand)';document.getElementById('qb-paste-hint').textContent='Ready — press Ctrl+V now'"
@@ -3664,26 +3676,33 @@ function resetBefModifyDate() {
   document.getElementById('bef-modify-date').value = '';
   document.getElementById('bef-modify-date-err').style.display = 'none';
 }
-// Returns { iso } with the custom date (current time-of-day kept, so same-day backlog entries
-// still sort in logging order) when the toggle is on and the text parses to a real calendar
-// date, { error: true } when it's on but invalid (message already shown inline), or null when
-// the toggle is off — meaning the caller should fall back to the normal "now" behaviour.
+// Shared by every "backlog this to an earlier date" checkbox in the app (Bet entry, Quick Bet).
+// Parses a DDMMYYYY string into { iso } — current time-of-day kept, so same-day backlog entries
+// still sort in the order they were actually logged — or { error: <message> } if it's blank,
+// malformed, or not a real calendar date (e.g. 31st of Feb).
+function parseBacklogDateDDMMYYYY(raw) {
+  const m = String(raw || '').trim().match(/^(\d{2})(\d{2})(\d{4})$/);
+  if (!m) return { error: 'Enter the date as DDMMYYYY, e.g. 03092026' };
+  const day = +m[1], month = +m[2], year = +m[3];
+  const d = new Date(Date.UTC(year, month - 1, day));
+  if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) {
+    return { error: 'That’s not a real date' };
+  }
+  const now = new Date();
+  d.setUTCHours(now.getUTCHours(), now.getUTCMinutes(), now.getUTCSeconds(), now.getUTCMilliseconds());
+  return { iso: d.toISOString() };
+}
+// Returns { iso } when the toggle is on and the text parses, { error: true } when it's on but
+// invalid (message already shown inline), or null when the toggle is off — meaning the caller
+// should fall back to the normal "now" behaviour.
 function getBefCustomDateIso() {
   const toggle = document.getElementById('bef-modify-date-toggle');
   if (!toggle || !toggle.checked) return null;
   const errEl = document.getElementById('bef-modify-date-err');
-  const raw = (document.getElementById('bef-modify-date').value || '').trim();
-  const m = raw.match(/^(\d{2})(\d{2})(\d{4})$/);
-  if (!m) { errEl.textContent = 'Enter the date as DDMMYYYY, e.g. 03092026'; errEl.style.display = ''; return { error: true }; }
-  const day = +m[1], month = +m[2], year = +m[3];
-  const d = new Date(Date.UTC(year, month - 1, day));
-  if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) {
-    errEl.textContent = 'That’s not a real date'; errEl.style.display = ''; return { error: true };
-  }
+  const res = parseBacklogDateDDMMYYYY(document.getElementById('bef-modify-date').value);
+  if (res.error) { errEl.textContent = res.error; errEl.style.display = ''; return { error: true }; }
   errEl.style.display = 'none';
-  const now = new Date();
-  d.setUTCHours(now.getUTCHours(), now.getUTCMinutes(), now.getUTCSeconds(), now.getUTCMilliseconds());
-  return { iso: d.toISOString() };
+  return { iso: res.iso };
 }
 
 function selectBetType(type, label) {
@@ -6854,6 +6873,27 @@ function qbReset() {
   const msg = document.getElementById('qb-submit-msg'); if (msg) msg.textContent = '';
 }
 
+// Backlog date for a whole Quick Bet batch — same DDMMYYYY control as the main bet entry form
+// (see parseBacklogDateDDMMYYYY), applied once to every screenshot logged in this batch rather
+// than per-entry, since a batch is normally all from the same day's matches. Deliberately not
+// cleared by qbReset() — same reasoning as the account dropdown staying set across batches.
+function onQbModifyDateToggle() {
+  const on = document.getElementById('qb-modify-date-toggle').checked;
+  const input = document.getElementById('qb-modify-date');
+  input.style.display = on ? 'inline-block' : 'none';
+  if (on) { input.focus(); } else { input.value = ''; }
+  document.getElementById('qb-modify-date-err').style.display = 'none';
+}
+function getQbCustomDateIso() {
+  const toggle = document.getElementById('qb-modify-date-toggle');
+  if (!toggle || !toggle.checked) return null;
+  const errEl = document.getElementById('qb-modify-date-err');
+  const res = parseBacklogDateDDMMYYYY(document.getElementById('qb-modify-date').value);
+  if (res.error) { errEl.textContent = res.error; errEl.style.display = ''; return { error: true }; }
+  errEl.style.display = 'none';
+  return { iso: res.iso };
+}
+
 function qbOnPaste(e) {
   const card = document.getElementById('quick-bet-card');
   if (!card || card.style.display === 'none') return;
@@ -7026,6 +7066,8 @@ async function submitQuickBetBatch() {
   const btn = document.getElementById('qb-submit-all');
   const account_id = document.getElementById('qb-account').value;
   if (!account_id) { msg.innerHTML = '<span style="color:var(--red)">Pick an account.</span>'; return; }
+  const customDate = getQbCustomDateIso();
+  if (customDate && customDate.error) { msg.innerHTML = '<span style="color:var(--red)">Fix the date above before logging.</span>'; return; }
 
   const toSubmit = qbBatch.filter(e => e.status === 'done');
   if (!toSubmit.length) { msg.innerHTML = '<span style="color:var(--amber)">Nothing ready to log yet.</span>'; return; }
@@ -7050,7 +7092,7 @@ async function submitQuickBetBatch() {
     try {
       const d = await ledgerApi('bets', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bet_type: 'Corners', fields, legs: [{ account_id, stake: +stake.toFixed(2) }] }),
+        body: JSON.stringify({ bet_type: 'Corners', fields, legs: [{ account_id, stake: +stake.toFixed(2) }], date: customDate ? customDate.iso : undefined }),
       });
       if (d.ok) { entry.status = 'submitted'; entry.submitError = null; ok++; }
       else { entry.submitError = d.error || 'Could not log the bet.'; failed++; }
