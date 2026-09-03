@@ -6221,7 +6221,7 @@ async function submitBtLegReassign() {
   } catch (e) { msgEl.innerHTML = '<span style="color:var(--red)">Network error</span>'; }
 }
 
-const DASHBOARD_EXCLUDED_BET_TYPES = ['Casino', 'Casino (Personal)'];
+const DASHBOARD_EXCLUDED_BET_TYPES = ['Casino', 'Casino (Personal)', 'Corners'];
 
 async function loadDashboardOpenBets() {
   const el = document.getElementById('dashboard-open-bets');
