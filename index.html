@@ -5446,7 +5446,12 @@ async function markAccountFinished() {
     const d = await ledgerApi('accounts/'+targetId, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ status:'closed' }) });
     if (!d.ok) { msgEl.innerHTML = `<span style="color:var(--red)">${d.error||'Failed to update'}</span>`; return; }
 
-    ALL_ACCOUNTS = ALL_ACCOUNTS.filter(a => a.id !== targetId);
+    // Update in place rather than dropping the row — the account still exists (just archived),
+    // and the Archived filter reads straight off this same array. Removing it here meant
+    // viewing Archived without an intervening full reload could show stale/incomplete data —
+    // e.g. an account that had genuinely changed balance since ALL_ACCOUNTS was last fetched.
+    const idx = ALL_ACCOUNTS.findIndex(a => a.id === targetId);
+    if (idx > -1) ALL_ACCOUNTS[idx].status = 'closed';
     closeAccountModal();
     if (document.getElementById('view-ledger-accounts').style.display !== 'none') { renderAccountsGrid(); renderBankBalancesBox(); }
   } catch (e) { msgEl.innerHTML = `<span style="color:var(--red)">Network error</span>`; }
