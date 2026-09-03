@@ -2744,7 +2744,7 @@ router.get('/corner-bet-stats', async (req, res) => {
     realBetsFirstHalfXg: realBets.firstHalfScorerXg, realBetsFirstHalfShots: realBets.firstHalfScorerShots,
     realBetsMatchedCount: realBets.matchedCount,
   };
-  if (!predictionLog) return res.json({ ok: true, date, predictedCount: 0, settledCount: 0, winCount: 0, firstHalfHeadedXg: 0, firstHalfHeadedShots: 0, targetCount: 0, allTimePredictedCount: 0, allTimeFirstHalfHeadedXg: 0, allTimeWinCount: 0, wins: [], ...realBetFields });
+  if (!predictionLog) return res.json({ ok: true, date, predictedCount: 0, settledCount: 0, winCount: 0, firstHalfHeadedXg: 0, firstHalfHeadedShots: 0, firstHalfHeadedGoals: 0, targetCount: 0, allTimePredictedCount: 0, allTimeFirstHalfHeadedXg: 0, allTimeWinCount: 0, allTimeFirstHalfHeadedGoals: 0, wins: [], ...realBetFields });
   try {
     if (cornerBetSettle) { try { await cornerBetSettle.settleDate(date); } catch (e) { /* leave unsettled, try again next read */ } }
     res.json({ ok: true, ...predictionLog.getStats(date), ...realBetFields });
