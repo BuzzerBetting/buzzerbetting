@@ -10888,7 +10888,7 @@ async function loadCornerBetStats(date){
     const realCount = Number(d.realBetsCount || 0);
     const realAvgOdds = d.realBetsAvgOdds != null ? Number(d.realBetsAvgOdds) : null;
     const realXg = Number(d.realBetsFirstHalfXg || 0);
-    const realLine = realCount ? `<div style="margin-top:6px;padding-top:6px;border-top:.5px solid var(--border);color:var(--text3)">Your placed bets: <b style="color:var(--text2)">${realCount}</b> bet${realCount===1?'':'s'} placed${realAvgOdds!=null?` &middot; avg odds <b style="color:var(--text2)">${realAvgOdds.toFixed(2)}</b>`:''} &middot; <b style="color:var(--text2)">${realXg.toFixed(2)}</b> xG from scorer picks (1st half)</div>` : '';
+    const realLine = realCount ? `<div style="margin-top:6px;padding-top:6px;border-top:.5px solid var(--border);color:var(--text3)">Your placed bets (Betfred): <b style="color:var(--text2)">${realCount}</b> bet${realCount===1?'':'s'} placed${realAvgOdds!=null?` &middot; avg odds <b style="color:var(--text2)">${realAvgOdds.toFixed(2)}</b>`:''} &middot; <b style="color:var(--text2)">${realXg.toFixed(2)}</b> xG from scorer picks (1st half)</div>` : '';
     if (!d.predictedCount){
       // No combos for this date — either nothing predicted yet (today), or the combos have
       // pruned away and only the persisted xG snapshot remains (past days).
