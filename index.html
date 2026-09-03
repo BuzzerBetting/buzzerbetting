@@ -753,6 +753,17 @@ input::placeholder{color:var(--text3)}
 
     <div id="bet-entry-note" style="display:none;margin-bottom:14px;padding:10px 14px;background:var(--amber-bg);color:var(--amber);border-radius:var(--radius);font-size:12.5px"></div>
 
+    <!-- Backlog entry: off by default (bet logs under today's date, as always). Ticked, it
+         swaps in a typed DDMMYYYY date instead — for logging a bet after the event happened,
+         e.g. Corners bets need the real fixture date so xG matching lines up. -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;font-size:13px;color:var(--text2)">
+        <input type="checkbox" id="bef-modify-date-toggle" onchange="onBefModifyDateToggle()"> Modify date
+      </label>
+      <input type="text" id="bef-modify-date" placeholder="DDMMYYYY" maxlength="8" inputmode="numeric" autocomplete="off" oninput="this.value=this.value.replace(/[^0-9]/g,'')" style="display:none;width:120px;padding:8px 10px;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit">
+      <span id="bef-modify-date-err" style="display:none;color:var(--red);font-size:11.5px"></span>
+    </div>
+
     <!-- Paste-to-autofill box (BB Horse / BB Golf / BB Racing Tracker / BB Bet Tracker) -->
     <div id="bet-entry-paste-wrap" style="display:none;margin-bottom:18px">
       <label class="lbl">Paste from BookieBashing</label>
@@ -3636,10 +3647,50 @@ function toggleRevealedField(checkboxKey, targetKey) {
   if (wrap) wrap.style.display = checked ? 'block' : 'none';
 }
 
+// Backlog date entry — see the "Modify date" checkbox above bet-entry-fields. Left off, every
+// bet logs under "now" exactly as before (the backend already defaults `date` server-side when
+// it's omitted); ticked, the typed DDMMYYYY replaces it. Kept as a plain text field rather than
+// a native date picker per the ask — quick to type DDMMYYYY without touching a calendar widget.
+function onBefModifyDateToggle() {
+  const on = document.getElementById('bef-modify-date-toggle').checked;
+  const input = document.getElementById('bef-modify-date');
+  input.style.display = on ? 'inline-block' : 'none';
+  if (on) { input.focus(); } else { input.value = ''; }
+  document.getElementById('bef-modify-date-err').style.display = 'none';
+}
+function resetBefModifyDate() {
+  document.getElementById('bef-modify-date-toggle').checked = false;
+  document.getElementById('bef-modify-date').style.display = 'none';
+  document.getElementById('bef-modify-date').value = '';
+  document.getElementById('bef-modify-date-err').style.display = 'none';
+}
+// Returns { iso } with the custom date (current time-of-day kept, so same-day backlog entries
+// still sort in logging order) when the toggle is on and the text parses to a real calendar
+// date, { error: true } when it's on but invalid (message already shown inline), or null when
+// the toggle is off — meaning the caller should fall back to the normal "now" behaviour.
+function getBefCustomDateIso() {
+  const toggle = document.getElementById('bef-modify-date-toggle');
+  if (!toggle || !toggle.checked) return null;
+  const errEl = document.getElementById('bef-modify-date-err');
+  const raw = (document.getElementById('bef-modify-date').value || '').trim();
+  const m = raw.match(/^(\d{2})(\d{2})(\d{4})$/);
+  if (!m) { errEl.textContent = 'Enter the date as DDMMYYYY, e.g. 03092026'; errEl.style.display = ''; return { error: true }; }
+  const day = +m[1], month = +m[2], year = +m[3];
+  const d = new Date(Date.UTC(year, month - 1, day));
+  if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) {
+    errEl.textContent = 'That’s not a real date'; errEl.style.display = ''; return { error: true };
+  }
+  errEl.style.display = 'none';
+  const now = new Date();
+  d.setUTCHours(now.getUTCHours(), now.getUTCMinutes(), now.getUTCSeconds(), now.getUTCMilliseconds());
+  return { iso: d.toISOString() };
+}
+
 function selectBetType(type, label) {
   betEntryType = type;
   betEntryTypeLabel = label || type;
   const cfg = BET_TYPE_CONFIG[type];
+  resetBefModifyDate();
 
   document.getElementById('bet-entry-type-picker').style.display = 'none';
   document.getElementById('bet-entry-form').style.display = 'block';
@@ -4103,7 +4154,7 @@ function updateBackLayOutcomeTable(backRows, layRows, totalBackStake) {
   set('bet-entry-backlay-tbl-doublewin-total', backWinBookie + layWinExchange);
 }
 
-async function submitBackLayBet(msgEl, btn) {
+async function submitBackLayBet(msgEl, btn, customDate) {
   const bookie = (document.getElementById('bef-Book')?.value || '').trim();
   const exchange = (document.getElementById('bef-backlay-exchange')?.value || '').trim();
   const desc = (document.getElementById('bef-backlay-desc')?.value || '').trim();
@@ -4158,7 +4209,7 @@ async function submitBackLayBet(msgEl, btn) {
     const d = await ledgerApi('bets/backlay', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ date: new Date().toISOString(), fields, backLegs, layLegs })
+      body: JSON.stringify({ date: customDate ? customDate.iso : new Date().toISOString(), fields, backLegs, layLegs })
     });
     if (d.ok) {
       msgEl.innerHTML = `<span style="color:var(--green)"><i class="ti ti-check"></i> Bet logged — back stake £${totalBackStake.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`;
@@ -4374,7 +4425,9 @@ async function submitBetEntry() {
   const btn = document.getElementById('bet-entry-submit');
   if (!betEntryType) return;
   const cfg = BET_TYPE_CONFIG[betEntryType];
-  if (cfg.layout === 'backLay') { await submitBackLayBet(msgEl, btn); return; }
+  const customDate = getBefCustomDateIso();
+  if (customDate && customDate.error) return; // inline error already shown, don't submit
+  if (cfg.layout === 'backLay') { await submitBackLayBet(msgEl, btn, customDate); return; }
 
   const fields = {};
   if (cfg.event) fields['Event'] = (document.getElementById('bef-Event')?.value || '').trim();
@@ -4495,7 +4548,7 @@ async function submitBetEntry() {
         const d = await ledgerApi('bets', {
           method: 'POST',
           headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ bet_type: betEntryType, fields, legs: [{ account_id: accountId, stake: 0.01 }] })
+          body: JSON.stringify({ bet_type: betEntryType, fields, legs: [{ account_id: accountId, stake: 0.01 }], date: customDate ? customDate.iso : undefined })
         });
         if (d.ok) successCount++;
       }
@@ -4516,7 +4569,7 @@ async function submitBetEntry() {
     const d = await ledgerApi('bets', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ bet_type: betEntryType, fields, legs, autoSettlePl })
+      body: JSON.stringify({ bet_type: betEntryType, fields, legs, autoSettlePl, date: customDate ? customDate.iso : undefined })
     });
     if (d.ok) {
       msgEl.innerHTML = `<span style="color:var(--green)"><i class="ti ti-check"></i> Bet logged — total stake £${d.bet.total_stake.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`;
