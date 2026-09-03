@@ -359,4 +359,11 @@ try { db.exec(`ALTER TABLE bet_legs ADD COLUMN role TEXT`); } catch (e) { /* alr
 try { db.exec(`ALTER TABLE bet_legs ADD COLUMN odds REAL`); } catch (e) { /* already exists */ }
 try { db.exec(`ALTER TABLE bet_legs ADD COLUMN commission REAL`); } catch (e) { /* already exists */ }
 
+// Free bet (SNR — Stake Not Returned) support for a Back & Lay bet's BOOKIE leg(s) only — the
+// exchange/lay leg always risks real liability regardless, so this deliberately lives per-leg
+// rather than at the bet level (unlike every other bet type's fields['Bet Type']-driven free
+// bet flag, which applies uniformly since those types only have one kind of leg). 0/absent for
+// every non-back leg and every other bet type. See legCommitted() in ledger-routes.js.
+try { db.exec(`ALTER TABLE bet_legs ADD COLUMN free_bet INTEGER DEFAULT 0`); } catch (e) { /* already exists */ }
+
 module.exports = db;

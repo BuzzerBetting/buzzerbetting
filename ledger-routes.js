@@ -39,9 +39,13 @@ function hasNoRealStake(bet_type, fieldsJsonOrObj) {
 // settlement time — a back leg commits its stake (same as every other bet type), but a lay
 // leg commits its *liability* (stake × (odds-1)), since that's the amount the exchange
 // account actually has locked up, not the lay stake itself. NULL role (every other bet
-// type) always falls through to the plain stake, so this is a no-op everywhere else.
+// type) always falls through to the plain stake, so this is a no-op everywhere else. A back
+// leg flagged free_bet commits nothing — it's SNR, no real money was ever staked to get it
+// back — the lay side is never free regardless, since it's always real money hedging it.
 function legCommitted(leg) {
-  return leg.role === 'lay' ? leg.stake * (leg.odds - 1) : leg.stake;
+  if (leg.role === 'lay') return leg.stake * (leg.odds - 1);
+  if (leg.role === 'back' && leg.free_bet) return 0;
+  return leg.stake;
 }
 
 // Mirrors the frontend's BET_TYPE_GROUPS, for server-side enforcement of the
@@ -1162,9 +1166,12 @@ router.post('/bets/backlay', (req, res) => {
     for (const leg of backLegs) {
       const account = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(leg.account_id);
       if (!account) throw new Error(`Account ${leg.account_id} not found`);
-      db.prepare(`INSERT INTO bet_legs (bet_id, account_id, stake, role, odds) VALUES (?, ?, ?, 'back', ?)`)
-        .run(betId, leg.account_id, leg.stake, leg.odds);
-      db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`).run(leg.stake, leg.account_id);
+      db.prepare(`INSERT INTO bet_legs (bet_id, account_id, stake, role, odds, free_bet) VALUES (?, ?, ?, 'back', ?, ?)`)
+        .run(betId, leg.account_id, leg.stake, leg.odds, leg.free_bet ? 1 : 0);
+      // Free bet (SNR) — no real money was ever staked, so nothing is deducted at placement.
+      if (!leg.free_bet) {
+        db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`).run(leg.stake, leg.account_id);
+      }
     }
     for (const leg of layLegs) {
       const account = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(leg.account_id);
@@ -1193,7 +1200,7 @@ router.post('/bets/backlay', (req, res) => {
     const betId = placeBackLay(
       date || new Date().toISOString(),
       fields || {},
-      backLegs.map(l => ({ account_id: l.account_id, stake: +parseFloat(l.stake).toFixed(2), odds: parseFloat(l.odds) })),
+      backLegs.map(l => ({ account_id: l.account_id, stake: +parseFloat(l.stake).toFixed(2), odds: parseFloat(l.odds), free_bet: !!l.free_bet })),
       layLegs.map(l => ({ account_id: l.account_id, stake: +parseFloat(l.stake).toFixed(2), odds: parseFloat(l.odds), commission: parseFloat(l.commission) }))
     );
     const bet = db.prepare(`SELECT * FROM bets WHERE id = ?`).get(betId);
@@ -1226,6 +1233,10 @@ router.patch('/bets/:id/settle-backlay', (req, res) => {
     const backLegs = legs.filter(l => l.role === 'back');
     const layLegs = legs.filter(l => l.role === 'lay');
     const totalBackStake = backLegs.reduce((s, l) => s + l.stake, 0);
+    // Real money actually staked at the bookie — excludes any back leg flagged free_bet (SNR,
+    // nothing real was ever staked). Used wherever "the stake" needs to come back off a gross
+    // figure; totalBackStake above stays the nominal total for the proportional-share calc.
+    const totalBackStakeReal = backLegs.reduce((s, l) => s + (l.free_bet ? 0 : l.stake), 0);
 
     // Reverse whatever this bet is currently applying to account balances, so re-settling
     // (or an override) never double-counts — same reasoning as the generic /settle route.
@@ -1259,14 +1270,16 @@ router.patch('/bets/:id/settle-backlay', (req, res) => {
           : (l.stake * (1 - (l.commission || 0))); // lay wins — stake minus commission
       });
       if (doublePayout) {
-        const totalBackPl = customWinAmount - (fundsType === 'free' ? 0 : totalBackStake);
+        const totalBackPl = customWinAmount - (fundsType === 'free' ? 0 : totalBackStakeReal);
         backLegs.forEach(l => {
           const share = totalBackStake > 0 ? l.stake / totalBackStake : (backLegs.length ? 1 / backLegs.length : 0);
           legPlMap[l.id] = totalBackPl * share;
         });
       } else {
         backLegs.forEach(l => {
-          legPlMap[l.id] = result === 'back_won' ? (l.stake * (l.odds - 1)) : -l.stake;
+          // A free-bet back leg risks nothing real, so a loss is £0, not -stake — win P/L
+          // (winnings only, stake excluded) is the same formula either way.
+          legPlMap[l.id] = result === 'back_won' ? (l.stake * (l.odds - 1)) : (l.free_bet ? 0 : -l.stake);
         });
       }
     }
@@ -1414,7 +1427,7 @@ router.get('/bets/:id/legs', (req, res) => {
     const bet = db.prepare(`SELECT * FROM bets WHERE id = ?`).get(req.params.id);
     if (!bet) return res.status(404).json({ ok: false, error: 'Bet not found' });
     const legs = db.prepare(
-      `SELECT bl.id, bl.account_id, bl.stake, bl.leg_pl, bl.settled, bl.role, bl.odds AS leg_odds, bl.commission,
+      `SELECT bl.id, bl.account_id, bl.stake, bl.leg_pl, bl.settled, bl.role, bl.odds AS leg_odds, bl.commission, bl.free_bet,
               a.account_id AS account_code, a.profile, a.bookie
        FROM bet_legs bl JOIN accounts a ON a.id = bl.account_id
        WHERE bl.bet_id = ? ORDER BY bl.id`

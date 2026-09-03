@@ -807,9 +807,15 @@ input::placeholder{color:var(--text3)}
     <div id="bet-entry-backlay-section" style="display:none">
       <div style="margin-bottom:14px"><label class="lbl">Bet description</label><input type="text" id="bef-backlay-desc"></div>
 
-      <div class="lbl" style="margin-bottom:10px">Bookie accounts &amp; back stakes</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="lbl" style="margin-bottom:0">Bookie accounts &amp; back stakes</div>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;font-size:12.5px;color:var(--text2)">
+          <input type="checkbox" id="bef-backlay-free-bet" onchange="recalcBackLay()"> Free bet (stake not returned)
+        </label>
+      </div>
       <div id="bet-entry-backlay-back-legs"></div>
       <button class="add-btn" id="bet-entry-backlay-add-back-btn" onclick="addBackLayLeg('back')"><i class="ti ti-plus"></i> Add bookie account</button>
+      <div id="bet-entry-backlay-free-bet-note" style="display:none;margin-top:6px;font-size:11.5px;color:var(--text3)">Every bookie account above is treated as a free bet — no stake is deducted at placement, and none is returned on a win (winnings only).</div>
 
       <div style="margin-top:20px;margin-bottom:14px"><label class="lbl">Exchange site</label><input type="text" id="bef-backlay-exchange" autocomplete="off" oninput="refreshBackLayAccountDropdowns()"></div>
 
@@ -4009,6 +4015,8 @@ let betEntryBackLayId = 0;
 function resetBackLaySection() {
   document.getElementById('bef-backlay-desc').value = '';
   document.getElementById('bef-backlay-exchange').value = '';
+  document.getElementById('bef-backlay-free-bet').checked = false;
+  document.getElementById('bet-entry-backlay-free-bet-note').style.display = 'none';
   document.getElementById('bet-entry-backlay-back-legs').innerHTML = '';
   document.getElementById('bet-entry-backlay-lay-legs').innerHTML = '';
   betEntryBackLayId = 0;
@@ -4092,12 +4100,21 @@ function recalcBackLay() {
   const layRows = [...document.querySelectorAll('#bet-entry-backlay-lay-legs .lay-leg-row')];
   if (!backRows.length || !layRows.length) return;
 
+  const freeBet = document.getElementById('bef-backlay-free-bet')?.checked || false;
+  const noteEl = document.getElementById('bet-entry-backlay-free-bet-note');
+  if (noteEl) noteEl.style.display = freeBet ? 'block' : 'none';
+
   const totalBackStake = backRows.reduce((s,r) => s + (parseFloat(r.querySelector('.back-leg-stake').value)||0), 0);
-  let totalBackReturn = 0, anyBackOdds = false;
+  // A free bet's stake is never returned, so hedging it only needs to cover the WINNINGS
+  // (stake × (odds-1)) — laying off the full gross return (stake × odds, as a normal qualifying
+  // bet does) would over-lay and cost real money on a loss. totalBackReturn stays the normal
+  // qualifying-bet figure; totalBackWinnings is the free-bet one — recalcBackLay picks whichever
+  // applies below.
+  let totalBackReturn = 0, totalBackWinnings = 0, anyBackOdds = false;
   backRows.forEach(r => {
     const stake = parseFloat(r.querySelector('.back-leg-stake').value) || 0;
     const odds = parseFloat(r.querySelector('.back-leg-odds').value) || 0;
-    if (stake > 0 && odds > 1) { totalBackReturn += stake * odds; anyBackOdds = true; }
+    if (stake > 0 && odds > 1) { totalBackReturn += stake * odds; totalBackWinnings += stake * (odds - 1); anyBackOdds = true; }
   });
 
   const backOdds = backLayBlendedOdds(backRows, '.back-leg-stake', '.back-leg-odds');
@@ -4116,7 +4133,7 @@ function recalcBackLay() {
 
   let optimalLay = null;
   if (anyBackOdds && layOdds && (layOdds - blendedCommission) > 0) {
-    optimalLay = totalBackReturn / (layOdds - blendedCommission);
+    optimalLay = (freeBet ? totalBackWinnings : totalBackReturn) / (layOdds - blendedCommission);
   }
   document.getElementById('bet-entry-backlay-optimal').textContent = optimalLay !== null ? '£' + optimalLay.toFixed(2) : '—';
 
@@ -4132,13 +4149,13 @@ function recalcBackLay() {
   const liability = (layOdds && totalLayStake > 0) ? totalLayStake * (layOdds - 1) : null;
   document.getElementById('bet-entry-backlay-liability').textContent = liability !== null ? '£' + liability.toFixed(2) : '—';
 
-  updateBackLayOutcomeTable(backRows, layRows, totalBackStake);
+  updateBackLayOutcomeTable(backRows, layRows, totalBackStake, freeBet);
   updateBetEntryTotal();
 }
 
 // Live preview only — computed per-leg exactly like the real settlement will be, so it stays
 // accurate even with mixed odds/commission across multiple accounts on either side.
-function updateBackLayOutcomeTable(backRows, layRows, totalBackStake) {
+function updateBackLayOutcomeTable(backRows, layRows, totalBackStake, freeBet) {
   const backLegs = backRows.map(r => ({ stake: parseFloat(r.querySelector('.back-leg-stake').value)||0, odds: parseFloat(r.querySelector('.back-leg-odds').value)||0 }));
   const layLegs = layRows.map(r => ({ stake: parseFloat(r.querySelector('.lay-leg-stake').value)||0, odds: parseFloat(r.querySelector('.lay-leg-odds').value)||0, commission: (parseFloat(r.querySelector('.lay-leg-commission').value)||0)/100 }));
   const haveBack = backLegs.some(l => l.stake>0 && l.odds>1);
@@ -4157,7 +4174,7 @@ function updateBackLayOutcomeTable(backRows, layRows, totalBackStake) {
 
   const backWinBookie = backLegs.reduce((s,l) => s + (l.stake>0 && l.odds>1 ? l.stake*(l.odds-1) : 0), 0);
   const backWinExchange = -layLegs.reduce((s,l) => s + (l.stake>0 && l.odds>1 ? l.stake*(l.odds-1) : 0), 0);
-  const layWinBookie = -totalBackStake;
+  const layWinBookie = freeBet ? 0 : -totalBackStake; // free bet risks no real stake, so nothing is lost
   const layWinExchange = layLegs.reduce((s,l) => s + (l.stake>0 ? l.stake*(1-l.commission) : 0), 0);
 
   set('bet-entry-backlay-tbl-backwin-bookie', backWinBookie);
@@ -4180,11 +4197,13 @@ async function submitBackLayBet(msgEl, btn, customDate) {
 
   const backRows = [...document.querySelectorAll('#bet-entry-backlay-back-legs .back-leg-row')];
   const layRows = [...document.querySelectorAll('#bet-entry-backlay-lay-legs .lay-leg-row')];
+  const freeBet = document.getElementById('bef-backlay-free-bet')?.checked || false;
 
   const backLegs = backRows.map(r => ({
     account_id: r.querySelector('.back-leg-account').value,
     stake: parseFloat(r.querySelector('.back-leg-stake').value) || 0,
     odds: parseFloat(r.querySelector('.back-leg-odds').value) || 0,
+    free_bet: freeBet,
   }));
   const layLegs = layRows.map(r => ({
     account_id: r.querySelector('.lay-leg-account').value,
@@ -4220,6 +4239,7 @@ async function submitBackLayBet(msgEl, btn, customDate) {
     'Back Stake': +totalBackStake.toFixed(2),
     'Lay Stake': +totalLayStake.toFixed(2),
     'Lay Liability': +liability.toFixed(2),
+    'Back Free Bet': freeBet ? 'Y' : '',
   };
 
   btn.disabled = true; btn.textContent = 'Logging…';
@@ -8001,7 +8021,8 @@ function setBtSettleDoublePayout(on) {
     const amountEl = document.getElementById('bt-settle-bl-dp-amount');
     if (!amountEl.value) {
       const backLegs = btSettleBackLayContext.legs.filter(l => l.role === 'back');
-      const standardBackReturn = backLegs.reduce((s,l) => s + l.stake * l.leg_odds, 0);
+      // A free-bet leg's "standard" return is winnings only (no stake to give back).
+      const standardBackReturn = backLegs.reduce((s,l) => s + (l.free_bet ? l.stake*(l.leg_odds-1) : l.stake*l.leg_odds), 0);
       amountEl.value = standardBackReturn.toFixed(2);
     }
   }
@@ -8022,15 +8043,17 @@ function recalcBtSettleBackLayPreview() {
   const backLegs = legs.filter(l => l.role === 'back');
   const layLegs = legs.filter(l => l.role === 'lay');
   const totalBackStake = backLegs.reduce((s,l) => s+l.stake, 0);
+  const totalBackStakeReal = backLegs.reduce((s,l) => s+(l.free_bet?0:l.stake), 0);
 
   const exchangePl = layLegs.reduce((s,l) => s + (btSettleBackLayResult === 'back_won' ? -(l.stake*(l.leg_odds-1)) : l.stake*(1-(l.commission||0))), 0);
   let bookiePl;
   if (btSettleBackLayDoublePayout) {
     const amount = parseFloat(document.getElementById('bt-settle-bl-dp-amount').value) || 0;
     const fundsType = document.getElementById('bt-settle-bl-dp-funds').value;
-    bookiePl = amount - (fundsType === 'free' ? 0 : totalBackStake);
+    bookiePl = amount - (fundsType === 'free' ? 0 : totalBackStakeReal);
   } else {
-    bookiePl = backLegs.reduce((s,l) => s + (btSettleBackLayResult === 'back_won' ? l.stake*(l.leg_odds-1) : -l.stake), 0);
+    // A free-bet leg risks nothing real, so a loss is £0, not -stake.
+    bookiePl = backLegs.reduce((s,l) => s + (btSettleBackLayResult === 'back_won' ? l.stake*(l.leg_odds-1) : (l.free_bet?0:-l.stake)), 0);
   }
   set(bookieEl, bookiePl);
   set(exchangeEl, exchangePl);
