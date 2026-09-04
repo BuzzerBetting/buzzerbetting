@@ -6994,7 +6994,10 @@ function qbHandleFiles(fileList) {
 async function qbAddImage(blob) {
   if (!blob) return;
   const entry = { id: 'qb' + (++qbBatchSeq), status: 'parsing', dataUrl: null, warnings: [], error: null, parsed: {} };
-  qbBatch.push(entry);
+  // Newest paste goes to the top — lets you watch each one land without scrolling down through
+  // an ever-growing pile during a big bulk-paste session (order here is purely display/submit
+  // order, harmless either way — nothing keys off array position, only entry.id).
+  qbBatch.unshift(entry);
   qbRenderBatch();
 
   let dataUrl, mediaType = 'image/jpeg';
