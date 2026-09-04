@@ -892,9 +892,12 @@ input::placeholder{color:var(--text3)}
   <div class="sec-title wide">Accounts</div>
 
   <div class="card card-pad wide" style="margin-bottom:16px">
-    <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleAccountsAddForm()">
-      <div class="sec-title" style="margin:0;font-size:16px"><i class="ti ti-plus"></i> Add account</div>
-      <i class="ti ti-chevron-down" id="accounts-add-chevron"></i>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1" onclick="toggleAccountsAddForm()">
+        <div class="sec-title" style="margin:0;font-size:16px"><i class="ti ti-plus"></i> Add account</div>
+        <i class="ti ti-chevron-down" id="accounts-add-chevron"></i>
+      </div>
+      <button class="add-btn" onclick="event.stopPropagation();refreshAccountsGrid()" title="Reload Live Accounts below — use after publishing a new account so it shows up without leaving this page"><i class="ti ti-refresh"></i> Refresh list</button>
     </div>
     <div id="accounts-add-form-wrap" style="display:none;margin-top:16px"></div>
   </div>
@@ -4705,6 +4708,17 @@ async function initAccountsGrid() {
   renderAccountsSummaryRow();
 }
 
+// Reloads Live Accounts without resetting the current filters/grouping — for after publishing
+// a new account (or any other out-of-band change), so it shows up here without backing out
+// of this view and coming back in (which is what initAccountsGrid's filter reset would force).
+async function refreshAccountsGrid() {
+  const wrap = document.getElementById('live-accounts-wrap');
+  wrap.innerHTML = '<div style="padding:24px;color:var(--text2);font-size:13px">Loading…</div>';
+  await loadAllAccounts(false);
+  renderAccountsGrid();
+  renderAccountsSummaryRow();
+}
+
 function toggleAccountsAddForm() {
   const wrap = document.getElementById('accounts-add-form-wrap');
   const chevron = document.getElementById('accounts-add-chevron');
@@ -7493,6 +7507,14 @@ function renderBtDetailTable(bets) {
         if (k === 'Stake' || k === 'Total Stake') {
           return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetStake(${b.id}, ${b.fields[k]||0}, fetchBtDetailPage)" title="Click to correct the stake">${cellContent}</span></td>`;
         }
+        if (isBackLay && k === 'Lay Stake' && b.result === 'open') {
+          return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBackLayLayStake(${b.id}, ${b.fields[k]||0}, fetchBtDetailPage)" title="Click to correct the actual matched lay stake — Lay Liability recalculates automatically">${cellContent}</span></td>`;
+        }
+        if (isBackLay && k === 'Lay Liability' && b.result === 'open') {
+          // Derived from Lay Stake × (Lay Odds - 1) — no direct edit; correct the Lay Stake
+          // instead and this recalculates on its own.
+          return `<td${colClass(k)}>${cellContent}</td>`;
+        }
         if (k === 'Winnings') {
           const isBlank = b.fields[k] === undefined || b.fields[k] === null;
           const display = isBlank ? '<i class="ti ti-plus" style="color:var(--text3)"></i>' : cellContent;
@@ -7880,6 +7902,39 @@ async function editBetWinnings(betId, currentWinnings, refreshFn) {
   try {
     const d = await ledgerApi('bets/'+betId+'/winnings', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ winnings }) });
     if (!d.ok) { alert(d.error || 'Failed to update winnings'); return; }
+    if (refreshFn) refreshFn();
+  } catch (e) { alert('Network error — please try again.'); }
+}
+
+// Corrects a Back & Lay bet's lay stake to what actually got matched at the exchange (e.g.
+// £4.18 was logged when placing, but only £3 got matched) — Lay Liability is derived, not
+// entered directly, so it recalculates automatically server-side from the new stake at that
+// leg's own odds, and the exchange account's locked balance is adjusted to match.
+async function editBackLayLayStake(betId, currentLayStake, refreshFn) {
+  let legs;
+  try {
+    const d = await ledgerApi('bets/'+betId+'/legs');
+    if (!d.ok) { alert(d.error || 'Failed to load legs'); return; }
+    legs = (d.legs || []).filter(l => l.role === 'lay');
+  } catch (e) { alert('Network error — please try again.'); return; }
+  if (!legs.length) { alert('No lay leg found on this bet.'); return; }
+
+  let leg = legs[0];
+  if (legs.length > 1) {
+    const choice = prompt(`This bet has ${legs.length} lay legs — enter the exchange account ID to correct:\n` +
+      legs.map(l => `${l.account_code} — currently £${(l.stake||0).toFixed(2)}`).join('\n'));
+    if (choice === null) return;
+    leg = legs.find(l => (l.account_code||'').toLowerCase() === choice.trim().toLowerCase());
+    if (!leg) { alert('No lay leg found on that account.'); return; }
+  }
+
+  const input = prompt(`Correct the actual matched lay stake for ${leg.account_code} — Lay Liability will be recalculated automatically:`, leg.stake);
+  if (input === null) return;
+  const newStake = parseFloat(input);
+  if (!(newStake > 0)) { alert('Enter a valid positive stake amount.'); return; }
+  try {
+    const d = await ledgerApi('bets/'+betId+'/legs/'+leg.id+'/lay-stake', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ stake: newStake }) });
+    if (!d.ok) { alert(d.error || 'Failed to update lay stake'); return; }
     if (refreshFn) refreshFn();
   } catch (e) { alert('Network error — please try again.'); }
 }

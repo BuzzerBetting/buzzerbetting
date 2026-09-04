@@ -1600,6 +1600,49 @@ router.post('/bets/:id/add-account/backlay', (req, res) => {
   } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
 });
 
+// PATCH /api/ledger/bets/:id/legs/:legId/lay-stake — body: { stake }
+// Corrects a lay leg's actual matched stake (e.g. £4.18 was logged when placing, but the
+// exchange only matched £3) — Lay Liability is derived, never entered directly, so it's
+// recalculated here from the corrected stake at this leg's own odds, and the exchange
+// account's locked-up balance is adjusted by the difference. Restricted to open bets — once
+// settled, the real P/L is already fixed, so use Override to correct that directly instead.
+router.patch('/bets/:id/legs/:legId/lay-stake', (req, res) => {
+  const updateLayStake = db.transaction((betId, legId, newStake) => {
+    const bet = db.prepare(`SELECT * FROM bets WHERE id = ?`).get(betId);
+    if (!bet) throw new Error('Bet not found');
+    if (bet.bet_type !== 'Back & Lay') throw new Error('This endpoint is only for Back & Lay bets.');
+    if (bet.result !== 'open') throw new Error('Only open bets can have their lay stake corrected — use Override to fix P/L on a settled bet.');
+    const leg = db.prepare(`SELECT * FROM bet_legs WHERE id = ? AND bet_id = ?`).get(legId, betId);
+    if (!leg) throw new Error('Leg not found on this bet');
+    if (leg.role !== 'lay') throw new Error('That leg is not a lay leg.');
+
+    const oldLiability = +(leg.stake * (leg.odds - 1)).toFixed(2);
+    const newLiability = +(newStake * (leg.odds - 1)).toFixed(2);
+    db.prepare(`UPDATE accounts SET balance = balance + ? - ?, updated_at = datetime('now') WHERE id = ?`)
+      .run(oldLiability, newLiability, leg.account_id);
+    db.prepare(`UPDATE bet_legs SET stake = ? WHERE id = ?`).run(newStake, leg.id);
+
+    // Recompute the bet-level aggregate fields from every lay leg's own stake/odds — summing
+    // each leg's own liability is exact even with several lay legs at different odds, unlike
+    // re-deriving it from a single blended odds figure.
+    const layLegs = db.prepare(`SELECT * FROM bet_legs WHERE bet_id = ? AND role = 'lay'`).all(betId);
+    const totalLayStake = +layLegs.reduce((s, l) => s + (l.id == leg.id ? newStake : l.stake), 0).toFixed(2);
+    const totalLayLiability = +layLegs.reduce((s, l) => s + (l.id == leg.id ? newLiability : +(l.stake * (l.odds - 1)).toFixed(2)), 0).toFixed(2);
+    const fields = JSON.parse(bet.fields);
+    fields['Lay Stake'] = totalLayStake;
+    fields['Lay Liability'] = totalLayLiability;
+    db.prepare(`UPDATE bets SET fields = ? WHERE id = ?`).run(JSON.stringify(fields), betId);
+    return fields;
+  });
+
+  try {
+    const newStake = +parseFloat(req.body.stake).toFixed(2);
+    if (!(newStake > 0)) return res.status(400).json({ ok: false, error: 'stake must be a positive number' });
+    const fields = updateLayStake(req.params.id, req.params.legId, newStake);
+    res.json({ ok: true, fields });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
 // DELETE /api/ledger/bets/:id/legs/:legId — removes one account from a multi-account bet
 // (e.g. the wrong account was accidentally included when placing). Reverses exactly that
 // leg's effect on its account's balance — the same open-vs-settled reversal math used by
