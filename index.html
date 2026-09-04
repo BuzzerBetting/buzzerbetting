@@ -11121,7 +11121,11 @@ function predSideBlock(side, align){
   }
   if(predPensOn()){
     const p=side.penTaker;
-    parts.push(`<div><span style="color:var(--text3)">Pen:</span> ${p?`${escapeHtml(p.name)} <b style="color:var(--brand)">${p.pct}%</b>${p.note?` <span style="color:var(--text3)">· ${escapeHtml(p.note)}</span>`:''}`:'—'}</div>`);
+    // Red name = predicted taker is a defender (CB/FB) in tonight's lineup — the high-odds-to-
+    // score case worth flagging, since a defender taking pens is a live anytime-scorer angle a
+    // striker/midfielder taker isn't.
+    const nameStyle=p&&p.isDefender?' style="color:var(--red)"':'';
+    parts.push(`<div><span style="color:var(--text3)">Pen:</span> ${p?`<span${nameStyle}>${escapeHtml(p.name)}</span> <b style="color:var(--brand)">${p.pct}%</b>${p.note?` <span style="color:var(--text3)">· ${escapeHtml(p.note)}</span>`:''}${p.isDefender?' <span style="color:var(--red)">(DEF)</span>':''}`:'—'}</div>`);
   }
   return `<div style="flex:1;min-width:0;text-align:${align};font-size:11.5px;line-height:1.5">${parts.join('')}</div>`;
 }
