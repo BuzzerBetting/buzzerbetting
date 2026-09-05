@@ -2791,7 +2791,7 @@ function checkPin(){
 
 // ── NAVIGATION ──
 function goHome(){if(CURRENT_USER_ROLE==='calculator'){showTopSec('calc');return;}document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
-function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();if(name==='ddhh')initDDHH(null);if(name==='bets-combined')initBetsPage();if(name==='monthly')initMonthly();if(name==='monthlyprofit')initMonthlyProfit();if(name==='assistantmonthly')initAssistantMonthly();if(name==='todo')initTodo();if(name==='oddschecker')initOddscheckerEV();else stopOddscheckerEVRefresh();}
+function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();if(name==='ddhh')initDDHH(null);if(name==='bets-combined')initBetsPage();if(name==='monthly')initMonthly();if(name==='monthlyprofit')initMonthlyProfit();if(name==='assistantmonthly')initAssistantMonthly();if(name==='todo')initTodo();if(name==='calculated')initCalcEV(0);if(name==='oddschecker')initOddscheckerEV();else stopOddscheckerEVRefresh();}
 const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger',bettracking:'bettracking',stats:'stats-menu'};
 function showTopSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='stats')renderStatsMenu();if(name==='calc')loadOddscheckerEV();stopOddscheckerEVRefresh();}
 
@@ -11756,10 +11756,16 @@ function deriveBfexFair(runner) {
 // oc-scraper's ev_engine.compute_header_otb_ev_bets) and shows up on the Oddschecker +EV page
 // instead, so this function no longer touches Oddschecker at all.
 async function runScanCore(matchId, home, away, competition) {
-  // Fetch lineups, BB odds and Betfair in parallel.
-  const [lineupData, , bfexData] = await Promise.all([
-    fetch(`/.netlify/functions/lineups?matchId=${matchId}`)
-      .then(r => r.json()).catch(() => ({ ok: false })),
+  // Lineups first, on their own — a predicted (not yet confirmed) XI isn't worth scanning at
+  // all, so bail here before spending a round-trip on WH/BFEX/BB for a fixture we're going to
+  // skip anyway. Same "only ever act on a confirmed lineup" rule the server-side Header/OTB
+  // scanner applies (ev_engine.is_lineup_confirmed).
+  const lineupData = await fetch(`/.netlify/functions/lineups?matchId=${matchId}`)
+    .then(r => r.json()).catch(() => ({ ok: false }));
+  if (!lineupData.ok || !lineupData.confirmed) return [];
+
+  // Fetch BB odds and Betfair in parallel.
+  const [, bfexData] = await Promise.all([
     fetchBBOdds(matchId, home, away),
     fetch(`/.netlify/functions/betfair-proxy?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`)
       .then(r => r.json()).catch(() => ({ ok: false }))
@@ -11852,12 +11858,6 @@ async function runScanCore(matchId, home, away, competition) {
     for (const p of whLfPlayers)     whLookups.lf_goal[p.name.toLowerCase()] = p;
     for (const p of whRfPlayers)     whLookups.rf_goal[p.name.toLowerCase()] = p;
     for (const p of wh6ydPlayers)    whLookups.six_yd[p.name.toLowerCase()] = p;
-
-    // Check lineups loaded
-    if (!lineupData.ok) {
-      console.warn(`No lineups for ${home} v ${away}`);
-      return [];
-    }
 
     const allPlayers = [];
     for (const team of [lineupData.home, lineupData.away]) {
