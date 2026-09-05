@@ -325,7 +325,7 @@ input::placeholder{color:var(--text3)}
     </div>
     <div class="cat" onclick="showSec('calculated')">
       <div class="cat-ico" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-trending-up"></i></div>
-      <div><div class="cat-title">Calculated +EV</div><div class="cat-desc">Model-derived value — header scorer, custom markets</div><div class="cat-tag" style="background:var(--purple-bg);color:var(--purple)">Coming soon</div></div>
+      <div><div class="cat-title">Calculated +EV</div><div class="cat-desc">Model-derived value — left/right foot &amp; 6-yard box (William Hill)</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
     <div class="cat" onclick="showSec('calculators')">
@@ -2220,7 +2220,7 @@ input::placeholder{color:var(--text3)}
     <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--amber);display:inline-block"></span>Usable but thinner BFEX data</span>
   </div>
   <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">BFex fair</th><th class="r">Last traded</th><th class="r">Total traded</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th></th></tr></thead><tbody id="scanner-body"></tbody></table></div></div>
-  <div class="note"><i class="ti ti-info-circle"></i> Auto-refreshes every 60s. Scanning starts once a match's lineup is confirmed and runs every 10 minutes until kickoff — First Goalscorer, Anytime Goalscorer, Player Shown a Card and Player Shots on Target markets, sorted by EV%.</div>
+  <div class="note"><i class="ti ti-info-circle"></i> Auto-refreshes every 60s. Scanning starts once a match's lineup is confirmed and runs every 10 minutes until kickoff — First Goalscorer, Anytime Goalscorer, Player Shown a Card, Player Shots on Target, Header goal and Outside-the-Box goal markets, sorted by EV%. Header/OTB fair odds are derived from BFEX AGS x FotMob headed/OTB shot share rather than a direct BFEX price — Betfair doesn't offer either market outright.</div>
 </div>
 
 <!-- DDHH -->
@@ -2260,46 +2260,20 @@ input::placeholder{color:var(--text3)}
 <!-- CALCULATED EV -->
 <div id="view-calculated" class="sec">
   <button class="back" onclick="backToCalcMenu()"><i class="ti ti-arrow-left"></i> Menu</button>
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0">
     <div class="sec-title" style="margin-bottom:0">Calculated +EV</div>
     <div style="display:flex;gap:8px">
-      <button onclick="initCalcEV(0)" style="display:flex;align-items:center;gap:6px;background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Today</button>
-      <button onclick="initCalcEV(1)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit" id="cev-tomorrow-btn">Tomorrow</button>
+      <button onclick="initCalcEV(0)" style="display:flex;align-items:center;gap:6px;background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Today</button>
+      <button onclick="initCalcEV(1)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit" id="cev-tomorrow-btn">Tomorrow</button>
     </div>
   </div>
+  <div class="smeta" id="cev-smeta" style="display:none"><span class="pulse"></span><strong id="cev-smeta-count" style="color:var(--green);font-weight:500"></strong></div>
 
   <div id="cev-status"></div>
-  <div id="cev-fixtures"></div>
-  <div id="cev-scan-all-wrap" style="display:none;margin-bottom:16px">
-    <button onclick="scanAllOC(this)" style="display:flex;align-items:center;gap:6px;background:var(--green);color:#fff;border:none;border-radius:var(--radius);padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-bolt"></i> Scan All</button>
+  <div id="cev-results" style="display:none;margin-top:10px">
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="cev-tbody"></tbody></table></div></div>
   </div>
-
-  <div id="cev-results" style="display:none">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <span style="font-size:13px;font-weight:600" id="cev-results-title"></span>
-      <button onclick="document.getElementById('cev-results').style.display='none'" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px"><i class="ti ti-x"></i></button>
-    </div>
-    <div class="card" style="overflow-x:auto">
-      <table class="dt" style="min-width:1100px">
-        <thead>
-          <tr>
-            <th>Match</th>
-            <th>Player</th>
-            <th>Market</th>
-            <th class="r">BB Fair</th>
-            <th class="r">BFEX</th>
-            <th class="r">Curr Team</th>
-            <th class="r">Season</th>
-            <th class="r"></th>
-            <th class="r">Odds</th>
-            <th>Bookie</th>
-            <th class="r">EV%</th>
-          </tr>
-        </thead>
-        <tbody id="cev-tbody"></tbody>
-      </table>
-    </div>
-  </div>
+  <div class="note"><i class="ti ti-info-circle"></i> Left Foot Goal, Right Foot Goal and 6 Yard Box — William Hill vs a BFEX-AGS-derived fair, sorted by EV%. Header and Outside-the-Box goal now run automatically against Oddschecker instead — see <a href="javascript:void(0)" onclick="showSec('oddschecker')">Oddschecker +EV</a>.</div>
 </div>
 
 <!-- MANUAL CALCULATORS -->
@@ -11657,12 +11631,15 @@ function calcAutoGSM(s,ags,so,sotV,pen){
 // ── CALCULATED +EV ─────────────────────────────────────────────────────────
 let cevFixtures = [];
 
+// Fetches today's/tomorrow's fixtures, then immediately scans every one of them for
+// Left-Foot/Right-Foot/6-Yard-Box value (the only markets left here — Header/OTB moved to
+// the automated Oddschecker +EV pipeline, see that page's note) and renders straight to a
+// bets table in the same shape as Oddschecker +EV. No manual per-fixture step any more.
 async function initCalcEV(dayOffset = 0) {
   const statusEl = document.getElementById('cev-status');
-  const fixturesEl = document.getElementById('cev-fixtures');
   document.getElementById('cev-results').style.display = 'none';
-  fixturesEl.innerHTML = '';
-  statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t">Loading today's matches...</div></div></div>`;
+  document.getElementById('cev-smeta').style.display = 'none';
+  statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t">Loading fixtures...</div></div></div>`;
 
   try {
     const now = new Date();
@@ -11670,7 +11647,6 @@ async function initCalcEV(dayOffset = 0) {
     const date = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
     const r = await fetch(`/.netlify/functions/fixtures?date=${date}`);
     const data = await r.json();
-    statusEl.innerHTML = '';
     if (!data.ok || !data.leagues?.length) {
       statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-calendar-off"></i></div><div class="ph-t">No fixtures today</div></div></div>`;
       return;
@@ -11681,75 +11657,11 @@ async function initCalcEV(dayOffset = 0) {
         cevFixtures.push({ ...m, leagueName: league.name });
       });
     });
-    renderCEVFixtures(data.leagues);
-    document.getElementById('cev-scan-all-wrap').style.display = '';
+    await scanAllCalcEV(statusEl);
   } catch(err) {
     statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-wifi-off"></i></div><div class="ph-t">Failed to load fixtures</div><div class="ph-d">${err.message}</div></div></div>`;
   }
 }
-
-function renderCEVFixtures(leagues) {
-  const wrap = document.getElementById('cev-fixtures');
-  wrap.innerHTML = '';
-  leagues.forEach(league => {
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.style.marginBottom = '12px';
-    let html = `<div class="card-h">${league.name}</div>`;
-    league.matches.forEach(m => {
-      const timeStr = m.utcTime ? fmtKickoff(m.utcTime) : 'TBC';
-      const key = `${slugifyOC(m.home)}-v-${slugifyOC(m.away)}`;
-      const saved = OC_MARKET_IDS[key] ? OC_MARKET_IDS[key].split(',') : ['','','',''];
-      html += `<div style="padding:10px 16px;border-bottom:.5px solid var(--border)">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-          <span style="font-size:12px;color:var(--text3);white-space:nowrap">${timeStr}</span>
-          <span style="font-size:13px;font-weight:500">${m.home} v ${m.away}</span>
-        </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <input placeholder="Header ID" value="${saved[0]}" id="mid-${key}-0" oninput="saveOCMarketId('${key}',[0,1,2,3].map(i=>document.getElementById('mid-${key}-'+i)?.value.trim()||'').join(','))" style="width:120px;padding:5px 8px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:11px;font-family:inherit">
-          <input placeholder="OTB ID" value="${saved[1]}" id="mid-${key}-1" oninput="saveOCMarketId('${key}',[0,1,2,3].map(i=>document.getElementById('mid-${key}-'+i)?.value.trim()||'').join(','))" style="width:120px;padding:5px 8px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:11px;font-family:inherit">
-          <input placeholder="Headed SOT ID" value="${saved[2]}" id="mid-${key}-2" oninput="saveOCMarketId('${key}',[0,1,2,3].map(i=>document.getElementById('mid-${key}-'+i)?.value.trim()||'').join(','))" style="width:120px;padding:5px 8px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:11px;font-family:inherit">
-          <input placeholder="SOT OTB ID" value="${saved[3]}" id="mid-${key}-3" oninput="saveOCMarketId('${key}',[0,1,2,3].map(i=>document.getElementById('mid-${key}-'+i)?.value.trim()||'').join(','))" style="width:120px;padding:5px 8px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);font-size:11px;font-family:inherit">
-          <button onclick="scanOC('${m.id}','${m.home.replace(/'/g,"\\'")}','${m.away.replace(/'/g,"\\'")}','${league.name.replace(/'/g,"\\'")}',this)"
-            style="background:var(--surface2);border:.5px solid var(--border);border-radius:var(--radius);padding:6px 14px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--text2);white-space:nowrap;transition:all .15s"
-            onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'"
-            onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">
-            <i class="ti ti-search"></i> Scan OC
-          </button>
-        </div>
-      </div>`;
-    });
-    card.innerHTML = html;
-    wrap.appendChild(card);
-  });
-}
-const BOOKIE_NAMES = {
-  'CE':  'Coral',
-  'AKB': 'AK Bets',
-  'LD':  'Ladbrokes',
-  'UN':  'Unibet',
-  'VE':  'Virgin Bet',
-  'B3':  'Bet365',
-  'PP':  'Paddy Power',
-  'QN':  'QuinnBet',
-  'BAH': 'Bet Ahoy',
-  'BTT': 'Bet Tom',
-  'SX':  'Spreadex',
-  'WH':  'William Hill',
-  'G5':  'Bet Goodwin',
-  'KN':  'BetMGM',
-  'FR':  'Betfred',
-  'SI':  'Sporting Index',
-  'SK':  'Sky Bet',
-  'PUP': 'PricedUp',
-  'S6':  'Star Sports',
-  'OE':  '10Bet',
-  'WA':  'Betway',
-  'BRS': 'BresBet',
-  'VC':  'Bet Victor',
-  'EE':  '888 Sport',
-  'BY':  'Boylesports',
-};
 function slugifyOC(str) {
   return (str||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 }
@@ -11759,21 +11671,6 @@ function getOCCompSlug(c) {
   for(const[k,v]of Object.entries(map))if(s.includes(k))return v;
   return slugifyOC(c);
 }
-const OC_MARKET_IDS_DEFAULT = {
-  'norway-v-france': '3584916118,3584916120,3585092326,3585077698',
-  'senegal-v-iraq':  '3584926835,3584926838,3585094430,3585077705',
-};
-// Merge with any saved in localStorage
-const OC_MARKET_IDS_SAVED = JSON.parse(localStorage.getItem('bb_oc_market_ids') || '{}');
-const OC_MARKET_IDS = { ...OC_MARKET_IDS_DEFAULT, ...OC_MARKET_IDS_SAVED };
-
-function saveOCMarketId(key, ids) {
-  const saved = JSON.parse(localStorage.getItem('bb_oc_market_ids') || '{}');
-  saved[key] = ids;
-  localStorage.setItem('bb_oc_market_ids', JSON.stringify(saved));
-  OC_MARKET_IDS[key] = ids;
-}
-
 async function fetchWHMarket(home, away, query, marketFilter) {
   try {
     const q = encodeURIComponent(query);
@@ -11853,23 +11750,14 @@ function deriveBfexFair(runner) {
   return { fair, confidence };
 }
 
-async function runScanCore(matchId, home, away, competition, idsArr) {
-  // Pairs each ID with its market key BEFORE filtering, so gaps (a market with no ID
-  // entered) don't shift positions — the request and the result-parsing below both derive
-  // from this same filtered list, so they always stay in sync regardless of which ones are
-  // actually provided.
-  const OC_MARKET_KEY_ORDER = ['header', 'otb', 'headed_sot', 'sot_otb'];
-  const providedMarkets = OC_MARKET_KEY_ORDER
-    .map((key, i) => ({ key, id: (idsArr[i] || '').trim() }))
-    .filter(m => m.id);
-  const ids = providedMarkets.map(m => m.id).join(',');
-  const hasAnyIds = providedMarkets.length > 0;
-
-  // Step 1: Fetch OC odds (only if at least one ID is present), lineups, BB odds and Betfair in parallel
-  const [ocRaw, lineupData, , bfexData] = await Promise.all([
-    hasAnyIds
-      ? fetch(`https://www.oddschecker.com/api/markets/v2/all-odds?market-ids=${ids}&repub=OC`).then(r => r.json()).catch(() => [])
-      : Promise.resolve([]),
+// Scans one fixture for Left-Foot/Right-Foot/6-Yard-Box value (William Hill vs a BFEX-AGS-
+// derived fair — see calcAutoGSM). Header/OTB goal used to live here too via manually-entered
+// Oddschecker market IDs; that's now automated server-side against Oddschecker directly (see
+// oc-scraper's ev_engine.compute_header_otb_ev_bets) and shows up on the Oddschecker +EV page
+// instead, so this function no longer touches Oddschecker at all.
+async function runScanCore(matchId, home, away, competition) {
+  // Fetch lineups, BB odds and Betfair in parallel.
+  const [lineupData, , bfexData] = await Promise.all([
     fetch(`/.netlify/functions/lineups?matchId=${matchId}`)
       .then(r => r.json()).catch(() => ({ ok: false })),
     fetchBBOdds(matchId, home, away),
@@ -11947,40 +11835,7 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
       return { fair, confidence };
     }
 
-    // Step 2: Parse OC odds into lookup by market → player name — uses the same
-    // providedMarkets list the request was built from, so a result's position always maps
-    // to the correct market key regardless of which ones were actually provided.
-    const ocMarkets = {};
-
-    for (const mkt of (Array.isArray(ocRaw) ? ocRaw : [])) {
-      const found = providedMarkets.find(m => m.id === String(mkt.marketId));
-      if (!found) continue;
-      const mkey = found.key;
-      if (!ocMarkets[mkey]) ocMarkets[mkey] = {};
-      const byBet = {};
-      for (const bet of (mkt.odds ?? [])) {
-        if (bet.status !== 'ACTIVE') continue;
-        const id = bet.betId;
-        if (!byBet[id]) byBet[id] = { name: '', odds: {} };
-        const code = bet.bookmakerCode ?? '';
-        const dec = parseFloat(bet.oddsDecimal ?? 0);
-        if (code && dec > 1) byBet[id].odds[code] = dec;
-        if (!byBet[id].name && bet.bookmakerSelectionId) {
-          const nm = bet.bookmakerSelectionId.match(/([A-Za-z+]+\+[A-Za-z+]+)\*/);
-          if (nm) byBet[id].name = nm[1].replace(/\+/g, ' ');
-        }
-      }
-      for (const { name, odds } of Object.values(byBet)) {
-        if (!name || !Object.keys(odds).length) continue;
-        const best = Math.max(...Object.values(odds));
-        ocMarkets[mkey][name.toLowerCase()] = {
-          name, odds, best,
-          bestBook: Object.entries(odds).find(([,v]) => v === best)?.[0] ?? ''
-        };
-      }
-    }
-
-    // Step 3: Fetch all WH markets in parallel
+    // Fetch all WH markets in parallel
     const [whSotOtbPlayers, whLfPlayers, whRfPlayers, wh6ydPlayers] = await Promise.all([
       fetchWHMarket(home, away, `${home} ${away} shot on target from outside the penalty area`, 'outside'),
       fetchWHMarket(home, away, 'to score with left foot', 'with left foot'),
@@ -11998,7 +11853,7 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
     for (const p of whRfPlayers)     whLookups.rf_goal[p.name.toLowerCase()] = p;
     for (const p of wh6ydPlayers)    whLookups.six_yd[p.name.toLowerCase()] = p;
 
-    // Step 4: Check lineups loaded
+    // Check lineups loaded
     if (!lineupData.ok) {
       console.warn(`No lineups for ${home} v ${away}`);
       return [];
@@ -12011,7 +11866,7 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
       for (const p of [...starters, ...bench]) allPlayers.push({ id: p.id, name: p.name });
     }
 
-    // Step 5: Fetch player stats for all players in parallel
+    // Fetch player stats for all players in parallel
     let fetched = 0;
     const statsMap = {};
     await Promise.allSettled(allPlayers.map(async p => {
@@ -12023,7 +11878,9 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
       fetched++;
     }));
 
-    // Step 6: Calculate EV for each player × market × timeframe
+    // Calculate EV for each player × market × timeframe. Every remaining market is
+    // William-Hill-sourced (useWH — Betfair/Oddschecker don't offer any of these outright),
+    // unlike the removed header/otb/headed_sot entries which read straight Oddschecker odds.
     const TIMEFRAMES = [
       { key: 'currentTeam',   label: 'Curr Team' },
       { key: 'currentSeason', label: 'This Season' },
@@ -12032,9 +11889,6 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
     ];
 
     const MARKET_CONFIG = [
-      { key: 'header',   label: 'Header Scorer',   calcKey: 'headerGoal', needsAGS: true,  isShot: false, useWH: false },
-      { key: 'otb',      label: 'Score OTB',        calcKey: 'otbGoal',    needsAGS: true,  isShot: false, useWH: false },
-      { key: 'headed_sot', label: 'Headed SOT 1+',  calcKey: 'headedSOTs', needsAGS: false, isShot: true,  useWH: false },
       { key: 'sot_otb',  label: 'SOT Outside Box',  calcKey: 'otbSOTP',    needsAGS: false, isShot: true,  useWH: true,  whKey: 'sot_otb' },
       { key: 'lf_goal',  label: 'Left Foot Goal',   calcKey: 'lfGoal',     needsAGS: true,  isShot: false, useWH: true,  whKey: 'lf_goal' },
       { key: 'rf_goal',  label: 'Right Foot Goal',  calcKey: 'rfGoal',     needsAGS: true,  isShot: false, useWH: true,  whKey: 'rf_goal' },
@@ -12104,8 +11958,8 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
             bfexPrice,
             bfexEv: null,
             bfexConfidence,
-            tfs: TIMEFRAMES.map(tf => ({ label: tf.label, fairOdds: null, ev: null, quality: 'none' })),
             bestEv: null,
+            bestFair: null,
             isConfident: false,
             noCalc: true,
           });
@@ -12113,22 +11967,12 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
         }
 
         if (market.needsAGS && !ags) continue;
-        if (!market.needsAGS && !market.useWH && !sotV) continue;
 
-        // Get OC/WH price for this player
-        let ocPrice = null, ocBook = null;
-        if (market.useWH) {
-          const lookup = whLookups[market.whKey] ?? {};
-          const entry = Object.entries(lookup).find(([k]) => fuzzyMatch(k, player.name));
-          if (entry) { ocPrice = entry[1].best; ocBook = 'William Hill'; }
-        } else {
-          const mktPlayers = ocMarkets[market.key] ?? {};
-          const entry = Object.entries(mktPlayers).find(([k]) => fuzzyMatch(k, player.name));
-          if (entry) {
-            ocPrice = entry[1].best;
-            ocBook = BOOKIE_NAMES[entry[1].bestBook] || entry[1].bestBook;
-          }
-        }
+        // Get William Hill price for this player — every remaining market is WH-sourced.
+        const lookup = whLookups[market.whKey] ?? {};
+        const entry = Object.entries(lookup).find(([k]) => fuzzyMatch(k, player.name));
+        const ocPrice = entry ? entry[1].best : null;
+        const ocBook = entry ? 'William Hill' : null;
 
         if (!ocPrice) continue;
 
@@ -12148,12 +11992,14 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
         const agsForCalc = (market.needsAGS && bfexPrice) ? bfexPrice : ags;
         const sotForCalc = (!market.needsAGS && market.isShot && bfexPrice) ? bfexPrice : sotV;
 
-        // Recalculate all timeframes using BFEX input if available
-        const tfs = [];
+        // Recalculate every timeframe using BFEX input where available, keeping whichever
+        // gives the best (highest) positive EV — same "best of 4 timeframes" rule the
+        // Oddschecker +EV server pipeline applies to Header/OTB.
+        let bestEv = null, bestFair = null;
         for (const tf of TIMEFRAMES) {
           const tfStats = statsData.timeframes?.[tf.key];
           const quality = dataQuality(tfStats, market);
-          if (quality === 'none') { tfs.push({ label: tf.label, fairOdds: null, ev: null, quality }); continue; }
+          if (quality === 'none') continue;
 
           const result = calcAutoGSM(
             tfStats,
@@ -12172,34 +12018,23 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
               fairOdds = result[market.calcKey];
             }
           }
-
-          if (!fairOdds || !isFinite(fairOdds) || fairOdds <= 1) {
-            tfs.push({ label: tf.label, fairOdds: null, ev: null, quality });
-            continue;
-          }
+          if (!fairOdds || !isFinite(fairOdds) || fairOdds <= 1) continue;
 
           const ev = ((ocPrice / fairOdds) - 1) * 100;
-          tfs.push({ label: tf.label, fairOdds: fairOdds.toFixed(2), ev: ev.toFixed(1), quality });
+          if (ev > 0 && (bestEv === null || ev > bestEv)) { bestEv = ev; bestFair = fairOdds; }
         }
 
-        const evTfs = tfs.filter(t => t.ev !== null && parseFloat(t.ev) > 0);
-        if (!evTfs.length) continue;
-
-        const bestEv = Math.max(...evTfs.map(t => parseFloat(t.ev)));
-        const bfexEv = null; // not used — EV is from timeframe GSM calcs
+        if (bestEv === null) continue;
 
         evBets.push({
           player: player.name,
           match: `${home} v ${away}`,
           market: market.label,
-          bbFair: market.needsAGS ? ags : sotV,
           ocOdds: ocPrice.toFixed(2),
           bookie: ocBook,
-          bfexPrice,
-          bfexEv,
           bfexConfidence,
-          tfs,
           bestEv,
+          bestFair,
           isConfident,
         });
       }
@@ -12211,61 +12046,31 @@ async function runScanCore(matchId, home, away, competition, idsArr) {
       return (b.bestEv ?? 0) - (a.bestEv ?? 0);
     });
 
-    // Filter out clearly erroneous results (>500% EV)
-    const filteredBets = evBets.filter(b => b.noCalc || (b.bestEv ?? 0) <= 500);
-    return evBets;
+    // Filter out clearly erroneous results (>500% EV) — previously computed but never
+    // actually applied (this function returned the unfiltered list), so a bad data point
+    // could show as a 1000%+ "value bet"; now it's actually used.
+    return evBets.filter(b => b.noCalc || (b.bestEv ?? 0) <= 500);
 }
 
-async function scanOC(matchId, home, away, competition, btn) {
-  const origHtml = btn.innerHTML;
-  btn.disabled = true;
-  try {
-    const key = `${slugifyOC(home)}-v-${slugifyOC(away)}`;
-    const idsArr = [0,1,2,3].map(i => document.getElementById(`mid-${key}-${i}`)?.value.trim() || '');
-    if (idsArr.filter(Boolean).length === 0) {
-      alert('Please fill in at least one market ID');
-      return;
-    }
-    btn.innerHTML = '<i class="ti ti-loader"></i> Scanning...';
-    const evBets = await runScanCore(matchId, home, away, competition, idsArr);
-    renderEVResults(`${home} v ${away} — +EV bets`, evBets);
-  } catch(err) {
-    console.error('scanOC error:', err);
-    alert(`Scan failed: ${err.message}`);
-  } finally {
-    btn.innerHTML = origHtml;
-    btn.disabled = false;
-  }
-}
-
-async function scanAllOC(btn) {
-  const origHtml = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = '<i class="ti ti-loader"></i> Scanning...';
-
-  // Collect all fixtures that have at least one market ID filled in
-  const toScan = [];
-  for (const fixture of cevFixtures) {
-    const key = `${slugifyOC(fixture.home)}-v-${slugifyOC(fixture.away)}`;
-    const ids = [0,1,2,3].map(i => document.getElementById(`mid-${key}-${i}`)?.value.trim() || '');
-    const hasIds = ids.some(Boolean);
-    // Always include for WH markets even without OC IDs
-    toScan.push({ fixture, key, ids });
-  }
-
-  if (!toScan.length) {
-    alert('No fixtures loaded — click Today or Tomorrow first');
-    btn.innerHTML = origHtml;
-    btn.disabled = false;
+// Scans every fixture loaded for today/tomorrow and renders straight to the results table —
+// no manual per-fixture step, called automatically by initCalcEV.
+async function scanAllCalcEV(statusEl) {
+  if (!cevFixtures.length) {
+    statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-calendar-off"></i></div><div class="ph-t">No fixtures today</div></div></div>`;
     return;
   }
 
+  const smetaEl = document.getElementById('cev-smeta');
+  const smetaCount = document.getElementById('cev-smeta-count');
+  smetaEl.style.display = '';
+
   const allEvBets = [];
-  for (const { fixture, key, ids } of toScan) {
-    btn.innerHTML = `<i class="ti ti-loader"></i> Scanning ${fixture.home} v ${fixture.away}...`;
+  for (const fixture of cevFixtures) {
+    smetaCount.textContent = `Scanning ${fixture.home} v ${fixture.away}...`;
     try {
-      // Reuse scanOC core by calling it with a dummy btn that doesn't render
-      const bets = await runScanCore(fixture.id, fixture.home, fixture.away, fixture.leagueName, ids);
+      const bets = await runScanCore(fixture.id, fixture.home, fixture.away, fixture.leagueName);
+      const t = fixture.utcTime ? fmtKickoff(fixture.utcTime) : 'TBC';
+      bets.forEach(b => { b.t = t; });
       allEvBets.push(...bets);
     } catch(e) {
       console.warn(`Scan failed for ${fixture.home} v ${fixture.away}:`, e.message);
@@ -12278,145 +12083,46 @@ async function scanAllOC(btn) {
     return (b.bestEv ?? 0) - (a.bestEv ?? 0);
   });
 
-  renderEVResults(`+EV Bets — All Matches`, allEvBets);
-  btn.innerHTML = origHtml;
-  btn.disabled = false;
+  statusEl.innerHTML = '';
+  smetaCount.textContent = `${allEvBets.length} bet${allEvBets.length === 1 ? '' : 's'} found`;
+  renderEVResults(allEvBets);
 }
 
-
-function renderEVResults(title, bets) {
+// Same table shape as the Oddschecker +EV page — Time/Match/Market/Selection/Fair/Bookie/Odds/EV%.
+function renderEVResults(bets) {
   const resultsEl = document.getElementById('cev-results');
   const tbody = document.getElementById('cev-tbody');
-  document.getElementById('cev-results-title').textContent = title || '+EV Bets';
   tbody.innerHTML = '';
 
   if (!bets.length) {
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:32px;font-size:13px">No +EV bets found</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:32px;font-size:13px">No +EV bets found</td></tr>`;
     resultsEl.style.display = '';
-    resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
     return;
   }
 
   for (const bet of bets) {
     const ev = bet.bestEv;
-    const evCol = ev >= 20 ? 'var(--green)' : ev >= 10 ? 'var(--amber)' : 'var(--blue)';
-    const evBg  = ev >= 20 ? 'var(--green-bg)' : ev >= 10 ? 'var(--amber-bg)' : 'var(--blue-bg)';
-    // Row colour: noCalc = subtle grey, confident = none, low data = amber
-    const rowStyle = bet.noCalc ? 'background:var(--surface2)' : (bet.isConfident ? '' : 'background:var(--amber-bg)');
-
-    // Build 2 timeframe cells: Curr Team + best season column + flag
-    const tfByKey = {};
-    bet.tfs.forEach(tf => {
-      if (tf.label === 'Curr Team') tfByKey.currTeam = tf;
-      else if (tf.label === 'This Season') tfByKey.thisSeason = tf;
-      else if (tf.label === '+Last Season') tfByKey.lastSeason = tf;
-      else if (tf.label === '+2 Seasons') tfByKey.last2Seasons = tf;
-    });
-
-    // Determine which season column to show
-    // Use This Season if it has high quality data (≥20 matches implied by 'high' quality)
-    const useThisSeason = tfByKey.thisSeason?.quality === 'high';
-    const seasonCol = useThisSeason ? tfByKey.thisSeason : tfByKey.lastSeason;
-
-    const renderTf = (tf) => {
-      if (!tf || tf.fairOdds === null) return `<td class="r tn" style="color:var(--text3)">—</td>`;
-      const tfEv = parseFloat(tf.ev);
-      const col = tfEv > 0 ? 'var(--green)' : 'var(--text2)';
-      const conf = tf.quality === 'high' ? '' : 'opacity:0.6;';
-      return `<td class="r tn" style="color:${col};${conf}">${tf.fairOdds}</td>`;
-    };
-
-    // Flag if +2 Seasons differs by >50% from season column
-    let flagCell = `<td class="r tn"></td>`;
-    if (seasonCol?.fairOdds && tfByKey.last2Seasons?.fairOdds) {
-      const diff = Math.abs(parseFloat(tfByKey.last2Seasons.fairOdds) - parseFloat(seasonCol.fairOdds)) / parseFloat(seasonCol.fairOdds);
-      if (diff > 0.5) {
-        flagCell = `<td class="r tn" title="+2 Seasons: ${tfByKey.last2Seasons.fairOdds}"><span style="color:var(--amber);font-size:13px" title="+2 Seasons fair: ${tfByKey.last2Seasons.fairOdds}">⚠</span></td>`;
-      }
-    }
-
-    const tfCells = renderTf(tfByKey.currTeam) + renderTf(seasonCol) + flagCell;
-
-    // EV% cell
-    const evCell = bet.noCalc
-      ? `<td class="r"><span class="badge" style="background:var(--surface);color:var(--text3);border:.5px solid var(--border)">No calc</span></td>`
-      : `<td class="r"><span class="badge" style="background:${evBg};color:${evCol}">+${ev.toFixed(1)}%</span></td>`;
+    const evCol = bet.noCalc ? 'var(--text3)' : (ev >= 20 ? 'var(--green)' : ev >= 10 ? 'var(--amber)' : 'var(--blue)');
+    const evBg  = bet.noCalc ? 'var(--surface2)' : (ev >= 20 ? 'var(--green-bg)' : ev >= 10 ? 'var(--amber-bg)' : 'var(--blue-bg)');
+    const evLabel = bet.noCalc ? 'No calc' : `+${ev.toFixed(1)}%`;
+    const fairLabel = bet.bestFair ? bet.bestFair.toFixed(2) : '—';
+    const rowStyle = bet.noCalc ? '' : (bet.isConfident ? '' : 'background:var(--amber-bg)');
 
     const tr = document.createElement('tr');
     tr.style.cssText = rowStyle;
-
-    // BFEX price cell (single column, no EV%)
-    let bfexCell;
-    if (!bet.bfexPrice || bet.bfexConfidence === 'red') {
-      bfexCell = `<td class="r tn" style="color:var(--red)">—</td>`;
-    } else {
-      const priceCol = bet.bfexConfidence === 'green' ? 'var(--green)' : 'var(--amber)';
-      bfexCell = `<td class="r tn" style="color:${priceCol};font-weight:500">${parseFloat(bet.bfexPrice).toFixed(2)}</td>`;
-    }
-
     tr.innerHTML = `
+      <td style="font-size:12px;color:var(--text3);white-space:nowrap">${bet.t ?? ''}</td>
       <td style="font-size:12px;color:var(--text3);white-space:nowrap">${bet.match ?? ''}</td>
-      <td style="font-weight:500">${bet.player}</td>
       <td style="font-size:12px;color:var(--text2)">${bet.market}</td>
-      <td class="r tn" style="color:var(--blue);font-weight:500">${bet.bbFair ? bet.bbFair.toFixed(2) : '—'}</td>
-      ${bfexCell}
-      ${tfCells}
+      <td style="font-weight:500">${bet.player}</td>
+      <td class="r tn" style="font-weight:500">${fairLabel}</td>
+      <td class="r" style="font-size:12px;color:var(--text2)">${bet.bookie}</td>
       <td class="r tn" style="font-weight:600;color:var(--green)">${bet.ocOdds}</td>
-      <td style="font-size:12px;color:var(--text2)">${bet.bookie}</td>
-      ${evCell}`;
+      <td class="r"><span class="badge" style="background:${evBg};color:${evCol}">${evLabel}</span></td>`;
     tbody.appendChild(tr);
   }
 
-  // Legend
-  const legend = document.createElement('tr');
-  legend.innerHTML = `<td colspan="12" style="padding:10px 16px;font-size:11px;color:var(--text2);border-top:.5px solid var(--border)">
-    <span style="display:inline-block;width:10px;height:10px;background:var(--surface);border:.5px solid var(--border);border-radius:2px;margin-right:4px"></span>High data confidence &nbsp;·&nbsp;
-    <span style="display:inline-block;width:10px;height:10px;background:var(--amber-bg);border:.5px solid var(--amber-bd);border-radius:2px;margin-right:4px"></span>Low data (xG &lt;10 / shots &lt;50 / SOT &lt;20) &nbsp;·&nbsp;
-    <span style="display:inline-block;width:10px;height:10px;background:var(--surface2);border:.5px solid var(--border);border-radius:2px;margin-right:4px"></span>No fair odds calc yet &nbsp;·&nbsp;
-    Faded fair odds = below minimum threshold
-  </td>`;
-  tbody.appendChild(legend);
-
   resultsEl.style.display = '';
-  resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-function renderCEVResults(home, away, data) {
-  const resultsEl = document.getElementById('cev-results');
-  const tbody = document.getElementById('cev-tbody');
-  document.getElementById('cev-results-title').textContent = `${home} v ${away} — OC prices`;
-  tbody.innerHTML = '';
-  const MARKET_META = [
-    { key: 'header',     label: 'To Score a Header' },
-    { key: 'otb',        label: 'Score Outside Box' },
-    { key: 'headed_sot', label: 'Headed Shots On Target' },
-    { key: 'sot_otb',    label: 'SOT Outside Box' },
-  ];
-
-  let hasData = false;
-  MARKET_META.forEach(({ key, label }) => {
-    const players = data.markets?.[key] ?? [];
-    if (!players.length) {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td colspan="3" style="color:var(--text3);font-size:12px;font-style:italic;padding:8px 16px">${label}: No data</td>`;
-      tbody.appendChild(tr);
-      return;
-    }
-    hasData = true;
-    const hdr = document.createElement('tr');
-    hdr.innerHTML = `<td colspan="3" style="background:var(--surface2);font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;padding:8px 16px;border-top:.5px solid var(--border)">${label}</td>`;
-    tbody.appendChild(hdr);
-    [...players].sort((a,b) => a.best - b.best).forEach(p => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td style="font-weight:500">${p.name}</td><td style="font-size:12px;color:var(--text3)">${BOOKIE_NAMES[p.bestBook]||p.bestBook||''}</td><td class="r tn" style="font-weight:600;color:var(--green)">${p.best.toFixed(2)}</td>`;
-      tbody.appendChild(tr);
-    });
-  });
-
-  if (!hasData) {
-    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No prices found${data.eventId ? ` — event ID: ${data.eventId}` : ''}</td></tr>`;
-  }
-  resultsEl.style.display = '';
-  resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 let bbMatchOdds=null,bfexMatchOdds=null,lineupMarketType=null,lineupMethodKey=null;
