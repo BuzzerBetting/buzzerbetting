@@ -2220,7 +2220,7 @@ input::placeholder{color:var(--text3)}
     <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--amber);display:inline-block"></span>Usable but thinner BFEX data</span>
   </div>
   <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">BFex fair</th><th class="r">Last traded</th><th class="r">Total traded</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th></th></tr></thead><tbody id="scanner-body"></tbody></table></div></div>
-  <div class="note"><i class="ti ti-info-circle"></i> Auto-refreshes every 60s. Scanning starts once a match's lineup is confirmed and runs every 10 minutes until kickoff — First Goalscorer, Anytime Goalscorer, Player Shown a Card, Player Shots on Target, Header goal and Outside-the-Box goal markets, sorted by EV%. Header/OTB fair odds are derived from BFEX AGS x FotMob headed/OTB shot share rather than a direct BFEX price — Betfair doesn't offer either market outright.</div>
+  <div class="note"><i class="ti ti-info-circle"></i> Auto-refreshes every 60s. Scanning starts once a match's lineup is confirmed and runs every 10 minutes until kickoff — First Goalscorer, Anytime Goalscorer, Player Shown a Card and Player Shots on Target markets, sorted by EV%. These all compare Oddschecker directly against the matching BFEX market. Header and Outside-the-Box goal need their own fair-odds calculation instead (no direct BFEX market for either) — see <a href="javascript:void(0)" onclick="showSec('calculated')">Calculated +EV</a>.</div>
 </div>
 
 <!-- DDHH -->
@@ -2273,7 +2273,7 @@ input::placeholder{color:var(--text3)}
   <div id="cev-results" style="display:none;margin-top:10px">
     <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="cev-tbody"></tbody></table></div></div>
   </div>
-  <div class="note"><i class="ti ti-info-circle"></i> Left Foot Goal, Right Foot Goal and 6 Yard Box — William Hill vs a BFEX-AGS-derived fair, sorted by EV%. Header and Outside-the-Box goal now run automatically against Oddschecker instead — see <a href="javascript:void(0)" onclick="showSec('oddschecker')">Oddschecker +EV</a>.</div>
+  <div class="note"><i class="ti ti-info-circle"></i> Markets with no direct Betfair equivalent — Header and Outside-the-Box goal (Oddschecker, auto-detected, no more manual market IDs) and Left Foot/Right Foot/6 Yard Box (William Hill) — all vs a BFEX-AGS-derived fair, sorted by EV%. Direct BFEX comparisons (AGS/FGS/Cards/SOT) live on <a href="javascript:void(0)" onclick="showSec('oddschecker')">Oddschecker +EV</a> instead.</div>
 </div>
 
 <!-- MANUAL CALCULATORS -->
@@ -11651,9 +11651,14 @@ async function initCalcEV(dayOffset = 0) {
       statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-calendar-off"></i></div><div class="ph-t">No fixtures today</div></div></div>`;
       return;
     }
+    // Skip anything already underway or finished — a match that's kicked off has no "before
+    // kickoff" value left to find here, and its lineup being confirmed doesn't change that.
+    // Same "not yet started" rule oc-scraper applies server-side (oc_scraper_service.py's
+    // _time_to_ko_minutes filter), just not applied at all here before now.
     cevFixtures = [];
     data.leagues.forEach(league => {
       league.matches.forEach(m => {
+        if (m.started || m.finished) return;
         cevFixtures.push({ ...m, leagueName: league.name });
       });
     });
@@ -12076,6 +12081,23 @@ async function scanAllCalcEV(statusEl) {
       console.warn(`Scan failed for ${fixture.home} v ${fixture.away}:`, e.message);
     }
   }
+
+  // Also pull in the server-computed Header/OTB bets (BFEX AGS x FotMob shot-share — see
+  // oc-scraper's ev_engine.compute_header_otb_ev_bets) alongside the client-side WH-based
+  // Left Foot/Right Foot/6 Yard Box/SOT-Outside-Box scan above — same table, one merge.
+  // Market IDs for these are auto-detected server-side now, no manual entry needed.
+  try {
+    const r = await fetch('/.netlify/functions/oc-calc-ev');
+    const d = await r.json();
+    if (d.ok && Array.isArray(d.bets)) {
+      d.bets.forEach(b => allEvBets.push({
+        t: b.t, match: b.match, market: b.mkt, player: b.sel,
+        bestFair: b.fair, bookie: b.bk,
+        ocOdds: typeof b.odds === 'number' ? b.odds.toFixed(2) : b.odds,
+        bestEv: b.ev, isConfident: b.conf === 'green', noCalc: false,
+      }));
+    }
+  } catch(e) { console.warn('oc-calc-ev fetch failed:', e.message); }
 
   allEvBets.sort((a, b) => {
     if (a.noCalc && !b.noCalc) return 1;
