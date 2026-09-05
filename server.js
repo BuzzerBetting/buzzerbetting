@@ -143,6 +143,25 @@ app.get('/api/oc-ev', (req, res) => {
   }
 });
 
+// GET /api/oc-calc-ev — the "calculated" counterpart to /api/oc-ev above: Header and
+// Outside-the-Box goal bets, where Betfair has no direct market to compare Oddschecker's
+// price against (see ev_engine.compute_header_otb_ev_bets — fair price is BFEX AGS x
+// FotMob headed/OTB shot-share, not a straight BFEX price read). Deliberately a separate
+// file/feed from oc_ev_bets.json rather than merged into it — Oddschecker +EV is reserved
+// for markets with a direct 1:1 Betfair comparison (AGS/FGS/Cards/SOT); anything requiring
+// the app's own GSM-style calculation belongs on the Calculated +EV page instead, same
+// split as before this got automated, just without manual market-ID entry any more.
+const OC_CALC_EV_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'oc_calc_ev_bets.json');
+app.get('/api/oc-calc-ev', (req, res) => {
+  if (!fs.existsSync(OC_CALC_EV_PATH)) return res.json({ ok: true, updated: null, bets: [] });
+  try {
+    const payload = JSON.parse(fs.readFileSync(OC_CALC_EV_PATH, 'utf8'));
+    res.json({ ok: true, updated: payload.updated || null, bets: payload.bets || [] });
+  } catch (e) {
+    res.json({ ok: false, error: 'Failed reading oc_calc_ev_bets.json: ' + e.message });
+  }
+});
+
 // POST /api/oc-ev/refresh — kicks off the same run_pipeline.sh the systemd timer fires every
 // 10 minutes, on demand. Deliberately fire-and-forget (returns immediately, doesn't wait for
 // the scrape to finish) rather than blocking the request: a full run takes 15-60s depending
