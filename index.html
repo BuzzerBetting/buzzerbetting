@@ -724,6 +724,39 @@ input::placeholder{color:var(--text3)}
   </div>
 
   <div id="bets-content" style="display:none">
+    <!-- Corners-only extras (shown when Bet type = Corners): Discord auto-entry + CSV export -->
+    <div id="crn-discord-card" style="display:none;border:.5px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:600;font-size:13px"><i class="ti ti-brand-discord" style="color:#5865F2"></i> Discord auto-entry</div>
+          <div style="font-size:11px;color:var(--text3)" id="crn-discord-status">Loading…</div>
+        </div>
+        <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;user-select:none">
+          <input type="checkbox" id="crn-discord-toggle" onchange="onCrnDiscordToggle()"> Parsing on
+        </label>
+      </div>
+      <div id="crn-discord-config" style="display:none;margin-top:12px">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <select id="crn-discord-account" style="padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text1);font-size:13px;font-family:inherit;min-width:240px"></select>
+          <input id="crn-discord-stake" type="number" step="0.01" min="0" placeholder="Fallback stake (optional)" style="width:190px;padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text1);font-size:13px;font-family:inherit">
+          <button onclick="saveCrnDiscordConfig()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit">Save</button>
+          <span id="crn-discord-msg" style="font-size:12px"></span>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px">Books each parsed corner slip on the selected account with the stake from the screenshot (fallback used only if that can't be read).</div>
+      </div>
+      <div id="crn-discord-recent" style="margin-top:10px;font-size:11px;color:var(--text3)"></div>
+    </div>
+    <div id="crn-export-card" style="display:none;border:.5px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-bottom:16px">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div style="font-weight:600;font-size:13px"><i class="ti ti-file-export"></i> Export CSV</div>
+        <label class="lbl" style="margin:0">Date</label>
+        <input type="date" id="crn-export-date" style="padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text1);font-size:13px;font-family:inherit">
+        <button onclick="crnExportRun(this)" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-download"></i> Export</button>
+        <span id="crn-export-msg" style="font-size:12px;color:var(--text3)"></span>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px">Downloads every corner bet logged on that date (manual, Quick Bet and Discord) as a CSV.</div>
+    </div>
+
     <div class="card card-pad" style="margin-bottom:16px">
       <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleBetsAddForm()">
         <div class="sec-title" style="margin:0;font-size:16px"><i class="ti ti-plus"></i> Add new bet</div>
@@ -769,41 +802,6 @@ input::placeholder{color:var(--text3)}
     </div>
 
     <div id="bet-entry-note" style="display:none;margin-bottom:14px;padding:10px 14px;background:var(--amber-bg);color:var(--amber);border-radius:var(--radius);font-size:12.5px"></div>
-
-    <!-- Discord corner-slip auto-entry — only shown for Buzzer / Corners, admin only. -->
-    <div id="crn-discord-card" style="display:none;border:.5px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-        <div>
-          <div style="font-weight:600;font-size:13px"><i class="ti ti-brand-discord" style="color:#5865F2"></i> Discord auto-entry</div>
-          <div style="font-size:11px;color:var(--text3)" id="crn-discord-status">Loading…</div>
-        </div>
-        <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;user-select:none">
-          <input type="checkbox" id="crn-discord-toggle" onchange="onCrnDiscordToggle()"> Parsing on
-        </label>
-      </div>
-      <div id="crn-discord-config" style="display:none;margin-top:12px">
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <select id="crn-discord-account" style="padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text1);font-size:13px;font-family:inherit;min-width:240px"></select>
-          <input id="crn-discord-stake" type="number" step="0.01" min="0" placeholder="Fallback stake (optional)" style="width:190px;padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text1);font-size:13px;font-family:inherit">
-          <button onclick="saveCrnDiscordConfig()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit">Save</button>
-          <span id="crn-discord-msg" style="font-size:12px"></span>
-        </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:6px">Books each parsed corner slip on the selected account with the stake from the screenshot (fallback used only if that can't be read).</div>
-      </div>
-      <div id="crn-discord-recent" style="margin-top:10px;font-size:11px;color:var(--text3)"></div>
-    </div>
-
-    <!-- Corner bets CSV export (a day's bets, to send to Dan) — Buzzer / Corners only. -->
-    <div id="crn-export-card" style="display:none;border:.5px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-bottom:14px">
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <div style="font-weight:600;font-size:13px"><i class="ti ti-file-export"></i> Export CSV</div>
-        <label class="lbl" style="margin:0">Date</label>
-        <input type="date" id="crn-export-date" style="padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text1);font-size:13px;font-family:inherit">
-        <button onclick="crnExportRun(this)" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-download"></i> Export</button>
-        <span id="crn-export-msg" style="font-size:12px;color:var(--text3)"></span>
-      </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:6px">Downloads every corner bet logged on that date (manual, Quick Bet and Discord) as a CSV.</div>
-    </div>
 
     <!-- Backlog entry: off by default (bet logs under today's date, as always). Ticked, it
          swaps in a typed DD/MM/YYYY date instead (slashes auto-inserted as you type digits) —
