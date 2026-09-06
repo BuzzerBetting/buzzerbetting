@@ -13082,8 +13082,11 @@ function baSetCount(key, n){
 function baUpdateMenuTag(){
   const el = document.getElementById('betalerts-menu-tag');
   if (!el) return;
-  const total = BA_EDGES.reduce((s, e) => s + (BA_COUNTS[e.key] || 0), 0);
-  el.textContent = total ? `${total} live` : '—';
+  // Corners run into the dozens vs a handful of value bets — show them separately so the
+  // value count isn't swamped. "value" = every edge except Corners.
+  const corners = BA_COUNTS['corners'] || 0;
+  const value = BA_EDGES.reduce((s, e) => s + (e.key === 'corners' ? 0 : (BA_COUNTS[e.key] || 0)), 0);
+  el.textContent = (value || corners) ? `${value} value · ${corners} corner` : '—';
 }
 function baTab(key){ activateBaTab(key); }
 function activateBaTab(key){
