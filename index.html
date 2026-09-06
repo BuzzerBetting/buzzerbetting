@@ -3814,8 +3814,10 @@ function selectBetType(type, label) {
   if (cfg.note) { noteEl.style.display = 'block'; noteEl.innerHTML = `<i class="ti ti-info-circle"></i> ${cfg.note}`; }
   else { noteEl.style.display = 'none'; }
 
-  // Corners-only extras under Buzzer: Discord auto-entry (admin only) + CSV export.
-  const isBuzzerCorners = type === 'Corners' && betEntryLastGroup === 'buzzer';
+  // Corners-only extras: Discord auto-entry (admin only) + CSV export. Corners is only ever
+  // a Buzzer sheet, and selectBetType is reached from both the button flow and the Ledger >
+  // Bets dropdown flow (which doesn't set betEntryLastGroup), so key on the type alone.
+  const isBuzzerCorners = type === 'Corners';
   const dcard = document.getElementById('crn-discord-card');
   if (dcard) {
     if (isBuzzerCorners && CURRENT_USER_ROLE === 'admin') loadCrnDiscordConfig();
