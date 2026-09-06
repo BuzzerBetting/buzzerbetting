@@ -18,7 +18,7 @@ const fs = require('fs');
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' };
 const BFEX_BASE = 'https://api.betfair.com/exchange/betting/rest/v1.0';
-const MOTOR_SPORT_EVENT_TYPE_ID = '7';
+const MOTOR_SPORT_EVENT_TYPE_ID = '8'; // Betfair: 1=Soccer, 7=Horse Racing, 8=Motor Sport
 
 // Betfair market names we care about -> our feed key. Matched case-insensitively as a
 // substring so "Race Winner" / "Winner" both land on `winner`, etc.
@@ -133,7 +133,7 @@ async function buildF1(appKey, session) {
       eventTypeIds: [MOTOR_SPORT_EVENT_TYPE_ID],
       marketStartTime: { from: now.toISOString(), to: to.toISOString() },
     },
-    marketProjection: ['EVENT', 'MARKET_START_TIME', 'RUNNER_DESCRIPTION'],
+    marketProjection: ['EVENT', 'COMPETITION', 'MARKET_START_TIME', 'RUNNER_DESCRIPTION'],
     sort: 'FIRST_TO_START',
     maxResults: 400,
   }, appKey, session);
@@ -143,7 +143,8 @@ async function buildF1(appKey, session) {
   const byEvent = {};
   for (const m of catalogue || []) {
     const evName = m.event && m.event.name ? m.event.name : '';
-    const looksF1 = /grand prix|formula 1|f1\b/i.test(evName) || /grand prix|formula 1/i.test((m.competition && m.competition.name) || '');
+    const compName = (m.competition && m.competition.name) || '';
+    const looksF1 = /grand prix|formula 1|f1\b|\bgp\b/i.test(evName) || /formula 1|f1\b/i.test(compName);
     if (!looksF1) continue;
     const cls = classifyMarket(m.marketName);
     if (!cls) continue;
@@ -153,7 +154,12 @@ async function buildF1(appKey, session) {
     if (new Date(m.marketStartTime) < new Date(byEvent[id].startTime)) byEvent[id].startTime = m.marketStartTime;
   }
   const events = Object.values(byEvent).filter((e) => e.markets.winner).sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
-  if (!events.length) return { ok: true, race: null, markets: { winner: [], podium: [], top6: [], points: [] } };
+  if (!events.length) {
+    // help the next debugging pass see what the catalogue actually held
+    const seenEvents = [...new Set((catalogue || []).map((m) => `${m.event && m.event.name}`))].slice(0, 15);
+    const seenMarkets = [...new Set((catalogue || []).map((m) => m.marketName))].slice(0, 25);
+    return { ok: true, race: null, markets: { winner: [], podium: [], top6: [], points: [] }, debug: { seenEvents, seenMarkets } };
+  }
   const race = events[0];
 
   const wantKeys = ['winner', 'podium', 'top6', 'points'];
