@@ -423,4 +423,9 @@ try { db.exec(`ALTER TABLE bet_legs ADD COLUMN commission REAL`); } catch (e) { 
 // every non-back leg and every other bet type. See legCommitted() in ledger-routes.js.
 try { db.exec(`ALTER TABLE bet_legs ADD COLUMN free_bet INTEGER DEFAULT 0`); } catch (e) { /* already exists */ }
 
+// When the Discord corners toggle is flipped on, this is set to the id of the last message
+// the bot reacted to — the bot catches up on everything since, then clears it. NULL = live
+// only, no backfill.
+try { db.exec(`ALTER TABLE discord_corners_config ADD COLUMN catchup_from TEXT`); } catch (e) { /* already exists */ }
+
 module.exports = db;

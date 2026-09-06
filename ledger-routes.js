@@ -2951,14 +2951,26 @@ const _bookCornerBet = db.transaction((fields, account_id, stake, date) => {
   return betId;
 });
 
+// The last message the bot actually reacted to — the point a catch-up resumes from.
+function lastReactedMessageId() {
+  const r = db.prepare(
+    `SELECT message_id FROM discord_corner_posts WHERE status IN ('booked','skipped','error','duplicate')
+     ORDER BY CAST(message_id AS INTEGER) DESC LIMIT 1`
+  ).get();
+  return r ? r.message_id : null;
+}
+
 function discordCornersConfig() {
-  const row = db.prepare(`SELECT * FROM discord_corners_config WHERE id = 1`).get() || { enabled: 0, account_id: null, default_stake: null };
+  const row = db.prepare(`SELECT * FROM discord_corners_config WHERE id = 1`).get() || { enabled: 0, account_id: null, default_stake: null, catchup_from: null };
   let account_label = null;
   if (row.account_id) {
     const a = db.prepare(`SELECT account_id, bookie, profile FROM accounts WHERE id = ?`).get(row.account_id);
     if (a) account_label = `${a.account_id || '—'} · ${a.bookie} · ${a.profile}`;
   }
-  return { enabled: !!row.enabled, account_id: row.account_id || null, account_label, default_stake: row.default_stake ?? null };
+  return {
+    enabled: !!row.enabled, account_id: row.account_id || null, account_label,
+    default_stake: row.default_stake ?? null, catchup_from: row.catchup_from || null,
+  };
 }
 
 // GET /api/ledger/discord-corners-config
@@ -2978,12 +2990,25 @@ router.post('/discord-corners-config', requireAdmin, (req, res) => {
     const { enabled, account_id, default_stake } = req.body || {};
     const acct = account_id ? db.prepare(`SELECT id FROM accounts WHERE id = ?`).get(account_id) : null;
     if (enabled && !acct) return res.status(400).json({ ok: false, error: 'Pick a valid account before turning the bot on.' });
+    const wasEnabled = !!(db.prepare(`SELECT enabled FROM discord_corners_config WHERE id = 1`).get() || {}).enabled;
+    // Flipping on: tell the bot to catch up on everything since the last slip it reacted to.
+    // Flipping off (or staying off): clear any pending catch-up.
+    const catchupFrom = (enabled && !wasEnabled) ? lastReactedMessageId() : null;
     db.prepare(
       `UPDATE discord_corners_config
-         SET enabled = ?, account_id = ?, default_stake = ?, updated_at = datetime('now'), updated_by = ?
+         SET enabled = ?, account_id = ?, default_stake = ?, catchup_from = ?, updated_at = datetime('now'), updated_by = ?
        WHERE id = 1`
-    ).run(enabled ? 1 : 0, acct ? account_id : null, default_stake != null && default_stake !== '' ? Number(default_stake) : null, req.username || null);
+    ).run(enabled ? 1 : 0, acct ? account_id : null, default_stake != null && default_stake !== '' ? Number(default_stake) : null, catchupFrom, req.username || null);
     res.json({ ok: true, ...discordCornersConfig() });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/discord-corners-catchup-clear — bot calls this once it's finished a
+// catch-up run (ledger-key gate only, no session).
+router.post('/discord-corners-catchup-clear', (req, res) => {
+  try {
+    db.prepare(`UPDATE discord_corners_config SET catchup_from = NULL WHERE id = 1`).run();
+    res.json({ ok: true });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
@@ -3010,7 +3035,8 @@ router.post('/discord-corners-book', async (req, res) => {
     if (existing && existing.status === 'booked') return res.json({ ok: true, status: 'duplicate', betId: existing.bet_id });
 
     const cfg = discordCornersConfig();
-    if (!cfg.enabled || !cfg.account_id) { record('disabled', 'Bot is off or no account set'); return res.json({ ok: true, status: 'disabled' }); }
+    // Bot off / no account: do nothing at all — no audit row, no reaction.
+    if (!cfg.enabled || !cfg.account_id) return res.json({ ok: true, status: 'disabled' });
 
     // Discord CDN URLs are short-lived — fetch straight away.
     const imgRes = await fetch(image_url);
