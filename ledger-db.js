@@ -363,6 +363,34 @@ CREATE TABLE IF NOT EXISTS bet_alert_posts (
 );
 CREATE INDEX IF NOT EXISTS idx_bet_alert_posts_edge_day ON bet_alert_posts(edge, day);
 
+-- ================== DISCORD CORNER-BET AUTO-ENTRY ==================
+-- Single-row config for the Discord bot (discord-corners-bot.js) that reads Betfred corner
+-- bet-builder screenshots posted to a channel and books them as 'Corners' bets. The bot
+-- only acts when enabled=1 AND account_id is set — both controlled from the site (Corners
+-- tracker section). default_stake is used only when a slip's stake can't be read.
+CREATE TABLE IF NOT EXISTS discord_corners_config (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  enabled INTEGER NOT NULL DEFAULT 0,
+  account_id INTEGER,
+  default_stake REAL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_by TEXT
+);
+INSERT OR IGNORE INTO discord_corners_config (id, enabled) VALUES (1, 0);
+
+-- One row per Discord message the bot has handled — dedupe across restarts + an audit trail.
+CREATE TABLE IF NOT EXISTS discord_corner_posts (
+  message_id TEXT PRIMARY KEY,
+  channel_id TEXT,
+  image_url TEXT,
+  parsed TEXT,                 -- JSON of the parsed slip
+  bet_id INTEGER,              -- set when status='booked'
+  status TEXT NOT NULL,        -- 'booked' | 'skipped' | 'error' | 'disabled' | 'duplicate'
+  note TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_discord_corner_posts_created ON discord_corner_posts(created_at);
+
 -- Which bookmakers the Bet Alerts bookmaker filter currently has ticked. Only books the
 -- user has actively toggled get a row; anything absent is treated as enabled by the
 -- frontend (default-on, merged over BOOKIES_LIST). Same one-row-per-bookie shape as

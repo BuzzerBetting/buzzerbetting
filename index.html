@@ -1928,6 +1928,27 @@ input::placeholder{color:var(--text3)}
   <div id="ts-personal-corners" class="tracker-section" style="display:none">
     <button class="back" onclick="backToTrackerSection('personal')"><i class="ti ti-arrow-left"></i> Personal bets</button>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px"><div class="sec-title" style="margin-bottom:0">Corners</div><button onclick="openCornersSection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'"><i class="ti ti-refresh"></i> Refresh</button></div>
+    <div class="card" id="crn-discord-card" style="padding:14px 18px;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:600;font-size:13px"><i class="ti ti-brand-discord" style="color:#5865F2"></i> Discord auto-entry</div>
+          <div style="font-size:11px;color:var(--text3)" id="crn-discord-status">Loading…</div>
+        </div>
+        <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;user-select:none">
+          <input type="checkbox" id="crn-discord-toggle" onchange="onCrnDiscordToggle()"> Parsing on
+        </label>
+      </div>
+      <div id="crn-discord-config" style="display:none;margin-top:12px">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <select id="crn-discord-account" style="padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text1);font-size:13px;font-family:inherit;min-width:240px"></select>
+          <input id="crn-discord-stake" type="number" step="0.01" min="0" placeholder="Fallback stake (optional)" style="width:190px;padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text1);font-size:13px;font-family:inherit">
+          <button onclick="saveCrnDiscordConfig()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit">Save</button>
+          <span id="crn-discord-msg" style="font-size:12px"></span>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px">Books each parsed corner slip on the selected account with the stake from the screenshot (fallback used only if that can't be read).</div>
+      </div>
+      <div id="crn-discord-recent" style="margin-top:10px;font-size:11px;color:var(--text3)"></div>
+    </div>
     <div id="crn-status-card" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="crn-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="crn-status-title">Loading...</div><div class="ph-d" id="crn-status-msg"></div></div></div></div>
     <div id="crn-kpi-wrap" style="display:none"><div class="kpis" id="crn-kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px"></div></div>
     <div id="crn-table-wrap" style="display:none"><div class="card"><div style="padding:12px 20px;border-bottom:.5px solid var(--border)"><span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500" id="crn-table-hdr">Bets</span></div><div style="overflow-x:auto;max-height:520px;overflow-y:auto"><table class="dt" style="min-width:580px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr><th style="min-width:72px">Date</th><th>Result</th><th style="min-width:120px">Assist</th><th style="min-width:120px">Scorer</th><th class="r">Odds</th><th class="r">Stake</th><th class="r">P/L</th></tr></thead><tbody id="crn-tbody"></tbody></table></div></div></div>
@@ -10727,7 +10748,82 @@ function renderOtherTable(rows,summary){
 }
 
 // ── CORNERS ──
-function openCornersSection(){openTrkSection({prefix:'crn',tab:'Corners',render:renderCornersTable});}
+function openCornersSection(){openTrkSection({prefix:'crn',tab:'Corners',render:renderCornersTable});loadCrnDiscordConfig();}
+
+// ── Discord corner-bet auto-entry (config panel in the Corners tracker section) ──
+let CRN_DISCORD_CFG = { enabled: false, account_id: null, default_stake: null };
+async function loadCrnDiscordConfig(){
+  const card = document.getElementById('crn-discord-card');
+  if (card) card.style.display = CURRENT_USER_ROLE === 'admin' ? 'block' : 'none';
+  if (CURRENT_USER_ROLE !== 'admin') return;
+  let d;
+  try { d = await ledgerApi('discord-corners-config'); } catch(e) { return; }
+  if (!d || !d.ok) return;
+  CRN_DISCORD_CFG = { enabled: !!d.enabled, account_id: d.account_id || null, default_stake: d.default_stake ?? null };
+  const toggle = document.getElementById('crn-discord-toggle');
+  const cfgPanel = document.getElementById('crn-discord-config');
+  const statusEl = document.getElementById('crn-discord-status');
+  if (toggle) toggle.checked = d.enabled;
+  if (cfgPanel) cfgPanel.style.display = 'none'; // opens when the user flips the toggle
+  if (statusEl) statusEl.textContent = d.enabled
+    ? `On — booking to ${d.account_label || 'account ' + d.account_id}${d.default_stake ? `, fallback £${d.default_stake}` : ''}`
+    : (d.account_id ? `Off (account set: ${d.account_label || d.account_id})` : 'Off — no account selected yet');
+  await populateCrnDiscordAccounts(d.account_id);
+  const stakeEl = document.getElementById('crn-discord-stake');
+  if (stakeEl) stakeEl.value = d.default_stake ?? '';
+  renderCrnDiscordRecent(d.recent || []);
+}
+async function populateCrnDiscordAccounts(selectedId){
+  const sel = document.getElementById('crn-discord-account');
+  if (!sel) return;
+  let accts = [];
+  try { const a = await ledgerApi('accounts?excludeClosed=1'); if (a.ok) accts = a.accounts || []; } catch(e) {}
+  accts.sort((x, y) => (/(betfred)/i.test(y.bookie) - /(betfred)/i.test(x.bookie)) || String(x.bookie).localeCompare(y.bookie));
+  sel.innerHTML = '<option value="">Select account…</option>' + accts.map(a =>
+    `<option value="${a.id}" ${String(a.id) === String(selectedId) ? 'selected' : ''}>${a.account_id || '—'} · ${a.bookie} · ${a.profile}</option>`).join('');
+}
+function renderCrnDiscordRecent(recent){
+  const el = document.getElementById('crn-discord-recent');
+  if (!el) return;
+  if (!recent.length) { el.textContent = ''; return; }
+  const ic = { booked: '✅', skipped: '⚠️', error: '❌', disabled: '💤', duplicate: '🔁' };
+  el.innerHTML = '<div style="font-weight:600;margin-bottom:3px">Recent</div>' + recent.slice(0, 6).map(r => {
+    const p = r.parsed || {};
+    const who = p.scorerPlayer ? `${p.assistPlayer || '?'} → ${p.scorerPlayer}` : '(unreadable)';
+    return `<div>${ic[r.status] || '•'} ${who}${r.note ? ` — ${r.note}` : (r.bet_id ? ` — bet #${r.bet_id}` : '')}</div>`;
+  }).join('');
+}
+function onCrnDiscordToggle(){
+  const toggle = document.getElementById('crn-discord-toggle');
+  const cfgPanel = document.getElementById('crn-discord-config');
+  if (toggle.checked) {
+    // Turning on always needs an account confirmed — reveal the picker and wait for Save.
+    cfgPanel.style.display = 'block';
+    document.getElementById('crn-discord-msg').innerHTML = '<span style="color:var(--amber)">Pick an account, then Save to start.</span>';
+  } else {
+    // Turning off is immediate.
+    saveCrnDiscordConfig(true);
+  }
+}
+async function saveCrnDiscordConfig(turningOff){
+  const toggle = document.getElementById('crn-discord-toggle');
+  const msg = document.getElementById('crn-discord-msg');
+  const account_id = document.getElementById('crn-discord-account').value || null;
+  const stakeRaw = document.getElementById('crn-discord-stake').value;
+  const enabled = turningOff ? false : toggle.checked;
+  if (enabled && !account_id) { if (msg) msg.innerHTML = '<span style="color:var(--red)">Pick an account first.</span>'; return; }
+  try {
+    const d = await ledgerApi('discord-corners-config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled, account_id, default_stake: stakeRaw === '' ? null : Number(stakeRaw) }),
+    });
+    if (!d.ok) { if (msg) msg.innerHTML = `<span style="color:var(--red)">${d.error || 'Failed to save'}</span>`; toggle.checked = CRN_DISCORD_CFG.enabled; return; }
+    if (msg) msg.innerHTML = '<span style="color:var(--green)">Saved.</span>';
+    document.getElementById('crn-discord-config').style.display = 'none';
+    setTimeout(() => { if (msg) msg.innerHTML = ''; }, 2500);
+    loadCrnDiscordConfig();
+  } catch(e) { if (msg) msg.innerHTML = '<span style="color:var(--red)">Network error.</span>'; toggle.checked = CRN_DISCORD_CFG.enabled; }
+}
 function renderCornersTable(rows,summary){
   const tbody=document.getElementById('crn-tbody');tbody.innerHTML='';
   let wins=0,losses=0,pl=0;

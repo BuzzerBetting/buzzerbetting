@@ -2845,43 +2845,54 @@ function fractionalToDecimal(str) {
   return +(Number(m[1]) / Number(m[2]) + 1).toFixed(3);
 }
 
+// Core screenshot -> parsed-slip step, shared by POST /parse-betslip (Quick Bet paste) and
+// POST /discord-corners-book (the Discord bot). Takes raw base64 (no data: prefix) + a
+// mediaType hint; returns the model's JSON object with oddsDecimal filled in from fractional.
+async function runBetslipModel(base64Data, mediaType) {
+  const client = getAnthropic();
+  if (!client) throw new Error('Screenshot parsing is not configured on the server (no ANTHROPIC_API_KEY).');
+  const media = /jpe?g/i.test(mediaType || '') ? 'image/jpeg'
+    : /webp/i.test(mediaType || '') ? 'image/webp' : 'image/png';
+  const msg = await client.messages.create({
+    model: BETSLIP_MODEL,
+    max_tokens: 1024,
+    output_config: { effort: 'low' },
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: media, data: base64Data } },
+        { type: 'text', text: BETSLIP_PROMPT },
+      ],
+    }],
+  });
+  const text = (msg.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
+  let parsed;
+  try { parsed = JSON.parse(text); }
+  catch (e) {
+    const m = text.match(/\{[\s\S]*\}/);
+    parsed = JSON.parse(m ? m[0] : '{}');
+  }
+  if (parsed.oddsDecimal == null && parsed.oddsFractional) parsed.oddsDecimal = fractionalToDecimal(parsed.oddsFractional);
+  return parsed;
+}
+
 router.post('/parse-betslip', requireAdmin, async (req, res) => {
   const t0 = Date.now();
   try {
     console.log('[parse-betslip] request received, body image chars =', (req.body && req.body.image || '').length);
-    const client = getAnthropic();
-    if (!client) return res.json({ ok: false, error: 'Screenshot parsing is not configured on the server yet.' });
+    if (!getAnthropic()) return res.json({ ok: false, error: 'Screenshot parsing is not configured on the server yet.' });
 
     const { image, mediaType } = req.body || {};
     if (!image || typeof image !== 'string') return res.status(400).json({ ok: false, error: 'image (base64) required' });
     const data = image.replace(/^data:[^,]+,/, '');
-    const media = /jpe?g/i.test(mediaType || '') ? 'image/jpeg'
-      : /webp/i.test(mediaType || '') ? 'image/webp' : 'image/png';
 
-    // effort:low keeps the round-trip within the Netlify function timeout (~10s) for this
-    // simple extraction; the frontend proxies through /.netlify/functions/ledger.
-    const msg = await client.messages.create({
-      model: BETSLIP_MODEL,
-      max_tokens: 1024,
-      output_config: { effort: 'low' },
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: media, data } },
-          { type: 'text', text: BETSLIP_PROMPT },
-        ],
-      }],
-    });
-
-    console.log('[parse-betslip] model replied in', ((Date.now() - t0) / 1000).toFixed(1) + 's, stop=' + msg.stop_reason);
-    const text = (msg.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
     let parsed;
-    try { parsed = JSON.parse(text); }
-    catch (e) {
-      const m = text.match(/\{[\s\S]*\}/);
-      try { parsed = JSON.parse(m ? m[0] : ''); }
-      catch (e2) { return res.json({ ok: false, error: 'Could not read the screenshot — try a clearer crop.' }); }
+    try {
+      parsed = await runBetslipModel(data, mediaType);
+    } catch (e) {
+      return res.json({ ok: false, error: 'Could not read the screenshot — try a clearer crop.' });
     }
+    console.log('[parse-betslip] model replied in', ((Date.now() - t0) / 1000).toFixed(1) + 's');
 
     if (parsed.oddsDecimal == null && parsed.oddsFractional) parsed.oddsDecimal = fractionalToDecimal(parsed.oddsFractional);
 
@@ -2919,6 +2930,126 @@ router.post('/parse-betslip', requireAdmin, async (req, res) => {
   } catch (err) {
     console.error('[parse-betslip]', err && err.message);
     res.json({ ok: false, error: 'Screenshot read failed: ' + (err && err.message || 'unknown error') });
+  }
+});
+
+// ================== DISCORD CORNER-BET AUTO-ENTRY ==================
+// Config + booking endpoints for discord-corners-bot.js. The bot posts each corner-slip
+// image to /discord-corners-book; everything else (parse, validate, book) is here so the
+// bot stays a thin relay.
+
+// Books one 'Corners' bet, single real-stake leg — minimal self-contained version of the
+// /bets route's placeBet, since the bot always books an open, real-money, one-account bet.
+const _bookCornerBet = db.transaction((fields, account_id, stake, date) => {
+  const info = db.prepare(
+    `INSERT INTO bets (bet_type, date, fields, total_stake, result, pl) VALUES ('Corners', ?, ?, ?, 'open', 0)`
+  ).run(date, JSON.stringify(fields), stake);
+  const betId = info.lastInsertRowid;
+  db.prepare(`INSERT INTO bet_legs (bet_id, account_id, stake) VALUES (?, ?, ?)`).run(betId, account_id, stake);
+  db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`).run(stake, account_id);
+  return betId;
+});
+
+function discordCornersConfig() {
+  const row = db.prepare(`SELECT * FROM discord_corners_config WHERE id = 1`).get() || { enabled: 0, account_id: null, default_stake: null };
+  let account_label = null;
+  if (row.account_id) {
+    const a = db.prepare(`SELECT account_id, bookie, profile FROM accounts WHERE id = ?`).get(row.account_id);
+    if (a) account_label = `${a.account_id || '—'} · ${a.bookie} · ${a.profile}`;
+  }
+  return { enabled: !!row.enabled, account_id: row.account_id || null, account_label, default_stake: row.default_stake ?? null };
+}
+
+// GET /api/ledger/discord-corners-config
+router.get('/discord-corners-config', (req, res) => {
+  try {
+    const cfg = discordCornersConfig();
+    const recent = db.prepare(
+      `SELECT message_id, status, note, bet_id, parsed, created_at FROM discord_corner_posts ORDER BY created_at DESC LIMIT 10`
+    ).all().map(r => ({ ...r, parsed: (() => { try { return JSON.parse(r.parsed); } catch (e) { return null; } })() }));
+    res.json({ ok: true, ...cfg, recent });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/discord-corners-config  body: { enabled, account_id, default_stake }
+router.post('/discord-corners-config', requireAdmin, (req, res) => {
+  try {
+    const { enabled, account_id, default_stake } = req.body || {};
+    const acct = account_id ? db.prepare(`SELECT id FROM accounts WHERE id = ?`).get(account_id) : null;
+    if (enabled && !acct) return res.status(400).json({ ok: false, error: 'Pick a valid account before turning the bot on.' });
+    db.prepare(
+      `UPDATE discord_corners_config
+         SET enabled = ?, account_id = ?, default_stake = ?, updated_at = datetime('now'), updated_by = ?
+       WHERE id = 1`
+    ).run(enabled ? 1 : 0, acct ? account_id : null, default_stake != null && default_stake !== '' ? Number(default_stake) : null, req.username || null);
+    res.json({ ok: true, ...discordCornersConfig() });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/discord-corners-book  body: { message_id, channel_id, image_url }
+// Called only by the bot (server-level x-ledger-key gate is enough — no user session).
+// Always returns { ok:true, status, ... } so the bot can react without treating a business
+// outcome as a transport failure.
+router.post('/discord-corners-book', async (req, res) => {
+  const { message_id, channel_id, image_url } = req.body || {};
+  if (!message_id || !image_url) return res.status(400).json({ ok: false, error: 'message_id and image_url required' });
+
+  const record = (status, note, bet_id, parsed) => {
+    try {
+      db.prepare(
+        `INSERT INTO discord_corner_posts (message_id, channel_id, image_url, parsed, bet_id, status, note)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(message_id) DO UPDATE SET status = excluded.status, note = excluded.note, bet_id = excluded.bet_id, parsed = excluded.parsed`
+      ).run(message_id, channel_id || null, image_url, parsed ? JSON.stringify(parsed) : null, bet_id || null, status, note || null);
+    } catch (e) { console.error('[discord-corners-book] audit write failed:', e.message); }
+  };
+
+  try {
+    const existing = db.prepare(`SELECT status, bet_id FROM discord_corner_posts WHERE message_id = ?`).get(message_id);
+    if (existing && existing.status === 'booked') return res.json({ ok: true, status: 'duplicate', betId: existing.bet_id });
+
+    const cfg = discordCornersConfig();
+    if (!cfg.enabled || !cfg.account_id) { record('disabled', 'Bot is off or no account set'); return res.json({ ok: true, status: 'disabled' }); }
+
+    // Discord CDN URLs are short-lived — fetch straight away.
+    const imgRes = await fetch(image_url);
+    if (!imgRes.ok) { record('error', `image fetch HTTP ${imgRes.status}`); return res.json({ ok: true, status: 'error', note: `couldn't download the image (HTTP ${imgRes.status})` }); }
+    const buf = Buffer.from(await imgRes.arrayBuffer());
+    const mediaType = imgRes.headers.get('content-type') || (/\.jpe?g/i.test(image_url) ? 'image/jpeg' : /\.webp/i.test(image_url) ? 'image/webp' : 'image/png');
+
+    let parsed;
+    try { parsed = await runBetslipModel(buf.toString('base64'), mediaType); }
+    catch (e) { record('error', 'parse failed: ' + e.message); return res.json({ ok: true, status: 'error', note: 'could not read the screenshot' }); }
+
+    const odds = parsed.oddsDecimal;
+    const scorer = parsed.scorerPlayer || null;
+    let stake = parsed.stake != null ? Number(parsed.stake) : (cfg.default_stake != null ? Number(cfg.default_stake) : null);
+    const miss = [];
+    if (!(odds > 1)) miss.push('odds');
+    if (!scorer) miss.push('scorer leg');
+    if (!(stake > 0)) miss.push('stake (and no default set)');
+    if (miss.length) { record('skipped', 'missing ' + miss.join(', '), null, parsed); return res.json({ ok: true, status: 'skipped', note: 'not booked — missing ' + miss.join(', ') }); }
+
+    let teamGuess = null;
+    if (_playerLookup && scorer) { try { const g = _playerLookup.guessTeam(scorer); if (g && g.team) teamGuess = g.team; } catch (e) {} }
+
+    const fields = {
+      Bookie: parsed.bookmaker || 'Betfred',
+      Team: teamGuess || '',
+      Assist: parsed.assistPlayer || '',
+      Scorer: scorer,
+      Odds: +Number(odds).toFixed(3),
+      Stake: +Number(stake).toFixed(2),
+    };
+    const betId = _bookCornerBet(fields, cfg.account_id, +Number(stake).toFixed(2), new Date().toISOString());
+    record('booked', null, betId, parsed);
+    const summary = `${fields.Team ? fields.Team + ' — ' : ''}${fields.Assist || '?'} → ${scorer} @ ${fields.Odds} · £${fields.Stake}`;
+    console.log('[discord-corners-book] booked bet', betId, '-', summary);
+    res.json({ ok: true, status: 'booked', betId, summary });
+  } catch (err) {
+    console.error('[discord-corners-book]', err && err.message);
+    record('error', err && err.message);
+    res.json({ ok: true, status: 'error', note: 'server error booking the bet' });
   }
 });
 
