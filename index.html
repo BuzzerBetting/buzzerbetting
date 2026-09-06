@@ -2259,10 +2259,6 @@ input::placeholder{color:var(--text3)}
 
   <!-- panel: Calculated +EV -->
   <div id="view-calculated" class="ba-panel" style="display:none">
-    <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:8px">
-      <button onclick="initCalcEV(0)" style="display:flex;align-items:center;gap:6px;background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Today</button>
-      <button onclick="initCalcEV(1)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit" id="cev-tomorrow-btn">Tomorrow</button>
-    </div>
     <div class="smeta" id="cev-smeta" style="display:none"><span class="pulse"></span><strong id="cev-smeta-count" style="color:var(--green);font-weight:500"></strong></div>
     <div id="cev-status"></div>
     <div id="cev-results" style="display:none;margin-top:10px">
@@ -2306,7 +2302,7 @@ input::placeholder{color:var(--text3)}
   <!-- panel: Corners -->
   <div id="ba-panel-corners" class="ba-panel" style="display:none">
     <div class="smeta"><span class="pulse"></span><strong id="ba-corners-count" style="color:var(--green);font-weight:500">—</strong></div>
-    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:600px"><thead><tr><th>Match</th><th>Team</th><th>Type</th><th>Selection</th><th class="r">Weight</th></tr></thead><tbody id="ba-corners-body"></tbody></table></div></div>
+    <div id="ba-corners-list"></div>
     <div class="note"><i class="ti ti-info-circle"></i> Predicted corner takers and header targets for matches whose lineups are confirmed and that haven't kicked off yet. From the corner model — refreshes every 60s.</div>
   </div>
 
@@ -3913,6 +3909,24 @@ const BOOKIE_ALIASES = {
   'b365': 'Bet365',
   '365': 'Bet365',
 };
+
+// Oddschecker's internal bookmaker codes -> display names. The +EV / Calculated +EV / F1
+// feeds come off Oddschecker's odds API, which returns codes like "B3"/"WH", not names.
+// Read off a live OC grid; extend as unmapped codes turn up. ocBookieName() falls through
+// to the raw code for anything not listed.
+const OC_BOOKIE_NAMES = {
+  B3:'Bet365', SK:'Sky Bet', WH:'William Hill', LD:'Ladbrokes', CE:'Coral', PP:'Paddy Power',
+  BY:'BoyleSports', VC:'BetVictor', UN:'Unibet', FR:'Betfred', FB:'Betfred', EE:'888sport',
+  WA:'Betway', KN:'BetMGM', QN:'QuinnBet', OE:'10bet', S6:'Star Sports', PUP:'PricedUp',
+  G5:'BetGoodwin', AKB:'AK Bets', BAH:'BetAhoy', BTT:'BetTom', IVB:'IvyBet', SI:'Sporting Index',
+  SX:'Spreadex', BF:'Betfair', MA:'Matchbook', DZ:'DAZN Bet', KW:'Kwiff', NB:'NetBet',
+  '32':'32Red', MK:'Midnite', FS:'FansBet', TF:'TheFA', RM:'MrQ', GB:'Grosvenor',
+};
+function ocBookieName(code) {
+  if (code == null) return '';
+  const c = String(code).trim();
+  return OC_BOOKIE_NAMES[c] || OC_BOOKIE_NAMES[c.toUpperCase()] || c;
+}
 
 function normalizeBookieInput(raw) {
   if (!raw || !raw.trim()) return null;
@@ -8561,7 +8575,7 @@ const OC_EV_MARKET_BADGE={
 // The line copyOddscheckerLine() puts on the clipboard — kept in one place so the button and
 // any future "copy all" both build it the same way.
 function oddscheckerLineText(b){
-  return `${b.t} ${b.match} — ${b.mkt}: ${b.sel} @ ${b.odds.toFixed(2)} (${b.bk}) — fair ${b.fair.toFixed(2)} — +${b.ev.toFixed(1)}% EV`;
+  return `${b.t} ${b.match} — ${b.mkt}: ${b.sel} @ ${b.odds.toFixed(2)} (${ocBookieName(b.bk)}) — fair ${b.fair.toFixed(2)} — +${b.ev.toFixed(1)}% EV`;
 }
 async function copyOddscheckerLine(i,btn){
   const b=ocEvBets[i]; if(!b)return;
@@ -8583,7 +8597,7 @@ function renderOddscheckerEV(){
   const shown=ocEvBets.map((b,i)=>({b,i})).filter(({b})=>(typeof baBookEnabled!=='function')||baBookEnabled(b.bk));
   const countEl=document.getElementById('oc-ev-smeta-count');
   if(countEl)countEl.textContent=`${shown.length} value bet${shown.length===1?'':'s'} found`;
-  if(typeof baOnEdgeRendered==='function')baOnEdgeRendered('oc-ev',shown.map(({b})=>({match:b.match,market:b.mkt,selection:b.sel,bk:b.bk,odds:b.odds,ev:b.ev})));
+  if(typeof baOnEdgeRendered==='function')baOnEdgeRendered('oc-ev',shown.map(({b})=>({match:b.match,market:b.mkt,selection:b.sel,bk:ocBookieName(b.bk),odds:b.odds,ev:b.ev})));
   shown.forEach(({b,i})=>{
     const mS=OC_EV_MARKET_BADGE[b.mkt]||'background:var(--surface2);color:var(--text2)';
     const eS=b.ev>=20?'background:var(--green-bg);color:var(--green)':'background:var(--amber-bg);color:var(--amber)';
@@ -8594,7 +8608,7 @@ function renderOddscheckerEV(){
     const lastTraded=(typeof b.lastTraded==='number')?b.lastTraded.toFixed(2):'—';
     const matched=(typeof b.matched==='number')?`£${b.matched.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}`:'—';
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:${fairColor};font-weight:500">${b.fair.toFixed(2)}</td><td class="r tn" style="color:var(--text2)">${lastTraded}</td><td class="r tn" style="color:var(--text2)">${matched}</td><td class="r" style="color:var(--text2);font-size:12px">${b.bk}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td><td class="r"><button onclick="copyOddscheckerLine(${i},this)" title="Copy line" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td>`;
+    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:${fairColor};font-weight:500">${b.fair.toFixed(2)}</td><td class="r tn" style="color:var(--text2)">${lastTraded}</td><td class="r tn" style="color:var(--text2)">${matched}</td><td class="r" style="color:var(--text2);font-size:12px">${ocBookieName(b.bk)}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td><td class="r"><button onclick="copyOddscheckerLine(${i},this)" title="Copy line" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td>`;
     sb.appendChild(tr);
   });
   if(!shown.length){
@@ -11138,10 +11152,13 @@ const INTL_LEAGUES = new Set([77, 78, 79, 80]); // World Cup, Nations League etc
 // across every card, instead of drifting with each card's longest team name.
 const MATCH_TBL_COLGROUP='<col style="width:78px"><col><col style="width:70px"><col><col style="width:34px">';
 
-function predSideBlock(side, align){
+function predSideBlock(side, align, opts){
   if(!side) return '';
+  opts = opts || {};
+  const showCorners = opts.corners !== undefined ? opts.corners : predCornersOn();
+  const showPens    = opts.pens    !== undefined ? opts.pens    : predPensOn();
   const parts=[];
-  if(predCornersOn()){
+  if(showCorners){
     if(Array.isArray(side.cornerTakers) && side.cornerTakers.length){
       const t=side.cornerTakers.map(c=>{
         const s=c.side?` <span style="color:var(--text3)">${c.side}</span>`:'';
@@ -11165,7 +11182,7 @@ function predSideBlock(side, align){
     }
     parts.push(`<div><span style="color:var(--text3)">Threat:</span> ${threat}</div>`);
   }
-  if(predPensOn()){
+  if(showPens){
     const p=side.penTaker;
     // Red name = predicted taker is a defender (CB/FB) in tonight's lineup — the high-odds-to-
     // score case worth flagging, since a defender taking pens is a live anytime-scorer angle a
@@ -11704,33 +11721,37 @@ let cevFixtures = [];
 // Left-Foot/Right-Foot/6-Yard-Box value (the only markets left here — Header/OTB moved to
 // the automated Oddschecker +EV pipeline, see that page's note) and renders straight to a
 // bets table in the same shape as Oddschecker +EV. No manual per-fixture step any more.
-async function initCalcEV(dayOffset = 0) {
+async function initCalcEV(dayOffset) {
   const statusEl = document.getElementById('cev-status');
   document.getElementById('cev-results').style.display = 'none';
   document.getElementById('cev-smeta').style.display = 'none';
   statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t">Loading fixtures...</div></div></div>`;
 
   try {
-    const now = new Date();
-    now.setDate(now.getDate() + dayOffset);
-    const date = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
-    const r = await fetch(`/.netlify/functions/fixtures?date=${date}`);
-    const data = await r.json();
-    if (!data.ok || !data.leagues?.length) {
-      statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-calendar-off"></i></div><div class="ph-t">No fixtures today</div></div></div>`;
+    // No day picker any more — always scan today + tomorrow together and show everything
+    // upcoming. (A specific offset can still be forced by passing 0 or 1.)
+    const offsets = (dayOffset === 0 || dayOffset === 1) ? [dayOffset] : [0, 1];
+    cevFixtures = [];
+    for (const off of offsets) {
+      const now = new Date();
+      now.setDate(now.getDate() + off);
+      const date = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+      const r = await fetch(`/.netlify/functions/fixtures?date=${date}`);
+      const data = await r.json();
+      if (!data.ok || !data.leagues?.length) continue;
+      // Skip anything already underway or finished — a match that's kicked off has no "before
+      // kickoff" value left to find here, and its lineup being confirmed doesn't change that.
+      data.leagues.forEach(league => {
+        league.matches.forEach(m => {
+          if (m.started || m.finished) return;
+          cevFixtures.push({ ...m, leagueName: league.name });
+        });
+      });
+    }
+    if (!cevFixtures.length) {
+      statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-calendar-off"></i></div><div class="ph-t">No upcoming fixtures</div></div></div>`;
       return;
     }
-    // Skip anything already underway or finished — a match that's kicked off has no "before
-    // kickoff" value left to find here, and its lineup being confirmed doesn't change that.
-    // Same "not yet started" rule oc-scraper applies server-side (oc_scraper_service.py's
-    // _time_to_ko_minutes filter), just not applied at all here before now.
-    cevFixtures = [];
-    data.leagues.forEach(league => {
-      league.matches.forEach(m => {
-        if (m.started || m.finished) return;
-        cevFixtures.push({ ...m, leagueName: league.name });
-      });
-    });
     await scanAllCalcEV(statusEl);
   } catch(err) {
     statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-wifi-off"></i></div><div class="ph-t">Failed to load fixtures</div><div class="ph-d">${err.message}</div></div></div>`;
@@ -12191,7 +12212,7 @@ function renderEVResults(bets) {
   if (typeof baBookEnabled === 'function') bets = bets.filter(b => baBookEnabled(b.bookie));
   const cevCountEl = document.getElementById('cev-smeta-count');
   if (cevCountEl) cevCountEl.textContent = `${bets.length} bet${bets.length === 1 ? '' : 's'} found`;
-  if (typeof baOnEdgeRendered === 'function') baOnEdgeRendered('calc-ev', bets.map(b => ({ match: b.match, market: b.market, selection: b.player, bk: b.bookie, odds: parseFloat(b.ocOdds) || null, ev: b.bestEv })));
+  if (typeof baOnEdgeRendered === 'function') baOnEdgeRendered('calc-ev', bets.map(b => ({ match: b.match, market: b.market, selection: b.player, bk: ocBookieName(b.bookie), odds: parseFloat(b.ocOdds) || null, ev: b.bestEv })));
 
   if (!bets.length) {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:32px;font-size:13px">No +EV bets found</td></tr>`;
@@ -12215,7 +12236,7 @@ function renderEVResults(bets) {
       <td style="font-size:12px;color:var(--text2)">${bet.market}</td>
       <td style="font-weight:500">${bet.player}</td>
       <td class="r tn" style="font-weight:500">${fairLabel}</td>
-      <td class="r" style="font-size:12px;color:var(--text2)">${bet.bookie}</td>
+      <td class="r" style="font-size:12px;color:var(--text2)">${ocBookieName(bet.bookie)}</td>
       <td class="r tn" style="font-weight:600;color:var(--green)">${bet.ocOdds}</td>
       <td class="r"><span class="badge" style="background:${evBg};color:${evCol}">${evLabel}</span></td>`;
     tbody.appendChild(tr);
@@ -12910,7 +12931,8 @@ const BA_BOOK_ALIASES = {
 };
 function baNormKey(s){ return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
 function baResolveBook(bk){
-  const raw = String(bk || '').trim();
+  // OC feeds carry codes ("WH") — expand to a name first so the filter can match BOOKIES_LIST.
+  const raw = (typeof ocBookieName === 'function' ? ocBookieName(bk) : String(bk || '')).trim();
   if (!raw) return null;
   const low = raw.toLowerCase();
   if (BA_BOOK_ALIASES[low]) return BA_BOOK_ALIASES[low];
@@ -13056,7 +13078,7 @@ function loadBaEdge(key, isPoll){
   if (key === 'oc-ev') {
     loadOddscheckerEV();                       // renders #scanner-body + calls baOnEdgeRendered
   } else if (key === 'calc-ev') {
-    if (!isPoll) initCalcEV(0);                // full scan (heavy) — activate / manual refresh only
+    if (!isPoll) initCalcEV();                 // full scan (heavy) — activate / manual refresh only; today + tomorrow
     else if (cevLastBets.length) renderEVResults(cevLastBets);
   } else if (key === 'ddhh') {
     if (!isPoll) initDDHH(null);               // guarded by ddhhLoaded, cheap on re-entry
@@ -13088,36 +13110,50 @@ async function baReportSeen(key, bets){
 }
 
 async function loadBaCorners(){
-  const body = document.getElementById('ba-corners-body');
+  const list = document.getElementById('ba-corners-list');
   const countEl = document.getElementById('ba-corners-count');
   let matches = [];
   try {
     const d = await ledgerApi('match-predictions?date=' + fmtDateParam(new Date()));
     if (d && d.ok) matches = d.matches || [];
   } catch(e) {}
-  const rows = [];
-  matches.forEach(m => {
+
+  // Same match-then-takers/threat-underneath layout as Today's Matches (predSideBlock),
+  // forced on regardless of that page's corner-toggle. One block per confirmed, not-started match.
+  const confirmed = matches.filter(m => (m.home && m.home.lineupConfirmed) || (m.away && m.away.lineupConfirmed));
+  const opts = { corners: true, pens: false };
+  if (list) {
+    list.innerHTML = confirmed.length ? confirmed.map(m => {
+      const home = m.home || {}, away = m.away || {};
+      return `<div class="card" style="padding:12px 16px;margin-bottom:10px">
+        <div style="font-weight:600;font-size:13px;margin-bottom:6px">${(home.teamName || 'Home')} <span style="color:var(--text3)">v</span> ${(away.teamName || 'Away')}</div>
+        <div style="display:flex;gap:24px;flex-wrap:wrap">
+          <div style="flex:1;min-width:220px">
+            <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">${home.teamName || 'Home'}</div>
+            ${predSideBlock(home, 'left', opts)}
+          </div>
+          <div style="flex:1;min-width:220px">
+            <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">${away.teamName || 'Away'}</div>
+            ${predSideBlock(away, 'left', opts)}
+          </div>
+        </div>
+      </div>`;
+    }).join('') : `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-calendar-off"></i></div><div class="ph-t">No confirmed lineups yet for matches still to kick off</div></div></div>`;
+  }
+
+  // unique-bet tracking: one entry per predicted taker / threat target
+  const seen = [];
+  confirmed.forEach(m => {
     const name = `${(m.home && m.home.teamName) || 'Home'} v ${(m.away && m.away.teamName) || 'Away'}`;
     [m.home, m.away].forEach(s => {
       if (!s || !s.lineupConfirmed) return;
-      (s.cornerTakers || []).forEach(c => rows.push({
-        match: name, team: s.teamName || '', type: 'Corner taker', sel: c.name,
-        weight: (c.pct != null ? Math.round(c.pct) + '%' : '') + (c.side ? ` ${c.side}` : ''),
-      }));
-      (s.cornerThreatTargets || []).forEach(t => rows.push({
-        match: name, team: s.teamName || '', type: 'Header target', sel: t.name,
-        weight: t.odds != null ? Number(t.odds).toFixed(2) : '—',
-      }));
+      (s.cornerTakers || []).forEach(c => seen.push({ match: name, market: 'Corner taker', selection: c.name }));
+      (s.cornerThreatTargets || []).forEach(t => seen.push({ match: name, market: 'Header target', selection: t.name }));
     });
   });
-  if (body) {
-    body.innerHTML = rows.length
-      ? rows.map(r => `<tr><td style="font-weight:500">${r.match}</td><td style="color:var(--text2)">${r.team}</td><td style="color:var(--text2);font-size:12px">${r.type}</td><td>${r.sel}</td><td class="r tn" style="color:var(--text2)">${r.weight}</td></tr>`).join('')
-      : `<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No confirmed lineups yet for matches still to kick off.</td></tr>`;
-  }
-  if (countEl) countEl.textContent = `${rows.length} prediction${rows.length === 1 ? '' : 's'} from confirmed lineups`;
-  baSetCount('corners', rows.length);
-  baReportSeen('corners', rows.map(r => ({ match: r.match, market: r.type, selection: r.sel })));
+  if (countEl) countEl.textContent = `${confirmed.length} match${confirmed.length === 1 ? '' : 'es'} with confirmed lineups`;
+  baSetCount('corners', confirmed.length);
+  baReportSeen('corners', seen);
 }
 
 const BA_STUB_ENDPOINT = { 'f1-ew': 'bet-alerts-f1ew', 'arbs': 'bet-alerts-arbs', 'dnf': 'bet-alerts-dnf' };
