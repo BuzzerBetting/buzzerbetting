@@ -1324,7 +1324,7 @@ router.patch('/bets/:id/settle-backlay', (req, res) => {
 // GET /api/ledger/bets?status=open&type=Value
 router.get('/bets', (req, res) => {
   try {
-    const { status, type, limit, offset, dateRange } = req.query;
+    const { status, type, limit, offset, dateRange, date } = req.query;
     if (req.userRole === 'staff' && type && getBetTypeGroup(type) === 'buzzer') {
       return res.status(403).json({ ok: false, error: 'Staff can only view Assistant sheets.' });
     }
@@ -1334,6 +1334,7 @@ router.get('/bets', (req, res) => {
     if (type) { filters.push('bet_type = ?'); params.push(type); }
     if (dateRange === 'today') { filters.push(`date(date) = date('now')`); }
     else if (dateRange === 'month') { filters.push(`strftime('%Y-%m', date) = strftime('%Y-%m', 'now')`); }
+    if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) { filters.push(`date(date) = ?`); params.push(date); }
     // Dashboard-only exception: Staff can see (and settle) Admin's open Buzzer bets from
     // there specifically, via an explicit flag — deliberately narrow, only ever applies to
     // open bets on this one call. Everywhere else (settled/historical Buzzer data, any
