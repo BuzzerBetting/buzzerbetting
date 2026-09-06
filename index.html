@@ -13078,7 +13078,7 @@ function loadBaEdge(key, isPoll){
   if (key === 'oc-ev') {
     loadOddscheckerEV();                       // renders #scanner-body + calls baOnEdgeRendered
   } else if (key === 'calc-ev') {
-    if (!isPoll) initCalcEV();                 // full scan (heavy) — activate / manual refresh only; today + tomorrow
+    if (!isPoll) initCalcEV(0);                // full scan (heavy) — activate / manual refresh only; today only
     else if (cevLastBets.length) renderEVResults(cevLastBets);
   } else if (key === 'ddhh') {
     if (!isPoll) initDDHH(null);               // guarded by ddhhLoaded, cheap on re-entry
