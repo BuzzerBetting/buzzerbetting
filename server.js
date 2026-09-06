@@ -30,6 +30,7 @@ const wrap = (handler) => async (req, res) => {
 
 app.all('/api/betfair', wrap(require('./netlify/functions/betfair').handler));
 app.all('/api/betfair-dogs', wrap(require('./netlify/functions/betfair-dogs').handler));
+app.all('/api/betfair-f1', wrap(require('./netlify/functions/betfair-f1').handler));
 app.all('/api/ddhh', wrap(require('./netlify/functions/ddhh').handler));
 app.all('/api/sheets', wrap(require('./netlify/functions/sheets').handler));
 app.all('/api/bb-odds', wrap(require('./netlify/functions/bb-odds').handler));
