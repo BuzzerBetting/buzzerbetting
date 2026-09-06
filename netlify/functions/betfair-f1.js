@@ -127,15 +127,16 @@ function fairPrice(b, l) {
 
 async function buildF1(appKey, session) {
   const now = new Date();
-  const to = new Date(now.getTime() + 21 * 24 * 60 * 60 * 1000); // next 3 weeks
+  const to = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000); // next ~2 months
   const catalogue = await bfCall('listMarketCatalogue', {
     filter: {
       eventTypeIds: [MOTOR_SPORT_EVENT_TYPE_ID],
+      textQuery: 'Formula 1',                          // keep it to F1, not MotoGP/NASCAR/etc.
       marketStartTime: { from: now.toISOString(), to: to.toISOString() },
     },
     marketProjection: ['EVENT', 'COMPETITION', 'MARKET_START_TIME', 'RUNNER_DESCRIPTION'],
     sort: 'FIRST_TO_START',
-    maxResults: 400,
+    maxResults: 500,
   }, appKey, session);
 
   // Group markets by event; keep only F1 (Grand Prix / "Formula 1" competition) events that
