@@ -11200,12 +11200,28 @@ function predSideBlock(side, align, opts){
   return `<div style="flex:1;min-width:0;text-align:${align};font-size:11.5px;line-height:1.5">${parts.join('')}</div>`;
 }
 
+// Postponed / cancelled / abandoned / suspended / delayed match — has an announced XI but
+// isn't really being played, so it must not count as "lineups confirmed". Catches both
+// FotMob's own flag/reason and the case it hasn't labelled yet: 25+ min past the scheduled
+// kickoff and still not started.
+function matchAbnormal(m){
+  if (!m) return false;
+  if (m.cancelled) return true;
+  if (/postpon|cancel|abandon|suspend|delay|awarded|walkover|interrupt/i.test(String(m.statusReason || ''))) return true;
+  if (!m.started && !m.finished && m.utcTime) {
+    const past = Date.now() - new Date(m.utcTime).getTime();
+    if (past > 25 * 60 * 1000) return true;
+  }
+  return false;
+}
+
 function buildMatchRow(m, leagueName, isIntl, leagueCcode){
   const frag=document.createDocumentFragment();
   const pred = MATCH_PREDICTIONS[String(m.id)] || null;
+  const abnormal = matchAbnormal(m);
   // green = announced XI on a match that hasn't kicked off; the endpoint already applies this,
   // the extra !m.started here just drops it instantly at KO without waiting for a refetch.
-  const notStarted = !m.started;
+  const notStarted = !m.started && !abnormal;
   const homeGreen = notStarted && pred && pred.home && pred.home.lineupConfirmed;
   const awayGreen = notStarted && pred && pred.away && pred.away.lineupConfirmed;
 
@@ -11215,8 +11231,10 @@ function buildMatchRow(m, leagueName, isIntl, leagueCcode){
   tr.onmouseenter=()=>tr.style.background='var(--surface2)';
   tr.onmouseleave=()=>tr.style.background='';
   tr.onclick=()=>openMatch(m.id, m.home, m.away, leagueName, isIntl, m.started, m.finished, m.homeId, m.awayId);
-  const timeStr=m.utcTime?fmtKickoff(m.utcTime):'TBC';
-  const isLive=m.started&&!m.finished;
+  const timeStr=abnormal
+    ? `<span style="color:var(--amber);font-weight:600;font-size:10px;text-transform:uppercase">${(m.statusReason||'Delayed').slice(0,10)}</span>`
+    : (m.utcTime?fmtKickoff(m.utcTime):'TBC');
+  const isLive=m.started&&!m.finished&&!abnormal;
   const statusDot=isLive?`<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);margin-right:4px;vertical-align:middle"></span>`:'';
   const leagueTag=leagueCcode?`<div style="font-size:9.5px;line-height:1.3;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">${leagueCcode}</div>`:'';
   let scoreHtml;
@@ -11752,7 +11770,7 @@ async function getConfirmedNotStartedFixtures() {
   });
   const out = [];
   if (fx && fx.ok) (fx.leagues || []).forEach(lg => (lg.matches || []).forEach(m => {
-    if (m.started || m.finished) return;
+    if (m.started || m.finished || matchAbnormal(m)) return;
     if (!confirmed.has(String(m.id))) return;
     out.push({ ...m, leagueName: lg.name });
   }));
@@ -13225,11 +13243,13 @@ async function loadBaCorners(){
     ]);
     if (pred && pred.ok) matches = pred.matches || [];
     if (fx && fx.ok) (fx.leagues || []).forEach(lg => (lg.matches || []).forEach(m => {
-      meta[String(m.id)] = { ko: m.utcTime || null, leagueName: lg.name || 'Other', ccode: lg.ccode || '' };
+      meta[String(m.id)] = { ko: m.utcTime || null, leagueName: lg.name || 'Other', ccode: lg.ccode || '', abnormal: matchAbnormal(m) };
     }));
   } catch(e) {}
 
-  const confirmed = matches.filter(m => (m.home && m.home.lineupConfirmed) || (m.away && m.away.lineupConfirmed));
+  const confirmed = matches.filter(m =>
+    !((meta[String(m.matchId)] || {}).abnormal) &&
+    ((m.home && m.home.lineupConfirmed) || (m.away && m.away.lineupConfirmed)));
   BA_CORNERS_CACHE = { confirmed, meta };
   renderBaCorners();
 

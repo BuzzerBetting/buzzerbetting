@@ -2745,9 +2745,16 @@ router.get('/match-predictions', async (req, res) => {
         // — used for predicting/logging). confirmed: additionally not yet kicked off (the
         // narrower window driving the green-name highlight and what's shown in the UI). See the
         // comment on mpSide for why these are no longer the same thing.
+        // Postponed / cancelled / abandoned / suspended / delayed — FotMob still carries the
+        // announced XI, but the match isn't really happening, so don't treat it as confirmed
+        // (drops it out of the green highlight, corner/pen predictions and the +EV scans).
+        // Also catch delays FotMob hasn't labelled yet: 25+ min past kickoff, still not started.
+        const staleKo = !m.started && !m.finished && m.utcTime && (Date.now() - new Date(m.utcTime).getTime() > 25 * 60 * 1000);
+        const abnormal = !!m.cancelled || staleKo
+          || /postpon|cancel|abandon|suspend|delay|awarded|walkover|interrupt/i.test(String(m.statusReason || ''));
         const xiKnown = !!lu && mpLineupConfirmed(lineupType);
-        const confirmed = xiKnown && !m.started;
-        const cacheKey = `${m.id}|${lineupType}|${m.started ? 1 : 0}`;
+        const confirmed = xiKnown && !m.started && !abnormal;
+        const cacheKey = `${m.id}|${lineupType}|${m.started ? 1 : 0}|${abnormal ? 1 : 0}`;
         let pred = _mpPredCache.get(cacheKey);
         if (pred && Date.now() - pred._at > 6 * 3600 * 1000) pred = null; // re-derive against fresher harvest data
         if (!pred) {
