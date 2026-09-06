@@ -18,6 +18,9 @@ const { Client, GatewayIntentBits } = require('discord.js');
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
 const KEY = process.env.LEDGER_API_KEY;
 const CHANNEL_ID = process.env.DISCORD_CORNERS_CHANNEL_ID || '1347882651004047420';
+// Only book slips posted by these Discord user IDs (comma-separated). Unset = anyone in the
+// channel. To find an ID: post a screenshot, then read this process's log for "image from".
+const ALLOWED_IDS = (process.env.DISCORD_CORNERS_ALLOWED_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
 const BOOK_URL = `http://localhost:${process.env.PORT || 3000}/api/ledger/discord-corners-book`;
 
 if (!TOKEN) { console.error('[discord-corners] DISCORD_BOT_TOKEN not set — exiting'); process.exit(1); }
@@ -40,6 +43,11 @@ client.on('messageCreate', async (msg) => {
   if (msg.author.bot || msg.channelId !== CHANNEL_ID) return;
   const images = [...msg.attachments.values()].filter(isImage);
   if (!images.length) return;
+  console.log(`[discord-corners] image from ${msg.author.tag} (${msg.author.id})`);
+  if (ALLOWED_IDS.length && !ALLOWED_IDS.includes(msg.author.id)) {
+    console.log('[discord-corners] ignored — sender not in DISCORD_CORNERS_ALLOWED_IDS');
+    return;
+  }
 
   for (const img of images) {
     try {
