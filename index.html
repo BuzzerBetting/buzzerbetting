@@ -292,6 +292,11 @@ input::placeholder{color:var(--text3)}
       <div><div class="cat-title">Calculations</div><div class="cat-desc">Value finders, DDHH, manual calculators and fixtures</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
+    <div class="cat" style="--accent:var(--amber)" onclick="showTopSec('betalerts')">
+      <div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-bell-ringing"></i></div>
+      <div><div class="cat-title">Bet Alerts</div><div class="cat-desc">Every live edge in one place — value, DDHH, corners, arbs</div><div class="cat-tag" id="betalerts-menu-tag" style="background:var(--amber-bg);color:var(--amber)">—</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
     <div class="cat" style="--accent:var(--blue)" onclick="showTopSec('ledger')">
       <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-wallet"></i></div>
       <div><div class="cat-title">Ledger</div><div class="cat-desc">Account tracking, live balances and bet entry</div></div>
@@ -2207,73 +2212,121 @@ input::placeholder{color:var(--text3)}
   </div>
 </div>
 
-<!-- ODDSCHECKER -->
-<div id="view-oddschecker" class="sec">
-  <button class="back" onclick="backToCalcMenu()"><i class="ti ti-arrow-left"></i> Menu</button>
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0">
-    <div class="sec-title" style="margin-bottom:0">Oddschecker +EV</div>
-    <button onclick="refreshOddscheckerEV(this)" id="oc-ev-refresh-btn" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+<!-- BET ALERTS -->
+<div id="view-bet-alerts" class="sec">
+  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+    <div class="sec-title" style="margin-bottom:0">Bet Alerts</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div style="position:relative">
+        <button id="ba-books-btn" onclick="baToggleBooksPanel()" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-filter"></i> Bookmakers <span id="ba-books-count" style="color:var(--text3);font-size:12px"></span></button>
+        <div id="ba-books-panel" style="display:none;position:absolute;right:0;top:calc(100% + 6px);z-index:60;width:250px;background:var(--surface);border:.5px solid var(--border);border-radius:var(--radius);box-shadow:0 12px 34px rgba(0,0,0,.22);padding:10px">
+          <div style="display:flex;gap:6px;margin-bottom:8px">
+            <button onclick="baSetAllBooks(true)" style="flex:1;background:var(--surface2);color:var(--text2);border:.5px solid var(--border);border-radius:6px;padding:5px 0;font-size:12px;cursor:pointer;font-family:inherit">Select all</button>
+            <button onclick="baSetAllBooks(false)" style="flex:1;background:var(--surface2);color:var(--text2);border:.5px solid var(--border);border-radius:6px;padding:5px 0;font-size:12px;cursor:pointer;font-family:inherit">Remove all</button>
+          </div>
+          <div id="ba-books-list" style="max-height:280px;overflow:auto;display:flex;flex-direction:column;gap:1px"></div>
+          <button onclick="baApplyBooks()" style="width:100%;margin-top:8px;background:var(--brand);color:#fff;border:none;border-radius:6px;padding:7px 0;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Apply</button>
+        </div>
+      </div>
+      <button onclick="baToggleStats()" id="ba-stats-btn" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-chart-bar"></i> Bet post stats</button>
+      <button onclick="baRefreshActive(this)" id="ba-refresh-btn" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+    </div>
   </div>
-  <div class="smeta"><span class="pulse"></span><strong id="oc-ev-smeta-count" style="color:var(--green);font-weight:500">Loading…</strong>&nbsp;· <span id="oc-ev-smeta-refreshed"></span></div>
-  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--text3);margin-bottom:10px">
-    <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block"></span>BFex fair — high confidence (£500+ matched, tight spread)</span>
-    <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--amber);display:inline-block"></span>Usable but thinner BFEX data</span>
-  </div>
-  <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">BFex fair</th><th class="r">Last traded</th><th class="r">Total traded</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th></th></tr></thead><tbody id="scanner-body"></tbody></table></div></div>
-  <div class="note"><i class="ti ti-info-circle"></i> Auto-refreshes every 60s. Scanning starts once a match's lineup is confirmed and runs every 10 minutes until kickoff — First Goalscorer, Anytime Goalscorer, Player Shown a Card and Player Shots on Target markets, sorted by EV%. These all compare Oddschecker directly against the matching BFEX market. Header and Outside-the-Box goal need their own fair-odds calculation instead (no direct BFEX market for either) — see <a href="javascript:void(0)" onclick="showSec('calculated')">Calculated +EV</a>.</div>
-</div>
 
-<!-- DDHH -->
-<div id="view-ddhh" class="sec">
-  <button class="back" onclick="backToCalcMenu()"><i class="ti ti-arrow-left"></i> Menu</button>
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
-    <div class="sec-title" style="margin-bottom:0">DDHH</div>
-    <button onclick="initDDHH(this)" id="ddhh-refresh-btn" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
-  </div>
-  <div id="ddhh-status"></div>
-  <div id="ddhh-matches"></div>
-  <div id="ddhh-results" style="display:none">
+  <div id="ba-tabs" style="display:flex;gap:4px;flex-wrap:wrap;border-bottom:.5px solid var(--border);margin-bottom:12px"></div>
+  <div class="note" style="margin-top:0;margin-bottom:14px"><i class="ti ti-info-circle"></i> <span id="ba-day-note-text">Loading…</span></div>
+
+  <div id="ba-stats-panel" class="card" style="display:none;padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <span style="font-size:13px;font-weight:600" id="ddhh-results-title"></span>
-      <button onclick="document.getElementById('ddhh-results').style.display='none'" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px">×</button>
+      <strong style="font-size:14px">Bet post stats</strong>
+      <button onclick="baToggleStats()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px">×</button>
     </div>
-    <div class="card" style="overflow-x:auto">
-      <table class="dt" style="min-width:700px">
-        <thead>
-          <tr>
-            <th>Player</th>
-            <th class="r">FGS BFEX</th>
-            <th class="r">AGS BFEX</th>
-            <th class="r">Betfred FGS</th>
-            <th class="r">DDHH Fair</th>
-            <th class="r">EV%</th>
-            <th class="r">Kelly Stake</th>
-          </tr>
-        </thead>
-        <tbody id="ddhh-tbody"></tbody>
-      </table>
-    </div>
-    <div style="font-size:11px;color:var(--text3);margin-top:8px">Green = >100% EV · Amber = 70-100% · Only players with liquid BFEX markets shown</div>
+    <div style="overflow-x:auto"><table class="dt" style="min-width:520px"><thead><tr><th>Edge</th><th class="r">Today</th><th class="r">All-time</th><th class="r">Days</th><th class="r">Avg / day</th></tr></thead><tbody id="ba-stats-body"></tbody></table></div>
+    <div style="font-size:11px;color:var(--text3);margin-top:8px">Distinct bets (match + market + selection) surfaced per day. Accrues while someone has the page open.</div>
   </div>
-</div>
 
-<!-- CALCULATED EV -->
-<div id="view-calculated" class="sec">
-  <button class="back" onclick="backToCalcMenu()"><i class="ti ti-arrow-left"></i> Menu</button>
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0">
-    <div class="sec-title" style="margin-bottom:0">Calculated +EV</div>
-    <div style="display:flex;gap:8px">
+  <!-- panel: Oddschecker +EV -->
+  <div id="view-oddschecker" class="ba-panel" style="display:none">
+    <div class="smeta"><span class="pulse"></span><strong id="oc-ev-smeta-count" style="color:var(--green);font-weight:500">Loading…</strong>&nbsp;· <span id="oc-ev-smeta-refreshed"></span></div>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--text3);margin-bottom:10px">
+      <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block"></span>BFex fair — high confidence (£500+ matched, tight spread)</span>
+      <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--amber);display:inline-block"></span>Usable but thinner BFEX data</span>
+    </div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">BFex fair</th><th class="r">Last traded</th><th class="r">Total traded</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th></th></tr></thead><tbody id="scanner-body"></tbody></table></div></div>
+    <div class="note"><i class="ti ti-info-circle"></i> Auto-refreshes every 60s. Scanning starts once a match's lineup is confirmed and runs every 10 minutes until kickoff — First Goalscorer, Anytime Goalscorer, Player Shown a Card and Player Shots on Target markets, sorted by EV%. These all compare Oddschecker directly against the matching BFEX market. Header and Outside-the-Box goal need their own fair-odds calculation instead (no direct BFEX market for either) — see the <a href="javascript:void(0)" onclick="baTab('calc-ev')">Calculated +EV</a> tab.</div>
+  </div>
+
+  <!-- panel: Calculated +EV -->
+  <div id="view-calculated" class="ba-panel" style="display:none">
+    <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:8px">
       <button onclick="initCalcEV(0)" style="display:flex;align-items:center;gap:6px;background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Today</button>
       <button onclick="initCalcEV(1)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit" id="cev-tomorrow-btn">Tomorrow</button>
     </div>
+    <div class="smeta" id="cev-smeta" style="display:none"><span class="pulse"></span><strong id="cev-smeta-count" style="color:var(--green);font-weight:500"></strong></div>
+    <div id="cev-status"></div>
+    <div id="cev-results" style="display:none;margin-top:10px">
+      <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="cev-tbody"></tbody></table></div></div>
+    </div>
+    <div class="note"><i class="ti ti-info-circle"></i> Markets with no direct Betfair equivalent — Header and Outside-the-Box goal (Oddschecker, auto-detected, no more manual market IDs) and Left Foot/Right Foot/6 Yard Box (William Hill) — all vs a BFEX-AGS-derived fair, sorted by EV%. Direct BFEX comparisons (AGS/FGS/Cards/SOT) live on the <a href="javascript:void(0)" onclick="baTab('oc-ev')">Oddschecker +EV</a> tab instead.</div>
   </div>
-  <div class="smeta" id="cev-smeta" style="display:none"><span class="pulse"></span><strong id="cev-smeta-count" style="color:var(--green);font-weight:500"></strong></div>
 
-  <div id="cev-status"></div>
-  <div id="cev-results" style="display:none;margin-top:10px">
-    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="cev-tbody"></tbody></table></div></div>
+  <!-- panel: DDHH -->
+  <div id="view-ddhh" class="ba-panel" style="display:none">
+    <div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:16px">
+      <button onclick="initDDHH(this)" id="ddhh-refresh-btn" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+    </div>
+    <div id="ddhh-status"></div>
+    <div id="ddhh-matches"></div>
+    <div id="ddhh-results" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="font-size:13px;font-weight:600" id="ddhh-results-title"></span>
+        <button onclick="document.getElementById('ddhh-results').style.display='none'" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px">×</button>
+      </div>
+      <div class="card" style="overflow-x:auto">
+        <table class="dt" style="min-width:700px">
+          <thead>
+            <tr>
+              <th>Player</th>
+              <th class="r">FGS BFEX</th>
+              <th class="r">AGS BFEX</th>
+              <th class="r">Betfred FGS</th>
+              <th class="r">DDHH Fair</th>
+              <th class="r">EV%</th>
+              <th class="r">Kelly Stake</th>
+            </tr>
+          </thead>
+          <tbody id="ddhh-tbody"></tbody>
+        </table>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">Green = >100% EV · Amber = 70-100% · Only players with liquid BFEX markets shown</div>
+    </div>
   </div>
-  <div class="note"><i class="ti ti-info-circle"></i> Markets with no direct Betfair equivalent — Header and Outside-the-Box goal (Oddschecker, auto-detected, no more manual market IDs) and Left Foot/Right Foot/6 Yard Box (William Hill) — all vs a BFEX-AGS-derived fair, sorted by EV%. Direct BFEX comparisons (AGS/FGS/Cards/SOT) live on <a href="javascript:void(0)" onclick="showSec('oddschecker')">Oddschecker +EV</a> instead.</div>
+
+  <!-- panel: Corners -->
+  <div id="ba-panel-corners" class="ba-panel" style="display:none">
+    <div class="smeta"><span class="pulse"></span><strong id="ba-corners-count" style="color:var(--green);font-weight:500">—</strong></div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:600px"><thead><tr><th>Match</th><th>Team</th><th>Type</th><th>Selection</th><th class="r">Weight</th></tr></thead><tbody id="ba-corners-body"></tbody></table></div></div>
+    <div class="note"><i class="ti ti-info-circle"></i> Predicted corner takers and header targets for matches whose lineups are confirmed and that haven't kicked off yet. From the corner model — refreshes every 60s.</div>
+  </div>
+
+  <!-- panel: F1 EW -->
+  <div id="ba-panel-f1-ew" class="ba-panel" style="display:none">
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:700px"><thead><tr><th>Time</th><th>Race</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="ba-f1-ew-body"></tbody></table></div></div>
+    <div class="note"><i class="ti ti-info-circle"></i> F1 Each-Way value vs place terms. Feed not connected yet — this tab lights up automatically once the scraper starts publishing.</div>
+  </div>
+
+  <!-- panel: Arbs -->
+  <div id="ba-panel-arbs" class="ba-panel" style="display:none">
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:700px"><thead><tr><th>Time</th><th>Event</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">Profit%</th></tr></thead><tbody id="ba-arbs-body"></tbody></table></div></div>
+    <div class="note"><i class="ti ti-info-circle"></i> Cross-bookmaker arbitrage. Feed not connected yet — this tab lights up automatically once the scraper starts publishing.</div>
+  </div>
+
+  <!-- panel: DNFs -->
+  <div id="ba-panel-dnf" class="ba-panel" style="display:none">
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:700px"><thead><tr><th>Time</th><th>Event</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="ba-dnf-body"></tbody></table></div></div>
+    <div class="note"><i class="ti ti-info-circle"></i> Did-Not-Finish / retirement value. Feed not connected yet — this tab lights up automatically once the scraper starts publishing.</div>
+  </div>
 </div>
 
 <!-- MANUAL CALCULATORS -->
@@ -2790,10 +2843,18 @@ function checkPin(){
 })();
 
 // ── NAVIGATION ──
-function goHome(){if(CURRENT_USER_ROLE==='calculator'){showTopSec('calc');return;}document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
-function showSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();if(name==='ddhh')initDDHH(null);if(name==='bets-combined')initBetsPage();if(name==='monthly')initMonthly();if(name==='monthlyprofit')initMonthlyProfit();if(name==='assistantmonthly')initAssistantMonthly();if(name==='todo')initTodo();if(name==='calculated')initCalcEV(0);if(name==='oddschecker')initOddscheckerEV();else stopOddscheckerEVRefresh();}
-const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger',bettracking:'bettracking',stats:'stats-menu'};
-function showTopSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='stats')renderStatsMenu();if(name==='calc')loadOddscheckerEV();stopOddscheckerEVRefresh();}
+function goHome(){stopBetAlerts();if(CURRENT_USER_ROLE==='calculator'){showTopSec('calc');return;}document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
+function showSec(name){
+  // Oddschecker +EV / Calculated +EV / DDHH now live as tabs inside the Bet Alerts page —
+  // any legacy showSec() call for them redirects there rather than to a standalone .sec.
+  if(name==='oddschecker'||name==='calculated'||name==='ddhh'){openBetAlerts({oddschecker:'oc-ev',calculated:'calc-ev',ddhh:'ddhh'}[name]);return;}
+  stopBetAlerts();
+  document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();if(name==='bets-combined')initBetsPage();if(name==='monthly')initMonthly();if(name==='monthlyprofit')initMonthlyProfit();if(name==='assistantmonthly')initAssistantMonthly();if(name==='todo')initTodo();stopOddscheckerEVRefresh();}
+const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger',bettracking:'bettracking',stats:'stats-menu',betalerts:'bet-alerts'};
+function showTopSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='stats')renderStatsMenu();if(name==='calc')loadOddscheckerEV();stopOddscheckerEVRefresh();if(name==='betalerts')initBetAlerts();else stopBetAlerts();}
+// Jump straight to a specific Bet Alerts tab (used by the Calculations menu shortcuts and the
+// cross-links in the tab notes).
+function openBetAlerts(tabKey){showTopSec('betalerts');if(tabKey)baTab(tabKey);}
 
 // Admin sees everything — the full Today's Stats and Monthly Profit (all bets, both
 // Buzzer and Assistant), plus the same two Assistant-only views Staff get, so nothing
@@ -8516,7 +8577,14 @@ async function copyOddscheckerLine(i,btn){
 function renderOddscheckerEV(){
   const sb=document.getElementById('scanner-body');
   sb.innerHTML='';
-  ocEvBets.forEach((b,i)=>{
+  // Bet Alerts bookmaker filter — keep the original index so the copy button still points at
+  // the right ocEvBets row. baBookEnabled() is defined in the Bet Alerts block and returns
+  // true for everything until the filter has loaded.
+  const shown=ocEvBets.map((b,i)=>({b,i})).filter(({b})=>(typeof baBookEnabled!=='function')||baBookEnabled(b.bk));
+  const countEl=document.getElementById('oc-ev-smeta-count');
+  if(countEl)countEl.textContent=`${shown.length} value bet${shown.length===1?'':'s'} found`;
+  if(typeof baOnEdgeRendered==='function')baOnEdgeRendered('oc-ev',shown.map(({b})=>({match:b.match,market:b.mkt,selection:b.sel,bk:b.bk,odds:b.odds,ev:b.ev})));
+  shown.forEach(({b,i})=>{
     const mS=OC_EV_MARKET_BADGE[b.mkt]||'background:var(--surface2);color:var(--text2)';
     const eS=b.ev>=20?'background:var(--green-bg);color:var(--green)':'background:var(--amber-bg);color:var(--amber)';
     // Colour the fair price by the same confidence deriveBfexFair judged it with — matches
@@ -8529,8 +8597,9 @@ function renderOddscheckerEV(){
     tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:${fairColor};font-weight:500">${b.fair.toFixed(2)}</td><td class="r tn" style="color:var(--text2)">${lastTraded}</td><td class="r tn" style="color:var(--text2)">${matched}</td><td class="r" style="color:var(--text2);font-size:12px">${b.bk}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td><td class="r"><button onclick="copyOddscheckerLine(${i},this)" title="Copy line" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td>`;
     sb.appendChild(tr);
   });
-  if(!ocEvBets.length){
-    sb.innerHTML='<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No 5%+ value bets right now — either no lineups confirmed yet, or nothing clears the threshold.</td></tr>';
+  if(!shown.length){
+    const filtered=ocEvBets.length?' for the bookmakers currently selected':'';
+    sb.innerHTML=`<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No 5%+ value bets right now${filtered} — either no lineups confirmed yet, or nothing clears the threshold.</td></tr>`;
   }
 }
 
@@ -12116,6 +12185,14 @@ function renderEVResults(bets) {
   const tbody = document.getElementById('cev-tbody');
   tbody.innerHTML = '';
 
+  // Bet Alerts bookmaker filter + daily-post reporting. cevLastBets keeps the *unfiltered*
+  // list so re-applying a more permissive filter can recover hidden rows without a re-scan.
+  cevLastBets = bets;
+  if (typeof baBookEnabled === 'function') bets = bets.filter(b => baBookEnabled(b.bookie));
+  const cevCountEl = document.getElementById('cev-smeta-count');
+  if (cevCountEl) cevCountEl.textContent = `${bets.length} bet${bets.length === 1 ? '' : 's'} found`;
+  if (typeof baOnEdgeRendered === 'function') baOnEdgeRendered('calc-ev', bets.map(b => ({ match: b.match, market: b.market, selection: b.player, bk: b.bookie, odds: parseFloat(b.ocOdds) || null, ev: b.bestEv })));
+
   if (!bets.length) {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:32px;font-size:13px">No +EV bets found</td></tr>`;
     resultsEl.style.display = '';
@@ -12469,6 +12546,7 @@ async function initDDHH(btn) {
     hdr.style.cssText = 'padding:12px 20px;border-bottom:.5px solid var(--border);font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500';
     hdr.textContent = `${d.matches.length} eligible match${d.matches.length !== 1 ? 'es' : ''}`;
     card.appendChild(hdr);
+    if (typeof baSetCount === 'function') baSetCount('ddhh', d.matches.length);
 
     for (const m of d.matches) {
       const row = document.createElement('div');
@@ -12756,6 +12834,15 @@ function renderDDHH(matchName, results) {
   document.getElementById('ddhh-results-title').textContent = `${matchName} — DDHH`;
   tbody.innerHTML = '';
 
+  // Bet Alerts: record the value picks (>=100% ratio) from this scan against the DDHH edge's
+  // daily unique count. DDHH is scanned per match rather than as one live list, so this fires
+  // once per scan and the server de-dupes across the day.
+  if (typeof baReportSeen === 'function') {
+    const picks = (results || []).filter(r => r.ratio >= 100)
+      .map(r => ({ match: matchName, market: 'DDHH', selection: r.name, bk: 'Betfred', odds: r.betfredFGS, ev: r.ratio - 100 }));
+    if (picks.length) baReportSeen('ddhh', picks);
+  }
+
   if (!results.length) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:32px">No players above 70% ratio — try again after team news and BFEX liquidity builds</td></tr>`;
     resultsEl.style.display = '';
@@ -12781,6 +12868,320 @@ function renderDDHH(matchName, results) {
   resultsEl.style.display = '';
   resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+// ── BET ALERTS ─────────────────────────────────────────────────────────────
+// One tabbed page over every live edge. Each tab either reuses an existing feed/renderer
+// (Oddschecker +EV, Calculated +EV, DDHH) or has its own small loader (Corners from the
+// corner model; F1 EW / Arbs / DNFs from stub netlify feeds that are empty until their
+// scrapers exist). A global bookmaker filter (BOOKIES_LIST, server-persisted via
+// /bet-alert-books) hides rows for books we can't use on the bookmaker-priced tabs. Every
+// tab reports what it currently shows to POST /bet-alert-seen, which de-dupes per edge per
+// day so the tab's "N unique bets posted today" note and the Bet post stats panel can be
+// shown.
+const BA_EDGES = [
+  { key: 'oc-ev',   label: 'Oddschecker +EV', panel: 'view-oddschecker',  priced: true  },
+  { key: 'calc-ev', label: 'Calculated +EV',  panel: 'view-calculated',   priced: true  },
+  { key: 'ddhh',    label: 'DDHH',            panel: 'view-ddhh',         priced: false },
+  { key: 'corners', label: 'Corners',         panel: 'ba-panel-corners',  priced: false },
+  { key: 'f1-ew',   label: 'F1 EW',           panel: 'ba-panel-f1-ew',    priced: true  },
+  { key: 'arbs',    label: 'Arbs',            panel: 'ba-panel-arbs',     priced: true  },
+  { key: 'dnf',     label: 'DNFs',            panel: 'ba-panel-dnf',      priced: true  },
+];
+let BA_BOOKS = null;             // { canonicalBookie: bool } — null until first load (= all on)
+let BA_ACTIVE = (function(){ try { return localStorage.getItem('bb_betalert_tab') || 'oc-ev'; } catch(e) { return 'oc-ev'; } })();
+let BA_POLL = null;
+let BA_COUNTS = {};              // edge key -> current available count (post-filter)
+let cevLastBets = [];            // unfiltered Calculated +EV list, for re-filtering without re-scan
+
+function baEdge(key){ return BA_EDGES.find(e => e.key === key); }
+function baLabel(key){ const e = baEdge(key); return e ? e.label : key; }
+
+// ---- bookmaker filter ----
+const BA_BOOK_ALIASES = {
+  'sky bet':'SkyBet','skybet':'SkyBet','paddy power':'PaddyPower','paddypower':'PaddyPower',
+  'william hill':'WilliamHill','will hill':'WilliamHill','willhill':'WilliamHill',
+  'bet 365':'Bet365','betfair sportsbook':'Betfair','betfair sb':'Betfair','betfair exchange':'Betfair',
+  'betfair':'Betfair','888 sport':'888Sport','888sport':'888Sport','32 red':'32Red','32red':'32Red',
+  'planet sport bet':'PlanetSportBet','planetsport bet':'PlanetSportBet','dazn bet':'DaznBet',
+  'sporting bet':'SportingBet','sportingbet':'SportingBet','net bet':'NetBet','netbet':'NetBet',
+  'star sports':'StarSportsBet','star sports bet':'StarSportsBet','priced up':'PricedUp',
+  'pricedup':'PricedUp','dragon bet':'DragonBet','dragonbet':'DragonBet','bet george':'Bet StGeorge',
+  'bet st george':'Bet StGeorge','mr q':'MrQ','mrq':'MrQ',
+};
+function baNormKey(s){ return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+function baResolveBook(bk){
+  const raw = String(bk || '').trim();
+  if (!raw) return null;
+  const low = raw.toLowerCase();
+  if (BA_BOOK_ALIASES[low]) return BA_BOOK_ALIASES[low];
+  const nk = baNormKey(raw);
+  return BOOKIES_LIST.find(b => baNormKey(b) === nk) || null;
+}
+// True = show this bet. Unknown / not-yet-toggled books default to visible.
+function baBookEnabled(bk){
+  if (!BA_BOOKS) return true;
+  const canon = baResolveBook(bk);
+  if (canon && (canon in BA_BOOKS)) return !!BA_BOOKS[canon];
+  if (bk && (bk in BA_BOOKS)) return !!BA_BOOKS[bk];
+  return true;
+}
+function baBooksEnabledCount(){
+  return BOOKIES_LIST.filter(b => baBookEnabled(b)).length;
+}
+function updateBaBooksCount(){
+  const el = document.getElementById('ba-books-count');
+  if (el) el.textContent = `(${baBooksEnabledCount()}/${BOOKIES_LIST.length})`;
+}
+function baToggleBooksPanel(){
+  const p = document.getElementById('ba-books-panel');
+  if (!p) return;
+  const show = p.style.display === 'none' || !p.style.display;
+  if (show) buildBaBooksList();
+  p.style.display = show ? 'block' : 'none';
+}
+function buildBaBooksList(){
+  const list = document.getElementById('ba-books-list');
+  if (!list) return;
+  list.innerHTML = '';
+  BOOKIES_LIST.slice().sort((a, b) => a.localeCompare(b)).forEach(bk => {
+    const row = document.createElement('label');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 2px;font-size:13px;color:var(--text2);cursor:pointer';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.dataset.book = bk;
+    cb.checked = baBookEnabled(bk);
+    cb.addEventListener('change', updateBaBooksCount);
+    row.appendChild(cb);
+    row.appendChild(document.createTextNode(' ' + bk));
+    list.appendChild(row);
+  });
+  updateBaBooksCount();
+}
+function syncBaBooksList(){
+  document.querySelectorAll('#ba-books-list input[data-book]').forEach(cb => { cb.checked = baBookEnabled(cb.dataset.book); });
+  updateBaBooksCount();
+}
+function baSetAllBooks(v){
+  document.querySelectorAll('#ba-books-list input[data-book]').forEach(cb => { cb.checked = !!v; });
+  updateBaBooksCount();
+}
+function baApplyBooks(){
+  const map = {};
+  document.querySelectorAll('#ba-books-list input[data-book]').forEach(cb => { map[cb.dataset.book] = cb.checked; });
+  BA_BOOKS = map;
+  try { localStorage.setItem('bb_betalert_books', JSON.stringify(map)); } catch(e) {}
+  ledgerApi('bet-alert-books', { method: 'POST', body: JSON.stringify({ books: map }) }).catch(() => {});
+  updateBaBooksCount();
+  const p = document.getElementById('ba-books-panel');
+  if (p) p.style.display = 'none';
+  refreshActiveBaTab();
+}
+async function loadBaBooks(){
+  if (BA_BOOKS === null) {
+    try { const c = JSON.parse(localStorage.getItem('bb_betalert_books') || 'null'); if (c && typeof c === 'object') BA_BOOKS = c; } catch(e) {}
+  }
+  try {
+    const d = await ledgerApi('bet-alert-books');
+    if (d && d.ok && d.books && Object.keys(d.books).length) {
+      BA_BOOKS = Object.assign({}, BA_BOOKS || {}, d.books);
+      try { localStorage.setItem('bb_betalert_books', JSON.stringify(BA_BOOKS)); } catch(e) {}
+    }
+  } catch(e) {}
+  syncBaBooksList();
+}
+
+// ---- tabs ----
+function renderBaTabs(){
+  const wrap = document.getElementById('ba-tabs');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  BA_EDGES.forEach(e => {
+    const active = e.key === BA_ACTIVE;
+    const n = BA_COUNTS[e.key];
+    const b = document.createElement('button');
+    b.textContent = `${e.label}${n != null ? ` (${n})` : ''}`;
+    b.onclick = () => baTab(e.key);
+    b.style.cssText = `padding:8px 12px;border:none;border-bottom:2px solid ${active ? 'var(--brand)' : 'transparent'};background:none;color:${active ? 'var(--text)' : 'var(--text3)'};font-weight:${active ? '600' : '400'};font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap`;
+    wrap.appendChild(b);
+  });
+}
+function baSetCount(key, n){
+  BA_COUNTS[key] = n;
+  renderBaTabs();
+  baUpdateMenuTag();
+}
+function baUpdateMenuTag(){
+  const el = document.getElementById('betalerts-menu-tag');
+  if (!el) return;
+  const total = BA_EDGES.reduce((s, e) => s + (BA_COUNTS[e.key] || 0), 0);
+  el.textContent = total ? `${total} live` : '—';
+}
+function baTab(key){ activateBaTab(key); }
+function activateBaTab(key){
+  if (!baEdge(key)) key = 'oc-ev';
+  BA_ACTIVE = key;
+  try { localStorage.setItem('bb_betalert_tab', key); } catch(e) {}
+  BA_EDGES.forEach(e => {
+    const p = document.getElementById(e.panel);
+    if (p) p.style.display = e.key === key ? 'block' : 'none';
+  });
+  renderBaTabs();
+  if (BA_POLL) { clearInterval(BA_POLL); BA_POLL = null; }
+  loadBaEdge(key, false);
+  BA_POLL = setInterval(() => {
+    const v = document.getElementById('view-bet-alerts');
+    if (!v || v.style.display === 'none') { stopBetAlerts(); return; }
+    loadBaEdge(BA_ACTIVE, true);
+  }, 60000);
+}
+function stopBetAlerts(){ if (BA_POLL) { clearInterval(BA_POLL); BA_POLL = null; } }
+function refreshActiveBaTab(){
+  if (BA_ACTIVE === 'oc-ev') renderOddscheckerEV();
+  else if (BA_ACTIVE === 'calc-ev') { if (cevLastBets.length) renderEVResults(cevLastBets); }
+  else loadBaEdge(BA_ACTIVE, true);
+}
+function baRefreshActive(btn){
+  if (btn) {
+    const i = btn.querySelector('i');
+    if (i) i.className = 'ti ti-loader-2';
+    btn.disabled = true;
+    setTimeout(() => { if (i) i.className = 'ti ti-refresh'; btn.disabled = false; }, 1000);
+  }
+  if (BA_ACTIVE === 'ddhh') initDDHH({});
+  else loadBaEdge(BA_ACTIVE, false);
+}
+
+// ---- per-edge loaders ----
+function loadBaEdge(key, isPoll){
+  if (key === 'oc-ev') {
+    loadOddscheckerEV();                       // renders #scanner-body + calls baOnEdgeRendered
+  } else if (key === 'calc-ev') {
+    if (!isPoll) initCalcEV(0);                // full scan (heavy) — activate / manual refresh only
+    else if (cevLastBets.length) renderEVResults(cevLastBets);
+  } else if (key === 'ddhh') {
+    if (!isPoll) initDDHH(null);               // guarded by ddhhLoaded, cheap on re-entry
+  } else if (key === 'corners') {
+    loadBaCorners();
+  } else {
+    loadBaStubFeed(key);
+  }
+}
+
+// Called by renderOddscheckerEV / renderEVResults once they've built their (filtered) list.
+function baOnEdgeRendered(key, bets){
+  baSetCount(key, bets.length);
+  baReportSeen(key, bets);
+}
+
+async function baReportSeen(key, bets){
+  try {
+    const d = await ledgerApi('bet-alert-seen', { method: 'POST', body: JSON.stringify({ edge: key, bets: bets || [] }) });
+    if (d && d.ok) {
+      if (key === BA_ACTIVE) {
+        const el = document.getElementById('ba-day-note-text');
+        if (el) el.textContent = `${d.todayUnique} unique bet${d.todayUnique === 1 ? '' : 's'} posted today on ${baLabel(key)}.`;
+      }
+      const sp = document.getElementById('ba-stats-panel');
+      if (sp && sp.style.display !== 'none') loadBaStats();
+    }
+  } catch(e) {}
+}
+
+async function loadBaCorners(){
+  const body = document.getElementById('ba-corners-body');
+  const countEl = document.getElementById('ba-corners-count');
+  let matches = [];
+  try {
+    const d = await ledgerApi('match-predictions?date=' + fmtDateParam(new Date()));
+    if (d && d.ok) matches = d.matches || [];
+  } catch(e) {}
+  const rows = [];
+  matches.forEach(m => {
+    const name = `${(m.home && m.home.teamName) || 'Home'} v ${(m.away && m.away.teamName) || 'Away'}`;
+    [m.home, m.away].forEach(s => {
+      if (!s || !s.lineupConfirmed) return;
+      (s.cornerTakers || []).forEach(c => rows.push({
+        match: name, team: s.teamName || '', type: 'Corner taker', sel: c.name,
+        weight: (c.pct != null ? Math.round(c.pct) + '%' : '') + (c.side ? ` ${c.side}` : ''),
+      }));
+      (s.cornerThreatTargets || []).forEach(t => rows.push({
+        match: name, team: s.teamName || '', type: 'Header target', sel: t.name,
+        weight: t.odds != null ? Number(t.odds).toFixed(2) : '—',
+      }));
+    });
+  });
+  if (body) {
+    body.innerHTML = rows.length
+      ? rows.map(r => `<tr><td style="font-weight:500">${r.match}</td><td style="color:var(--text2)">${r.team}</td><td style="color:var(--text2);font-size:12px">${r.type}</td><td>${r.sel}</td><td class="r tn" style="color:var(--text2)">${r.weight}</td></tr>`).join('')
+      : `<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No confirmed lineups yet for matches still to kick off.</td></tr>`;
+  }
+  if (countEl) countEl.textContent = `${rows.length} prediction${rows.length === 1 ? '' : 's'} from confirmed lineups`;
+  baSetCount('corners', rows.length);
+  baReportSeen('corners', rows.map(r => ({ match: r.match, market: r.type, selection: r.sel })));
+}
+
+const BA_STUB_ENDPOINT = { 'f1-ew': 'bet-alerts-f1ew', 'arbs': 'bet-alerts-arbs', 'dnf': 'bet-alerts-dnf' };
+const BA_STUB_BODY = { 'f1-ew': 'ba-f1-ew-body', 'arbs': 'ba-arbs-body', 'dnf': 'ba-dnf-body' };
+async function loadBaStubFeed(key){
+  let bets = [];
+  try {
+    const r = await fetch('/.netlify/functions/' + BA_STUB_ENDPOINT[key]);
+    const d = await r.json();
+    if (d && d.ok && Array.isArray(d.bets)) bets = d.bets;
+  } catch(e) {}
+  const shown = bets.filter(b => baBookEnabled(b.bk));
+  const body = document.getElementById(BA_STUB_BODY[key]);
+  if (body) {
+    body.innerHTML = shown.length
+      ? shown.map(b => {
+          const val = key === 'arbs'
+            ? (b.profit_pct != null ? `${Number(b.profit_pct).toFixed(2)}%` : '—')
+            : (b.ev != null ? `+${Number(b.ev).toFixed(1)}%` : '—');
+          return `<tr><td style="color:var(--text2)">${b.t ?? ''}</td><td style="font-weight:500">${b.match ?? ''}</td><td style="color:var(--text2);font-size:12px">${b.mkt ?? ''}</td><td>${b.sel ?? ''}</td><td class="r tn">${b.fair != null ? Number(b.fair).toFixed(2) : '—'}</td><td class="r" style="color:var(--text2);font-size:12px">${b.bk ?? ''}</td><td class="r tn" style="font-weight:500">${b.odds != null ? Number(b.odds).toFixed(2) : '—'}</td><td class="r">${val}</td></tr>`;
+        }).join('')
+      : `<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">Feed not connected yet — nothing to show.</td></tr>`;
+  }
+  baSetCount(key, shown.length);
+  baReportSeen(key, shown.map(b => ({ match: b.match, market: b.mkt, selection: b.sel, bk: b.bk, odds: b.odds, ev: b.ev })));
+}
+
+// ---- bet post stats ----
+function baToggleStats(){
+  const p = document.getElementById('ba-stats-panel');
+  if (!p) return;
+  const show = p.style.display === 'none' || !p.style.display;
+  p.style.display = show ? 'block' : 'none';
+  if (show) loadBaStats();
+}
+async function loadBaStats(){
+  let d;
+  try { d = await ledgerApi('bet-alert-stats'); } catch(e) { return; }
+  if (!d || !d.ok) return;
+  const body = document.getElementById('ba-stats-body');
+  if (!body) return;
+  body.innerHTML = BA_EDGES.map(e => {
+    const s = (d.stats && d.stats[e.key]) || { todayUnique: 0, allTimeTotal: 0, daysTracked: 0, avgPerDay: 0 };
+    return `<tr><td>${e.label}</td><td class="r tn">${s.todayUnique}</td><td class="r tn">${s.allTimeTotal}</td><td class="r tn">${s.daysTracked}</td><td class="r tn">${s.avgPerDay}</td></tr>`;
+  }).join('');
+}
+
+// ---- entry point (from showTopSec('betalerts')) ----
+function initBetAlerts(){
+  renderBaTabs();
+  buildBaBooksList();
+  loadBaBooks();
+  activateBaTab(BA_ACTIVE);
+  loadBaStats();
+}
+
+// Close the bookmaker dropdown on an outside click.
+document.addEventListener('click', (e) => {
+  const p = document.getElementById('ba-books-panel');
+  if (!p || p.style.display === 'none') return;
+  if (!(e.target instanceof Element)) return;
+  if (e.target.closest('#ba-books-panel') || e.target.closest('#ba-books-btn')) return;
+  p.style.display = 'none';
+});
 </script>
 
 </body>

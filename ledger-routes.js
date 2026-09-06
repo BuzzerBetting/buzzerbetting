@@ -3039,4 +3039,137 @@ router.delete('/bookie-settings/:bookie', (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// ================== BET ALERTS ==================
+// Backs the Bet Alerts page (index.html #view-bet-alerts). Two concerns:
+//   1. bet_alert_posts — a per-day de-duped record of every distinct bet each edge has
+//      surfaced, so the page can show "N unique bets posted today" and an all-time /
+//      per-day breakdown. The alert feeds are stateless "what's valuable right now"
+//      snapshots; the frontend POSTs whatever the active tab currently shows on each
+//      refresh and this table accumulates the union.
+//   2. bet_alert_books — which bookmakers the page's bookmaker filter has ticked.
+
+// Every edge the Bet Alerts page knows about, in tab order. Kept here so /bet-alert-stats
+// always returns a row per edge even before anything has been posted for it.
+const BET_ALERT_EDGES = ['oc-ev', 'calc-ev', 'ddhh', 'corners', 'f1-ew', 'arbs', 'dnf'];
+
+// London calendar day, 'YYYY-MM-DD' — matches how the rest of the app thinks about "today".
+function betAlertDay() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
+}
+
+// match | market | selection, lower-cased and stripped to alphanumerics+spaces so the same
+// bet keeps one key across price / bookie / casing / punctuation drift within a day.
+function betAlertNorm(s) {
+  return String(s == null ? '' : s)
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function betAlertKey(b) {
+  return [betAlertNorm(b && b.match), betAlertNorm(b && b.market), betAlertNorm(b && b.selection)].join(' | ');
+}
+
+// POST /api/ledger/bet-alert-seen — body: { edge, bets:[{match,market,selection,bk?,odds?,ev?}] }
+// Upserts one row per distinct bet for today. Returns today's unique count for that edge.
+router.post('/bet-alert-seen', (req, res) => {
+  try {
+    const edge = String((req.body && req.body.edge) || '').trim();
+    if (!BET_ALERT_EDGES.includes(edge)) return res.status(400).json({ ok: false, error: 'unknown edge' });
+    const bets = Array.isArray(req.body && req.body.bets) ? req.body.bets : [];
+    const day = betAlertDay();
+
+    const upsert = db.prepare(
+      `INSERT INTO bet_alert_posts (edge, day, bet_key, sample)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(edge, day, bet_key)
+       DO UPDATE SET last_seen = datetime('now'), sample = excluded.sample`
+    );
+    const seen = new Set();
+    const tx = db.transaction(() => {
+      for (const b of bets) {
+        if (!b || (!b.match && !b.selection)) continue;
+        const key = betAlertKey(b);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const sample = JSON.stringify({
+          match: b.match ?? '', market: b.market ?? '', selection: b.selection ?? '',
+          bk: b.bk ?? null, odds: b.odds ?? null, ev: b.ev ?? null,
+        });
+        upsert.run(edge, day, key, sample);
+      }
+    });
+    tx();
+
+    const todayUnique = db.prepare(
+      `SELECT COUNT(*) AS c FROM bet_alert_posts WHERE edge = ? AND day = ?`
+    ).get(edge, day).c;
+    res.json({ ok: true, todayUnique });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// GET /api/ledger/bet-alert-stats — per-edge totals for the Bet post stats panel.
+router.get('/bet-alert-stats', (req, res) => {
+  try {
+    const day = betAlertDay();
+    const since = new Date(Date.now() - 13 * 86400000).toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
+
+    const today = new Map(db.prepare(
+      `SELECT edge, COUNT(*) AS c FROM bet_alert_posts WHERE day = ? GROUP BY edge`
+    ).all(day).map(r => [r.edge, r.c]));
+    const allTime = new Map(db.prepare(
+      `SELECT edge, COUNT(*) AS c FROM bet_alert_posts GROUP BY edge`
+    ).all().map(r => [r.edge, r.c]));
+    const days = new Map(db.prepare(
+      `SELECT edge, COUNT(DISTINCT day) AS d FROM bet_alert_posts GROUP BY edge`
+    ).all().map(r => [r.edge, r.d]));
+    const seriesRows = db.prepare(
+      `SELECT edge, day, COUNT(*) AS c FROM bet_alert_posts WHERE day >= ? GROUP BY edge, day ORDER BY day`
+    ).all(since);
+    const series = {};
+    for (const r of seriesRows) (series[r.edge] = series[r.edge] || []).push({ day: r.day, count: r.c });
+
+    const stats = {};
+    for (const edge of BET_ALERT_EDGES) {
+      const allTimeTotal = allTime.get(edge) || 0;
+      const daysTracked = days.get(edge) || 0;
+      stats[edge] = {
+        todayUnique: today.get(edge) || 0,
+        allTimeTotal,
+        daysTracked,
+        avgPerDay: daysTracked ? +(allTimeTotal / daysTracked).toFixed(2) : 0,
+        last14: series[edge] || [],
+      };
+    }
+    res.json({ ok: true, generatedAt: new Date().toISOString(), day, stats });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// GET /api/ledger/bet-alert-books — { ok, books:{ <bookie>: true|false } }, explicit rows only.
+router.get('/bet-alert-books', (req, res) => {
+  try {
+    const rows = db.prepare(`SELECT bookie, enabled FROM bet_alert_books`).all();
+    const books = {};
+    for (const r of rows) books[r.bookie] = !!r.enabled;
+    res.json({ ok: true, books });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/bet-alert-books — body: { books:{ <bookie>: bool } }. Replace-upsert.
+router.post('/bet-alert-books', requireAdmin, (req, res) => {
+  try {
+    const books = (req.body && req.body.books) || {};
+    const upsert = db.prepare(
+      `INSERT INTO bet_alert_books (bookie, enabled) VALUES (?, ?)
+       ON CONFLICT(bookie) DO UPDATE SET enabled = excluded.enabled, updated_at = datetime('now')`
+    );
+    const tx = db.transaction(() => {
+      for (const [bookie, enabled] of Object.entries(books)) {
+        if (!bookie || !bookie.trim()) continue;
+        upsert.run(bookie.trim(), enabled ? 1 : 0);
+      }
+    });
+    tx();
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 module.exports = router;

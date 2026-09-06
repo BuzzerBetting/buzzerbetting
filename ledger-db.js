@@ -343,6 +343,35 @@ CREATE TABLE IF NOT EXISTS lineup_notify_state (
   match_id TEXT PRIMARY KEY,
   notified_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- ================== BET ALERTS ==================
+-- One row per distinct bet an edge has surfaced on the Bet Alerts page on a given day.
+-- The alert feeds themselves are stateless snapshots of what's valuable right now; this
+-- table accumulates the de-duped set over the day so "N unique bets posted today" and the
+-- all-time / per-day Bet post stats can be shown. Written by POST /bet-alert-seen, which
+-- the frontend calls with whatever the active tab currently shows on each refresh.
+-- bet_key is a normalised  match | market | selection  — price / bookie / EV drift within
+-- the same day is still the same bet (locked with the user).
+CREATE TABLE IF NOT EXISTS bet_alert_posts (
+  edge     TEXT NOT NULL,   -- 'oc-ev' | 'calc-ev' | 'ddhh' | 'corners' | 'f1-ew' | 'arbs' | 'dnf'
+  day      TEXT NOT NULL,   -- 'YYYY-MM-DD', Europe/London
+  bet_key  TEXT NOT NULL,   -- normalised  match | market | selection
+  sample   TEXT,            -- JSON of a representative sighting: {match,market,selection,bk,odds,ev}
+  first_seen TEXT NOT NULL DEFAULT (datetime('now')),
+  last_seen  TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (edge, day, bet_key)
+);
+CREATE INDEX IF NOT EXISTS idx_bet_alert_posts_edge_day ON bet_alert_posts(edge, day);
+
+-- Which bookmakers the Bet Alerts bookmaker filter currently has ticked. Only books the
+-- user has actively toggled get a row; anything absent is treated as enabled by the
+-- frontend (default-on, merged over BOOKIES_LIST). Same one-row-per-bookie shape as
+-- bookie_settings above.
+CREATE TABLE IF NOT EXISTS bet_alert_books (
+  bookie TEXT PRIMARY KEY,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `);
 
 // Safe migration — ALTER TABLE ADD COLUMN errors if the column already exists, so this is
