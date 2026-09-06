@@ -2301,7 +2301,13 @@ input::placeholder{color:var(--text3)}
 
   <!-- panel: Corners -->
   <div id="ba-panel-corners" class="ba-panel" style="display:none">
-    <div class="smeta"><span class="pulse"></span><strong id="ba-corners-count" style="color:var(--green);font-weight:500">—</strong></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      <div class="smeta" style="margin:0"><span class="pulse"></span><strong id="ba-corners-count" style="color:var(--green);font-weight:500">—</strong></div>
+      <div id="ba-corners-sort" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden">
+        <button onclick="setBaCornersSort('league')" data-sort="league" style="background:none;border:none;padding:6px 12px;font-size:12px;color:var(--text2);cursor:pointer;font-family:inherit">By league</button>
+        <button onclick="setBaCornersSort('time')" data-sort="time" style="background:none;border:none;border-left:0.5px solid var(--border);padding:6px 12px;font-size:12px;color:var(--text2);cursor:pointer;font-family:inherit">By time</button>
+      </div>
+    </div>
     <div id="ba-corners-list"></div>
     <div class="note"><i class="ti ti-info-circle"></i> Predicted corner takers and header targets for matches whose lineups are confirmed and that haven't kicked off yet. From the corner model — refreshes every 60s.</div>
   </div>
@@ -13137,44 +13143,95 @@ async function baReportSeen(key, bets){
   } catch(e) {}
 }
 
-async function loadBaCorners(){
+let BA_CORNERS_CACHE = { confirmed: [], meta: {} }; // meta: matchId -> { ko, leagueName, ccode }
+
+function baCornersSortMode(){ try { return localStorage.getItem('bb_corners_sort') || 'time'; } catch(e) { return 'time'; } }
+function syncBaCornersSortToggle(){
+  const cur = baCornersSortMode();
+  document.querySelectorAll('#ba-corners-sort button').forEach(b => {
+    const on = b.dataset.sort === cur;
+    b.style.background = on ? 'var(--brand)' : 'none';
+    b.style.color = on ? '#fff' : 'var(--text2)';
+    b.style.fontWeight = on ? '600' : '400';
+  });
+}
+function setBaCornersSort(mode){
+  try { localStorage.setItem('bb_corners_sort', mode); } catch(e) {}
+  syncBaCornersSortToggle();
+  renderBaCorners();
+}
+
+// One match's block — kickoff, teams, league country code, then corner takers + header
+// threat per side underneath (same predSideBlock renderer as Today's Matches).
+function baCornerBlock(m, meta){
+  const home = m.home || {}, away = m.away || {};
+  const opts = { corners: true, pens: false };
+  const ko = meta.ko ? `<span style="color:var(--text3);font-weight:500">${fmtKickoff(meta.ko)}</span>` : '';
+  const cc = meta.ccode ? `<span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">${meta.ccode}</span>` : '';
+  return `<div class="card" style="padding:12px 16px;margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-weight:600;font-size:13px;margin-bottom:6px">
+      ${ko}<span>${(home.teamName || 'Home')} <span style="color:var(--text3)">v</span> ${(away.teamName || 'Away')}</span>${cc}
+    </div>
+    <div style="display:flex;gap:24px;flex-wrap:wrap">
+      <div style="flex:1;min-width:220px">
+        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">${home.teamName || 'Home'}</div>
+        ${predSideBlock(home, 'left', opts)}
+      </div>
+      <div style="flex:1;min-width:220px">
+        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">${away.teamName || 'Away'}</div>
+        ${predSideBlock(away, 'left', opts)}
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderBaCorners(){
+  syncBaCornersSortToggle();
   const list = document.getElementById('ba-corners-list');
+  if (!list) return;
+  const { confirmed, meta } = BA_CORNERS_CACHE;
+  if (!confirmed.length) {
+    list.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-calendar-off"></i></div><div class="ph-t">No confirmed lineups yet for matches still to kick off</div></div></div>`;
+    return;
+  }
+  const mode = baCornersSortMode();
+  if (mode === 'league') {
+    const groups = {};
+    confirmed.forEach(m => {
+      const g = (meta[String(m.matchId)] || {}).leagueName || 'Other';
+      (groups[g] = groups[g] || []).push(m);
+    });
+    list.innerHTML = Object.keys(groups).sort((a, b) => a.localeCompare(b)).map(name => {
+      const cc = ((meta[String(groups[name][0].matchId)] || {}).ccode) || '';
+      const ms = groups[name].slice().sort((a, b) => ((meta[String(a.matchId)] || {}).ko || '').localeCompare((meta[String(b.matchId)] || {}).ko || ''));
+      return `<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin:14px 0 8px">${name} <span style="color:var(--text3);font-weight:400">${cc}</span></div>`
+        + ms.map(m => baCornerBlock(m, meta[String(m.matchId)] || {})).join('');
+    }).join('');
+  } else {
+    const ms = confirmed.slice().sort((a, b) => ((meta[String(a.matchId)] || {}).ko || '').localeCompare((meta[String(b.matchId)] || {}).ko || ''));
+    list.innerHTML = ms.map(m => baCornerBlock(m, meta[String(m.matchId)] || {})).join('');
+  }
+}
+
+async function loadBaCorners(){
   const countEl = document.getElementById('ba-corners-count');
   const date = fmtDateParam(new Date());
-  let matches = [], koById = {};
+  let matches = [];
+  const meta = {};
   try {
     const [pred, fx] = await Promise.all([
       ledgerApi('match-predictions?date=' + date),
       fetch(`/.netlify/functions/fixtures?date=${date}`).then(r => r.json()).catch(() => null),
     ]);
     if (pred && pred.ok) matches = pred.matches || [];
-    if (fx && fx.ok) (fx.leagues || []).forEach(lg => (lg.matches || []).forEach(m => { if (m.utcTime) koById[String(m.id)] = m.utcTime; }));
+    if (fx && fx.ok) (fx.leagues || []).forEach(lg => (lg.matches || []).forEach(m => {
+      meta[String(m.id)] = { ko: m.utcTime || null, leagueName: lg.name || 'Other', ccode: lg.ccode || '' };
+    }));
   } catch(e) {}
 
-  // Same match-then-takers/threat-underneath layout as Today's Matches (predSideBlock),
-  // forced on regardless of that page's corner-toggle. One block per confirmed, not-started match.
   const confirmed = matches.filter(m => (m.home && m.home.lineupConfirmed) || (m.away && m.away.lineupConfirmed));
-  confirmed.sort((a, b) => (koById[String(a.matchId)] || '').localeCompare(koById[String(b.matchId)] || ''));
-  const opts = { corners: true, pens: false };
-  if (list) {
-    list.innerHTML = confirmed.length ? confirmed.map(m => {
-      const home = m.home || {}, away = m.away || {};
-      const ko = koById[String(m.matchId)] ? fmtKickoff(koById[String(m.matchId)]) : '';
-      return `<div class="card" style="padding:12px 16px;margin-bottom:10px">
-        <div style="font-weight:600;font-size:13px;margin-bottom:6px">${ko ? `<span style="color:var(--text3);font-weight:500;margin-right:8px">${ko}</span>` : ''}${(home.teamName || 'Home')} <span style="color:var(--text3)">v</span> ${(away.teamName || 'Away')}</div>
-        <div style="display:flex;gap:24px;flex-wrap:wrap">
-          <div style="flex:1;min-width:220px">
-            <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">${home.teamName || 'Home'}</div>
-            ${predSideBlock(home, 'left', opts)}
-          </div>
-          <div style="flex:1;min-width:220px">
-            <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">${away.teamName || 'Away'}</div>
-            ${predSideBlock(away, 'left', opts)}
-          </div>
-        </div>
-      </div>`;
-    }).join('') : `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-calendar-off"></i></div><div class="ph-t">No confirmed lineups yet for matches still to kick off</div></div></div>`;
-  }
+  BA_CORNERS_CACHE = { confirmed, meta };
+  renderBaCorners();
 
   // unique-bet tracking: one entry per predicted taker / threat target
   const seen = [];
