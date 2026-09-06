@@ -3317,6 +3317,7 @@ function applyRoleRestrictions() {
   const calcBackBtn = document.getElementById('calc-menu-back-btn');
   if (calcBackBtn) calcBackBtn.style.display = isCalculator ? 'none' : '';
   if (!isCalculator) startTodoPolling(); // Calculator has no Ledger access at all — polling would just produce repeated 403s
+  if (!isCalculator) startCalcEVBackground(); // Calculated +EV scans every 5 min in the background so the tab is always current
   startNotifPolling(); // header notification bell — every role, Calculator included (GET /notifications is allowed for it)
 }
 
@@ -11721,42 +11722,68 @@ let cevFixtures = [];
 // Left-Foot/Right-Foot/6-Yard-Box value (the only markets left here — Header/OTB moved to
 // the automated Oddschecker +EV pipeline, see that page's note) and renders straight to a
 // bets table in the same shape as Oddschecker +EV. No manual per-fixture step any more.
-async function initCalcEV(dayOffset) {
-  const statusEl = document.getElementById('cev-status');
-  document.getElementById('cev-results').style.display = 'none';
-  document.getElementById('cev-smeta').style.display = 'none';
-  statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t">Loading fixtures...</div></div></div>`;
+// Calculated +EV runs continuously in the background once logged in (started from
+// applyRoleRestrictions), scanning every 5 min so the tab always has fresh bets rather than
+// only scanning on click. Target: today's fixtures whose lineups are confirmed and that
+// haven't kicked off yet — the only ones a left/right-foot / 6-yard-box fair can be built for.
+let CALC_EV_BG_INTERVAL = null;
+let cevScanning = false;
+let cevLastScanAt = 0;
 
+function calcTodayParam() {
+  const d = new Date();
+  return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+}
+
+async function getConfirmedNotStartedFixtures() {
+  const date = calcTodayParam();
+  let fx = null, pred = null;
+  try { fx = await fetch(`/.netlify/functions/fixtures?date=${date}`).then(r => r.json()); } catch(e) {}
+  try { pred = await ledgerApi('match-predictions?date=' + date); } catch(e) {}
+  const confirmed = new Set();
+  if (pred && pred.ok) (pred.matches || []).forEach(m => {
+    if ((m.home && m.home.lineupConfirmed) || (m.away && m.away.lineupConfirmed)) confirmed.add(String(m.matchId));
+  });
+  const out = [];
+  if (fx && fx.ok) (fx.leagues || []).forEach(lg => (lg.matches || []).forEach(m => {
+    if (m.started || m.finished) return;
+    if (!confirmed.has(String(m.id))) return;
+    out.push({ ...m, leagueName: lg.name });
+  }));
+  return out;
+}
+
+async function runCalcEVScan(opts) {
+  opts = opts || {};
+  if (cevScanning) return;
+  if (opts.silent && document.hidden) return; // don't burn scrapes while the tab isn't visible
+  cevScanning = true;
+  const statusEl = document.getElementById('cev-status');
   try {
-    // No day picker any more — always scan today + tomorrow together and show everything
-    // upcoming. (A specific offset can still be forced by passing 0 or 1.)
-    const offsets = (dayOffset === 0 || dayOffset === 1) ? [dayOffset] : [0, 1];
-    cevFixtures = [];
-    for (const off of offsets) {
-      const now = new Date();
-      now.setDate(now.getDate() + off);
-      const date = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
-      const r = await fetch(`/.netlify/functions/fixtures?date=${date}`);
-      const data = await r.json();
-      if (!data.ok || !data.leagues?.length) continue;
-      // Skip anything already underway or finished — a match that's kicked off has no "before
-      // kickoff" value left to find here, and its lineup being confirmed doesn't change that.
-      data.leagues.forEach(league => {
-        league.matches.forEach(m => {
-          if (m.started || m.finished) return;
-          cevFixtures.push({ ...m, leagueName: league.name });
-        });
-      });
+    if (!opts.silent && statusEl) {
+      document.getElementById('cev-results').style.display = 'none';
+      document.getElementById('cev-smeta').style.display = 'none';
+      statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t">Loading fixtures...</div></div></div>`;
     }
-    if (!cevFixtures.length) {
-      statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-calendar-off"></i></div><div class="ph-t">No upcoming fixtures</div></div></div>`;
-      return;
-    }
-    await scanAllCalcEV(statusEl);
+    cevFixtures = await getConfirmedNotStartedFixtures();
+    await scanAllCalcEV(statusEl, { silent: !!opts.silent });
+    cevLastScanAt = Date.now();
   } catch(err) {
-    statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-wifi-off"></i></div><div class="ph-t">Failed to load fixtures</div><div class="ph-d">${err.message}</div></div></div>`;
+    if (!opts.silent && statusEl) statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-wifi-off"></i></div><div class="ph-t">Failed to load fixtures</div><div class="ph-d">${err.message}</div></div></div>`;
+  } finally {
+    cevScanning = false;
   }
 }
+
+function startCalcEVBackground() {
+  if (CURRENT_USER_ROLE === 'calculator') return;
+  if (CALC_EV_BG_INTERVAL) clearInterval(CALC_EV_BG_INTERVAL);
+  runCalcEVScan({ silent: true });
+  CALC_EV_BG_INTERVAL = setInterval(() => runCalcEVScan({ silent: true }), 5 * 60 * 1000);
+}
+
+// Thin alias — kept so existing callers / the Bet Alerts Refresh button still work.
+function initCalcEV() { return runCalcEVScan({ silent: false }); }
 function slugifyOC(str) {
   return (str||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 }
@@ -12149,19 +12176,15 @@ async function runScanCore(matchId, home, away, competition) {
 
 // Scans every fixture loaded for today/tomorrow and renders straight to the results table —
 // no manual per-fixture step, called automatically by initCalcEV.
-async function scanAllCalcEV(statusEl) {
-  if (!cevFixtures.length) {
-    statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-calendar-off"></i></div><div class="ph-t">No fixtures today</div></div></div>`;
-    return;
-  }
-
+async function scanAllCalcEV(statusEl, opts) {
+  opts = opts || {};
   const smetaEl = document.getElementById('cev-smeta');
   const smetaCount = document.getElementById('cev-smeta-count');
-  smetaEl.style.display = '';
+  if (smetaEl) smetaEl.style.display = '';
 
   const allEvBets = [];
   for (const fixture of cevFixtures) {
-    smetaCount.textContent = `Scanning ${fixture.home} v ${fixture.away}...`;
+    if (!opts.silent && smetaCount) smetaCount.textContent = `Scanning ${fixture.home} v ${fixture.away}...`;
     try {
       const bets = await runScanCore(fixture.id, fixture.home, fixture.away, fixture.leagueName);
       const t = fixture.utcTime ? fmtKickoff(fixture.utcTime) : 'TBC';
@@ -12195,8 +12218,8 @@ async function scanAllCalcEV(statusEl) {
     return (b.bestEv ?? 0) - (a.bestEv ?? 0);
   });
 
-  statusEl.innerHTML = '';
-  smetaCount.textContent = `${allEvBets.length} bet${allEvBets.length === 1 ? '' : 's'} found`;
+  if (statusEl) statusEl.innerHTML = '';
+  if (smetaCount) smetaCount.textContent = `${allEvBets.length} bet${allEvBets.length === 1 ? '' : 's'} found`;
   renderEVResults(allEvBets);
 }
 
@@ -13070,6 +13093,7 @@ function baRefreshActive(btn){
     setTimeout(() => { if (i) i.className = 'ti ti-refresh'; btn.disabled = false; }, 1000);
   }
   if (BA_ACTIVE === 'ddhh') initDDHH({});
+  else if (BA_ACTIVE === 'calc-ev') runCalcEVScan({ silent: false });
   else loadBaEdge(BA_ACTIVE, false);
 }
 
@@ -13078,8 +13102,12 @@ function loadBaEdge(key, isPoll){
   if (key === 'oc-ev') {
     loadOddscheckerEV();                       // renders #scanner-body + calls baOnEdgeRendered
   } else if (key === 'calc-ev') {
-    if (!isPoll) initCalcEV(0);                // full scan (heavy) — activate / manual refresh only; today only
-    else if (cevLastBets.length) renderEVResults(cevLastBets);
+    // Background timer (startCalcEVBackground) keeps this current every 5 min. On tab open,
+    // show whatever it last produced instantly, then kick a silent refresh; only do a
+    // visible scan if nothing has run yet.
+    if (isPoll) { if (cevLastBets.length) renderEVResults(cevLastBets); }
+    else if (cevLastScanAt) { renderEVResults(cevLastBets); runCalcEVScan({ silent: true }); }
+    else runCalcEVScan({ silent: false });
   } else if (key === 'ddhh') {
     if (!isPoll) initDDHH(null);               // guarded by ddhhLoaded, cheap on re-entry
   } else if (key === 'corners') {
