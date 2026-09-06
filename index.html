@@ -770,6 +770,29 @@ input::placeholder{color:var(--text3)}
 
     <div id="bet-entry-note" style="display:none;margin-bottom:14px;padding:10px 14px;background:var(--amber-bg);color:var(--amber);border-radius:var(--radius);font-size:12.5px"></div>
 
+    <!-- Discord corner-slip auto-entry — only shown for Buzzer / Corners, admin only. -->
+    <div id="crn-discord-card" style="display:none;border:.5px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:600;font-size:13px"><i class="ti ti-brand-discord" style="color:#5865F2"></i> Discord auto-entry</div>
+          <div style="font-size:11px;color:var(--text3)" id="crn-discord-status">Loading…</div>
+        </div>
+        <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;user-select:none">
+          <input type="checkbox" id="crn-discord-toggle" onchange="onCrnDiscordToggle()"> Parsing on
+        </label>
+      </div>
+      <div id="crn-discord-config" style="display:none;margin-top:12px">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <select id="crn-discord-account" style="padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text1);font-size:13px;font-family:inherit;min-width:240px"></select>
+          <input id="crn-discord-stake" type="number" step="0.01" min="0" placeholder="Fallback stake (optional)" style="width:190px;padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text1);font-size:13px;font-family:inherit">
+          <button onclick="saveCrnDiscordConfig()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit">Save</button>
+          <span id="crn-discord-msg" style="font-size:12px"></span>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px">Books each parsed corner slip on the selected account with the stake from the screenshot (fallback used only if that can't be read).</div>
+      </div>
+      <div id="crn-discord-recent" style="margin-top:10px;font-size:11px;color:var(--text3)"></div>
+    </div>
+
     <!-- Backlog entry: off by default (bet logs under today's date, as always). Ticked, it
          swaps in a typed DD/MM/YYYY date instead (slashes auto-inserted as you type digits) —
          for logging a bet after the event happened, e.g. Corners bets need the real fixture
@@ -1928,27 +1951,6 @@ input::placeholder{color:var(--text3)}
   <div id="ts-personal-corners" class="tracker-section" style="display:none">
     <button class="back" onclick="backToTrackerSection('personal')"><i class="ti ti-arrow-left"></i> Personal bets</button>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px"><div class="sec-title" style="margin-bottom:0">Corners</div><button onclick="openCornersSection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'"><i class="ti ti-refresh"></i> Refresh</button></div>
-    <div class="card" id="crn-discord-card" style="padding:14px 18px;margin-bottom:16px">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-        <div>
-          <div style="font-weight:600;font-size:13px"><i class="ti ti-brand-discord" style="color:#5865F2"></i> Discord auto-entry</div>
-          <div style="font-size:11px;color:var(--text3)" id="crn-discord-status">Loading…</div>
-        </div>
-        <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;user-select:none">
-          <input type="checkbox" id="crn-discord-toggle" onchange="onCrnDiscordToggle()"> Parsing on
-        </label>
-      </div>
-      <div id="crn-discord-config" style="display:none;margin-top:12px">
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <select id="crn-discord-account" style="padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text1);font-size:13px;font-family:inherit;min-width:240px"></select>
-          <input id="crn-discord-stake" type="number" step="0.01" min="0" placeholder="Fallback stake (optional)" style="width:190px;padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text1);font-size:13px;font-family:inherit">
-          <button onclick="saveCrnDiscordConfig()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit">Save</button>
-          <span id="crn-discord-msg" style="font-size:12px"></span>
-        </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:6px">Books each parsed corner slip on the selected account with the stake from the screenshot (fallback used only if that can't be read).</div>
-      </div>
-      <div id="crn-discord-recent" style="margin-top:10px;font-size:11px;color:var(--text3)"></div>
-    </div>
     <div id="crn-status-card" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="crn-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="crn-status-title">Loading...</div><div class="ph-d" id="crn-status-msg"></div></div></div></div>
     <div id="crn-kpi-wrap" style="display:none"><div class="kpis" id="crn-kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px"></div></div>
     <div id="crn-table-wrap" style="display:none"><div class="card"><div style="padding:12px 20px;border-bottom:.5px solid var(--border)"><span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500" id="crn-table-hdr">Bets</span></div><div style="overflow-x:auto;max-height:520px;overflow-y:auto"><table class="dt" style="min-width:580px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr><th style="min-width:72px">Date</th><th>Result</th><th style="min-width:120px">Assist</th><th style="min-width:120px">Scorer</th><th class="r">Odds</th><th class="r">Stake</th><th class="r">P/L</th></tr></thead><tbody id="crn-tbody"></tbody></table></div></div></div>
@@ -3799,6 +3801,13 @@ function selectBetType(type, label) {
   const noteEl = document.getElementById('bet-entry-note');
   if (cfg.note) { noteEl.style.display = 'block'; noteEl.innerHTML = `<i class="ti ti-info-circle"></i> ${cfg.note}`; }
   else { noteEl.style.display = 'none'; }
+
+  // Discord corner-slip auto-entry panel — only under Buzzer / Corners, admin only.
+  const dcard = document.getElementById('crn-discord-card');
+  if (dcard) {
+    if (type === 'Corners' && betEntryLastGroup === 'buzzer' && CURRENT_USER_ROLE === 'admin') loadCrnDiscordConfig();
+    else dcard.style.display = 'none';
+  }
 
   document.getElementById('bet-entry-paste-wrap').style.display = cfg.layout === 'paste' ? 'block' : 'none';
   if (cfg.layout === 'paste') document.getElementById('bet-entry-paste-input').value = '';
@@ -10748,7 +10757,7 @@ function renderOtherTable(rows,summary){
 }
 
 // ── CORNERS ──
-function openCornersSection(){openTrkSection({prefix:'crn',tab:'Corners',render:renderCornersTable});loadCrnDiscordConfig();}
+function openCornersSection(){openTrkSection({prefix:'crn',tab:'Corners',render:renderCornersTable});}
 
 // ── Discord corner-bet auto-entry (config panel in the Corners tracker section) ──
 let CRN_DISCORD_CFG = { enabled: false, account_id: null, default_stake: null };
