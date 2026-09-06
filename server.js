@@ -162,6 +162,29 @@ app.get('/api/oc-calc-ev', (req, res) => {
   }
 });
 
+// GET /api/oc-f1-ew, /api/oc-arbs, /api/oc-dnf — the new Bet Alerts edges (F1 Each-Way,
+// Arbs, DNFs). Same "just read whatever the scraper last wrote" contract as /api/oc-ev and
+// /api/oc-calc-ev above; the oc-scraper side that writes these JSON files doesn't exist yet,
+// so until it does these simply return an empty feed and the Bet Alerts tab shows its
+// empty state. Bets array shape: { t, match, mkt, sel, fair, bk, odds, ev } plus optional
+// per-edge extras (F1 EW: place_terms; Arbs: legs[], profit_pct).
+const BET_ALERT_FEED_PATHS = {
+  '/api/oc-f1-ew': require('path').join(__dirname, 'oc-scraper', 'data', 'oc_f1_ew_bets.json'),
+  '/api/oc-arbs':  require('path').join(__dirname, 'oc-scraper', 'data', 'oc_arb_bets.json'),
+  '/api/oc-dnf':   require('path').join(__dirname, 'oc-scraper', 'data', 'oc_dnf_bets.json'),
+};
+for (const [route, filePath] of Object.entries(BET_ALERT_FEED_PATHS)) {
+  app.get(route, (req, res) => {
+    if (!fs.existsSync(filePath)) return res.json({ ok: true, updated: null, bets: [] });
+    try {
+      const payload = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      res.json({ ok: true, updated: payload.updated || null, bets: payload.bets || [] });
+    } catch (e) {
+      res.json({ ok: false, error: `Failed reading ${require('path').basename(filePath)}: ` + e.message });
+    }
+  });
+}
+
 // POST /api/oc-ev/refresh — kicks off the same run_pipeline.sh the systemd timer fires every
 // 10 minutes, on demand. Deliberately fire-and-forget (returns immediately, doesn't wait for
 // the scrape to finish) rather than blocking the request: a full run takes 15-60s depending
