@@ -91,6 +91,11 @@ exports.handler = async (event) => {
             started: m.status?.started || false,
             finished: m.status?.finished || false,
             score: m.status?.scoreStr || null,
+            // FotMob flags postponed/cancelled/abandoned/suspended matches via status.cancelled
+            // and/or a status.reason. Surfaced so downstream can ignore them for lineups /
+            // predictions / +EV scanning rather than treating a stalled game as live.
+            cancelled: m.status?.cancelled || false,
+            statusReason: m.status?.reason?.long || m.status?.reason?.short || null,
             link: `https://www.fotmob.com/matches/${m.id}`
           }))
       }))
