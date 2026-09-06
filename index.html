@@ -793,6 +793,18 @@ input::placeholder{color:var(--text3)}
       <div id="crn-discord-recent" style="margin-top:10px;font-size:11px;color:var(--text3)"></div>
     </div>
 
+    <!-- Corner bets CSV export (a day's bets, to send to Dan) — Buzzer / Corners only. -->
+    <div id="crn-export-card" style="display:none;border:.5px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-bottom:14px">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div style="font-weight:600;font-size:13px"><i class="ti ti-file-export"></i> Export CSV</div>
+        <label class="lbl" style="margin:0">Date</label>
+        <input type="date" id="crn-export-date" style="padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text1);font-size:13px;font-family:inherit">
+        <button onclick="crnExportRun(this)" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-download"></i> Export</button>
+        <span id="crn-export-msg" style="font-size:12px;color:var(--text3)"></span>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px">Downloads every corner bet logged on that date (manual, Quick Bet and Discord) as a CSV.</div>
+    </div>
+
     <!-- Backlog entry: off by default (bet logs under today's date, as always). Ticked, it
          swaps in a typed DD/MM/YYYY date instead (slashes auto-inserted as you type digits) —
          for logging a bet after the event happened, e.g. Corners bets need the real fixture
@@ -1950,18 +1962,7 @@ input::placeholder{color:var(--text3)}
   </div>
   <div id="ts-personal-corners" class="tracker-section" style="display:none">
     <button class="back" onclick="backToTrackerSection('personal')"><i class="ti ti-arrow-left"></i> Personal bets</button>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:8px;flex-wrap:wrap"><div class="sec-title" style="margin-bottom:0">Corners</div>
-      <div style="display:flex;gap:8px">
-        <button onclick="crnExportToggle()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'"><i class="ti ti-file-export"></i> Export CSV</button>
-        <button onclick="openCornersSection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'"><i class="ti ti-refresh"></i> Refresh</button>
-      </div>
-    </div>
-    <div id="crn-export-panel" style="display:none;margin-bottom:16px"><div class="card" style="padding:14px 18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <label class="lbl" style="margin:0">Date</label>
-      <input type="date" id="crn-export-date" style="padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text1);font-size:13px;font-family:inherit">
-      <button onclick="crnExportRun(this)" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:8px 18px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-download"></i> Export</button>
-      <span id="crn-export-msg" style="font-size:12px;color:var(--text3)"></span>
-    </div></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px"><div class="sec-title" style="margin-bottom:0">Corners</div><button onclick="openCornersSection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'"><i class="ti ti-refresh"></i> Refresh</button></div>
     <div id="crn-status-card" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="crn-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="crn-status-title">Loading...</div><div class="ph-d" id="crn-status-msg"></div></div></div></div>
     <div id="crn-kpi-wrap" style="display:none"><div class="kpis" id="crn-kpis" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px"></div></div>
     <div id="crn-table-wrap" style="display:none"><div class="card"><div style="padding:12px 20px;border-bottom:.5px solid var(--border)"><span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500" id="crn-table-hdr">Bets</span></div><div style="overflow-x:auto;max-height:520px;overflow-y:auto"><table class="dt" style="min-width:580px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr><th style="min-width:72px">Date</th><th>Result</th><th style="min-width:120px">Assist</th><th style="min-width:120px">Scorer</th><th class="r">Odds</th><th class="r">Stake</th><th class="r">P/L</th></tr></thead><tbody id="crn-tbody"></tbody></table></div></div></div>
@@ -3813,11 +3814,19 @@ function selectBetType(type, label) {
   if (cfg.note) { noteEl.style.display = 'block'; noteEl.innerHTML = `<i class="ti ti-info-circle"></i> ${cfg.note}`; }
   else { noteEl.style.display = 'none'; }
 
-  // Discord corner-slip auto-entry panel — only under Buzzer / Corners, admin only.
+  // Corners-only extras under Buzzer: Discord auto-entry (admin only) + CSV export.
+  const isBuzzerCorners = type === 'Corners' && betEntryLastGroup === 'buzzer';
   const dcard = document.getElementById('crn-discord-card');
   if (dcard) {
-    if (type === 'Corners' && betEntryLastGroup === 'buzzer' && CURRENT_USER_ROLE === 'admin') loadCrnDiscordConfig();
+    if (isBuzzerCorners && CURRENT_USER_ROLE === 'admin') loadCrnDiscordConfig();
     else dcard.style.display = 'none';
+  }
+  const xcard = document.getElementById('crn-export-card');
+  if (xcard) {
+    xcard.style.display = isBuzzerCorners ? 'block' : 'none';
+    const xd = document.getElementById('crn-export-date');
+    if (isBuzzerCorners && xd && !xd.value) xd.value = new Date().toLocaleDateString('en-CA');
+    const xm = document.getElementById('crn-export-msg'); if (xm) xm.textContent = '';
   }
 
   document.getElementById('bet-entry-paste-wrap').style.display = cfg.layout === 'paste' ? 'block' : 'none';
@@ -10768,20 +10777,9 @@ function renderOtherTable(rows,summary){
 }
 
 // ── CORNERS ──
-function openCornersSection(){openTrkSection({prefix:'crn',tab:'Corners',render:renderCornersTable});const p=document.getElementById('crn-export-panel');if(p)p.style.display='none';}
+function openCornersSection(){openTrkSection({prefix:'crn',tab:'Corners',render:renderCornersTable});}
 
 // ── Corner bets CSV export (for sending a day's bets to Dan) ──
-function crnExportToggle(){
-  const p = document.getElementById('crn-export-panel');
-  if (!p) return;
-  const show = p.style.display === 'none' || !p.style.display;
-  p.style.display = show ? 'block' : 'none';
-  if (show) {
-    const d = document.getElementById('crn-export-date');
-    if (d && !d.value) d.value = fmtDateParam(new Date()).replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3');
-    document.getElementById('crn-export-msg').textContent = '';
-  }
-}
 function csvCell(v){
   const s = v == null ? '' : String(v);
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
