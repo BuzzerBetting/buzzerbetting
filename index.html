@@ -343,6 +343,43 @@ input::placeholder{color:var(--text3)}
       <div><div class="cat-title">Today's Matches</div><div class="cat-desc">Fixture list and lineup scanner — FotMob live data</div><div class="cat-tag" style="background:var(--green-bg);color:var(--green)">Live</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
+    <div class="cat" onclick="showSec('freeze')">
+      <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-snowflake"></i></div>
+      <div><div class="cat-title">Freeze</div><div class="cat-desc">SkyBet acca freeze builder and eligible-fixtures list</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
+  </div>
+</div>
+
+<!-- FREEZE -->
+<div id="view-freeze" class="sec" style="display:none">
+  <button class="back" onclick="backToCalcMenu()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <div class="sec-title">Freeze</div>
+
+  <div id="freeze-tabs" style="display:flex;gap:4px;flex-wrap:wrap;border-bottom:.5px solid var(--border);margin-bottom:16px"></div>
+
+  <!-- panel: builder (bet-building tools land here) -->
+  <div id="freeze-panel-builder" style="display:none">
+    <div class="note"><i class="ti ti-info-circle"></i> Acca builder — pick fodder legs and a freeze target, generate candidate accas, and log them to the ledger. Not built yet.</div>
+  </div>
+
+  <!-- panel: full eligible-fixtures list -->
+  <div id="freeze-panel-list" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <label for="freeze-min-odds" style="font-size:12.5px;color:var(--text2)">Minimum team odds</label>
+        <input id="freeze-min-odds" type="number" step="0.5" min="1" placeholder="e.g. 7" oninput="renderFreezeList()" style="width:80px;background:var(--surface);border:.5px solid var(--border);border-radius:var(--radius);padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit">
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span id="freeze-list-count" style="font-size:12px;color:var(--text3)"></span>
+        <button onclick="loadFreezeList(true)" id="freeze-refresh-btn" style="display:flex;align-items:center;gap:6px;background:none;border:.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+      </div>
+    </div>
+    <div id="freeze-list-status" class="note" style="display:none"></div>
+    <div style="overflow-x:auto"><table class="dt" style="min-width:640px">
+      <thead><tr><th style="min-width:72px">Kickoff</th><th>Competition</th><th>Home</th><th class="r">Home odds</th><th class="r">Draw</th><th>Away</th><th class="r">Away odds</th></tr></thead>
+      <tbody id="freeze-list-tbody"></tbody>
+    </table></div>
   </div>
 </div>
 
@@ -2884,7 +2921,7 @@ function showSec(name){
   // any legacy showSec() call for them redirects there rather than to a standalone .sec.
   if(name==='oddschecker'||name==='calculated'||name==='ddhh'){openBetAlerts({oddschecker:'oc-ev',calculated:'calc-ev',ddhh:'ddhh'}[name]);return;}
   stopBetAlerts();
-  document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='today')initToday();if(name==='bets-combined')initBetsPage();if(name==='monthly')initMonthly();if(name==='monthlyprofit')initMonthlyProfit();if(name==='assistantmonthly')initAssistantMonthly();if(name==='todo')initTodo();stopOddscheckerEVRefresh();}
+  document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='freeze')initFreeze();if(name==='today')initToday();if(name==='bets-combined')initBetsPage();if(name==='monthly')initMonthly();if(name==='monthlyprofit')initMonthlyProfit();if(name==='assistantmonthly')initAssistantMonthly();if(name==='todo')initTodo();stopOddscheckerEVRefresh();}
 const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger',bettracking:'bettracking',stats:'stats-menu',betalerts:'bet-alerts'};
 function showTopSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='stats')renderStatsMenu();if(name==='calc')loadOddscheckerEV();stopOddscheckerEVRefresh();if(name==='betalerts')initBetAlerts();else stopBetAlerts();}
 // Jump straight to a specific Bet Alerts tab (used by the Calculations menu shortcuts and the
@@ -13503,6 +13540,102 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('#ba-books-panel') || e.target.closest('#ba-books-btn')) return;
   p.style.display = 'none';
 });
+
+// ── FREEZE PAGE (SkyBet acca-freeze builder) ─────────────────────────────────
+// New Calculations > Freeze page — not to be confused with the ledger's existing "Freeze" bet-
+// category tracker (openFreezeSection/renderFreezeTable, up near the other trk* sections), which
+// renders already-logged Freeze bets read out of the ledger. This is the new builder/browser page.
+const FREEZE_TABS = [
+  { key: 'builder', label: 'Freeze Builder', panel: 'freeze-panel-builder' },
+  { key: 'list',    label: 'Full Sky Freeze List', panel: 'freeze-panel-list' },
+];
+let FREEZE_ACTIVE = (function(){ try { return localStorage.getItem('bb_freeze_tab') || 'builder'; } catch(e) { return 'builder'; } })();
+let FREEZE_DATA = null; // last-loaded { fixtures, updated } from netlify/functions/skybet-accafreeze
+
+function initFreeze(){ activateFreezeTab(FREEZE_ACTIVE); }
+
+function renderFreezeTabs(){
+  const wrap = document.getElementById('freeze-tabs');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  FREEZE_TABS.forEach(t => {
+    const active = t.key === FREEZE_ACTIVE;
+    const b = document.createElement('button');
+    b.textContent = t.label;
+    b.onclick = () => freezeTab(t.key);
+    b.style.cssText = `padding:8px 12px;border:none;border-bottom:2px solid ${active ? 'var(--brand)' : 'transparent'};background:none;color:${active ? 'var(--text)' : 'var(--text3)'};font-weight:${active ? '600' : '400'};font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap`;
+    wrap.appendChild(b);
+  });
+}
+function freezeTab(key){ activateFreezeTab(key); }
+function activateFreezeTab(key){
+  if (!FREEZE_TABS.find(t => t.key === key)) key = 'builder';
+  FREEZE_ACTIVE = key;
+  try { localStorage.setItem('bb_freeze_tab', key); } catch(e) {}
+  FREEZE_TABS.forEach(t => {
+    const p = document.getElementById(t.panel);
+    if (p) p.style.display = t.key === key ? 'block' : 'none';
+  });
+  renderFreezeTabs();
+  if (key === 'list' && !FREEZE_DATA) loadFreezeList();
+}
+
+// forceRefresh is currently unused (there's only ever one thing to fetch) — kept as a named
+// param on the refresh button's onclick for clarity/future use (e.g. bypassing a cache).
+async function loadFreezeList(forceRefresh){
+  const statusEl = document.getElementById('freeze-list-status');
+  const btn = document.getElementById('freeze-refresh-btn');
+  if (btn) btn.disabled = true;
+  if (statusEl) { statusEl.style.display = ''; statusEl.innerHTML = '<i class="ti ti-info-circle"></i> Loading eligible fixtures…'; }
+  try {
+    const r = await fetch('/.netlify/functions/skybet-accafreeze');
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'unknown error');
+    FREEZE_DATA = d;
+    if (statusEl) statusEl.style.display = 'none';
+    renderFreezeList();
+  } catch (e) {
+    if (statusEl) { statusEl.style.display = ''; statusEl.innerHTML = `<i class="ti ti-alert-triangle"></i> Couldn't load fixtures: ${escapeHtml(e.message)}`; }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// Pure client-side filter over the already-loaded fixture list — the min-odds box re-slices
+// what's in memory rather than re-hitting the scraper on every keystroke. Odds check is
+// home-or-away only (never draw) since the freeze target is always a team, never the draw.
+function renderFreezeList(){
+  const tbody = document.getElementById('freeze-list-tbody');
+  const countEl = document.getElementById('freeze-list-count');
+  if (!tbody) return;
+  if (!FREEZE_DATA) { tbody.innerHTML = ''; if (countEl) countEl.textContent = ''; return; }
+  const minInput = document.getElementById('freeze-min-odds');
+  const minRaw = minInput ? minInput.value : '';
+  const min = minRaw !== '' ? parseFloat(minRaw) : null;
+  const fixtures = FREEZE_DATA.fixtures
+    .filter(f => min == null || (f.homeOdds != null && f.homeOdds >= min) || (f.awayOdds != null && f.awayOdds >= min))
+    .sort((a, b) => (a.kickoff || '').localeCompare(b.kickoff || ''));
+
+  tbody.innerHTML = '';
+  fixtures.forEach(f => {
+    const homeHot = min != null && f.homeOdds != null && f.homeOdds >= min;
+    const awayHot = min != null && f.awayOdds != null && f.awayOdds >= min;
+    const kickoff = f.kickoff ? new Date(f.kickoff).toLocaleString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td style="font-size:12px;white-space:nowrap">${kickoff}</td>` +
+      `<td style="font-size:12px;color:var(--text2)">${escapeHtml(f.competition || '')}</td>` +
+      `<td style="${homeHot ? 'font-weight:600;color:var(--green)' : ''}">${escapeHtml(f.home)}</td>` +
+      `<td class="r tn" style="${homeHot ? 'font-weight:600;color:var(--green)' : ''}">${f.homeOdds != null ? f.homeOdds.toFixed(2) : '—'}</td>` +
+      `<td class="r tn" style="color:var(--text3)">${f.drawOdds != null ? f.drawOdds.toFixed(2) : '—'}</td>` +
+      `<td style="${awayHot ? 'font-weight:600;color:var(--green)' : ''}">${escapeHtml(f.away)}</td>` +
+      `<td class="r tn" style="${awayHot ? 'font-weight:600;color:var(--green)' : ''}">${f.awayOdds != null ? f.awayOdds.toFixed(2) : '—'}</td>`;
+    tbody.appendChild(tr);
+  });
+  if (countEl) countEl.textContent = `${fixtures.length} of ${FREEZE_DATA.fixtures.length} fixtures${FREEZE_DATA.updated ? ` · updated ${new Date(FREEZE_DATA.updated).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : ''}`;
+  if (!fixtures.length) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No fixtures${min != null ? ` with a team at ${min}+ odds` : ''} right now.</td></tr>`;
+  }
+}
 </script>
 
 </body>
