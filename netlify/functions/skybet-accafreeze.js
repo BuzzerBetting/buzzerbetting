@@ -139,7 +139,16 @@ async function findAccaFreezeCouponUrl(cookies) {
 // for step 4's batched GraphQL calls.
 async function loadCouponPage(couponPath, cookies) {
   const res = await skybetFetch(`https://skybet.com/${couponPath}`, cookies);
-  if (!res.ok) throw new Error(`coupon page HTTP ${res.status}`);
+  if (!res.ok) {
+    // Extra diagnostics on failure — cf-mitigated/server tell us whether this is Cloudflare
+    // bot-management blocking the request outright (vs. e.g. a plain expired-session redirect),
+    // and a body snippet shows a challenge page ("Just a moment...") vs a normal error page.
+    const cfMitigated = res.headers.get('cf-mitigated');
+    const cfRay = res.headers.get('cf-ray');
+    const server = res.headers.get('server');
+    const bodySnippet = (await res.text().catch(() => '')).slice(0, 300).replace(/\s+/g, ' ').trim();
+    throw new Error(`coupon page HTTP ${res.status} | server=${server} cf-ray=${cfRay} cf-mitigated=${cfMitigated} | body: ${bodySnippet}`);
+  }
   const html = await res.text();
   const catalog = extractWindowVar(html, '__TBD_PRELOADED_CATALOG__');
   const preloaded = extractWindowVar(html, '__PRELOADED_STATE__');
