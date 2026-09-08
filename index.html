@@ -12655,7 +12655,9 @@ function renderEVResults(bets) {
   if (typeof baBookEnabled === 'function') bets = bets.filter(b => baBookEnabled(b.bookie));
   const cevCountEl = document.getElementById('cev-smeta-count');
   if (cevCountEl) cevCountEl.textContent = `${bets.length} bet${bets.length === 1 ? '' : 's'} found`;
-  if (typeof baOnEdgeRendered === 'function') baOnEdgeRendered('calc-ev', bets.map(b => ({ match: b.match, market: b.market, selection: b.player, bk: ocBookieName(b.bookie), odds: parseFloat(b.ocOdds) || null, ev: b.bestEv })));
+  // noCalc rows (e.g. 6 Yard Box) are display-only — WH price with no fair-odds model, so
+  // no EV. Keep them in the table but never feed them to the daily-post / "seen" pipeline.
+  if (typeof baOnEdgeRendered === 'function') baOnEdgeRendered('calc-ev', bets.filter(b => !b.noCalc).map(b => ({ match: b.match, market: b.market, selection: b.player, bk: ocBookieName(b.bookie), odds: parseFloat(b.ocOdds) || null, ev: b.bestEv })));
 
   if (!bets.length) {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:32px;font-size:13px">No +EV bets found</td></tr>`;
