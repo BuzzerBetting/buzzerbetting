@@ -2979,15 +2979,25 @@ function checkPin(){
 })();
 
 // ── NAVIGATION ──
+// The Freeze role is hard-locked to the Freeze page: any nav call that isn't 'freeze' is
+// rejected here, no matter which code path (home card, init, deep link) triggered it.
+function freezeRoleBlocks(name){
+  if (CURRENT_USER_ROLE === 'freeze' && name !== 'freeze') {
+    if (document.getElementById('view-freeze')) showSec('freeze');
+    return true;
+  }
+  return false;
+}
 function goHome(){stopBetAlerts();if(CURRENT_USER_ROLE==='freeze'){showSec('freeze');return;}if(CURRENT_USER_ROLE==='calculator'){showTopSec('calc');return;}document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
 function showSec(name){
+  if(freezeRoleBlocks(name))return;
   // Oddschecker +EV / Calculated +EV / DDHH now live as tabs inside the Bet Alerts page —
   // any legacy showSec() call for them redirects there rather than to a standalone .sec.
   if(name==='oddschecker'||name==='calculated'||name==='ddhh'){openBetAlerts({oddschecker:'oc-ev',calculated:'calc-ev',ddhh:'ddhh'}[name]);return;}
   stopBetAlerts();
   document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='freeze')initFreeze();if(name==='today')initToday();if(name==='bets-combined')initBetsPage();if(name==='monthly')initMonthly();if(name==='monthlyprofit')initMonthlyProfit();if(name==='assistantmonthly')initAssistantMonthly();if(name==='todo')initTodo();stopOddscheckerEVRefresh();}
 const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger',bettracking:'bettracking',stats:'stats-menu',betalerts:'bet-alerts'};
-function showTopSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='stats')renderStatsMenu();if(name==='calc')loadOddscheckerEV();stopOddscheckerEVRefresh();if(name==='betalerts')initBetAlerts();else stopBetAlerts();}
+function showTopSec(name){if(freezeRoleBlocks(name))return;document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='stats')renderStatsMenu();if(name==='calc')loadOddscheckerEV();stopOddscheckerEVRefresh();if(name==='betalerts')initBetAlerts();else stopBetAlerts();}
 // Jump straight to a specific Bet Alerts tab (used by the Calculations menu shortcuts and the
 // cross-links in the tab notes).
 function openBetAlerts(tabKey){showTopSec('betalerts');if(tabKey)baTab(tabKey);}
@@ -3463,6 +3473,13 @@ function applyRoleRestrictions() {
   if (!noLedger) startTodoPolling(); // Calculator/Freeze have no Ledger access — polling would just produce repeated 403s
   if (!noLedger) startCalcEVBackground(); // Calculated +EV scans every 5 min in the background so the tab is always current
   if (!isFreeze) startNotifPolling(); // header notification bell — every role except Freeze (which is locked to one tool)
+  if (isFreeze) {
+    // Lock the view to Freeze immediately (no flash of Home / other sections) and hide the
+    // header notification bell (it has no meaning for this role).
+    document.getElementById('view-home').style.display = 'none';
+    const bell = document.getElementById('notif-wrap'); if (bell) bell.style.display = 'none';
+    if (document.getElementById('view-freeze')) showSec('freeze');
+  }
 }
 
 // ── TO DO ──
