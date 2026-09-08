@@ -236,6 +236,13 @@ async function fetchBfexMatchOdds(appKey, session) {
         draw: px(drawR).lay, drawSize: px(drawR).laySize, drawMatched: px(drawR).matched,
         away: px(awayR).lay, awaySize: px(awayR).laySize, awayMatched: px(awayR).matched,
       },
+      // Betfair selectionIds per side — the acca builder stores the backed one so the
+      // freeze-acca poller can read the runner's WINNER/LOSER status later.
+      selections: {
+        home: homeR ? homeR.selectionId : null,
+        draw: drawR ? drawR.selectionId : null,
+        away: awayR ? awayR.selectionId : null,
+      },
     };
   });
 }
@@ -461,7 +468,7 @@ exports.handler = async (event) => {
       away: b.away,
       kickoff: b.startTime,
       competition: b.competition,
-      bfex: { marketId: b.marketId, eventId: b.eventId, status: b.status, totalMatched: b.totalMatched, lay: b.lay },
+      bfex: { marketId: b.marketId, eventId: b.eventId, status: b.status, totalMatched: b.totalMatched, lay: b.lay, selections: b.selections },
       sky,
     })).sort((a, c) => (a.kickoff || '').localeCompare(c.kickoff || ''));
 
@@ -516,3 +523,6 @@ exports.startWarmer = function ({ intervalMs = 20 * 60 * 1000, initialDelayMs = 
   setInterval(warm, intervalMs);
   console.log('[skybet-bfex warm] warmer started');
 };
+
+// Betfair session/call helpers, reused by freeze-acca-poller.js for settled-market lookups.
+exports._bf = { getSessionToken, bfCall, hasCert: () => { try { return !!CERT && !!KEY; } catch (e) { return false; } } };

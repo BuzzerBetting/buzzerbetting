@@ -223,3 +223,6 @@ require('./notifications-poller').startLineupNotifier();
 
 // Background: keep the SkyBet-odds cache for /api/skybet-bfex warm (every 20 min).
 require('./skybet-bfex-lib').startWarmer();
+
+// Background: resolve freeze-acca fodder results + auto-settle lost accas (every 15 min).
+require('./freeze-acca-poller').start();

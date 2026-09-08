@@ -2052,6 +2052,11 @@ input::placeholder{color:var(--text3)}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px"><div class="sec-title" style="margin-bottom:0">Freeze</div><button onclick="openFreezeSection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'"><i class="ti ti-refresh"></i> Refresh</button></div>
     <div id="frz-status-card" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="frz-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="frz-status-title">Loading...</div><div class="ph-d" id="frz-status-msg"></div></div></div></div>
     <div id="frz-kpi-wrap" style="display:none"><div class="kpis" id="frz-kpis" style="grid-template-columns:repeat(6,1fr);margin-bottom:16px"></div></div>
+    <div id="frz-tab-row" style="display:none;gap:4px;margin-bottom:12px">
+      <button id="frz-tab-acca" onclick="frzTrackerTab('acca')" class="sub-btn2">Acca bets</button>
+      <button id="frz-tab-legacy" onclick="frzTrackerTab('legacy')" class="sub-btn2">Legacy</button>
+    </div>
+    <div id="frz-acca-wrap" style="display:none"></div>
     <div id="frz-table-wrap" style="display:none"><div class="card"><div style="padding:12px 20px;border-bottom:.5px solid var(--border)"><span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500" id="frz-table-hdr">Bets</span></div><div style="overflow-x:auto;max-height:520px;overflow-y:auto"><table class="dt" style="min-width:580px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr><th style="min-width:72px">Date</th><th>Result</th><th style="min-width:150px">Team</th><th class="r">Acca Odds</th><th class="r">Stake</th><th class="r">P/L</th><th class="r">EV</th></tr></thead><tbody id="frz-tbody"></tbody></table></div></div></div>
   </div>
   <div id="ts-personal-ninja" class="tracker-section" style="display:none">
@@ -10827,7 +10832,102 @@ function renderBBGolfTable(rows,summary){
 }
 
 // ── FREEZE ──
-function openFreezeSection(){openTrkSection({prefix:'frz',tab:'Freeze',render:renderFreezeTable});}
+// The Freeze tracker has two views: the sheet-fed "Legacy" table (all 574+ bets, unchanged)
+// and "Acca bets" — cards read live from GET /bets?type=Freeze for the new freeze-acca format,
+// showing the 5 legs, per-leg won/lost colouring (freeze-acca-poller), Settle + freeze-token.
+// KPIs stay sheet-fed = combined totals across both.
+let FRZ_ACCA_BETS = [];
+let FRZ_TRACKER_TAB = (function(){ try { return localStorage.getItem('bb_frz_tracker_tab') || 'acca'; } catch(e) { return 'acca'; } })();
+
+async function openFreezeSection(){
+  await openTrkSection({ prefix:'frz', tab:'Freeze', render:renderFreezeTable });
+  const tabRow = document.getElementById('frz-tab-row');
+  if (tabRow) tabRow.style.display = 'flex';
+  await frzLoadAccas();
+  frzTrackerTab(FRZ_TRACKER_TAB);
+}
+async function frzLoadAccas(){
+  try {
+    const d = await ledgerApi('bets?type=Freeze&limit=500');
+    FRZ_ACCA_BETS = (d && d.ok && d.bets ? d.bets : []).filter(b => b.fields && b.fields.format === 'freeze-acca');
+  } catch (e) { FRZ_ACCA_BETS = []; }
+  frzRenderAccas();
+}
+function frzTrackerTab(which){
+  FRZ_TRACKER_TAB = which === 'legacy' ? 'legacy' : 'acca';
+  try { localStorage.setItem('bb_frz_tracker_tab', FRZ_TRACKER_TAB); } catch(e) {}
+  const isAcca = FRZ_TRACKER_TAB === 'acca';
+  const tw = document.getElementById('frz-table-wrap'), aw = document.getElementById('frz-acca-wrap');
+  if (tw) tw.style.display = isAcca ? 'none' : '';
+  if (aw) aw.style.display = isAcca ? '' : 'none';
+  const ta = document.getElementById('frz-tab-acca'), tl = document.getElementById('frz-tab-legacy');
+  if (ta) ta.classList.toggle('active', isAcca);
+  if (tl) tl.classList.toggle('active', !isAcca);
+}
+function frzRenderAccas(){
+  const wrap = document.getElementById('frz-acca-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = FRZ_ACCA_BETS.length
+    ? FRZ_ACCA_BETS.map(frzAccaCard).join('')
+    : '<div class="note" style="color:var(--text3)"><i class="ti ti-info-circle"></i> No acca-format Freeze bets yet — log one from Calculations → Freeze → Freeze Builder.</div>';
+}
+function frzAccaCard(b){
+  const f = b.fields || {};
+  const legs = Array.isArray(f.legs) ? f.legs : [];
+  const results = Array.isArray(f.legResults) ? f.legResults : [];
+  const odds = +f.Odds || 0, fair = +f['Fair Odds'] || 0, stake = +f.Stake || 0, evGbp = +f.EV || 0;
+  const evPct = (odds > 0 && fair > 0) ? (odds / fair - 1) * 100 : null;
+  const settled = b.result && b.result !== 'open';
+  const pl = +b.pl || 0;
+  const ko = f.freezeKickoff ? new Date(f.freezeKickoff).toLocaleString('en-GB', { weekday:'short', day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '—';
+  const det = [
+    ['Placed', (b.date || '').slice(0, 10)],
+    ['Acca odds', odds ? odds.toFixed(2) : '—'],
+    ['Fair', fair ? fair.toFixed(2) : '—'],
+    ['Stake', '£' + stake.toFixed(2)],
+    ['EV £', (evGbp >= 0 ? '+' : '') + '£' + Math.abs(evGbp).toFixed(2)],
+    ['EV %', evPct == null ? '—' : (evPct >= 0 ? '+' : '') + evPct.toFixed(0) + '%'],
+    ['Freeze KO', ko],
+  ].map(([k, v]) => `<span style="white-space:nowrap"><span style="color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.06em">${k}</span> <b>${escapeHtml(String(v))}</b></span>`).join('<span style="color:var(--border)">·</span>');
+  const legCol = (leg, i) => {
+    const r = results[i];
+    const bg = r === 'won' ? 'var(--green-bg)' : r === 'lost' ? 'var(--red-bg)' : 'transparent';
+    const bd = r === 'won' ? 'var(--green-bd)' : r === 'lost' ? 'var(--red-bd)' : 'var(--border)';
+    const line2 = leg.isFreeze
+      ? `back <b>${(+leg.skyBack || 0).toFixed(2)}</b> · fair <b style="color:var(--amber)">${(+leg.leadFair || 0).toFixed(2)}</b>`
+      : `back <b>${(+leg.skyBack || 0).toFixed(2)}</b> · lay <b style="color:var(--amber)">${leg.bfexLay != null ? (+leg.bfexLay).toFixed(2) : '—'}</b>`;
+    return `<div style="flex:1;min-width:118px;border:.5px solid ${bd};background:${bg};border-radius:var(--radius);padding:8px 10px">
+      <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:${leg.isFreeze ? 'var(--blue)' : 'var(--text3)'};font-weight:600">${leg.isFreeze ? 'Freeze' : 'Fodder ' + (i + 1)}</div>
+      <div style="font-weight:600;font-size:12.5px;margin:2px 0 3px">${escapeHtml(leg.team || '')}</div>
+      <div style="font-size:11.5px;color:var(--text2)">${line2}</div>
+    </div>`;
+  };
+  const tokenUsed = !!f.freezeTokenUsed;
+  const settleArgs = `${b.id},'${settled ? b.result : 'open'}',${settled ? pl : 'null'},frzLoadAccas,${stake},${odds || 'null'},'Freeze',null,null,null,null`;
+  const actions = settled
+    ? `${trkBadge(String(b.result)[0], pl)} <b style="color:${pl >= 0 ? 'var(--green)' : 'var(--red)'};font-size:12.5px">${pl >= 0 ? '+' : ''}£${Math.abs(pl).toFixed(2)}</b> <button class="sub-btn2" onclick="openBtSettleModal(${settleArgs})">Override</button>`
+    : `<button class="sub-btn2" onclick="openBtSettleModal(${settleArgs})">Settle</button>`;
+  return `<div class="fb-acca" style="margin-bottom:14px">
+    <div class="fb-acca-head" style="align-items:flex-start">
+      <div style="display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center">${det}</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <button class="sub-btn2${tokenUsed ? ' active' : ''}" onclick="frzToggleToken(${b.id})">${tokenUsed ? '🔒 Token used' : 'Mark token used'}</button>
+        ${actions}
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;padding:10px 14px">${legs.map(legCol).join('')}</div>
+    ${f.legResultsCheckedAt ? `<div style="padding:0 14px 8px;font-size:10.5px;color:var(--text3)">Fodder results checked ${new Date(f.legResultsCheckedAt).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}</div>` : ''}
+  </div>`;
+}
+async function frzToggleToken(betId){
+  const b = FRZ_ACCA_BETS.find(x => x.id === betId);
+  if (!b) return;
+  const next = !(b.fields && b.fields.freezeTokenUsed);
+  try {
+    const d = await ledgerApi('bets/' + betId + '/freeze-meta', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ freezeTokenUsed: next }) });
+    if (d && d.ok) { b.fields = d.fields; frzRenderAccas(); }
+  } catch (e) {}
+}
 function renderFreezeTable(rows,summary){
   const tbody=document.getElementById('frz-tbody');tbody.innerHTML='';
   let wins=0,losses=0,pl=0;
@@ -13952,7 +14052,10 @@ function fbEligibleFreezeTeams(){
     if (!leadFair) continue;
     const ev = skyOdds / leadFair - 1;
     if (ev < minEv) continue;
-    out.push({ team, opp, matchEventName: f.eventName || (f.home + ' v ' + f.away), competition: f.competition || '', skyOdds, leadFair, ev, kickoff: kt });
+    out.push({ team, opp, side, matchEventName: f.eventName || (f.home + ' v ' + f.away), competition: f.competition || '', skyOdds, leadFair, ev, kickoff: kt,
+      bfexMarketId: f.bfex && f.bfex.marketId || null,
+      bfexSelectionId: f.bfex && f.bfex.selections && f.bfex.selections[side] || null,
+      skyEventId: f.sky && f.sky.eventId || null });
   }
   out.sort((a, b) => b.ev - a.ev);
   return out;
@@ -13977,7 +14080,10 @@ function fbFodderPoolFor(freezeKt, excludeEventName){
     if (!isNaN(fmax) && skyBack > fmax) continue;
     const bfexLay = side === 'home' ? f.bfex.lay.home : f.bfex.lay.away;
     if (bfexLay == null) continue;
-    pool.push({ eventName: evName, team: side === 'home' ? f.home : f.away, side, skyBack, bfexLay, kickoff: kt, competition: f.competition || '' });
+    pool.push({ eventName: evName, team: side === 'home' ? f.home : f.away, opp: side === 'home' ? f.away : f.home, side, skyBack, bfexLay, kickoff: kt, competition: f.competition || '',
+      bfexMarketId: f.bfex.marketId || null,
+      bfexSelectionId: f.bfex.selections && f.bfex.selections[side] || null,
+      skyEventId: f.sky.eventId || null });
   }
   return pool.sort((a, b) => a.kickoff - b.kickoff);
 }
@@ -14155,13 +14261,28 @@ async function fbSubmitAddBet(idx){
   if (!(stake > 0)) { msg.innerHTML = '<span style="color:var(--red)">Enter a stake above £0.</span>'; return; }
   const fair = fbAccaFair(a);
   const evGbp = +(stake * (odds / fair - 1)).toFixed(2);
+  // Full acca breakdown stored on the bet so the Freeze tracker can render the 5 legs and
+  // the poller can resolve each fodder result. 4 fodder legs then the freeze leg.
+  const accaLegs = a.fodder.map(l => ({
+    team: l.team, opp: l.opp || '', kickoff: new Date(l.kickoff).toISOString(), side: l.side, isFreeze: false,
+    skyBack: l.skyBack, bfexLay: l.bfexLay, leadFair: null,
+    bfexMarketId: l.bfexMarketId || null, bfexSelectionId: l.bfexSelectionId || null, skyEventId: l.skyEventId || null,
+  }));
+  accaLegs.push({
+    team: a.freeze.team, opp: a.freeze.opp || '', kickoff: new Date(a.freeze.kickoff).toISOString(), side: a.freeze.side, isFreeze: true,
+    skyBack: a.freeze.skyOdds, bfexLay: null, leadFair: a.freeze.leadFair,
+    bfexMarketId: a.freeze.bfexMarketId || null, bfexSelectionId: a.freeze.bfexSelectionId || null, skyEventId: a.freeze.skyEventId || null,
+  });
   btn.disabled = true; btn.textContent = 'Logging…';
   try {
     const d = await ledgerApi('bets', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         bet_type: 'Freeze',
-        fields: { 'Book': 'SkyBet', 'Targeted Freeze': a.freeze.team, 'Odds': +odds.toFixed(3), 'Fair Odds': +fair.toFixed(3), 'EV': evGbp, 'Stake': stake },
+        fields: {
+          'Book': 'SkyBet', 'Targeted Freeze': a.freeze.team, 'Odds': +odds.toFixed(3), 'Fair Odds': +fair.toFixed(3), 'EV': evGbp, 'Stake': stake,
+          format: 'freeze-acca', freezeKickoff: new Date(a.freeze.kickoff).toISOString(), legs: accaLegs,
+        },
         legs: [{ account_id: accEl.value, stake }],
       }),
     });

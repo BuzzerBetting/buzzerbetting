@@ -1790,6 +1790,23 @@ router.patch('/bets/:id/bettype', (req, res) => {
   } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
 });
 
+// PATCH /api/ledger/bets/:id/freeze-meta — merges Freeze-acca tracking metadata into `fields`
+// without touching result/pl/balance. Used by the Freeze tracker ("token used" toggle) and by
+// freeze-acca-poller.js (per-leg won/lost results). Whitelisted keys only.
+router.patch('/bets/:id/freeze-meta', (req, res) => {
+  try {
+    const bet = db.prepare(`SELECT * FROM bets WHERE id = ?`).get(req.params.id);
+    if (!bet) return res.status(404).json({ ok: false, error: 'Bet not found' });
+    const fields = JSON.parse(bet.fields);
+    const { freezeTokenUsed, legResults, legResultsCheckedAt } = req.body || {};
+    if (freezeTokenUsed !== undefined) fields.freezeTokenUsed = !!freezeTokenUsed;
+    if (Array.isArray(legResults)) fields.legResults = legResults.map(r => (r === 'won' || r === 'lost') ? r : null);
+    if (legResultsCheckedAt) fields.legResultsCheckedAt = String(legResultsCheckedAt);
+    db.prepare(`UPDATE bets SET fields = ? WHERE id = ?`).run(JSON.stringify(fields), req.params.id);
+    res.json({ ok: true, fields });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
 // GET /api/ledger/bets/:id/note
 router.get('/bets/:id/note', (req, res) => {
   try {
