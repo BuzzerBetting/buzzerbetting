@@ -253,8 +253,8 @@ function skyHeaders(json) {
     'User-Agent': SKY_UA,
     'Accept': json ? 'application/json' : 'text/html',
     'Cookie': process.env.SKYBET_COOKIES || '',
-    'Referer': 'https://skybet.com/football/s-1',
-    'Origin': 'https://skybet.com',
+    'Referer': 'https://www.skybet.com/football/s-1',
+    'Origin': 'https://www.skybet.com',
   };
   if (json) h['Content-Type'] = 'application/json';
   return h;
@@ -372,7 +372,8 @@ async function resolveSkyOdds(fx, cache) {
 
   let odds = null;
   try {
-    const res = await fetch('https://skybet.com/' + found.url, { headers: skyHeaders(false) });
+    // apex skybet.com started 406ing 2026-09-08 (broken apex→www redirect); www. still works.
+    const res = await fetch('https://www.skybet.com/' + found.url, { headers: skyHeaders(false) });
     if (res.ok) {
       const html = await res.text();
       odds = parseEventPageOdds(html);                                   // fast path (inline market)
