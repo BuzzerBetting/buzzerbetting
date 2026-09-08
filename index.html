@@ -412,6 +412,10 @@ input::placeholder{color:var(--text3)}
         <input id="fb-freeze-min-odds" type="number" step="0.5" min="1" placeholder="any" oninput="fbOnControlChange()" class="fb-in" style="width:100px">
       </div>
       <div style="display:flex;flex-direction:column;gap:4px">
+        <label class="fb-lbl">Freeze max odds</label>
+        <input id="fb-freeze-max-odds" type="number" step="0.5" min="1" placeholder="any" oninput="fbOnControlChange()" class="fb-in" style="width:100px">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
         <label class="fb-lbl">Freeze min EV %</label>
         <input id="fb-freeze-min-ev" type="number" step="5" placeholder="80" oninput="fbOnControlChange()" class="fb-in" style="width:100px">
       </div>
@@ -13855,7 +13859,7 @@ async function fbLoadPrefs(){
     const set = (id, v) => { const el = document.getElementById(id); if (el && v != null && v !== '') el.value = v; };
     set('fb-strategy', p.strategy); set('fb-num', p.numAccas); set('fb-timeframe', p.timeframe);
     set('fb-fodder-min', p.fodderMin); set('fb-fodder-max', p.fodderMax);
-    set('fb-freeze-min-odds', p.freezeMinOdds); set('fb-freeze-min-ev', p.freezeMinEv);
+    set('fb-freeze-min-odds', p.freezeMinOdds); set('fb-freeze-max-odds', p.freezeMaxOdds); set('fb-freeze-min-ev', p.freezeMinEv);
     FB_PENDING_TEAM = p.freezeTeam || '';
   } catch (e) { /* calculator role / no session — fine */ }
 }
@@ -13868,7 +13872,7 @@ function fbSavePrefs(){
       body: JSON.stringify({ prefs: {
         strategy: g('fb-strategy'), numAccas: g('fb-num'), timeframe: g('fb-timeframe'), freezeTeam: g('fb-team'),
         fodderMin: g('fb-fodder-min'), fodderMax: g('fb-fodder-max'),
-        freezeMinOdds: g('fb-freeze-min-odds'), freezeMinEv: g('fb-freeze-min-ev'),
+        freezeMinOdds: g('fb-freeze-min-odds'), freezeMaxOdds: g('fb-freeze-max-odds'), freezeMinEv: g('fb-freeze-min-ev'),
       } })
     }).catch(() => {});
   }, 700);
@@ -13926,6 +13930,8 @@ function fbTimeframeCutoff(){
 function fbEligibleFreezeTeams(){
   if (!FB_BFEX || !FB_BFEX.fixtures) return [];
   const minOdds = parseFloat((document.getElementById('fb-freeze-min-odds') || {}).value) || 0;
+  const maxOddsRaw = parseFloat((document.getElementById('fb-freeze-max-odds') || {}).value);
+  const maxOdds = isNaN(maxOddsRaw) ? Infinity : maxOddsRaw;
   const evRaw = (document.getElementById('fb-freeze-min-ev') || {}).value;
   const minEv = (evRaw === '' || evRaw == null) ? FB_DEFAULT_MIN_EV : ((parseFloat(evRaw) || 0) / 100);
   const cutoff = fbTimeframeCutoff(), now = Date.now();
@@ -13940,7 +13946,7 @@ function fbEligibleFreezeTeams(){
     const team = side === 'home' ? f.home : f.away;
     const opp  = side === 'home' ? f.away : f.home;
     const skyOdds = side === 'home' ? ho : ao;
-    if (skyOdds < minOdds) continue;
+    if (skyOdds < minOdds || skyOdds > maxOdds) continue;
     const leadFair = fbLeadFairForTeam(team, opp);
     if (!leadFair) continue;
     const ev = skyOdds / leadFair - 1;
