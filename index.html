@@ -13374,13 +13374,26 @@ const BA_BOOK_ALIASES = {
 };
 function baNormKey(s){ return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
 function baResolveBook(bk){
-  // OC feeds carry codes ("WH") — expand to a name first so the filter can match BOOKIES_LIST.
+  // OC feeds may carry codes ("WH") or full names ("Unibet") — expand codes to a name first.
   const raw = (typeof ocBookieName === 'function' ? ocBookieName(bk) : String(bk || '')).trim();
   if (!raw) return null;
   const low = raw.toLowerCase();
   if (BA_BOOK_ALIASES[low]) return BA_BOOK_ALIASES[low];
   const nk = baNormKey(raw);
-  return BOOKIES_LIST.find(b => baNormKey(b) === nk) || null;
+  // Fall back to the display name itself (not null) so a bookie missing from BOOKIES_LIST —
+  // e.g. Unibet, Sporting Index — is still resolvable to a stable key the filter can store.
+  return BOOKIES_LIST.find(b => baNormKey(b) === nk) || raw;
+}
+// Every bookie the filter should offer a checkbox for: the static list, plus any bookie
+// actually present in the loaded feeds, plus any bookie already saved in the filter map
+// (so a persisted "Unibet = off" never loses its checkbox when a feed is momentarily empty).
+function baAllKnownBooks(){
+  const set = new Set(BOOKIES_LIST);
+  const add = v => { const r = baResolveBook(v); if (r) set.add(r); };
+  (typeof ocEvBets !== 'undefined' ? ocEvBets : []).forEach(b => add(b && b.bk));
+  (typeof cevLastBets !== 'undefined' ? cevLastBets : []).forEach(b => add(b && b.bookie));
+  if (BA_BOOKS) Object.keys(BA_BOOKS).forEach(k => set.add(k));
+  return [...set];
 }
 // True = show this bet. Unknown / not-yet-toggled books default to visible.
 function baBookEnabled(bk){
@@ -13391,11 +13404,12 @@ function baBookEnabled(bk){
   return true;
 }
 function baBooksEnabledCount(){
-  return BOOKIES_LIST.filter(b => baBookEnabled(b)).length;
+  const all = baAllKnownBooks();
+  return { on: all.filter(b => baBookEnabled(b)).length, total: all.length };
 }
 function updateBaBooksCount(){
   const el = document.getElementById('ba-books-count');
-  if (el) el.textContent = `(${baBooksEnabledCount()}/${BOOKIES_LIST.length})`;
+  if (el) { const c = baBooksEnabledCount(); el.textContent = `(${c.on}/${c.total})`; }
 }
 function baToggleBooksPanel(){
   const p = document.getElementById('ba-books-panel');
@@ -13408,7 +13422,7 @@ function buildBaBooksList(){
   const list = document.getElementById('ba-books-list');
   if (!list) return;
   list.innerHTML = '';
-  BOOKIES_LIST.slice().sort((a, b) => a.localeCompare(b)).forEach(bk => {
+  baAllKnownBooks().sort((a, b) => a.localeCompare(b)).forEach(bk => {
     const row = document.createElement('label');
     row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 2px;font-size:13px;color:var(--text2);cursor:pointer';
     const cb = document.createElement('input');
