@@ -2395,7 +2395,7 @@ input::placeholder{color:var(--text3)}
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--amber);display:inline-block"></span>Usable but thinner BFEX data</span>
     </div>
     <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">BFex fair</th><th class="r">Last traded</th><th class="r">Total traded</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th></th></tr></thead><tbody id="scanner-body"></tbody></table></div></div>
-    <div class="note"><i class="ti ti-info-circle"></i> Auto-refreshes every 60s. Scanning starts once a match's lineup is confirmed and runs every 10 minutes until kickoff — First Goalscorer, Anytime Goalscorer, Player Shown a Card and Player Shots on Target markets, sorted by EV%. These all compare Oddschecker directly against the matching BFEX market. Header and Outside-the-Box goal need their own fair-odds calculation instead (no direct BFEX market for either) — see the <a href="javascript:void(0)" onclick="baTab('calc-ev')">Calculated +EV</a> tab.</div>
+    <div class="note"><i class="ti ti-info-circle"></i> Auto-refreshes every 60s. Scanning starts once a match's lineup is confirmed and runs every 10 minutes until kickoff, tightening to every 3 minutes in the last 15 minutes before kickoff — First Goalscorer, Anytime Goalscorer, Player Shown a Card and Player Shots on Target markets, sorted by EV%. These all compare Oddschecker directly against the matching BFEX market. Header and Outside-the-Box goal need their own fair-odds calculation instead (no direct BFEX market for either) — see the <a href="javascript:void(0)" onclick="baTab('calc-ev')">Calculated +EV</a> tab.</div>
   </div>
 
   <!-- panel: Calculated +EV -->
@@ -3480,7 +3480,7 @@ function applyRoleRestrictions() {
   const freezeBackBtn = document.getElementById('freeze-back-btn');
   if (freezeBackBtn) freezeBackBtn.style.display = isFreeze ? 'none' : ''; // Freeze role can't leave the Freeze page
   if (!noLedger) startTodoPolling(); // Calculator/Freeze have no Ledger access — polling would just produce repeated 403s
-  if (!noLedger) startCalcEVBackground(); // Calculated +EV scans every 5 min in the background so the tab is always current
+  if (!noLedger) startCalcEVBackground(); // Calculated +EV rescans in the background (every 5 min, 3 min within 15 min of a kickoff)
   if (!isFreeze) startNotifPolling(); // header notification bell — every role except Freeze (which is locked to one tool)
   if (isFreeze) {
     // Lock the view to Freeze immediately (no flash of Home / other sections) and hide the
@@ -12146,7 +12146,7 @@ let cevFixtures = [];
 // applyRoleRestrictions), scanning every 5 min so the tab always has fresh bets rather than
 // only scanning on click. Target: today's fixtures whose lineups are confirmed and that
 // haven't kicked off yet — the only ones a left/right-foot / 6-yard-box fair can be built for.
-let CALC_EV_BG_INTERVAL = null;
+let CALC_EV_BG_TIMER = null;
 let cevScanning = false;
 let cevLastScanAt = 0;
 
@@ -12195,11 +12195,26 @@ async function runCalcEVScan(opts) {
   }
 }
 
+// Kickoff-aware cadence: rescan every 3 min while any confirmed fixture is within 15 min of
+// kickoff (matches the OC scraper's sprint window), otherwise every 5 min.
+function calcEvNextDelayMs() {
+  const now = Date.now();
+  let soonestMin = Infinity;
+  for (const f of (cevFixtures || [])) {
+    if (!f || !f.utcTime) continue;
+    const mins = (new Date(f.utcTime).getTime() - now) / 60000;
+    if (mins > 0 && mins < soonestMin) soonestMin = mins;
+  }
+  return soonestMin <= 15 ? 3 * 60 * 1000 : 5 * 60 * 1000;
+}
 function startCalcEVBackground() {
   if (CURRENT_USER_ROLE === 'calculator') return;
-  if (CALC_EV_BG_INTERVAL) clearInterval(CALC_EV_BG_INTERVAL);
-  runCalcEVScan({ silent: true });
-  CALC_EV_BG_INTERVAL = setInterval(() => runCalcEVScan({ silent: true }), 5 * 60 * 1000);
+  if (CALC_EV_BG_TIMER) clearTimeout(CALC_EV_BG_TIMER);
+  const tick = async () => {
+    await runCalcEVScan({ silent: true });
+    CALC_EV_BG_TIMER = setTimeout(tick, calcEvNextDelayMs());
+  };
+  tick();
 }
 
 // Thin alias — kept so existing callers / the Bet Alerts Refresh button still work.
@@ -13541,7 +13556,7 @@ function loadBaEdge(key, isPoll){
   if (key === 'oc-ev') {
     loadOddscheckerEV();                       // renders #scanner-body + calls baOnEdgeRendered
   } else if (key === 'calc-ev') {
-    // Background timer (startCalcEVBackground) keeps this current every 5 min. On tab open,
+    // Background timer (startCalcEVBackground) keeps this current (5 min, 3 min near a KO). On tab open,
     // show whatever it last produced instantly, then kick a silent refresh; only do a
     // visible scan if nothing has run yet.
     if (isPoll) { if (cevLastBets.length) renderEVResults(cevLastBets); }
