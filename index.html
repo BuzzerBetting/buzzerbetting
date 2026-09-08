@@ -369,6 +369,7 @@ input::placeholder{color:var(--text3)}
       <div style="display:flex;align-items:center;gap:8px">
         <label for="freeze-min-odds" style="font-size:12.5px;color:var(--text2)">Minimum team odds</label>
         <input id="freeze-min-odds" type="number" step="0.5" min="1" placeholder="e.g. 7" oninput="renderFreezeList()" style="width:80px;background:var(--surface);border:.5px solid var(--border);border-radius:var(--radius);padding:6px 10px;font-size:13px;color:var(--text);font-family:inherit">
+        <button onclick="toggleFreezeSort()" id="freeze-sort-btn" style="display:flex;align-items:center;gap:6px;background:none;border:.5px solid var(--border);border-radius:var(--radius);padding:6px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit"><i class="ti ti-arrows-sort"></i> Sort by EV</button>
       </div>
       <div style="display:flex;align-items:center;gap:12px">
         <span id="freeze-list-count" style="font-size:12px;color:var(--text3)"></span>
@@ -376,8 +377,9 @@ input::placeholder{color:var(--text3)}
       </div>
     </div>
     <div id="freeze-list-status" class="note" style="display:none"></div>
-    <div style="overflow-x:auto"><table class="dt" style="min-width:640px">
-      <thead><tr><th style="min-width:72px">Kickoff</th><th>Competition</th><th>Home</th><th class="r">Home odds</th><th class="r">Draw</th><th>Away</th><th class="r">Away odds</th></tr></thead>
+    <div class="note" style="font-size:11.5px;color:var(--text3);margin-bottom:10px"><i class="ti ti-info-circle"></i> "Lead @ any" = BookieBashing fair odds for that team to be ahead at some point. Shown only for the likely freeze side (FTR odds ≥ 4.0). Freeze EV = SkyBet odds ÷ lead-anytime fair − 1. Red = BookieBashing has no fair for that team.</div>
+    <div style="overflow-x:auto"><table class="dt" style="min-width:760px">
+      <thead><tr><th style="min-width:72px">Kickoff</th><th>Competition</th><th>Home</th><th class="r">Home odds</th><th class="r">Draw</th><th>Away</th><th class="r">Away odds</th><th class="r">Lead @ any</th><th class="r">Freeze EV</th></tr></thead>
       <tbody id="freeze-list-tbody"></tbody>
     </table></div>
   </div>
@@ -13551,6 +13553,9 @@ const FREEZE_TABS = [
 ];
 let FREEZE_ACTIVE = (function(){ try { return localStorage.getItem('bb_freeze_tab') || 'builder'; } catch(e) { return 'builder'; } })();
 let FREEZE_DATA = null; // last-loaded { fixtures, updated } from netlify/functions/skybet-accafreeze
+let FREEZE_LEAD = null; // last-loaded { matches, updated } from netlify/functions/bb-lead (lead-at-any-time fairs)
+let FREEZE_SORT = 'kickoff'; // 'kickoff' | 'ev'
+const FREEZE_LEAD_MIN_ODDS = 4.0; // only surface lead-anytime fairs for the likely freeze side
 
 function initFreeze(){ activateFreezeTab(FREEZE_ACTIVE); }
 
@@ -13588,10 +13593,16 @@ async function loadFreezeList(forceRefresh){
   if (btn) btn.disabled = true;
   if (statusEl) { statusEl.style.display = ''; statusEl.innerHTML = '<i class="ti ti-info-circle"></i> Loading eligible fixtures…'; }
   try {
-    const r = await fetch('/.netlify/functions/skybet-accafreeze');
-    const d = await r.json();
-    if (!d.ok) throw new Error(d.error || 'unknown error');
-    FREEZE_DATA = d;
+    // SkyBet freeze list + BookieBashing lead-anytime fairs in parallel. A bb-lead failure
+    // must not block the freeze list — the Lead/EV columns just fall back to "no fair" (red).
+    const [skyRes, leadRes] = await Promise.allSettled([
+      fetch('/.netlify/functions/skybet-accafreeze').then(r => r.json()),
+      fetch('/.netlify/functions/bb-lead').then(r => r.json()),
+    ]);
+    if (skyRes.status !== 'fulfilled') throw new Error(skyRes.reason && skyRes.reason.message || 'fetch failed');
+    if (!skyRes.value.ok) throw new Error(skyRes.value.error || 'unknown error');
+    FREEZE_DATA = skyRes.value;
+    FREEZE_LEAD = (leadRes.status === 'fulfilled' && leadRes.value && leadRes.value.ok) ? leadRes.value : null;
     if (statusEl) statusEl.style.display = 'none';
     renderFreezeList();
   } catch (e) {
@@ -13599,6 +13610,71 @@ async function loadFreezeList(forceRefresh){
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+// ── Lead-at-any-time matching + EV ───────────────────────────────────────────
+// Match a SkyBet fixture to a bb-lead entry by team name (the two feeds name teams
+// differently), then EV = SkyBet FTR odds ÷ BB lead-anytime fair − 1.
+function freezeNorm(s){
+  return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    // common UK-bookmaker abbreviations so SkyBet vs BookieBashing names line up
+    .replace(/\butd\b/g, 'united').replace(/\bnottm\b/g, 'nottingham').replace(/\bwolves\b/g, 'wolverhampton')
+    .replace(/\bspurs\b/g, 'tottenham').replace(/\bsheff\b/g, 'sheffield').replace(/\bboro\b/g, 'borough')
+    .replace(/\b(fc|afc|cf|sc|ss|as|ac|sv|bk|if|fk|club|calcio|res)\b/g, ' ')
+    .replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function freezeTeamEq(a, b){
+  const na = freezeNorm(a), nb = freezeNorm(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const wa = na.split(' ').filter(w => w.length > 2), wb = nb.split(' ').filter(w => w.length > 2);
+  if (!wa.length || !wb.length) return false;
+  const [short, long] = wa.length <= wb.length ? [wa, wb] : [wb, wa];
+  // one distinctive word: only a match if it's the other name's leading word (Milan ≠ Inter Milan)
+  if (short.length === 1) return short[0] === long[0];
+  // else every significant word of one name must appear somewhere in the other
+  return short.every(w => long.join(' ').includes(w)) || long.every(w => short.join(' ').includes(w));
+}
+function freezeFindLead(f){
+  if (!FREEZE_LEAD || !FREEZE_LEAD.matches) return null;
+  const kt = f.kickoff ? Date.parse(f.kickoff) : null;
+  let best = null, bestDelta = Infinity;
+  for (const m of FREEZE_LEAD.matches){
+    if (!(freezeTeamEq(f.home, m.homeName) && freezeTeamEq(f.away, m.awayName))) continue;
+    const delta = (kt && m.startTime) ? Math.abs(kt - m.startTime) : 0;
+    if (delta < bestDelta){ best = m; bestDelta = delta; }
+  }
+  // reject a same-teams match more than ~2 days off — likely a different fixture
+  if (best && kt && best.startTime && bestDelta > 2 * 864e5) return null;
+  return best;
+}
+// Per-fixture freeze picture: for each side priced >= FREEZE_LEAD_MIN_ODDS, its lead-anytime
+// fair + EV. { sides:[{key,name,odds,fair,ev}], bestEv, anyMissing, hasTarget }
+function freezeEval(f){
+  const le = freezeFindLead(f);
+  const sides = [];
+  let bestEv = null, anyMissing = false;
+  for (const key of ['home', 'away']){
+    const odds = f[key + 'Odds'];
+    if (odds == null || odds < FREEZE_LEAD_MIN_ODDS) continue;
+    const fair = le ? le[key + 'LeadAnyTime'] : null;
+    const ev = (fair && odds) ? (odds / fair - 1) : null;
+    if (ev == null) anyMissing = true;
+    else if (bestEv == null || ev > bestEv) bestEv = ev;
+    sides.push({ key, name: f[key], odds, fair: fair || null, ev });
+  }
+  return { sides, bestEv, anyMissing, hasTarget: sides.length > 0 };
+}
+function toggleFreezeSort(){
+  FREEZE_SORT = FREEZE_SORT === 'ev' ? 'kickoff' : 'ev';
+  const btn = document.getElementById('freeze-sort-btn');
+  if (btn){
+    const on = FREEZE_SORT === 'ev';
+    btn.style.borderColor = on ? 'var(--brand)' : 'var(--border)';
+    btn.style.color = on ? 'var(--brand)' : 'var(--text2)';
+    btn.innerHTML = `<i class="ti ti-arrows-sort"></i> ${on ? 'Sorted by EV' : 'Sort by EV'}`;
+  }
+  renderFreezeList();
 }
 
 // Pure client-side filter over the already-loaded fixture list — the min-odds box re-slices
@@ -13612,15 +13688,44 @@ function renderFreezeList(){
   const minInput = document.getElementById('freeze-min-odds');
   const minRaw = minInput ? minInput.value : '';
   const min = minRaw !== '' ? parseFloat(minRaw) : null;
-  const fixtures = FREEZE_DATA.fixtures
+
+  let rows = FREEZE_DATA.fixtures
     .filter(f => min == null || (f.homeOdds != null && f.homeOdds >= min) || (f.awayOdds != null && f.awayOdds >= min))
-    .sort((a, b) => (a.kickoff || '').localeCompare(b.kickoff || ''));
+    .map(f => ({ f, ev: freezeEval(f) }));
+
+  if (FREEZE_SORT === 'ev') {
+    rows.sort((a, b) => {
+      const av = a.ev.bestEv, bv = b.ev.bestEv;
+      if (av == null && bv == null) return (a.f.kickoff || '').localeCompare(b.f.kickoff || '');
+      if (av == null) return 1;   // no EV → bottom
+      if (bv == null) return -1;
+      return bv - av;
+    });
+  } else {
+    rows.sort((a, b) => (a.f.kickoff || '').localeCompare(b.f.kickoff || ''));
+  }
 
   tbody.innerHTML = '';
-  fixtures.forEach(f => {
+  rows.forEach(({ f, ev }) => {
     const homeHot = min != null && f.homeOdds != null && f.homeOdds >= min;
     const awayHot = min != null && f.awayOdds != null && f.awayOdds >= min;
     const kickoff = f.kickoff ? new Date(f.kickoff).toLocaleString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+
+    const leadLines = [], evLines = [];
+    ev.sides.forEach(s => {
+      const short = s.name.length > 14 ? s.name.slice(0, 13) + '…' : s.name;
+      if (s.fair == null) {
+        leadLines.push(`<span style="color:var(--red)">${escapeHtml(short)} —</span>`);
+        evLines.push('<span style="color:var(--red)">—</span>');
+      } else {
+        leadLines.push(`<span style="color:var(--text2)">${escapeHtml(short)} ${s.fair.toFixed(2)}</span>`);
+        const pct = s.ev * 100;
+        evLines.push(`<span style="color:${pct >= 0 ? 'var(--green)' : 'var(--text3)'};font-weight:${pct >= 0 ? 600 : 400}">${pct >= 0 ? '+' : ''}${pct.toFixed(0)}%</span>`);
+      }
+    });
+    const leadCell = leadLines.length ? leadLines.join('<br>') : '<span style="color:var(--text3)">·</span>';
+    const evCell = evLines.length ? evLines.join('<br>') : '<span style="color:var(--text3)">·</span>';
+
     const tr = document.createElement('tr');
     tr.innerHTML = `<td style="font-size:12px;white-space:nowrap">${kickoff}</td>` +
       `<td style="font-size:12px;color:var(--text2)">${escapeHtml(f.competition || '')}</td>` +
@@ -13628,12 +13733,18 @@ function renderFreezeList(){
       `<td class="r tn" style="${homeHot ? 'font-weight:600;color:var(--green)' : ''}">${f.homeOdds != null ? f.homeOdds.toFixed(2) : '—'}</td>` +
       `<td class="r tn" style="color:var(--text3)">${f.drawOdds != null ? f.drawOdds.toFixed(2) : '—'}</td>` +
       `<td style="${awayHot ? 'font-weight:600;color:var(--green)' : ''}">${escapeHtml(f.away)}</td>` +
-      `<td class="r tn" style="${awayHot ? 'font-weight:600;color:var(--green)' : ''}">${f.awayOdds != null ? f.awayOdds.toFixed(2) : '—'}</td>`;
+      `<td class="r tn" style="${awayHot ? 'font-weight:600;color:var(--green)' : ''}">${f.awayOdds != null ? f.awayOdds.toFixed(2) : '—'}</td>` +
+      `<td class="r tn" style="font-size:12px;line-height:1.5">${leadCell}</td>` +
+      `<td class="r tn" style="font-size:12px;line-height:1.5">${evCell}</td>`;
     tbody.appendChild(tr);
   });
-  if (countEl) countEl.textContent = `${fixtures.length} of ${FREEZE_DATA.fixtures.length} fixtures${FREEZE_DATA.updated ? ` · updated ${new Date(FREEZE_DATA.updated).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : ''}`;
-  if (!fixtures.length) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No fixtures${min != null ? ` with a team at ${min}+ odds` : ''} right now.</td></tr>`;
+
+  const leadNote = FREEZE_LEAD
+    ? ` · lead fairs from ${(FREEZE_LEAD.matches || []).filter(m => m.homeLeadAnyTime).length} BB matches`
+    : ' · lead fairs unavailable';
+  if (countEl) countEl.textContent = `${rows.length} of ${FREEZE_DATA.fixtures.length} fixtures${FREEZE_DATA.updated ? ` · updated ${new Date(FREEZE_DATA.updated).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : ''}${leadNote}`;
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No fixtures${min != null ? ` with a team at ${min}+ odds` : ''} right now.</td></tr>`;
   }
 }
 </script>
