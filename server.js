@@ -221,7 +221,7 @@ app.listen(PORT, () => console.log(`BuzzerBetting server running on port ${PORT}
 // Background: watch FotMob for lineups flipping to confirmed and feed the header bell.
 require('./notifications-poller').startLineupNotifier();
 
-// Background: keep the SkyBet-odds cache for /api/skybet-bfex warm (every 20 min).
+// Background: keep the SkyBet-odds cache for /api/skybet-bfex warm (incremental, every 15 min).
 require('./skybet-bfex-lib').startWarmer();
 
 // Background: resolve freeze-acca fodder results + auto-settle lost accas (every 15 min).

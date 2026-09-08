@@ -23,6 +23,17 @@
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const { skyThrottle, noteResponse, isBlocked } = require('./skybet-throttle');
+
+// Every SkyBet request (skybet.com pages + apitbd GraphQL) goes through here: it paces
+// calls and, on a 429/503, opens a process-wide circuit so the warmer / builder / accafreeze
+// scraper stop hammering SkyBet until its (hours-long) ban lifts. Throws SKY_BLOCKED meanwhile.
+async function skyFetch(url, opts) {
+  await skyThrottle();
+  const res = await fetch(url, opts);
+  noteResponse(res);
+  return res;
+}
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' };
 const BFEX_BASE = 'https://api.betfair.com/exchange/betting/rest/v1.0';
@@ -40,8 +51,8 @@ const SKY_QC = { preferences: { userProducts: ['SPORTSBOOK', 'GAMES'], favoriteS
 const SKY_CACHE_PATH = path.join(__dirname, 'data', 'sky_odds_cache.json');
 const SKY_TTL_MS = 25 * 60 * 1000;       // re-resolve a hit after this
 const SKY_NEG_TTL_MS = 45 * 60 * 1000;   // re-try a miss after this
-const MAX_SKY_RESOLVE = 150;             // live resolutions per call unless ?full=1
-const SKY_CONCURRENCY = 4;
+const MAX_SKY_RESOLVE = 60;              // live resolutions per call unless ?full=1
+const SKY_CONCURRENCY = 2;              // SkyBet 429-bans datacentre IPs that burst it
 
 // ── Betfair plumbing (copied from netlify/functions/betfair.js) ───────────────
 const CERT = fs.readFileSync('/root/client-2048.crt');
@@ -260,7 +271,7 @@ function skyHeaders(json) {
   return h;
 }
 async function skySearch(query) {
-  const res = await fetch(SKY_GQL + '?_ak=' + encodeURIComponent(SKY_APPKEY), {
+  const res = await skyFetch(SKY_GQL + '?_ak=' + encodeURIComponent(SKY_APPKEY), {
     method: 'POST', headers: skyHeaders(true),
     body: JSON.stringify({ documentId: SKY_SEARCH_DOC, variables: { query } }),
   });
@@ -306,7 +317,7 @@ function deepFind(node, pred, depth) {
 async function skyGql(documentId, variables, currentViewUrn) {
   const url = SKY_GQL + '?_ak=' + encodeURIComponent(SKY_APPKEY) +
     (currentViewUrn ? '&currentViewUrn=' + encodeURIComponent(currentViewUrn) : '');
-  const res = await fetch(url, { method: 'POST', headers: skyHeaders(true), body: JSON.stringify({ documentId, variables }) });
+  const res = await skyFetch(url, { method: 'POST', headers: skyHeaders(true), body: JSON.stringify({ documentId, variables }) });
   return res.json().catch(() => null);
 }
 // Fallback for "thin" SSR event pages: nav-tabs Card# → the MATCH_ODDS sbkMarket urn →
@@ -354,10 +365,13 @@ async function resolveSkyOdds(fx, cache) {
     if (hit.odds && age < SKY_TTL_MS) return { ...hit, source: 'search-cache' };
     if (!hit.odds && age < SKY_NEG_TTL_MS) return null; // cached miss, still fresh
   }
+  // SkyBet circuit open (recent 429) — bail without writing a negative cache entry,
+  // so this fixture is retried straight away once the ban lifts.
+  if (isBlocked()) return null;
   let found = null;
   for (const q of [fx.home, fx.away]) {
     let hits;
-    try { hits = await skySearch(q); } catch (e) { hits = []; }
+    try { hits = await skySearch(q); } catch (e) { hits = []; if (e && e.code === 'SKY_BLOCKED') return null; }
     found = hits.find(h => {
       const parts = String(h.url).split('/');
       const slugPair = parts[parts.length - 2] || h.name; // "home-v-away"
@@ -372,13 +386,13 @@ async function resolveSkyOdds(fx, cache) {
 
   let odds = null;
   try {
-    const res = await fetch('https://skybet.com/' + found.url, { headers: skyHeaders(false) });
+    const res = await skyFetch('https://skybet.com/' + found.url, { headers: skyHeaders(false) });
     if (res.ok) {
       const html = await res.text();
       odds = parseEventPageOdds(html);                                   // fast path (inline market)
       if (!odds) odds = await resolveViaGraphQL(html, found.eventId);    // thin-page fallback
     }
-  } catch (e) { /* leave null */ }
+  } catch (e) { if (e && e.code === 'SKY_BLOCKED') return null; /* else leave null */ }
 
   if (!odds) { cache[key] = { ts: now, odds: null }; return null; }
   const entry = { ts: now, odds: odds.odds, eligible: odds.eligible, url: found.url, eventId: found.eventId, marketId: odds.marketId };
@@ -499,16 +513,19 @@ function favPrice(b) {
 }
 
 // ── Background cache warmer ──────────────────────────────────────────────────
-// Keeps data/sky_odds_cache.json fully populated as fixtures roll in/out of the
-// 5-day window, so the acca builder's calls stay fast (a plain call only resolves
-// 150 new fixtures). Started from server.js, same pattern as notifications-poller.
+// Keeps data/sky_odds_cache.json populated as fixtures roll in/out of the 5-day
+// window, so the acca builder's calls stay fast. Deliberately NOT a `full` sweep:
+// that fires ~2000 SkyBet requests in a burst and gets the DO box's IP 429-banned
+// for hours ("enhance_your_calm", Retry-After in the tens of thousands of seconds).
+// It resolves MAX_SKY_RESOLVE per pass instead and just runs often enough to keep
+// up with the fixture list. Started from server.js, like notifications-poller.
 let warmerInFlight = false;
 async function warm() {
   if (warmerInFlight) return;
   warmerInFlight = true;
   const t0 = Date.now();
   try {
-    const res = await exports.handler({ httpMethod: 'GET', queryStringParameters: { full: '1' } });
+    const res = await exports.handler({ httpMethod: 'GET', queryStringParameters: {} });
     const j = JSON.parse(res.body);
     if (j.ok) console.log(`[skybet-bfex warm] ${j.withSkyOdds}/${j.count} with SkyBet odds, ${((Date.now() - t0) / 1000).toFixed(0)}s`);
     else console.log(`[skybet-bfex warm] failed: ${j.error}`);
@@ -518,7 +535,7 @@ async function warm() {
     warmerInFlight = false;
   }
 }
-exports.startWarmer = function ({ intervalMs = 20 * 60 * 1000, initialDelayMs = 45 * 1000 } = {}) {
+exports.startWarmer = function ({ intervalMs = 15 * 60 * 1000, initialDelayMs = 4 * 60 * 1000 } = {}) {
   setTimeout(warm, initialDelayMs);
   setInterval(warm, intervalMs);
   console.log('[skybet-bfex warm] warmer started');
