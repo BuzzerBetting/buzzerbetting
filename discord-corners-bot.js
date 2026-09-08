@@ -66,8 +66,9 @@ async function processImage(msg, img) {
     console.log(`[discord-corners] msg ${msg.id} -> ${status}${d.note ? ' (' + d.note + ')' : ''}`);
     if (status === 'disabled') return; // shouldn't happen (we check first) — but never react
     await msg.react(EMOJI[status] || '❓').catch(() => {});
-    if (status === 'booked') await msg.reply(`✅ Booked: ${d.summary}`).catch(() => {});
-    else if (status === 'skipped' || status === 'error') await msg.reply(`${EMOJI[status]} ${d.note || status}`).catch(() => {});
+    // On a successful booking the ✅ reaction is the only confirmation — no reply.
+    // Skips/errors still get a reply since the reason (d.note) isn't conveyable by a reaction alone.
+    if (status === 'skipped' || status === 'error') await msg.reply(`${EMOJI[status]} ${d.note || status}`).catch(() => {});
   } catch (e) {
     console.error('[discord-corners] book request failed:', e.message);
     await msg.react('❌').catch(() => {});
