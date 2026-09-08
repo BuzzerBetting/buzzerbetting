@@ -378,10 +378,27 @@ exports.handler = async (event) => {
       };
     });
 
-    let toResolve = rows.filter(r => !r.sky);
+    // Cache-only pass first (free): apply every fresh cached hit, note fresh misses, and
+    // collect only the genuinely-uncached fixtures for a live lookup (that's what the cap limits).
+    const now = Date.now();
+    let fromCache = 0;
+    const needLive = [];
+    for (const r of rows) {
+      if (r.sky) continue;
+      const hit = cache[skyCacheKey(r.b.home, r.b.away, r.b.startTime)];
+      const age = hit ? now - (hit.ts || 0) : Infinity;
+      if (hit && hit.odds && age < SKY_TTL_MS) {
+        r.sky = { eventId: hit.eventId, url: hit.url || null, odds: hit.odds, accaFreezeEligible: !!hit.eligible, source: 'search-cache' };
+        fromCache++;
+      } else if (hit && !hit.odds && age < SKY_NEG_TTL_MS) {
+        // fresh cached miss — don't re-hit SkyBet yet
+      } else {
+        needLive.push(r);
+      }
+    }
     // prefer fixtures with a favourite (likely fodder legs) when capping
-    toResolve.sort((x, y) => favPrice(x.b) - favPrice(y.b));
-    const slice = full ? toResolve : toResolve.slice(0, MAX_SKY_RESOLVE);
+    needLive.sort((x, y) => favPrice(x.b) - favPrice(y.b));
+    const slice = full ? needLive : needLive.slice(0, MAX_SKY_RESOLVE);
     const resolved = await mapPool(slice, SKY_CONCURRENCY, r => resolveSkyOdds(r.b, cache));
     slice.forEach((r, i) => {
       const o = resolved[i];
@@ -408,6 +425,7 @@ exports.handler = async (event) => {
         windowDays: WINDOW_DAYS,
         count: fixtures.length,
         withSkyOdds: withSky,
+        skyFromCache: fromCache,
         skyResolvedThisCall: slice.length,
         skyStillMissing: fixtures.length - withSky,
         fixtures,
