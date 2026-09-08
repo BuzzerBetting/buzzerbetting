@@ -14067,13 +14067,6 @@ function fbRenderAccas(accas){
   }).join('');
 }
 
-// SkyBet accounts for the Add Bet picker — robust to however the bookie is stored/normalised.
-function fbSkybetAccountOptions(){
-  const isSky = b => (b || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes('skybet');
-  let list = LEDGER_ACCOUNTS.filter(a => isSky(a.bookie));
-  if (!list.length) list = LEDGER_ACCOUNTS;
-  return list.map(a => `<option value="${a.id}">${escapeHtml((a.id ? a.id + ' — ' : '') + (a.bookie || '') + (a.holder ? ' (' + a.holder + ')' : ''))}</option>`).join('');
-}
 async function fbToggleAddBet(idx){
   const box = document.getElementById('fb-addbet-' + idx);
   if (!box) return;
@@ -14088,7 +14081,7 @@ async function fbToggleAddBet(idx){
   box.innerHTML = `
     <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
       <div style="display:flex;flex-direction:column;gap:4px"><label class="fb-lbl">SkyBet account</label>
-        <select id="fb-ab-acc-${idx}" class="fb-in" style="min-width:210px">${fbSkybetAccountOptions()}</select></div>
+        <select id="fb-ab-acc-${idx}" class="fb-in" style="min-width:210px">${accountOptionsHtml(null, 'SkyBet')}</select></div>
       <div style="display:flex;flex-direction:column;gap:4px"><label class="fb-lbl">Back odds (whole acca)</label>
         <input id="fb-ab-odds-${idx}" type="number" step="0.01" class="fb-in" style="width:120px" oninput="fbUpdateAbEv(${idx})"></div>
       <div style="display:flex;flex-direction:column;gap:4px"><label class="fb-lbl">Stake £</label>
