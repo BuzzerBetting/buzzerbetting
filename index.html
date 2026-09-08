@@ -13846,6 +13846,7 @@ const FB_GAP_MS = 105 * 60 * 1000; // 1h45m between latest fodder KO and the fre
 const FB_DEFAULT_MIN_EV = 0.80;     // freeze min-EV when the box is left blank
 let FB_BFEX = null, FB_LEAD = null, FB_ACCAS = [], FB_LOADED = false;
 let FB_INIT_DONE = false, FB_PENDING_TEAM = null, FB_SAVE_T = null, FB_GEN_T = null;
+let FB_LAST_SIGS = new Set(); // fodder-set signatures from the previous Generate — penalised so re-generating gives a fresh mix
 
 async function initFreezeBuilder(){
   if (!FB_INIT_DONE) { FB_INIT_DONE = true; await fbLoadPrefs(); }
@@ -14004,34 +14005,74 @@ function fbGenerate(){
     return;
   }
 
-  // One freeze leg per acca: round-robin across the (EV-sorted) teams so N is spread evenly,
-  // and if N < #teams the highest-EV teams are the ones used.
-  const freezeLegs = [];
-  for (let i = 0; i < N; i++) freezeLegs.push(freezeTeams[i % freezeTeams.length]);
-
-  // Fodder is distributed evenly GLOBALLY: one usage counter across every acca. Each acca
-  // takes the 4 least-used matches from its own time-valid pool (tie-break: earliest kickoff),
-  // then bumps their counts — so successive accas rotate through the available fodder.
-  const usage = new Map();
-  const accas = [], shortfalls = new Set();
+  const sigOf = ls => ls.map(l => l.eventName).sort().join('|');
+  const shortfalls = new Set();
   const poolCache = new Map();
+
+  // Keep only freeze teams whose time-valid fodder pool has >= 4 matches, then round-robin
+  // N accas across just those (EV-sorted) — so N is honoured whenever any team can build.
+  const usable = freezeTeams.filter(ft => {
+    const pool = fbFodderPoolFor(ft.kickoff, ft.matchEventName);
+    poolCache.set(ft.team, pool);
+    if (pool.length >= 4) return true;
+    shortfalls.add(`${ft.team} (only ${pool.length} fodder)`);
+    return false;
+  });
+  if (!usable.length) {
+    FB_ACCAS = []; res.innerHTML = '';
+    if (st) { st.style.display = ''; st.innerHTML = `<i class="ti ti-info-circle"></i> No freeze team has 4+ eligible fodder matches. ${escapeHtml([...shortfalls].join(', '))}`; }
+    return;
+  }
+  const freezeLegs = [];
+  for (let i = 0; i < N; i++) freezeLegs.push(usable[i % usable.length]);
+
+  // Each acca picks 4 fodder matches from its pool by lowest score, where
+  //   score = global usage (keeps distribution roughly even)
+  //         + how many already-built accas contain it (spreads correlation between accas)
+  //         + random jitter (mixes it up, and makes each Generate give a different set)
+  // No two accas share the same 4-match set; sets from the previous Generate are also
+  // penalised so re-generating gives a fresh mix.
+  const W_USAGE = 3, W_OVERLAP = 7, W_JITTER = 6;
+  const usage = new Map(), inAccas = new Map(), sigSet = new Set();
+  const accas = [];
+  let dupCount = 0;
+
   for (const ft of freezeLegs) {
-    let pool = poolCache.get(ft.team);
-    if (!pool) { pool = fbFodderPoolFor(ft.kickoff, ft.matchEventName); poolCache.set(ft.team, pool); }
-    if (pool.length < 4) { shortfalls.add(`${ft.team} (only ${pool.length} fodder)`); continue; }
-    const ordered = pool.slice().sort((a, b) =>
-      ((usage.get(a.eventName) || 0) - (usage.get(b.eventName) || 0)) || (a.kickoff - b.kickoff));
-    const legs = [];
-    for (const p of ordered) { if (legs.length === 4) break; if (!legs.some(x => x.eventName === p.eventName)) legs.push(p); }
-    if (legs.length < 4) { shortfalls.add(ft.team); continue; }
-    legs.forEach(l => usage.set(l.eventName, (usage.get(l.eventName) || 0) + 1));
+    const pool = poolCache.get(ft.team);
+    const scored = pool.map(p => ({
+      p,
+      s: (usage.get(p.eventName) || 0) * W_USAGE
+       + (inAccas.get(p.eventName) || 0) * W_OVERLAP
+       + Math.random() * W_JITTER,
+    })).sort((a, b) => a.s - b.s).map(x => x.p);
+
+    // candidate quads over the low-scoring end of the pool, roughly score-ascending;
+    // scored.slice(0,4) is always first so there's a guaranteed fallback.
+    const K = Math.min(scored.length, 14);
+    const combos = [scored.slice(0, 4)];
+    for (let a = 0; a < Math.min(K, 4); a++)
+      for (let b = a + 1; b < Math.min(K, 7); b++)
+        for (let c = b + 1; c < Math.min(K, 10); c++)
+          for (let d = c + 1; d < K; d++)
+            combos.push([scored[a], scored[b], scored[c], scored[d]]);
+
+    let legs = combos.find(q => { const s = sigOf(q); return !sigSet.has(s) && !FB_LAST_SIGS.has(s); });
+    if (!legs) { legs = combos[0]; dupCount++; }
+
+    sigSet.add(sigOf(legs));
+    legs.forEach(l => {
+      usage.set(l.eventName, (usage.get(l.eventName) || 0) + 1);
+      inAccas.set(l.eventName, (inAccas.get(l.eventName) || 0) + 1);
+    });
     accas.push({ freeze: ft, fodder: legs });
   }
 
+  FB_LAST_SIGS = sigSet; // next Generate avoids reproducing this set
   FB_ACCAS = accas;
   fbRenderAccas(accas);
   const usedTeams = new Set(accas.map(a => a.freeze.team)).size;
   const parts = [`${accas.length} acca${accas.length === 1 ? '' : 's'} across ${usedTeams} freeze team${usedTeams === 1 ? '' : 's'}`];
+  if (dupCount) parts.push(`${dupCount} repeated fodder set${dupCount === 1 ? '' : 's'} (pool too small for more unique combos)`);
   if (shortfalls.size) parts.push(`fodder pool too small for: ${[...shortfalls].join(', ')}`);
   if (st) { st.style.display = ''; st.innerHTML = `<i class="ti ti-info-circle"></i> ${escapeHtml(parts.join(' · '))}`; }
 }
