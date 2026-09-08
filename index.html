@@ -377,7 +377,7 @@ input::placeholder{color:var(--text3)}
       </div>
     </div>
     <div id="freeze-list-status" class="note" style="display:none"></div>
-    <div class="note" style="font-size:11.5px;color:var(--text3);margin-bottom:10px"><i class="ti ti-info-circle"></i> The likely freeze side (FTR odds ≥ 4.0) is <span style="color:var(--blue);font-weight:600">highlighted</span>. "Lead @ any / EV" = BookieBashing fair odds for that team to be ahead at some point, then EV = SkyBet odds ÷ that fair − 1. Red = BookieBashing has no fair for that team.</div>
+    <div class="note" style="font-size:11.5px;color:var(--text3);margin-bottom:10px"><i class="ti ti-info-circle"></i> The likely freeze side (FTR odds ≥ 4.0) is highlighted <span style="color:var(--blue);font-weight:600">blue</span>, or <span style="color:var(--red);font-weight:600">red</span> if BookieBashing has no fair for it. "Lead @ any / EV" = BB fair odds for that team to be ahead at some point, then EV = SkyBet odds ÷ that fair − 1.</div>
     <div style="overflow-x:auto"><table class="dt" style="min-width:720px">
       <thead><tr><th style="min-width:72px">Kickoff</th><th>Competition</th><th>Home</th><th class="r">Home odds</th><th class="r">Draw</th><th>Away</th><th class="r">Away odds</th><th class="r">Lead @ any / EV</th></tr></thead>
       <tbody id="freeze-list-tbody"></tbody>
@@ -13707,10 +13707,15 @@ function renderFreezeList(){
 
   tbody.innerHTML = '';
   rows.forEach(({ f, ev }) => {
-    // the freeze side(s) — priced >= 4.0 — get the light-blue highlight
-    const homeTarget = f.homeOdds != null && f.homeOdds >= FREEZE_LEAD_MIN_ODDS;
-    const awayTarget = f.awayOdds != null && f.awayOdds >= FREEZE_LEAD_MIN_ODDS;
-    const blue = 'color:var(--blue);font-weight:600';
+    // the freeze side(s) — priced >= 4.0 — get highlighted: blue if BB has a lead-anytime
+    // fair for them, red if not.
+    const sideByKey = {};
+    ev.sides.forEach(s => { sideByKey[s.key] = s; });
+    const targetStyle = key => {
+      const s = sideByKey[key];
+      if (!s) return '';
+      return `color:${s.fair == null ? 'var(--red)' : 'var(--blue)'};font-weight:600`;
+    };
     const kickoff = f.kickoff ? new Date(f.kickoff).toLocaleString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 
     // one column: lead-anytime fair + EV per freeze side (no team name — the blue highlight
@@ -13726,11 +13731,11 @@ function renderFreezeList(){
     const tr = document.createElement('tr');
     tr.innerHTML = `<td style="font-size:12px;white-space:nowrap">${kickoff}</td>` +
       `<td style="font-size:12px;color:var(--text2)">${escapeHtml(f.competition || '')}</td>` +
-      `<td style="${homeTarget ? blue : ''}">${escapeHtml(f.home)}</td>` +
-      `<td class="r tn" style="${homeTarget ? blue : ''}">${f.homeOdds != null ? f.homeOdds.toFixed(2) : '—'}</td>` +
+      `<td style="${targetStyle('home')}">${escapeHtml(f.home)}</td>` +
+      `<td class="r tn" style="${targetStyle('home')}">${f.homeOdds != null ? f.homeOdds.toFixed(2) : '—'}</td>` +
       `<td class="r tn" style="color:var(--text3)">${f.drawOdds != null ? f.drawOdds.toFixed(2) : '—'}</td>` +
-      `<td style="${awayTarget ? blue : ''}">${escapeHtml(f.away)}</td>` +
-      `<td class="r tn" style="${awayTarget ? blue : ''}">${f.awayOdds != null ? f.awayOdds.toFixed(2) : '—'}</td>` +
+      `<td style="${targetStyle('away')}">${escapeHtml(f.away)}</td>` +
+      `<td class="r tn" style="${targetStyle('away')}">${f.awayOdds != null ? f.awayOdds.toFixed(2) : '—'}</td>` +
       `<td class="r tn" style="font-size:12px;line-height:1.5;white-space:nowrap">${leadCell}</td>`;
     tbody.appendChild(tr);
   });
