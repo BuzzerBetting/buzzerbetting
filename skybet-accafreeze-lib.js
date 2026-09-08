@@ -186,7 +186,11 @@ async function loadCouponPage(couponPath, cookies) {
   return { urns, appKey, currentViewUrn, initialCards };
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 // Step 4: resolve every remaining urn's full card detail via the "Card" persisted query.
+// apitbd rate-limits bursts (HTTP 429) — pace the batches and back off + retry on 429/503
+// rather than aborting the whole run on one throttled batch.
 async function resolveCards(urns, appKey, currentViewUrn, cookies) {
   const url = `https://apitbd.skybet.com/api/tbd/bff-gql/v11/?_ak=${encodeURIComponent(appKey)}&currentViewUrn=${encodeURIComponent(currentViewUrn)}`;
   const out = [];
@@ -196,11 +200,19 @@ async function resolveCards(urns, appKey, currentViewUrn, cookies) {
       variables: { urn: batch, numberOfFilledCardsInCardGroup: 2, ...QUERY_CONTEXT },
       documentId: CARD_DOCUMENT_ID,
     });
-    const res = await skybetFetch(url, cookies, { method: 'POST', body, headers: { 'Content-Type': 'application/json' } });
-    if (!res.ok) throw new Error(`Card query HTTP ${res.status} (batch starting at ${i})`);
-    const json = await res.json();
-    if (!json.data || !Array.isArray(json.data.Cards)) throw new Error(`unexpected Card query shape (batch starting at ${i})`);
+    let json = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const res = await skybetFetch(url, cookies, { method: 'POST', body, headers: { 'Content-Type': 'application/json' } });
+      if (res.ok) { json = await res.json(); break; }
+      if ((res.status === 429 || res.status === 503) && attempt < 3) {
+        await sleep(1500 * (attempt + 1) * (attempt + 1)); // 1.5s, 6s, 13.5s
+        continue;
+      }
+      throw new Error(`Card query HTTP ${res.status} (batch starting at ${i})`);
+    }
+    if (!json || !json.data || !Array.isArray(json.data.Cards)) throw new Error(`unexpected Card query shape (batch starting at ${i})`);
     out.push(...json.data.Cards);
+    if (i + BATCH_SIZE < urns.length) await sleep(450); // pace the next batch
   }
   return out;
 }
