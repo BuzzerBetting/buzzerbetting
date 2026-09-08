@@ -13975,37 +13975,35 @@ function fbGenerate(){
     return;
   }
 
-  // split N ~evenly across teams; remainder to the highest-EV teams (list is EV-sorted)
-  const T = freezeTeams.length;
-  const per = freezeTeams.map((_, i) => Math.floor(N / T) + (i < (N % T) ? 1 : 0));
+  // One freeze leg per acca: round-robin across the (EV-sorted) teams so N is spread evenly,
+  // and if N < #teams the highest-EV teams are the ones used.
+  const freezeLegs = [];
+  for (let i = 0; i < N; i++) freezeLegs.push(freezeTeams[i % freezeTeams.length]);
 
-  const accas = [], shortfalls = [];
-  freezeTeams.forEach((ft, ti) => {
-    const want = per[ti];
-    if (!want) return;
-    const pool = fbFodderPoolFor(ft.kickoff, ft.matchEventName);
-    if (pool.length < 4) { shortfalls.push(`${ft.team} (only ${pool.length} fodder)`); return; }
-    // deal round-robin from `reps` copies of the pool → every fodder match used ~evenly
-    const reps = Math.max(1, Math.ceil((want * 4) / pool.length));
-    const bag = []; for (let r = 0; r < reps; r++) bag.push(...pool);
-    let bi = 0, made = 0;
-    for (let i = 0; i < want; i++) {
-      const legs = []; let scanned = 0;
-      while (legs.length < 4 && scanned < bag.length) {
-        const c = bag[bi % bag.length]; bi++; scanned++;
-        if (!legs.some(x => x.eventName === c.eventName)) legs.push(c);
-      }
-      if (legs.length < 4) break;
-      accas.push({ freeze: ft, fodder: legs.slice() });
-      made++;
-    }
-    if (made < want) shortfalls.push(`${ft.team} (${made}/${want})`);
-  });
+  // Fodder is distributed evenly GLOBALLY: one usage counter across every acca. Each acca
+  // takes the 4 least-used matches from its own time-valid pool (tie-break: earliest kickoff),
+  // then bumps their counts — so successive accas rotate through the available fodder.
+  const usage = new Map();
+  const accas = [], shortfalls = new Set();
+  const poolCache = new Map();
+  for (const ft of freezeLegs) {
+    let pool = poolCache.get(ft.team);
+    if (!pool) { pool = fbFodderPoolFor(ft.kickoff, ft.matchEventName); poolCache.set(ft.team, pool); }
+    if (pool.length < 4) { shortfalls.add(`${ft.team} (only ${pool.length} fodder)`); continue; }
+    const ordered = pool.slice().sort((a, b) =>
+      ((usage.get(a.eventName) || 0) - (usage.get(b.eventName) || 0)) || (a.kickoff - b.kickoff));
+    const legs = [];
+    for (const p of ordered) { if (legs.length === 4) break; if (!legs.some(x => x.eventName === p.eventName)) legs.push(p); }
+    if (legs.length < 4) { shortfalls.add(ft.team); continue; }
+    legs.forEach(l => usage.set(l.eventName, (usage.get(l.eventName) || 0) + 1));
+    accas.push({ freeze: ft, fodder: legs });
+  }
 
   FB_ACCAS = accas;
   fbRenderAccas(accas);
-  const parts = [`${accas.length} acca${accas.length === 1 ? '' : 's'} built from ${freezeTeams.length} freeze team${freezeTeams.length === 1 ? '' : 's'}`];
-  if (shortfalls.length) parts.push(`fodder pool too small for: ${shortfalls.join(', ')}`);
+  const usedTeams = new Set(accas.map(a => a.freeze.team)).size;
+  const parts = [`${accas.length} acca${accas.length === 1 ? '' : 's'} across ${usedTeams} freeze team${usedTeams === 1 ? '' : 's'}`];
+  if (shortfalls.size) parts.push(`fodder pool too small for: ${[...shortfalls].join(', ')}`);
   if (st) { st.style.display = ''; st.innerHTML = `<i class="ti ti-info-circle"></i> ${escapeHtml(parts.join(' · '))}`; }
 }
 function fbFmtKt(kt){ return new Date(kt).toLocaleString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); }
