@@ -13719,7 +13719,7 @@ function renderFreezeList(){
       if (s.fair == null) return '<span style="color:var(--red)">— &nbsp; —</span>';
       const pct = s.ev * 100;
       const evCol = pct >= 0 ? 'var(--green)' : 'var(--text3)';
-      return `<span style="color:var(--text2)">${s.fair.toFixed(2)}</span> &nbsp; <span style="color:${evCol};font-weight:${pct >= 0 ? 600 : 400}">${pct >= 0 ? '+' : ''}${pct.toFixed(0)}%</span>`;
+      return `<span style="color:var(--amber);font-weight:600">${s.fair.toFixed(2)}</span> &nbsp; <span style="color:${evCol};font-weight:${pct >= 0 ? 600 : 400}">${pct >= 0 ? '+' : ''}${pct.toFixed(0)}%</span>`;
     });
     const leadCell = cellLines.length ? cellLines.join('<br>') : '<span style="color:var(--text3)">·</span>';
 
