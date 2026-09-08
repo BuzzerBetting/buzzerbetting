@@ -490,3 +490,29 @@ function favPrice(b) {
   const h = b.lay && b.lay.home, a = b.lay && b.lay.away;
   return Math.min(h || 999, a || 999);
 }
+
+// ── Background cache warmer ──────────────────────────────────────────────────
+// Keeps data/sky_odds_cache.json fully populated as fixtures roll in/out of the
+// 5-day window, so the acca builder's calls stay fast (a plain call only resolves
+// 150 new fixtures). Started from server.js, same pattern as notifications-poller.
+let warmerInFlight = false;
+async function warm() {
+  if (warmerInFlight) return;
+  warmerInFlight = true;
+  const t0 = Date.now();
+  try {
+    const res = await exports.handler({ httpMethod: 'GET', queryStringParameters: { full: '1' } });
+    const j = JSON.parse(res.body);
+    if (j.ok) console.log(`[skybet-bfex warm] ${j.withSkyOdds}/${j.count} with SkyBet odds, ${((Date.now() - t0) / 1000).toFixed(0)}s`);
+    else console.log(`[skybet-bfex warm] failed: ${j.error}`);
+  } catch (e) {
+    console.log(`[skybet-bfex warm] error: ${e.message}`);
+  } finally {
+    warmerInFlight = false;
+  }
+}
+exports.startWarmer = function ({ intervalMs = 20 * 60 * 1000, initialDelayMs = 45 * 1000 } = {}) {
+  setTimeout(warm, initialDelayMs);
+  setInterval(warm, intervalMs);
+  console.log('[skybet-bfex warm] warmer started');
+};
