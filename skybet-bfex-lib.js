@@ -1,19 +1,22 @@
-// skybet-bfex-lib.js — SkyBet football fixtures for the next 5 days (with SkyBet back odds),
-// each annotated with Betfair Exchange MATCH_ODDS lay prices + liquidity. Backend only —
-// feeds the acca-freeze builder; not rendered anywhere yet.
+// skybet-bfex-lib.js — every football fixture Betfair Exchange has a MATCH_ODDS market for in
+// the next 5 days, with lay prices + liquidity, plus SkyBet back (FTR) odds where we have them.
+// Backend only — feeds the acca-freeze builder; not rendered anywhere yet.
 //
-// Runs on the DO box (required directly by server.js), NOT as a Netlify function:
-//   - the SkyBet side reuses skybet-accafreeze-lib.js, which is DO-only (geo-fence)
-//   - the Betfair side needs the cert-login (client-2048.crt/.key live on /root, DO-only)
+// Runs on the DO box (required directly by server.js), NOT a Netlify function: Betfair needs
+// the cert-login (client-2048.crt/.key on /root) and the SkyBet side is geo-fenced.
 //
-// SkyBet fixtures: the skybet-accafreeze feed's `fixtures` array is every fixture where Acca
-// Freeze is offered — i.e. essentially all SkyBet football — and every one carries home/draw/
-// away FTR (back) odds. ~190 fixtures over today+5d. So no separate all-football scrape is
-// needed; we just reuse that handler's output.
+// Why Betfair is the spine, not SkyBet: SkyBet's SPA has no scrapeable all-football list
+// (every fixture-list route 404s; the real data is behind a bff-gql GraphQL layer whose
+// request shape needs a live browser capture to reverse-engineer, and the browser tool blocks
+// gambling sites). So: Betfair listMarketCatalogue(MATCH_ODDS, now..now+5d) is the fixture
+// universe (~500 markets, ~115 competitions), and SkyBet back odds are attached from the
+// accafreeze feed (skybet-accafreeze-lib) where the fixture also appears on the Acca Freeze
+// coupon — which is essentially all mainstream SkyBet football (~190 fixtures, with FTR odds).
+// Fixtures Betfair covers but SkyBet's acca-freeze coupon doesn't get `sky: null`.
 //
-// Betfair: one listMarketCatalogue(MATCH_ODDS, marketStartTime = now..now+5d) → ~500 markets,
-// then listMarketBook in chunks for EX_BEST_OFFERS lay prices + per-runner/market totalMatched.
-// Login / bfCall are copied from netlify/functions/betfair.js (kept in sync by hand).
+// Betfair: one listMarketCatalogue + listMarketBook in chunks for EX_BEST_OFFERS lay prices +
+// per-runner/market totalMatched. Login / bfCall copied from netlify/functions/betfair.js
+// (kept in sync by hand).
 
 const https = require('https');
 const fs = require('fs');
@@ -197,17 +200,21 @@ async function fetchBfexMatchOdds(appKey, session) {
   });
 }
 
-// ── Join ────────────────────────────────────────────────────────────────────
-function findBfex(skyFx, bfexList) {
-  const skt = skyFx.kickoff ? Date.parse(skyFx.kickoff) : null;
+// ── Join: find the SkyBet fixture (from the accafreeze feed) for a Betfair event ──
+// SkyBet's SPA has no scrapeable all-football list, so the accafreeze feed's `fixtures`
+// (every fixture where Acca Freeze is offered — essentially all mainstream SkyBet football,
+// with home/draw/away back odds) is the only SkyBet source. Betfair MATCH_ODDS is the spine;
+// SkyBet odds are attached where the fixture also appears on the accafreeze coupon, else null.
+function findSky(bfexFx, skyList) {
+  const bt = bfexFx.startTime ? Date.parse(bfexFx.startTime) : null;
   let best = null, bestDelta = Infinity;
-  for (const b of bfexList) {
-    if (!(teamEq(skyFx.home, b.home) && teamEq(skyFx.away, b.away))) continue;
-    const bt = b.startTime ? Date.parse(b.startTime) : null;
-    const delta = (skt && bt) ? Math.abs(skt - bt) : 0;
-    if (delta < bestDelta) { best = b; bestDelta = delta; }
+  for (const s of skyList) {
+    if (!(teamEq(bfexFx.home, s.home) && teamEq(bfexFx.away, s.away))) continue;
+    const st = s.kickoff ? Date.parse(s.kickoff) : null;
+    const delta = (bt && st) ? Math.abs(bt - st) : 0;
+    if (delta < bestDelta) { best = s; bestDelta = delta; }
   }
-  if (best && skt && best.startTime && bestDelta > 6 * 3600e3) return null; // >6h apart → different fixture
+  if (best && bt && best.kickoff && bestDelta > 6 * 3600e3) return null; // >6h apart → different fixture
   return best;
 }
 
@@ -218,35 +225,41 @@ exports.handler = async (event) => {
   if (!appKey) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'BFEX_APP_KEY not set' }) };
 
   try {
-    // 1. SkyBet fixtures + back odds (reuse the accafreeze scraper's fixtures list)
-    const skyRes = await require('./skybet-accafreeze-lib').handler({ httpMethod: 'GET', queryStringParameters: {} });
-    const sky = JSON.parse(skyRes.body);
-    if (!sky.ok) throw new Error('skybet-accafreeze: ' + (sky.error || 'failed'));
-
-    // 2. Betfair MATCH_ODDS lay odds for the same window
+    // 1. Betfair MATCH_ODDS for the next 5 days — this is the fixture spine
     const session = await getSessionToken();
     const bfexList = await fetchBfexMatchOdds(appKey, session);
 
-    // 3. Join
-    let matched = 0;
-    const fixtures = (sky.fixtures || []).map(f => {
-      const b = findBfex(f, bfexList);
-      if (b) matched++;
+    // 2. SkyBet back odds, from the accafreeze feed (best-effort — a failure just leaves sky:null)
+    let skyList = [];
+    try {
+      const skyRes = await require('./skybet-accafreeze-lib').handler({ httpMethod: 'GET', queryStringParameters: {} });
+      const sky = JSON.parse(skyRes.body);
+      if (sky.ok) skyList = sky.fixtures || [];
+    } catch (e) { /* leave skyList empty */ }
+
+    // 3. Join — every Betfair fixture, SkyBet odds where we have them
+    let withSky = 0;
+    const fixtures = bfexList.map(b => {
+      const s = findSky(b, skyList);
+      if (s) withSky++;
       return {
-        eventId: f.eventId,
-        home: f.home,
-        away: f.away,
-        kickoff: f.kickoff,
-        competition: f.competition,
-        skyOdds: { home: f.homeOdds ?? null, draw: f.drawOdds ?? null, away: f.awayOdds ?? null },
-        accaFreezeEligible: !!f.accaFreezeEligible,
-        skyUrl: f.url || null,
-        bfex: b ? {
+        eventName: b.eventName,
+        home: b.home,
+        away: b.away,
+        kickoff: b.startTime,
+        competition: b.competition,
+        bfex: {
           marketId: b.marketId,
           eventId: b.eventId,
           status: b.status,
           totalMatched: b.totalMatched,
           lay: b.lay,
+        },
+        sky: s ? {
+          eventId: s.eventId,
+          url: s.url || null,
+          odds: { home: s.homeOdds ?? null, draw: s.drawOdds ?? null, away: s.awayOdds ?? null },
+          accaFreezeEligible: !!s.accaFreezeEligible,
         } : null,
       };
     }).sort((a, c) => (a.kickoff || '').localeCompare(c.kickoff || ''));
@@ -257,9 +270,9 @@ exports.handler = async (event) => {
         ok: true,
         updated: new Date().toISOString(),
         windowDays: WINDOW_DAYS,
-        count: fixtures.length,
-        bfexMarkets: bfexList.length,
-        matchedToBfex: matched,
+        count: fixtures.length,          // Betfair football fixtures next 5 days
+        withSkyOdds: withSky,            // how many also have SkyBet back odds
+        skyFixturesSeen: skyList.length, // accafreeze feed size
         fixtures,
       }),
     };
