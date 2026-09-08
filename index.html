@@ -377,9 +377,9 @@ input::placeholder{color:var(--text3)}
       </div>
     </div>
     <div id="freeze-list-status" class="note" style="display:none"></div>
-    <div class="note" style="font-size:11.5px;color:var(--text3);margin-bottom:10px"><i class="ti ti-info-circle"></i> "Lead @ any" = BookieBashing fair odds for that team to be ahead at some point. Shown only for the likely freeze side (FTR odds ≥ 4.0). Freeze EV = SkyBet odds ÷ lead-anytime fair − 1. Red = BookieBashing has no fair for that team.</div>
-    <div style="overflow-x:auto"><table class="dt" style="min-width:760px">
-      <thead><tr><th style="min-width:72px">Kickoff</th><th>Competition</th><th>Home</th><th class="r">Home odds</th><th class="r">Draw</th><th>Away</th><th class="r">Away odds</th><th class="r">Lead @ any</th><th class="r">Freeze EV</th></tr></thead>
+    <div class="note" style="font-size:11.5px;color:var(--text3);margin-bottom:10px"><i class="ti ti-info-circle"></i> The likely freeze side (FTR odds ≥ 4.0) is <span style="color:var(--blue);font-weight:600">highlighted</span>. "Lead @ any / EV" = BookieBashing fair odds for that team to be ahead at some point, then EV = SkyBet odds ÷ that fair − 1. Red = BookieBashing has no fair for that team.</div>
+    <div style="overflow-x:auto"><table class="dt" style="min-width:720px">
+      <thead><tr><th style="min-width:72px">Kickoff</th><th>Competition</th><th>Home</th><th class="r">Home odds</th><th class="r">Draw</th><th>Away</th><th class="r">Away odds</th><th class="r">Lead @ any / EV</th></tr></thead>
       <tbody id="freeze-list-tbody"></tbody>
     </table></div>
   </div>
@@ -13707,35 +13707,31 @@ function renderFreezeList(){
 
   tbody.innerHTML = '';
   rows.forEach(({ f, ev }) => {
-    const homeHot = min != null && f.homeOdds != null && f.homeOdds >= min;
-    const awayHot = min != null && f.awayOdds != null && f.awayOdds >= min;
+    // the freeze side(s) — priced >= 4.0 — get the light-blue highlight
+    const homeTarget = f.homeOdds != null && f.homeOdds >= FREEZE_LEAD_MIN_ODDS;
+    const awayTarget = f.awayOdds != null && f.awayOdds >= FREEZE_LEAD_MIN_ODDS;
+    const blue = 'color:var(--blue);font-weight:600';
     const kickoff = f.kickoff ? new Date(f.kickoff).toLocaleString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 
-    const leadLines = [], evLines = [];
-    ev.sides.forEach(s => {
-      const short = s.name.length > 14 ? s.name.slice(0, 13) + '…' : s.name;
-      if (s.fair == null) {
-        leadLines.push(`<span style="color:var(--red)">${escapeHtml(short)} —</span>`);
-        evLines.push('<span style="color:var(--red)">—</span>');
-      } else {
-        leadLines.push(`<span style="color:var(--text2)">${escapeHtml(short)} ${s.fair.toFixed(2)}</span>`);
-        const pct = s.ev * 100;
-        evLines.push(`<span style="color:${pct >= 0 ? 'var(--green)' : 'var(--text3)'};font-weight:${pct >= 0 ? 600 : 400}">${pct >= 0 ? '+' : ''}${pct.toFixed(0)}%</span>`);
-      }
+    // one column: lead-anytime fair + EV per freeze side (no team name — the blue highlight
+    // already says which team). Two lines, home then away, if both sides qualify.
+    const cellLines = ev.sides.map(s => {
+      if (s.fair == null) return '<span style="color:var(--red)">— &nbsp; —</span>';
+      const pct = s.ev * 100;
+      const evCol = pct >= 0 ? 'var(--green)' : 'var(--text3)';
+      return `<span style="color:var(--text2)">${s.fair.toFixed(2)}</span> &nbsp; <span style="color:${evCol};font-weight:${pct >= 0 ? 600 : 400}">${pct >= 0 ? '+' : ''}${pct.toFixed(0)}%</span>`;
     });
-    const leadCell = leadLines.length ? leadLines.join('<br>') : '<span style="color:var(--text3)">·</span>';
-    const evCell = evLines.length ? evLines.join('<br>') : '<span style="color:var(--text3)">·</span>';
+    const leadCell = cellLines.length ? cellLines.join('<br>') : '<span style="color:var(--text3)">·</span>';
 
     const tr = document.createElement('tr');
     tr.innerHTML = `<td style="font-size:12px;white-space:nowrap">${kickoff}</td>` +
       `<td style="font-size:12px;color:var(--text2)">${escapeHtml(f.competition || '')}</td>` +
-      `<td style="${homeHot ? 'font-weight:600;color:var(--green)' : ''}">${escapeHtml(f.home)}</td>` +
-      `<td class="r tn" style="${homeHot ? 'font-weight:600;color:var(--green)' : ''}">${f.homeOdds != null ? f.homeOdds.toFixed(2) : '—'}</td>` +
+      `<td style="${homeTarget ? blue : ''}">${escapeHtml(f.home)}</td>` +
+      `<td class="r tn" style="${homeTarget ? blue : ''}">${f.homeOdds != null ? f.homeOdds.toFixed(2) : '—'}</td>` +
       `<td class="r tn" style="color:var(--text3)">${f.drawOdds != null ? f.drawOdds.toFixed(2) : '—'}</td>` +
-      `<td style="${awayHot ? 'font-weight:600;color:var(--green)' : ''}">${escapeHtml(f.away)}</td>` +
-      `<td class="r tn" style="${awayHot ? 'font-weight:600;color:var(--green)' : ''}">${f.awayOdds != null ? f.awayOdds.toFixed(2) : '—'}</td>` +
-      `<td class="r tn" style="font-size:12px;line-height:1.5">${leadCell}</td>` +
-      `<td class="r tn" style="font-size:12px;line-height:1.5">${evCell}</td>`;
+      `<td style="${awayTarget ? blue : ''}">${escapeHtml(f.away)}</td>` +
+      `<td class="r tn" style="${awayTarget ? blue : ''}">${f.awayOdds != null ? f.awayOdds.toFixed(2) : '—'}</td>` +
+      `<td class="r tn" style="font-size:12px;line-height:1.5;white-space:nowrap">${leadCell}</td>`;
     tbody.appendChild(tr);
   });
 
@@ -13744,7 +13740,7 @@ function renderFreezeList(){
     : ' · lead fairs unavailable';
   if (countEl) countEl.textContent = `${rows.length} of ${FREEZE_DATA.fixtures.length} fixtures${FREEZE_DATA.updated ? ` · updated ${new Date(FREEZE_DATA.updated).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : ''}${leadNote}`;
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No fixtures${min != null ? ` with a team at ${min}+ odds` : ''} right now.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No fixtures${min != null ? ` with a team at ${min}+ odds` : ''} right now.</td></tr>`;
   }
 }
 </script>
