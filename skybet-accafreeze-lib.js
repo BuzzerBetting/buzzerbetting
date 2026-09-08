@@ -7,11 +7,14 @@
 // DO droplet this now runs from is itself London-based (confirmed via ipinfo.io), which a UK
 // gambling site's geo-fence should accept where a US Lambda never will.
 //
-// 2026-09-08: the bare apex host `https://skybet.com/...` started returning HTTP 406 (Cloudflare
-// in front of a Tomcat "Application Server - Error report" page) for every path — SkyBet seems
-// to have broken/removed the apex→www redirect. `https://www.skybet.com/...` (and m.skybet.com)
-// still serve the full SSR page fine, so all the page fetches / Referer / Origin below use www.
-// The apitbd.skybet.com GraphQL host is unaffected.
+// 2026-09-08: every skybet.com page fetch started returning HTTP 406 (Cloudflare serving a
+// Tomcat "Application Server - Error report" page). Root cause was a STALE `cf_clearance` token
+// in SKYBET_COOKIES — Cloudflare bot-management rejects the whole request when the clearance
+// cookie has expired. Refreshing SKYBET_COOKIES (any browser session, logged in or not — the
+// Acca Freeze coupon renders fine anonymously) fixed it. If this 406s again, the cookie's
+// `cf_clearance` has expired: grab a fresh Cookie header and `pm2 restart --update-env`. NB the
+// apex host `skybet.com` is the correct one for deep paths — `www.`/`m.` 301 event/coupon URLs
+// back to a hub page. apitbd.skybet.com (GraphQL) is a separate host, also clearance-gated.
 //
 // Scrapes SkyBet's Acca Freeze eligible-fixtures list (team names, kickoff, Full Time Result
 // odds, isAccaFreezeEligible flag) for the acca-freeze-builder project.
@@ -119,8 +122,8 @@ async function skybetFetch(url, cookies, options = {}) {
       'User-Agent': UA,
       'Accept': options.body ? 'application/json' : 'text/html',
       'Cookie': cookies,
-      'Referer': 'https://www.skybet.com/',
-      'Origin': 'https://www.skybet.com',
+      'Referer': 'https://skybet.com/',
+      'Origin': 'https://skybet.com',
       ...(options.headers || {})
     }
   });
@@ -133,7 +136,7 @@ async function skybetFetch(url, cookies, options = {}) {
 async function findAccaFreezeCouponUrl(cookies) {
   if (process.env.SKYBET_ACCAFREEZE_PATH) return process.env.SKYBET_ACCAFREEZE_PATH;
 
-  const res = await skybetFetch('https://www.skybet.com/football/s-1', cookies);
+  const res = await skybetFetch('https://skybet.com/football/s-1', cookies);
   if (!res.ok) throw new Error(`football hub HTTP ${res.status}`);
   const html = await res.text();
 
@@ -153,7 +156,7 @@ async function findAccaFreezeCouponUrl(cookies) {
 // Step 2/3: load the coupon page itself, pull out the full card list + session context needed
 // for step 4's batched GraphQL calls.
 async function loadCouponPage(couponPath, cookies) {
-  const res = await skybetFetch(`https://www.skybet.com/${couponPath}`, cookies);
+  const res = await skybetFetch(`https://skybet.com/${couponPath}`, cookies);
   if (!res.ok) {
     // Extra diagnostics on failure — cf-mitigated/server tell us whether this is Cloudflare
     // bot-management blocking the request outright (vs. e.g. a plain expired-session redirect),
