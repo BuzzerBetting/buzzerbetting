@@ -105,20 +105,20 @@ router.use((req, res, next) => {
   next();
 });
 
-// The Calculator role can only ever use the Calculations tools, which don't touch any
-// live betting/financial data — so it has no legitimate reason to ever call this API at
-// all. Blocked entirely here, not just hidden in the frontend, so there's no endpoint a
-// Calculator session could reach even by calling the API directly.
-// Exception: /fotmob-leagues lives under this router for historical/routing reasons only —
-// it's part of the Calculations feature set (Today's Matches / Edit Leagues), not financial
-// Ledger data, so it's exempted from this block rather than widening Calculator's access
-// generally. /notifications is likewise exempt — the header notification bell is available
-// to every role, and the route itself only ever returns 'all'-audience rows to a Calculator.
+// The Calculator and Freeze roles only ever use Calculations tools, which don't touch any
+// live betting/financial data — so they have no legitimate reason to call this API at all.
+// Blocked entirely here, not just hidden in the frontend, so there's no endpoint such a
+// session could reach even by calling the API directly.
+//   - /fotmob-leagues: part of Calculations (Today's Matches / Edit Leagues), not Ledger data.
+//   - /notifications: the header bell is available to every role.
+//   - /match-predictions: Calculations feature.
+//   - /strategy-prefs: per-user Freeze-builder UI settings, no financial data — every role.
 router.use((req, res, next) => {
-  if (req.userRole === 'calculator'
+  if ((req.userRole === 'calculator' || req.userRole === 'freeze')
       && !req.path.startsWith('/fotmob-leagues')
       && !req.path.startsWith('/notifications')
-      && !req.path.startsWith('/match-predictions')) {
+      && !req.path.startsWith('/match-predictions')
+      && !req.path.startsWith('/strategy-prefs')) {
     return res.status(403).json({ ok: false, error: 'This account has no access to the Ledger.' });
   }
   next();

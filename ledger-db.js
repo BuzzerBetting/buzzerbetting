@@ -189,7 +189,7 @@ CREATE TABLE IF NOT EXISTS cards (
 CREATE TABLE IF NOT EXISTS users (
   username TEXT PRIMARY KEY,
   passcode_hash TEXT NOT NULL,
-  role TEXT NOT NULL, -- 'admin' | 'staff'
+  role TEXT NOT NULL, -- 'admin' | 'staff' | 'calculator' | 'freeze'
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

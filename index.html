@@ -360,7 +360,7 @@ input::placeholder{color:var(--text3)}
 
 <!-- FREEZE -->
 <div id="view-freeze" class="sec" style="display:none">
-  <button class="back" onclick="backToCalcMenu()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <button class="back" id="freeze-back-btn" onclick="backToCalcMenu()"><i class="ti ti-arrow-left"></i> Menu</button>
   <div class="sec-title">Freeze</div>
 
   <div id="freeze-tabs" style="display:flex;gap:4px;flex-wrap:wrap;border-bottom:.5px solid var(--border);margin-bottom:16px"></div>
@@ -2949,6 +2949,7 @@ function checkPin(){
       document.getElementById('login-passcode').value='';
       applyRoleRestrictions();
       if (d.role === 'calculator') showTopSec('calc');
+      else if (d.role === 'freeze') showSec('freeze');
     } else {
       errEl.textContent = d.error || 'Incorrect username or passcode — try again';
       errEl.style.display='block';
@@ -2971,13 +2972,14 @@ function checkPin(){
     if(o)o.style.display='none';
     setTimeout(applyRoleRestrictions, 0);
     if (CURRENT_USER_ROLE === 'calculator') setTimeout(()=>showTopSec('calc'), 0);
+    else if (CURRENT_USER_ROLE === 'freeze') setTimeout(()=>showSec('freeze'), 0);
   } else {
     setTimeout(()=>{const i=document.getElementById('login-username');if(i)i.focus();},200);
   }
 })();
 
 // ── NAVIGATION ──
-function goHome(){stopBetAlerts();if(CURRENT_USER_ROLE==='calculator'){showTopSec('calc');return;}document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
+function goHome(){stopBetAlerts();if(CURRENT_USER_ROLE==='freeze'){showSec('freeze');return;}if(CURRENT_USER_ROLE==='calculator'){showTopSec('calc');return;}document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
 function showSec(name){
   // Oddschecker +EV / Calculated +EV / DDHH now live as tabs inside the Bet Alerts page —
   // any legacy showSec() call for them redirects there rather than to a standalone .sec.
@@ -3026,7 +3028,7 @@ function renderStatsMenu() {
   document.getElementById('stats-menu-grid').innerHTML = cards.join('');
 }
 function backToBetsMenu(){showTopSec('bets');}
-function backToCalcMenu(){showTopSec('calc');}
+function backToCalcMenu(){if(CURRENT_USER_ROLE==='freeze'){showSec('freeze');return;}showTopSec('calc');}
 function showLedgerSec(name){document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-ledger-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='bet-entry')initBetEntry();if(name==='bulk-import')initAccountEntry();if(name==='accounts')initAccountsGrid();if(name==='deposits')initDepositsLog();if(name==='withdrawals')initWithdrawalsPending();if(name==='account-summary')initAccountSummary();if(name==='locked-funds')initLockedFunds();if(name==='archived')initArchived();if(name==='bank-transactions')initBankTransactions();if(name==='money')initMoneyPage();if(name==='dashboard')initDashboard();if(name==='bankroll')initBankroll();if(name==='external-staking')initExternalStaking();}
 function backToLedgerHub(){showTopSec('ledger');}
 
@@ -3446,6 +3448,8 @@ const NINJA_GOLF_COMMISSION = 0.02;
 function applyRoleRestrictions() {
   const isStaff = CURRENT_USER_ROLE === 'staff';
   const isCalculator = CURRENT_USER_ROLE === 'calculator';
+  const isFreeze = CURRENT_USER_ROLE === 'freeze'; // Freeze tool only — no other Calculations, no Ledger
+  const noLedger = isCalculator || isFreeze;
   const profitCard = document.getElementById('home-card-profit');
   if (profitCard) profitCard.style.display = isStaff ? 'none' : '';
   const transferBtn = document.getElementById('money-type-transfer');
@@ -3454,9 +3458,11 @@ function applyRoleRestrictions() {
   if (externalBtn) externalBtn.style.display = isStaff ? 'none' : '';
   const calcBackBtn = document.getElementById('calc-menu-back-btn');
   if (calcBackBtn) calcBackBtn.style.display = isCalculator ? 'none' : '';
-  if (!isCalculator) startTodoPolling(); // Calculator has no Ledger access at all — polling would just produce repeated 403s
-  if (!isCalculator) startCalcEVBackground(); // Calculated +EV scans every 5 min in the background so the tab is always current
-  startNotifPolling(); // header notification bell — every role, Calculator included (GET /notifications is allowed for it)
+  const freezeBackBtn = document.getElementById('freeze-back-btn');
+  if (freezeBackBtn) freezeBackBtn.style.display = isFreeze ? 'none' : ''; // Freeze role can't leave the Freeze page
+  if (!noLedger) startTodoPolling(); // Calculator/Freeze have no Ledger access — polling would just produce repeated 403s
+  if (!noLedger) startCalcEVBackground(); // Calculated +EV scans every 5 min in the background so the tab is always current
+  if (!isFreeze) startNotifPolling(); // header notification bell — every role except Freeze (which is locked to one tool)
 }
 
 // ── TO DO ──
