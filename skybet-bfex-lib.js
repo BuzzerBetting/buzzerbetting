@@ -1,31 +1,44 @@
 // skybet-bfex-lib.js — every football fixture Betfair Exchange has a MATCH_ODDS market for in
-// the next 5 days, with lay prices + liquidity, plus SkyBet back (FTR) odds where we have them.
+// the next 5 days, with lay prices + liquidity, plus SkyBet back (Full Time Result) odds.
 // Backend only — feeds the acca-freeze builder; not rendered anywhere yet.
 //
 // Runs on the DO box (required directly by server.js), NOT a Netlify function: Betfair needs
-// the cert-login (client-2048.crt/.key on /root) and the SkyBet side is geo-fenced.
+// the cert-login (client-2048.crt/.key on /root) and SkyBet is geo-fenced.
 //
-// Why Betfair is the spine, not SkyBet: SkyBet's SPA has no scrapeable all-football list
-// (every fixture-list route 404s; the real data is behind a bff-gql GraphQL layer whose
-// request shape needs a live browser capture to reverse-engineer, and the browser tool blocks
-// gambling sites). So: Betfair listMarketCatalogue(MATCH_ODDS, now..now+5d) is the fixture
-// universe (~500 markets, ~115 competitions), and SkyBet back odds are attached from the
-// accafreeze feed (skybet-accafreeze-lib) where the fixture also appears on the Acca Freeze
-// coupon — which is essentially all mainstream SkyBet football (~190 fixtures, with FTR odds).
-// Fixtures Betfair covers but SkyBet's acca-freeze coupon doesn't get `sky: null`.
+// SkyBet has no scrapeable all-football list (fixture-list routes 404; the data is behind a
+// bff-gql GraphQL layer, and the browser tool blocks gambling sites so it can't be captured
+// live). BUT the acca-freeze acca only needs the ONE high-odds "freeze target" leg to be Acca
+// Freeze eligible — the other 4 fodder legs can be any match — so we need SkyBet back odds for
+// ALL fixtures, not just the acca-freeze coupon. Mechanism:
+//   - Betfair listMarketCatalogue(MATCH_ODDS, now..now+5d) is the fixture universe (~500).
+//   - SkyBet odds come from the accafreeze feed (skybet-accafreeze-lib) where the fixture is on
+//     that coupon (free, ~170), else resolved per-fixture: SkyBet SearchView#<hash> {query:team}
+//     → EventView url → GET that event page → parse the server-rendered SportsbookMarket
+//     (MATCH_ODDS) + SportsbookRunnerLiveData decimal odds + isAccaFreezeEligible.
+//   - Per-fixture resolutions are disk-cached (data/sky_odds_cache.json, ~25min TTL) and capped
+//     per call, so a cron hitting this repeatedly keeps the cache warm and calls stay quick.
 //
-// Betfair: one listMarketCatalogue + listMarketBook in chunks for EX_BEST_OFFERS lay prices +
-// per-runner/market totalMatched. Login / bfCall copied from netlify/functions/betfair.js
-// (kept in sync by hand).
+// Betfair login / bfCall are copied from netlify/functions/betfair.js (kept in sync by hand).
 
 const https = require('https');
 const fs = require('fs');
+const path = require('path');
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' };
 const BFEX_BASE = 'https://api.betfair.com/exchange/betting/rest/v1.0';
-const DRAW_SELECTION_ID = 58805; // Betfair's fixed "The Draw" selectionId across all football
+const DRAW_SELECTION_ID = 58805; // Betfair's (and SkyBet's) fixed "Draw" selectionId in football
 const WINDOW_DAYS = 5;
 const BOOK_CHUNK = 40;
+
+const SKY_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+const SKY_GQL = 'https://apitbd.skybet.com/api/tbd/bff-gql/v11/';
+const SKY_APPKEY = 'DuJYiLaRflSsueCd'; // from the football hub's __PRELOADED_STATE__.entities.appkey
+const SKY_SEARCH_DOC = 'SearchView#185684815f1216bfd5f46eda8d2dbb4c';
+const SKY_CACHE_PATH = path.join(__dirname, 'data', 'sky_odds_cache.json');
+const SKY_TTL_MS = 25 * 60 * 1000;       // re-resolve a hit after this
+const SKY_NEG_TTL_MS = 45 * 60 * 1000;   // re-try a miss after this
+const MAX_SKY_RESOLVE = 150;             // live resolutions per call unless ?full=1
+const SKY_CONCURRENCY = 4;
 
 // ── Betfair plumbing (copied from netlify/functions/betfair.js) ───────────────
 const CERT = fs.readFileSync('/root/client-2048.crt');
@@ -94,12 +107,12 @@ async function bfCall(method, params, appKey, session) {
   return data;
 }
 
-// ── Name matching (SkyBet names vs Betfair names) ────────────────────────────
+// ── shared helpers ──────────────────────────────────────────────────────────
 function norm(n) {
   return (n || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
     .replace(/\butd\b/g, 'united').replace(/\bnottm\b/g, 'nottingham')
     .replace(/\bwolves\b/g, 'wolverhampton').replace(/\bspurs\b/g, 'tottenham')
-    .replace(/\bmunich\b/g, 'munchen') // Betfair "Munich" ↔ SkyBet "München"→"munchen"
+    .replace(/\bmunich\b/g, 'munchen')
     .replace(/\b(fc|afc|cf|sc|ss|as|ac|sv|bk|if|fk|club|w|res)\b/g, ' ')
     .replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 }
@@ -112,6 +125,32 @@ function teamEq(a, b) {
   const [short, long] = wa.length <= wb.length ? [wa, wb] : [wb, wa];
   if (short.length === 1) return short[0] === long[0];
   return short.every(w => long.join(' ').includes(w)) || long.every(w => short.join(' ').includes(w));
+}
+// balanced-brace scan for a `window.<var> = {...}` blob in server-rendered HTML
+function extractWindowVar(html, varName) {
+  const marker = `window.${varName} = `;
+  const start = html.indexOf(marker);
+  if (start === -1) return null;
+  let i = start + marker.length, depth = 0, inStr = false, esc = false;
+  for (; i < html.length; i++) {
+    const c = html[i];
+    if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; continue; }
+    if (c === '"') inStr = true;
+    else if (c === '{') depth++;
+    else if (c === '}') { depth--; if (depth === 0) { try { return JSON.parse(html.slice(start + marker.length, i + 1)); } catch (e) { return null; } } }
+  }
+  return null;
+}
+async function mapPool(items, concurrency, fn) {
+  const out = new Array(items.length);
+  let idx = 0;
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (idx < items.length) {
+      const i = idx++;
+      try { out[i] = await fn(items[i], i); } catch (e) { out[i] = null; }
+    }
+  }));
+  return out;
 }
 
 // ── Betfair: every football MATCH_ODDS market in the window, with lay prices ──
@@ -164,7 +203,6 @@ async function fetchBfexMatchOdds(appKey, session) {
     }
   }
 
-  // Resolve each market's home/away/draw from runner order + the "X v Y" event name.
   return Object.values(byMarket).map(m => {
     const parts = m.eventName.split(/\s+v\s+/i);
     const evHome = parts[0], evAway = parts[1];
@@ -174,7 +212,6 @@ async function fetchBfexMatchOdds(appKey, session) {
       if (evHome && teamEq(r.name, evHome)) homeR = r;
       else if (evAway && teamEq(r.name, evAway)) awayR = r;
     }
-    // fall back to sortPriority (1 home, 2 away) if name match failed
     if (!homeR || !awayR) {
       const nonDraw = m.runners.filter(r => r !== drawR).sort((a, b) => (a.sortPriority || 9) - (b.sortPriority || 9));
       homeR = homeR || nonDraw[0];
@@ -200,11 +237,100 @@ async function fetchBfexMatchOdds(appKey, session) {
   });
 }
 
-// ── Join: find the SkyBet fixture (from the accafreeze feed) for a Betfair event ──
-// SkyBet's SPA has no scrapeable all-football list, so the accafreeze feed's `fixtures`
-// (every fixture where Acca Freeze is offered — essentially all mainstream SkyBet football,
-// with home/draw/away back odds) is the only SkyBet source. Betfair MATCH_ODDS is the spine;
-// SkyBet odds are attached where the fixture also appears on the accafreeze coupon, else null.
+// ── SkyBet: per-fixture Full Time Result odds (search → event page) ──────────
+function skyHeaders(json) {
+  const h = {
+    'User-Agent': SKY_UA,
+    'Accept': json ? 'application/json' : 'text/html',
+    'Cookie': process.env.SKYBET_COOKIES || '',
+    'Referer': 'https://skybet.com/football/s-1',
+    'Origin': 'https://skybet.com',
+  };
+  if (json) h['Content-Type'] = 'application/json';
+  return h;
+}
+async function skySearch(query) {
+  const res = await fetch(SKY_GQL + '?_ak=' + encodeURIComponent(SKY_APPKEY), {
+    method: 'POST', headers: skyHeaders(true),
+    body: JSON.stringify({ documentId: SKY_SEARCH_DOC, variables: { query } }),
+  });
+  const j = await res.json().catch(() => null);
+  const results = j && j.data && j.data.Search && j.data.Search.results || [];
+  return results.filter(r => r && r.__typename === 'EventView' && r.url).map(r => ({
+    url: r.url,
+    name: (r.sportevent && r.sportevent.name) || '',
+    eventId: (String(r.url).match(/e-(\d+)/) || [])[1] || null,
+  }));
+}
+function parseEventPageOdds(html) {
+  const cat = extractWindowVar(html, '__TBD_PRELOADED_CATALOG__');
+  const d = (cat && cat.data) || {};
+  const mkts = d.SportsbookMarket || [];
+  const live = d.SportsbookRunnerLiveData || [];
+  const mo = mkts.find(m => m.marketType === 'MATCH_ODDS');
+  if (!mo || !mo.runners) return null;
+  const oddsBySel = {};
+  for (const r of live) oddsBySel[r.selectionId] = r.odds && r.odds.decimal;
+  const byResult = {};
+  for (const r of mo.runners) byResult[r.resultType] = oddsBySel[r.selectionId] ?? null;
+  if (byResult.HOME == null && byResult.AWAY == null) return null;
+  return {
+    odds: { home: byResult.HOME ?? null, draw: byResult.DRAW ?? null, away: byResult.AWAY ?? null },
+    eligible: !!mo.isAccaFreezeEligible,
+    marketId: mo.marketId || null,
+  };
+}
+function skyCacheKey(home, away, kickoff) {
+  return `${norm(home)}|${norm(away)}|${(kickoff || '').slice(0, 10)}`;
+}
+function loadSkyCache() {
+  try { return JSON.parse(fs.readFileSync(SKY_CACHE_PATH, 'utf8')); } catch (e) { return {}; }
+}
+function saveSkyCache(cache) {
+  try {
+    fs.mkdirSync(path.dirname(SKY_CACHE_PATH), { recursive: true });
+    fs.writeFileSync(SKY_CACHE_PATH, JSON.stringify(cache));
+  } catch (e) { /* non-fatal */ }
+}
+// resolve one Betfair fixture's SkyBet FTR odds. Returns {odds,eligible,url,eventId,source} | null
+async function resolveSkyOdds(fx, cache) {
+  const key = skyCacheKey(fx.home, fx.away, fx.startTime);
+  const hit = cache[key];
+  const now = Date.now();
+  if (hit) {
+    const age = now - (hit.ts || 0);
+    if (hit.odds && age < SKY_TTL_MS) return { ...hit, source: 'search-cache' };
+    if (!hit.odds && age < SKY_NEG_TTL_MS) return null; // cached miss, still fresh
+  }
+  let found = null;
+  for (const q of [fx.home, fx.away]) {
+    let hits;
+    try { hits = await skySearch(q); } catch (e) { hits = []; }
+    found = hits.find(h => {
+      const parts = String(h.url).split('/');
+      const slugPair = parts[parts.length - 2] || h.name; // "home-v-away"
+      const nm = slugPair.replace(/-/g, ' ');
+      const [hn, an] = nm.split(/ v /i);
+      return (teamEq(fx.home, hn) && teamEq(fx.away, an)) ||
+             (teamEq(fx.home, h.name.split(/ v /i)[0]) && teamEq(fx.away, h.name.split(/ v /i)[1]));
+    });
+    if (found) break;
+  }
+  if (!found) { cache[key] = { ts: now, odds: null }; return null; }
+
+  let odds = null;
+  try {
+    const res = await fetch('https://skybet.com/' + found.url, { headers: skyHeaders(false) });
+    if (res.ok) odds = parseEventPageOdds(await res.text());
+  } catch (e) { /* leave null */ }
+
+  if (!odds) { cache[key] = { ts: now, odds: null }; return null; }
+  const entry = { ts: now, odds: odds.odds, eligible: odds.eligible, url: found.url, eventId: found.eventId, marketId: odds.marketId };
+  cache[key] = entry;
+  return { ...entry, source: 'search' };
+}
+
+// ── Join: SkyBet fixture (from accafreeze feed) for a Betfair event ─────────
 function findSky(bfexFx, skyList) {
   const bt = bfexFx.startTime ? Date.parse(bfexFx.startTime) : null;
   let best = null, bestDelta = Infinity;
@@ -214,7 +340,7 @@ function findSky(bfexFx, skyList) {
     const delta = (bt && st) ? Math.abs(bt - st) : 0;
     if (delta < bestDelta) { best = s; bestDelta = delta; }
   }
-  if (best && bt && best.kickoff && bestDelta > 6 * 3600e3) return null; // >6h apart → different fixture
+  if (best && bt && best.kickoff && bestDelta > 6 * 3600e3) return null;
   return best;
 }
 
@@ -223,56 +349,67 @@ exports.handler = async (event) => {
 
   const appKey = process.env.BFEX_APP_KEY;
   if (!appKey) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'BFEX_APP_KEY not set' }) };
+  const full = ((event.queryStringParameters || {}).full === '1');
 
   try {
-    // 1. Betfair MATCH_ODDS for the next 5 days — this is the fixture spine
+    // 1. Betfair MATCH_ODDS for the next 5 days — the fixture spine
     const session = await getSessionToken();
     const bfexList = await fetchBfexMatchOdds(appKey, session);
 
-    // 2. SkyBet back odds, from the accafreeze feed (best-effort — a failure just leaves sky:null)
+    // 2. accafreeze feed → free SkyBet odds for the coupon fixtures
     let skyList = [];
     try {
-      const skyRes = await require('./skybet-accafreeze-lib').handler({ httpMethod: 'GET', queryStringParameters: {} });
-      const sky = JSON.parse(skyRes.body);
-      if (sky.ok) skyList = sky.fixtures || [];
-    } catch (e) { /* leave skyList empty */ }
+      const r = await require('./skybet-accafreeze-lib').handler({ httpMethod: 'GET', queryStringParameters: {} });
+      const j = JSON.parse(r.body);
+      if (j.ok) skyList = j.fixtures || [];
+    } catch (e) { /* leave empty */ }
 
-    // 3. Join — every Betfair fixture, SkyBet odds where we have them
-    let withSky = 0;
-    const fixtures = bfexList.map(b => {
+    // 3. Attach accafreeze odds; collect the rest for per-fixture SkyBet resolution
+    const cache = loadSkyCache();
+    const rows = bfexList.map(b => {
       const s = findSky(b, skyList);
-      if (s) withSky++;
       return {
-        eventName: b.eventName,
-        home: b.home,
-        away: b.away,
-        kickoff: b.startTime,
-        competition: b.competition,
-        bfex: {
-          marketId: b.marketId,
-          eventId: b.eventId,
-          status: b.status,
-          totalMatched: b.totalMatched,
-          lay: b.lay,
-        },
+        b,
         sky: s ? {
-          eventId: s.eventId,
-          url: s.url || null,
+          eventId: s.eventId, url: s.url || null,
           odds: { home: s.homeOdds ?? null, draw: s.drawOdds ?? null, away: s.awayOdds ?? null },
-          accaFreezeEligible: !!s.accaFreezeEligible,
+          accaFreezeEligible: !!s.accaFreezeEligible, source: 'accafreeze',
         } : null,
       };
-    }).sort((a, c) => (a.kickoff || '').localeCompare(c.kickoff || ''));
+    });
 
+    let toResolve = rows.filter(r => !r.sky);
+    // prefer fixtures with a favourite (likely fodder legs) when capping
+    toResolve.sort((x, y) => favPrice(x.b) - favPrice(y.b));
+    const slice = full ? toResolve : toResolve.slice(0, MAX_SKY_RESOLVE);
+    const resolved = await mapPool(slice, SKY_CONCURRENCY, r => resolveSkyOdds(r.b, cache));
+    slice.forEach((r, i) => {
+      const o = resolved[i];
+      if (o && o.odds) r.sky = { eventId: o.eventId, url: o.url || null, odds: o.odds, accaFreezeEligible: !!o.eligible, source: o.source };
+    });
+    saveSkyCache(cache);
+
+    const fixtures = rows.map(({ b, sky }) => ({
+      eventName: b.eventName,
+      home: b.home,
+      away: b.away,
+      kickoff: b.startTime,
+      competition: b.competition,
+      bfex: { marketId: b.marketId, eventId: b.eventId, status: b.status, totalMatched: b.totalMatched, lay: b.lay },
+      sky,
+    })).sort((a, c) => (a.kickoff || '').localeCompare(c.kickoff || ''));
+
+    const withSky = fixtures.filter(f => f.sky).length;
     return {
       statusCode: 200, headers: CORS,
       body: JSON.stringify({
         ok: true,
         updated: new Date().toISOString(),
         windowDays: WINDOW_DAYS,
-        count: fixtures.length,          // Betfair football fixtures next 5 days
-        withSkyOdds: withSky,            // how many also have SkyBet back odds
-        skyFixturesSeen: skyList.length, // accafreeze feed size
+        count: fixtures.length,
+        withSkyOdds: withSky,
+        skyResolvedThisCall: slice.length,
+        skyStillMissing: fixtures.length - withSky,
         fixtures,
       }),
     };
@@ -281,3 +418,8 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: err.message, sessionExpired: expired }) };
   }
 };
+
+function favPrice(b) {
+  const h = b.lay && b.lay.home, a = b.lay && b.lay.away;
+  return Math.min(h || 999, a || 999);
+}
