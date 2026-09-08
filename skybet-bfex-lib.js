@@ -34,6 +34,9 @@ const SKY_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KH
 const SKY_GQL = 'https://apitbd.skybet.com/api/tbd/bff-gql/v11/';
 const SKY_APPKEY = 'DuJYiLaRflSsueCd'; // from the football hub's __PRELOADED_STATE__.entities.appkey
 const SKY_SEARCH_DOC = 'SearchView#185684815f1216bfd5f46eda8d2dbb4c';
+const SKY_CARD_DOC = 'Card#ed393a254c0cebbd3469dc600ea16864';
+const SKY_MARKETS_DOC = 'Markets#ede59ffff6ffb3ed784ee6e393a81881';
+const SKY_QC = { preferences: { userProducts: ['SPORTSBOOK', 'GAMES'], favoriteSports: [] }, productExclusions: [], experiments: [] };
 const SKY_CACHE_PATH = path.join(__dirname, 'data', 'sky_odds_cache.json');
 const SKY_TTL_MS = 25 * 60 * 1000;       // re-resolve a hit after this
 const SKY_NEG_TTL_MS = 45 * 60 * 1000;   // re-try a miss after this
@@ -262,12 +265,13 @@ async function skySearch(query) {
     eventId: (String(r.url).match(/e-(\d+)/) || [])[1] || null,
   }));
 }
+// Fast path: many SkyBet event pages inline the market as window.__TBD_PRELOADED_CATALOG__
 function parseEventPageOdds(html) {
   const cat = extractWindowVar(html, '__TBD_PRELOADED_CATALOG__');
   const d = (cat && cat.data) || {};
   const mkts = d.SportsbookMarket || [];
   const live = d.SportsbookRunnerLiveData || [];
-  const mo = mkts.find(m => m.marketType === 'MATCH_ODDS');
+  const mo = mkts.find(m => m && m.marketType === 'MATCH_ODDS');
   if (!mo || !mo.runners) return null;
   const oddsBySel = {};
   for (const r of live) oddsBySel[r.selectionId] = r.odds && r.odds.decimal;
@@ -278,6 +282,47 @@ function parseEventPageOdds(html) {
     odds: { home: byResult.HOME ?? null, draw: byResult.DRAW ?? null, away: byResult.AWAY ?? null },
     eligible: !!mo.isAccaFreezeEligible,
     marketId: mo.marketId || null,
+  };
+}
+// depth-first search of a parsed object for the first node matching pred
+function deepFind(node, pred, depth) {
+  if (node == null || depth > 30) return null;
+  if (typeof node === 'object') {
+    if (pred(node)) return node;
+    for (const k of Object.keys(node)) {
+      const hit = deepFind(node[k], pred, (depth || 0) + 1);
+      if (hit) return hit;
+    }
+  }
+  return null;
+}
+async function skyGql(documentId, variables, currentViewUrn) {
+  const url = SKY_GQL + '?_ak=' + encodeURIComponent(SKY_APPKEY) +
+    (currentViewUrn ? '&currentViewUrn=' + encodeURIComponent(currentViewUrn) : '');
+  const res = await fetch(url, { method: 'POST', headers: skyHeaders(true), body: JSON.stringify({ documentId, variables }) });
+  return res.json().catch(() => null);
+}
+// Fallback for "thin" SSR event pages: nav-tabs Card# → the MATCH_ODDS sbkMarket urn →
+// Markets# for its live odds. `html` is the already-fetched (thin) event page.
+async function resolveViaGraphQL(html, eventId) {
+  const navUrn = (html.match(/ppb:tbd:card:navigationTabsList:[A-Za-z0-9]+\/e\/\d+/) || [])[0];
+  if (!navUrn) return null;
+  const viewUrn = 'ppb:tbd:view:event:' + eventId;
+  const nav = await skyGql(SKY_CARD_DOC, { urn: [navUrn], numberOfFilledCardsInCardGroup: 2, ...SKY_QC }, viewUrn);
+  const mo = deepFind(nav, n => n.__typename === 'SportsbookMarket' && n.marketType === 'MATCH_ODDS', 0);
+  if (!mo || !mo.urn || !Array.isArray(mo.runners)) return null;
+  const mk = await skyGql(SKY_MARKETS_DOC, { URNs: [mo.urn], productExclusions: [], preferences: SKY_QC.preferences }, viewUrn);
+  const market = mk && mk.data && mk.data.Markets && mk.data.Markets[0];
+  const runners = market && market.liveData && market.liveData.runners || [];
+  const oddsBySel = {};
+  for (const r of runners) oddsBySel[r.selectionId] = (r.odds && r.odds.decimal) ?? (r.displayOdds && r.displayOdds.decimal);
+  const byResult = {};
+  for (const r of mo.runners) byResult[r.resultType] = oddsBySel[r.selectionId] ?? null;
+  if (byResult.HOME == null && byResult.AWAY == null) return null;
+  return {
+    odds: { home: byResult.HOME ?? null, draw: byResult.DRAW ?? null, away: byResult.AWAY ?? null },
+    eligible: !!mo.isAccaFreezeEligible,
+    marketId: mo.marketId || (mo.urn.split(':').pop()) || null,
   };
 }
 function skyCacheKey(home, away, kickoff) {
@@ -321,7 +366,11 @@ async function resolveSkyOdds(fx, cache) {
   let odds = null;
   try {
     const res = await fetch('https://skybet.com/' + found.url, { headers: skyHeaders(false) });
-    if (res.ok) odds = parseEventPageOdds(await res.text());
+    if (res.ok) {
+      const html = await res.text();
+      odds = parseEventPageOdds(html);                                   // fast path (inline market)
+      if (!odds) odds = await resolveViaGraphQL(html, found.eventId);    // thin-page fallback
+    }
   } catch (e) { /* leave null */ }
 
   if (!odds) { cache[key] = { ts: now, odds: null }; return null; }
