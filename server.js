@@ -42,6 +42,10 @@ app.all('/api/player-stats', wrap(require('./netlify/functions/player-stats').ha
 // skybet-accafreeze-lib.js (repo root, NOT netlify/functions) — must run from this UK-based box,
 // not Netlify's US function IP; see that file's header comment for why.
 app.all('/api/skybet-accafreeze', wrap(require('./skybet-accafreeze-lib').handler));
+// skybet-bfex-lib.js — SkyBet 5-day fixtures + back odds joined to Betfair MATCH_ODDS lay
+// prices/liquidity. Backend only (feeds the acca builder), DO-box only (SkyBet geo-fence +
+// Betfair cert on /root). See that file's header.
+app.all('/api/skybet-bfex', wrap(require('./skybet-bfex-lib').handler));
 app.use('/api/ledger', ledgerRouter);
 
 const PORT = process.env.PORT || 3000;
