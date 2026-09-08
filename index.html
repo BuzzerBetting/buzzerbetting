@@ -190,6 +190,13 @@ input::placeholder{color:var(--text3)}
 .bb-odds-item:hover{border-color:var(--brand);background:var(--green-bg)}
 .bb-odds-lbl{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em}
 .bb-odds-val{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--green)}
+.fb-lbl{font-size:11.5px;color:var(--text2)}
+.fb-in{background:var(--surface);border:.5px solid var(--border);border-radius:var(--radius);padding:7px 10px;font-size:13px;color:var(--text);font-family:inherit}
+.fb-acca{border:.5px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden}
+.fb-acca-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:9px 14px;background:var(--surface2);font-size:12.5px}
+.fb-acca table{width:100%;border-collapse:collapse;font-size:12.5px}
+.fb-acca td{padding:6px 14px;border-top:.5px solid var(--border)}
+.fb-leg-freeze td{background:var(--blue-bg)}
 .odds-tf{font-size:11px;font-variant-numeric:tabular-nums;color:var(--green);font-weight:600;min-width:44px;text-align:right;padding-right:2px;white-space:nowrap}
 .odds-tf.loading{color:var(--text3);font-weight:400}
 .odds-tf.empty{color:var(--text3);font-weight:400}
@@ -358,9 +365,62 @@ input::placeholder{color:var(--text3)}
 
   <div id="freeze-tabs" style="display:flex;gap:4px;flex-wrap:wrap;border-bottom:.5px solid var(--border);margin-bottom:16px"></div>
 
-  <!-- panel: builder (bet-building tools land here) -->
+  <!-- panel: builder -->
   <div id="freeze-panel-builder" style="display:none">
-    <div class="note"><i class="ti ti-info-circle"></i> Acca builder — pick fodder legs and a freeze target, generate candidate accas, and log them to the ledger. Not built yet.</div>
+    <div class="note" style="margin-bottom:14px"><i class="ti ti-info-circle"></i> Builds 5-leg SkyBet accas: 4 fodder legs (favourites that all kick off ≥ 1h45m before the freeze leg) + 1 freeze target. Fair odds = the 4 fodder BFEX lay prices × the freeze team's "lead at any time" fair.</div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:16px 22px;align-items:flex-end;margin-bottom:12px">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label class="fb-lbl">Strategy</label>
+        <select id="fb-strategy" onchange="fbOnControlChange()" class="fb-in" style="width:180px">
+          <option value="4fodder">4 Fodder + Freeze</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label class="fb-lbl">Number of accas</label>
+        <input id="fb-num" type="number" min="1" step="1" value="10" oninput="fbOnControlChange()" class="fb-in" style="width:90px">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label class="fb-lbl">Freeze timeframe</label>
+        <select id="fb-timeframe" onchange="fbOnControlChange()" class="fb-in" style="width:130px">
+          <option value="all">All</option>
+          <option value="today">Today</option>
+          <option value="2">2 Days</option>
+          <option value="3">3 Days</option>
+          <option value="5">5 Days</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label class="fb-lbl">Select freeze team</label>
+        <select id="fb-team" onchange="fbOnControlChange()" class="fb-in" style="min-width:230px;max-width:320px">
+          <option value="">All eligible teams</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:16px 22px;align-items:flex-end;margin-bottom:14px">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label class="fb-lbl">Fodder min odds</label>
+        <input id="fb-fodder-min" type="number" step="0.01" min="1" placeholder="e.g. 1.10" oninput="fbOnControlChange()" class="fb-in" style="width:110px">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label class="fb-lbl">Fodder max odds</label>
+        <input id="fb-fodder-max" type="number" step="0.01" min="1" placeholder="e.g. 1.40" oninput="fbOnControlChange()" class="fb-in" style="width:110px">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label class="fb-lbl">Freeze min odds</label>
+        <input id="fb-freeze-min-odds" type="number" step="0.5" min="1" placeholder="any" oninput="fbOnControlChange()" class="fb-in" style="width:100px">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label class="fb-lbl">Freeze min EV %</label>
+        <input id="fb-freeze-min-ev" type="number" step="5" placeholder="80" oninput="fbOnControlChange()" class="fb-in" style="width:100px">
+      </div>
+      <button onclick="fbGenerate()" id="fb-generate-btn" style="display:flex;align-items:center;gap:6px;background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:9px 18px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit"><i class="ti ti-cards"></i> Generate accas</button>
+      <button onclick="fbRefreshData(true)" id="fb-refresh-btn" style="display:flex;align-items:center;gap:6px;background:none;border:.5px solid var(--border);border-radius:var(--radius);padding:9px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh data</button>
+    </div>
+
+    <div id="fb-status" class="note" style="display:none"></div>
+    <div id="fb-results"></div>
   </div>
 
   <!-- panel: full eligible-fixtures list -->
@@ -13583,6 +13643,7 @@ function activateFreezeTab(key){
   });
   renderFreezeTabs();
   if (key === 'list' && !FREEZE_DATA) loadFreezeList();
+  if (key === 'builder') initFreezeBuilder();
 }
 
 // forceRefresh is currently unused (there's only ever one thing to fetch) — kept as a named
@@ -13747,6 +13808,312 @@ function renderFreezeList(){
   if (!rows.length) {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No fixtures${min != null ? ` with a team at ${min}+ odds` : ''} right now.</td></tr>`;
   }
+}
+
+// ── FREEZE BUILDER (Calculations > Freeze > Freeze Builder) ───────────────────
+// Strategy: 5-leg SkyBet acca = 4 fodder favourites + 1 freeze target, where all 4 fodder
+// matches kick off ≥ 1h45m before the freeze leg. Data: /.netlify/functions/skybet-bfex
+// (fixtures + SkyBet back odds + BFEX lay odds + accaFreezeEligible) and bb-lead
+// (lead-at-any-time fairs). Fair odds = ∏(4 fodder BFEX lay) × freeze lead-any fair.
+const FB_GAP_MS = 105 * 60 * 1000; // 1h45m between latest fodder KO and the freeze KO
+const FB_DEFAULT_MIN_EV = 0.80;     // freeze min-EV when the box is left blank
+let FB_BFEX = null, FB_LEAD = null, FB_ACCAS = [], FB_LOADED = false;
+let FB_INIT_DONE = false, FB_PENDING_TEAM = null, FB_SAVE_T = null, FB_GEN_T = null;
+
+async function initFreezeBuilder(){
+  if (!FB_INIT_DONE) { FB_INIT_DONE = true; await fbLoadPrefs(); }
+  if (!FB_LOADED) fbRefreshData(false); else fbGenerate();
+}
+
+async function fbLoadPrefs(){
+  try {
+    const d = await ledgerApi('strategy-prefs');
+    const p = (d && d.ok && d.prefs) || {};
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v != null && v !== '') el.value = v; };
+    set('fb-strategy', p.strategy); set('fb-num', p.numAccas); set('fb-timeframe', p.timeframe);
+    set('fb-fodder-min', p.fodderMin); set('fb-fodder-max', p.fodderMax);
+    set('fb-freeze-min-odds', p.freezeMinOdds); set('fb-freeze-min-ev', p.freezeMinEv);
+    FB_PENDING_TEAM = p.freezeTeam || '';
+  } catch (e) { /* calculator role / no session — fine */ }
+}
+function fbSavePrefs(){
+  clearTimeout(FB_SAVE_T);
+  FB_SAVE_T = setTimeout(() => {
+    const g = id => (document.getElementById(id) || {}).value || '';
+    ledgerApi('strategy-prefs', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prefs: {
+        strategy: g('fb-strategy'), numAccas: g('fb-num'), timeframe: g('fb-timeframe'), freezeTeam: g('fb-team'),
+        fodderMin: g('fb-fodder-min'), fodderMax: g('fb-fodder-max'),
+        freezeMinOdds: g('fb-freeze-min-odds'), freezeMinEv: g('fb-freeze-min-ev'),
+      } })
+    }).catch(() => {});
+  }, 700);
+}
+function fbOnControlChange(){
+  fbSavePrefs();
+  clearTimeout(FB_GEN_T);
+  FB_GEN_T = setTimeout(() => { if (FB_LOADED) fbGenerate(); }, 250);
+}
+
+async function fbRefreshData(force){
+  const st = document.getElementById('fb-status'), btn = document.getElementById('fb-refresh-btn');
+  if (btn) btn.disabled = true;
+  if (st) { st.style.display = ''; st.innerHTML = '<i class="ti ti-info-circle"></i> Loading fixtures + fair odds…'; }
+  try {
+    const [bx, ld] = await Promise.allSettled([
+      fetch('/.netlify/functions/skybet-bfex').then(r => r.json()),
+      fetch('/.netlify/functions/bb-lead').then(r => r.json()),
+    ]);
+    if (bx.status !== 'fulfilled') throw new Error(bx.reason && bx.reason.message || 'fetch failed');
+    if (!bx.value.ok) throw new Error(bx.value.error || 'skybet-bfex failed');
+    FB_BFEX = bx.value;
+    FB_LEAD = (ld.status === 'fulfilled' && ld.value && ld.value.ok) ? ld.value : null;
+    FB_LOADED = true;
+    if (st) st.style.display = 'none';
+    fbGenerate();
+  } catch (e) {
+    if (st) { st.style.display = ''; st.innerHTML = `<i class="ti ti-alert-triangle"></i> Couldn't load data: ${escapeHtml(e.message)}`; }
+  } finally { if (btn) btn.disabled = false; }
+}
+
+// look up a team's "lead at any time" fair from the bb-lead feed (opponent disambiguates)
+function fbLeadFairForTeam(team, opp){
+  if (!FB_LEAD || !FB_LEAD.matches) return null;
+  let loose = null;
+  for (const m of FB_LEAD.matches){
+    const h = freezeTeamEq(team, m.homeName), a = freezeTeamEq(team, m.awayName);
+    if (!h && !a) continue;
+    const fair = h ? m.homeLeadAnyTime : m.awayLeadAnyTime;
+    if (!fair) continue;
+    if (opp && (freezeTeamEq(opp, m.homeName) || freezeTeamEq(opp, m.awayName))) return fair;
+    if (loose == null) loose = fair;
+  }
+  return loose;
+}
+function fbTimeframeCutoff(){
+  const tf = (document.getElementById('fb-timeframe') || {}).value || 'all';
+  if (tf === 'all' || tf === '5') return Date.now() + 5 * 864e5;
+  const endOfDay = d => { d.setHours(23, 59, 59, 999); return d.getTime(); };
+  if (tf === 'today') return endOfDay(new Date());
+  const days = parseInt(tf, 10) || 5;
+  const d = new Date(); d.setDate(d.getDate() + (days - 1));
+  return endOfDay(d);
+}
+function fbEligibleFreezeTeams(){
+  if (!FB_BFEX || !FB_BFEX.fixtures) return [];
+  const minOdds = parseFloat((document.getElementById('fb-freeze-min-odds') || {}).value) || 0;
+  const evRaw = (document.getElementById('fb-freeze-min-ev') || {}).value;
+  const minEv = (evRaw === '' || evRaw == null) ? FB_DEFAULT_MIN_EV : ((parseFloat(evRaw) || 0) / 100);
+  const cutoff = fbTimeframeCutoff(), now = Date.now();
+  const out = [];
+  for (const f of FB_BFEX.fixtures){
+    if (!f.sky || !f.sky.accaFreezeEligible || !f.sky.odds) continue;
+    const kt = f.kickoff ? Date.parse(f.kickoff) : null;
+    if (!kt || kt < now || kt > cutoff) continue;
+    const ho = f.sky.odds.home, ao = f.sky.odds.away;
+    if (ho == null || ao == null) continue;
+    const side = ho >= ao ? 'home' : 'away';
+    const team = side === 'home' ? f.home : f.away;
+    const opp  = side === 'home' ? f.away : f.home;
+    const skyOdds = side === 'home' ? ho : ao;
+    if (skyOdds < minOdds) continue;
+    const leadFair = fbLeadFairForTeam(team, opp);
+    if (!leadFair) continue;
+    const ev = skyOdds / leadFair - 1;
+    if (ev < minEv) continue;
+    out.push({ team, opp, matchEventName: f.eventName || (f.home + ' v ' + f.away), competition: f.competition || '', skyOdds, leadFair, ev, kickoff: kt });
+  }
+  out.sort((a, b) => b.ev - a.ev);
+  return out;
+}
+function fbFodderPoolFor(freezeKt, excludeEventName){
+  const fmin = parseFloat((document.getElementById('fb-fodder-min') || {}).value);
+  const fmax = parseFloat((document.getElementById('fb-fodder-max') || {}).value);
+  const now = Date.now(), latest = freezeKt - FB_GAP_MS;
+  const pool = [];
+  for (const f of FB_BFEX.fixtures){
+    if (!f.sky || !f.sky.odds || !f.bfex || !f.bfex.lay) continue;
+    const evName = f.eventName || (f.home + ' v ' + f.away);
+    if (evName === excludeEventName) continue;
+    const kt = f.kickoff ? Date.parse(f.kickoff) : null;
+    if (!kt || kt < now || kt > latest) continue;
+    const ho = f.sky.odds.home, ao = f.sky.odds.away;
+    if (ho == null && ao == null) continue;
+    let side, skyBack;
+    if (ho != null && (ao == null || ho <= ao)) { side = 'home'; skyBack = ho; }
+    else { side = 'away'; skyBack = ao; }
+    if (!isNaN(fmin) && skyBack < fmin) continue;
+    if (!isNaN(fmax) && skyBack > fmax) continue;
+    const bfexLay = side === 'home' ? f.bfex.lay.home : f.bfex.lay.away;
+    if (bfexLay == null) continue;
+    pool.push({ eventName: evName, team: side === 'home' ? f.home : f.away, side, skyBack, bfexLay, kickoff: kt, competition: f.competition || '' });
+  }
+  return pool.sort((a, b) => a.kickoff - b.kickoff);
+}
+function fbRebuildTeamDropdown(teams){
+  const sel = document.getElementById('fb-team');
+  if (!sel) return;
+  const prev = FB_PENDING_TEAM != null ? FB_PENDING_TEAM : sel.value;
+  FB_PENDING_TEAM = null;
+  sel.innerHTML = '<option value="">All eligible teams</option>' +
+    teams.map(t => `<option value="${escapeHtml(t.team)}">${escapeHtml(t.team)} — ${t.skyOdds.toFixed(2)} · +${Math.round(t.ev * 100)}%</option>`).join('');
+  sel.value = (prev && teams.some(t => t.team === prev)) ? prev : '';
+}
+function fbGenerate(){
+  const st = document.getElementById('fb-status'), res = document.getElementById('fb-results');
+  if (!FB_LOADED || !res) return;
+  const allTeams = fbEligibleFreezeTeams();
+  fbRebuildTeamDropdown(allTeams);
+
+  const N = Math.max(1, parseInt((document.getElementById('fb-num') || {}).value, 10) || 1);
+  const selTeam = (document.getElementById('fb-team') || {}).value || '';
+  const freezeTeams = selTeam ? allTeams.filter(t => t.team === selTeam) : allTeams;
+  if (!freezeTeams.length) {
+    FB_ACCAS = []; res.innerHTML = '';
+    if (st) { st.style.display = ''; st.innerHTML = '<i class="ti ti-info-circle"></i> No freeze teams match the current filters.'; }
+    return;
+  }
+
+  // split N ~evenly across teams; remainder to the highest-EV teams (list is EV-sorted)
+  const T = freezeTeams.length;
+  const per = freezeTeams.map((_, i) => Math.floor(N / T) + (i < (N % T) ? 1 : 0));
+
+  const accas = [], shortfalls = [];
+  freezeTeams.forEach((ft, ti) => {
+    const want = per[ti];
+    if (!want) return;
+    const pool = fbFodderPoolFor(ft.kickoff, ft.matchEventName);
+    if (pool.length < 4) { shortfalls.push(`${ft.team} (only ${pool.length} fodder)`); return; }
+    // deal round-robin from `reps` copies of the pool → every fodder match used ~evenly
+    const reps = Math.max(1, Math.ceil((want * 4) / pool.length));
+    const bag = []; for (let r = 0; r < reps; r++) bag.push(...pool);
+    let bi = 0, made = 0;
+    for (let i = 0; i < want; i++) {
+      const legs = []; let scanned = 0;
+      while (legs.length < 4 && scanned < bag.length) {
+        const c = bag[bi % bag.length]; bi++; scanned++;
+        if (!legs.some(x => x.eventName === c.eventName)) legs.push(c);
+      }
+      if (legs.length < 4) break;
+      accas.push({ freeze: ft, fodder: legs.slice() });
+      made++;
+    }
+    if (made < want) shortfalls.push(`${ft.team} (${made}/${want})`);
+  });
+
+  FB_ACCAS = accas;
+  fbRenderAccas(accas);
+  const parts = [`${accas.length} acca${accas.length === 1 ? '' : 's'} built from ${freezeTeams.length} freeze team${freezeTeams.length === 1 ? '' : 's'}`];
+  if (shortfalls.length) parts.push(`fodder pool too small for: ${shortfalls.join(', ')}`);
+  if (st) { st.style.display = ''; st.innerHTML = `<i class="ti ti-info-circle"></i> ${escapeHtml(parts.join(' · '))}`; }
+}
+function fbFmtKt(kt){ return new Date(kt).toLocaleString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+function fbAccaFair(a){ return a.fodder.reduce((p, l) => p * l.bfexLay, 1) * a.freeze.leadFair; }
+function fbRenderAccas(accas){
+  const res = document.getElementById('fb-results');
+  if (!res) return;
+  if (!accas.length) { res.innerHTML = ''; return; }
+  const isAdmin = CURRENT_USER_ROLE === 'admin';
+  res.innerHTML = accas.map((a, idx) => {
+    const fair = fbAccaFair(a), fr = a.freeze;
+    const fodderRows = a.fodder.map(l => `<tr>
+      <td style="color:var(--text3);font-size:11px">FODDER</td>
+      <td style="font-weight:500">${escapeHtml(l.team)}</td>
+      <td class="r tn">${l.skyBack.toFixed(2)}</td>
+      <td class="r tn" style="color:var(--amber)">${l.bfexLay.toFixed(2)} lay</td>
+      <td class="r tn" style="color:var(--text3);white-space:nowrap">${fbFmtKt(l.kickoff)}</td></tr>`).join('');
+    const freezeRow = `<tr class="fb-leg-freeze">
+      <td style="color:var(--blue);font-size:11px;font-weight:600">FREEZE</td>
+      <td style="font-weight:600;color:var(--blue)">${escapeHtml(fr.team)}</td>
+      <td class="r tn" style="font-weight:600">${fr.skyOdds.toFixed(2)}</td>
+      <td class="r tn" style="color:var(--amber)">${fr.leadFair.toFixed(2)} fair</td>
+      <td class="r tn" style="color:var(--text3);white-space:nowrap">${fbFmtKt(fr.kickoff)}</td></tr>`;
+    return `<div class="fb-acca">
+      <div class="fb-acca-head">
+        <span><b>Acca ${idx + 1}</b> &nbsp;·&nbsp; freeze <b style="color:var(--blue)">${escapeHtml(fr.team)}</b> &nbsp;·&nbsp; acca fair <b>${fair.toFixed(2)}</b> &nbsp;·&nbsp; freeze EV <b style="color:var(--green)">+${Math.round(fr.ev * 100)}%</b></span>
+        ${isAdmin ? `<button onclick="fbToggleAddBet(${idx})" id="fb-addbet-btn-${idx}" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit"><i class="ti ti-plus"></i> Add Bet</button>` : ''}
+      </div>
+      <div style="overflow-x:auto"><table>${fodderRows}${freezeRow}</table></div>
+      <div id="fb-addbet-${idx}" style="display:none;padding:10px 14px;border-top:.5px solid var(--border);background:var(--surface)"></div>
+    </div>`;
+  }).join('');
+}
+
+// SkyBet accounts for the Add Bet picker — robust to however the bookie is stored/normalised.
+function fbSkybetAccountOptions(){
+  const isSky = b => (b || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes('skybet');
+  let list = LEDGER_ACCOUNTS.filter(a => isSky(a.bookie));
+  if (!list.length) list = LEDGER_ACCOUNTS;
+  return list.map(a => `<option value="${a.id}">${escapeHtml((a.id ? a.id + ' — ' : '') + (a.bookie || '') + (a.holder ? ' (' + a.holder + ')' : ''))}</option>`).join('');
+}
+async function fbToggleAddBet(idx){
+  const box = document.getElementById('fb-addbet-' + idx);
+  if (!box) return;
+  if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+  box.style.display = '';
+  box.innerHTML = '<span style="color:var(--text3);font-size:12px">Loading accounts…</span>';
+  if (!LEDGER_ACCOUNTS.length) {
+    try { const d = await ledgerApi('accounts?excludeClosed=1'); LEDGER_ACCOUNTS = (d.ok && d.accounts) ? d.accounts : []; } catch (e) {}
+  }
+  const a = FB_ACCAS[idx];
+  const fair = fbAccaFair(a);
+  box.innerHTML = `
+    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
+      <div style="display:flex;flex-direction:column;gap:4px"><label class="fb-lbl">SkyBet account</label>
+        <select id="fb-ab-acc-${idx}" class="fb-in" style="min-width:210px">${fbSkybetAccountOptions()}</select></div>
+      <div style="display:flex;flex-direction:column;gap:4px"><label class="fb-lbl">Back odds (whole acca)</label>
+        <input id="fb-ab-odds-${idx}" type="number" step="0.01" class="fb-in" style="width:120px" oninput="fbUpdateAbEv(${idx})"></div>
+      <div style="display:flex;flex-direction:column;gap:4px"><label class="fb-lbl">Stake £</label>
+        <input id="fb-ab-stake-${idx}" type="number" step="0.01" class="fb-in" style="width:100px" oninput="fbUpdateAbEv(${idx})"></div>
+      <div style="font-size:12px;color:var(--text2)">Fair ${fair.toFixed(3)} &nbsp;·&nbsp; EV <span id="fb-ab-ev-${idx}" style="font-weight:600">—</span></div>
+      <button onclick="fbSubmitAddBet(${idx})" id="fb-ab-submit-${idx}" style="background:var(--green);color:#fff;border:none;border-radius:var(--radius);padding:8px 16px;font-size:12.5px;cursor:pointer;font-family:inherit">Log Freeze bet</button>
+    </div>
+    <div id="fb-ab-msg-${idx}" style="margin-top:8px;font-size:12px"></div>`;
+}
+function fbUpdateAbEv(idx){
+  const a = FB_ACCAS[idx]; if (!a) return;
+  const fair = fbAccaFair(a);
+  const odds = parseFloat(document.getElementById('fb-ab-odds-' + idx).value);
+  const stake = parseFloat(document.getElementById('fb-ab-stake-' + idx).value);
+  const el = document.getElementById('fb-ab-ev-' + idx);
+  if (isFinite(odds) && isFinite(stake) && fair > 0) {
+    const ev = stake * (odds / fair - 1);
+    el.textContent = (ev >= 0 ? '+' : '−') + '£' + Math.abs(ev).toFixed(2);
+    el.style.color = ev >= 0 ? 'var(--green)' : 'var(--red)';
+  } else { el.textContent = '—'; el.style.color = ''; }
+}
+async function fbSubmitAddBet(idx){
+  const a = FB_ACCAS[idx]; if (!a) return;
+  const accEl = document.getElementById('fb-ab-acc-' + idx);
+  const odds = parseFloat(document.getElementById('fb-ab-odds-' + idx).value);
+  const stake = parseFloat(document.getElementById('fb-ab-stake-' + idx).value);
+  const msg = document.getElementById('fb-ab-msg-' + idx), btn = document.getElementById('fb-ab-submit-' + idx);
+  if (!accEl || !accEl.value) { msg.innerHTML = '<span style="color:var(--red)">Pick a SkyBet account.</span>'; return; }
+  if (!(odds > 1)) { msg.innerHTML = '<span style="color:var(--red)">Enter valid back odds.</span>'; return; }
+  if (!(stake > 0)) { msg.innerHTML = '<span style="color:var(--red)">Enter a stake above £0.</span>'; return; }
+  const fair = fbAccaFair(a);
+  const evGbp = +(stake * (odds / fair - 1)).toFixed(2);
+  btn.disabled = true; btn.textContent = 'Logging…';
+  try {
+    const d = await ledgerApi('bets', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bet_type: 'Freeze',
+        fields: { 'Book': 'SkyBet', 'Targeted Freeze': a.freeze.team, 'Odds': +odds.toFixed(3), 'Fair Odds': +fair.toFixed(3), 'EV': evGbp, 'Stake': stake },
+        legs: [{ account_id: accEl.value, stake }],
+      }),
+    });
+    if (d.ok) {
+      msg.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Logged to the Freeze sheet.</span>';
+      const hb = document.getElementById('fb-addbet-btn-' + idx);
+      if (hb) { hb.innerHTML = '<i class="ti ti-check"></i> Logged'; hb.disabled = true; hb.style.opacity = '.55'; }
+    } else {
+      msg.innerHTML = `<span style="color:var(--red)">${escapeHtml(d.error || 'Failed to log the bet.')}</span>`;
+    }
+  } catch (e) {
+    msg.innerHTML = '<span style="color:var(--red)">Network error — try again.</span>';
+  } finally { btn.disabled = false; btn.textContent = 'Log Freeze bet'; }
 }
 </script>
 

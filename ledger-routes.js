@@ -146,6 +146,31 @@ router.post('/login', (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// ================== PER-USER STRATEGY PREFS ==================
+// One JSON blob per user for the Freeze acca builder controls. Needs a resolved session
+// (the router.use middleware sets req.username); calculator role is already blocked from
+// this whole router.
+
+// GET /api/ledger/strategy-prefs → { ok, prefs }
+router.get('/strategy-prefs', (req, res) => {
+  if (!req.username) return res.status(400).json({ ok: false, error: 'no session' });
+  const row = db.prepare(`SELECT prefs FROM user_strategy_prefs WHERE username = ?`).get(req.username);
+  let prefs = {};
+  if (row) { try { prefs = JSON.parse(row.prefs) || {}; } catch (e) { prefs = {}; } }
+  res.json({ ok: true, prefs });
+});
+
+// POST /api/ledger/strategy-prefs  body: { prefs: {...} }  (upsert for the current user)
+router.post('/strategy-prefs', (req, res) => {
+  if (!req.username) return res.status(400).json({ ok: false, error: 'no session' });
+  const prefs = (req.body && typeof req.body.prefs === 'object' && req.body.prefs) || {};
+  db.prepare(
+    `INSERT INTO user_strategy_prefs (username, prefs, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(username) DO UPDATE SET prefs = excluded.prefs, updated_at = excluded.updated_at`
+  ).run(req.username, JSON.stringify(prefs), new Date().toISOString());
+  res.json({ ok: true });
+});
+
 
 
 function openStakeFor(accountId) {

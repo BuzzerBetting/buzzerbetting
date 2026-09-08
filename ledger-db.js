@@ -202,6 +202,15 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Per-user UI preferences for the Freeze acca builder (strategy, # accas, filters, ...).
+-- One JSON blob per user so each person's builder settings persist across logins without
+-- affecting anyone else.
+CREATE TABLE IF NOT EXISTS user_strategy_prefs (
+  username   TEXT PRIMARY KEY,
+  prefs      TEXT NOT NULL DEFAULT '{}',
+  updated_at TEXT
+);
+
 -- ================== BANKROLL BREAKDOWN ==================
 -- Manually-updated figures (Savings/Pension/Misc) — everything else on the page (Liquid
 -- Bankroll) is computed live from banks + accounts, not stored here.
