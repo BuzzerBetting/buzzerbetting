@@ -24,6 +24,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { skyThrottle, noteResponse, isBlocked, SKY_PROXY_AGENT } = require('./skybet-throttle');
+const oddsMonkeyLib = require('./oddsmonkey-lib');
 
 // Every SkyBet request (skybet.com pages + apitbd GraphQL) goes through here: it paces
 // calls and, on a 429/503, opens a process-wide circuit so the warmer / builder / accafreeze
@@ -123,24 +124,7 @@ async function bfCall(method, params, appKey, session) {
 }
 
 // ── shared helpers ──────────────────────────────────────────────────────────
-function norm(n) {
-  return (n || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-    .replace(/\butd\b/g, 'united').replace(/\bnottm\b/g, 'nottingham')
-    .replace(/\bwolves\b/g, 'wolverhampton').replace(/\bspurs\b/g, 'tottenham')
-    .replace(/\bmunich\b/g, 'munchen')
-    .replace(/\b(fc|afc|cf|sc|ss|as|ac|sv|bk|if|fk|club|w|res)\b/g, ' ')
-    .replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
-}
-function teamEq(a, b) {
-  const na = norm(a), nb = norm(b);
-  if (!na || !nb) return false;
-  if (na === nb) return true;
-  const wa = na.split(' ').filter(w => w.length > 2), wb = nb.split(' ').filter(w => w.length > 2);
-  if (!wa.length || !wb.length) return false;
-  const [short, long] = wa.length <= wb.length ? [wa, wb] : [wb, wa];
-  if (short.length === 1) return short[0] === long[0];
-  return short.every(w => long.join(' ').includes(w)) || long.every(w => short.join(' ').includes(w));
-}
+const { norm, teamEq } = require('./team-name-match');
 // balanced-brace scan for a `window.<var> = {...}` blob in server-rendered HTML
 function extractWindowVar(html, varName) {
   const marker = `window.${varName} = `;
@@ -448,6 +432,19 @@ exports.handler = async (event) => {
         } : null,
       };
     });
+
+    // 3.5. OddsMonkey OddsMatcher bulk fill — SkyBet FTR back odds for anything the accafreeze
+    // feed didn't cover. Not a source of Acca-Freeze eligibility (OddsMonkey has no concept of
+    // that promo), so this never sets accaFreezeEligible; the live per-fixture scrape below still
+    // runs for anything still uncovered, in case it can add eligibility too. See oddsmonkey-lib.js.
+    try {
+      const omRows = await oddsMonkeyLib.fetchSkyBackOdds();
+      for (const r of rows) {
+        if (r.sky) continue;
+        const m = oddsMonkeyLib.findOddsMonkeySky(r.b, omRows);
+        if (m) r.sky = { eventId: null, url: null, odds: m.odds, accaFreezeEligible: false, source: 'oddsmonkey' };
+      }
+    } catch (e) { /* leave uncovered rows for the cache/live passes below */ }
 
     // Cache-only pass first (free): apply every fresh cached hit, note fresh misses, and
     // collect only the genuinely-uncached fixtures for a live lookup (that's what the cap limits).
