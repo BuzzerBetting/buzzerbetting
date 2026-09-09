@@ -23,14 +23,15 @@
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
-const { skyThrottle, noteResponse, isBlocked } = require('./skybet-throttle');
+const { skyThrottle, noteResponse, isBlocked, SKY_PROXY_AGENT } = require('./skybet-throttle');
 
 // Every SkyBet request (skybet.com pages + apitbd GraphQL) goes through here: it paces
 // calls and, on a 429/503, opens a process-wide circuit so the warmer / builder / accafreeze
 // scraper stop hammering SkyBet until its (hours-long) ban lifts. Throws SKY_BLOCKED meanwhile.
+// Routed via SKY_PROXY_AGENT (SKYBET_PROXY_URL) when set — see skybet-throttle.js.
 async function skyFetch(url, opts) {
   await skyThrottle();
-  const res = await fetch(url, opts);
+  const res = await fetch(url, SKY_PROXY_AGENT ? { ...opts, dispatcher: SKY_PROXY_AGENT } : opts);
   noteResponse(res);
   return res;
 }

@@ -8,6 +8,18 @@
 //
 // Usage:  await skyThrottle();  const res = await fetch(url, opts);  noteResponse(res);
 // skyThrottle() throws an Error with .code === 'SKY_BLOCKED' while the circuit is open.
+//
+// 2026-09-09: confirmed the ~24h+ 429 run wasn't a stale-cookie issue (a brand-new
+// cf_clearance from a real cleared browser session still 429'd instantly) — this is a
+// hard ban on the DO droplet's IP itself. Routing SkyBet traffic through a proxy dodges
+// that. SKYBET_PROXY_URL (e.g. "http://user:pass@host:port", one of the Gridpanel mobile
+// proxies already used for the Dolphin account browsers) is optional — SKY_PROXY_AGENT is
+// null and every skyFetch call goes out on the box's own IP as before when it's unset.
+// SKYBET_PROXY_ROTATE_URL is the panel's "get a fresh IP on this proxy" endpoint — not
+// wired into any automatic retry here, just documented: `curl "$SKYBET_PROXY_ROTATE_URL"`
+// by hand if the proxy's current IP also ends up flagged.
+const { ProxyAgent } = require('undici');
+const SKY_PROXY_AGENT = process.env.SKYBET_PROXY_URL ? new ProxyAgent(process.env.SKYBET_PROXY_URL) : null;
 
 let blockedUntil = 0;
 let lastCallAt = 0;
@@ -43,4 +55,4 @@ function noteResponse(res) {
   }
 }
 
-module.exports = { skyThrottle, noteResponse, isBlocked, blockedForMs };
+module.exports = { skyThrottle, noteResponse, isBlocked, blockedForMs, SKY_PROXY_AGENT };

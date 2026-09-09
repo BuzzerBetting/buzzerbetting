@@ -115,8 +115,9 @@ function extractWindowVar(html, varName) {
   try { return JSON.parse(block); } catch (e) { return null; }
 }
 
-const { skyThrottle, noteResponse } = require('./skybet-throttle');
+const { skyThrottle, noteResponse, SKY_PROXY_AGENT } = require('./skybet-throttle');
 
+// Routed via SKY_PROXY_AGENT (SKYBET_PROXY_URL) when set — see skybet-throttle.js.
 async function skybetFetch(url, cookies, options = {}) {
   await skyThrottle(); // paces requests; throws {code:'SKY_BLOCKED'} while the circuit is open
   const res = await fetch(url, {
@@ -128,7 +129,8 @@ async function skybetFetch(url, cookies, options = {}) {
       'Referer': 'https://skybet.com/',
       'Origin': 'https://skybet.com',
       ...(options.headers || {})
-    }
+    },
+    ...(SKY_PROXY_AGENT ? { dispatcher: SKY_PROXY_AGENT } : {}),
   });
   noteResponse(res); // a 429/503 opens the shared circuit for every SkyBet caller
   return res;
