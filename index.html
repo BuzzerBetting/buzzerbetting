@@ -192,6 +192,10 @@ input::placeholder{color:var(--text3)}
 .bb-odds-val{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--green)}
 .fb-lbl{font-size:11.5px;color:var(--text2)}
 .fb-in{background:var(--surface);border:.5px solid var(--border);border-radius:var(--radius);padding:7px 10px;font-size:13px;color:var(--text);font-family:inherit}
+/* Oddschecker Price Boost marker — white box, dark-red "B", used identically on Today's
+   Matches (a boost exists somewhere on this match) and Oddschecker +EV (this specific bet
+   IS a +EV boost) so the two contexts read as the same signal. */
+.boost-icon{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:3px;background:#fff;border:1px solid #8b1a1a;color:#8b1a1a;font-size:10px;font-weight:800;line-height:1;flex-shrink:0}
 .fb-acca{border:.5px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden}
 .fb-acca-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:9px 14px;background:var(--surface2);font-size:12.5px}
 .fb-acca table{width:100%;border-collapse:collapse;font-size:12.5px}
@@ -8807,8 +8811,9 @@ function renderOddscheckerEV(){
     const fairColor=b.conf==='green'?'var(--green)':(b.conf==='yellow'?'var(--amber)':'var(--text2)');
     const lastTraded=(typeof b.lastTraded==='number')?b.lastTraded.toFixed(2):'—';
     const matched=(typeof b.matched==='number')?`£${b.matched.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}`:'—';
+    const boostIcon=b.boost?'<span class="boost-icon" title="Oddschecker Price Boost" style="margin-right:6px;vertical-align:middle">B</span>':'';
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:${fairColor};font-weight:500">${b.fair.toFixed(2)}</td><td class="r tn" style="color:var(--text2)">${lastTraded}</td><td class="r tn" style="color:var(--text2)">${matched}</td><td class="r" style="color:var(--text2);font-size:12px">${ocBookieName(b.bk)}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td><td class="r"><button onclick="copyOddscheckerLine(${i},this)" title="Copy line" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td>`;
+    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${boostIcon}${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:${fairColor};font-weight:500">${b.fair.toFixed(2)}</td><td class="r tn" style="color:var(--text2)">${lastTraded}</td><td class="r tn" style="color:var(--text2)">${matched}</td><td class="r" style="color:var(--text2);font-size:12px">${ocBookieName(b.bk)}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td><td class="r"><button onclick="copyOddscheckerLine(${i},this)" title="Copy line" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td>`;
     sb.appendChild(tr);
   });
   if(!shown.length){
@@ -8819,9 +8824,18 @@ function renderOddscheckerEV(){
 
 async function loadOddscheckerEV(){
   try{
-    const r=await fetch('/.netlify/functions/oc-ev');
-    const d=await r.json();
+    // Regular OC scan + Oddschecker Price Boosts +EV in parallel — boosts feed straight into
+    // the same table (see renderOddscheckerEV's boostIcon), just each row additionally
+    // tagged boost:true (set server-side, oc_boosts_scraper.py) so it gets the red "B" icon.
+    // A boost-feed failure must not blank the regular scan, so this is best-effort.
+    const [r,rBoost]=await Promise.allSettled([
+      fetch('/.netlify/functions/oc-ev').then(x=>x.json()),
+      fetch('/.netlify/functions/oc-boost-ev').then(x=>x.json()),
+    ]);
+    const d=(r.status==='fulfilled')?r.value:{ok:false};
+    const dBoost=(rBoost.status==='fulfilled'&&rBoost.value&&rBoost.value.ok)?rBoost.value:null;
     ocEvBets=(d.ok&&Array.isArray(d.bets))?d.bets:[];
+    if(dBoost&&Array.isArray(dBoost.bets))ocEvBets=ocEvBets.concat(dBoost.bets);
     ocEvLastUpdated=d.updated||ocEvLastUpdated;
     const countEl=document.getElementById('oc-ev-smeta-count');
     const refEl=document.getElementById('oc-ev-smeta-refreshed');
@@ -11291,7 +11305,13 @@ function renderDogsTable(rows,summary){
     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none">
       <input type="checkbox" id="pred-bet-stats-toggle" onchange="setPredToggle('bet-stats',this.checked)"> Corner bet stats
     </label>
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none">
+      <input type="checkbox" id="pred-boosts-toggle" onchange="setPredToggle('boosts',this.checked)"> Price boosts
+    </label>
     <span id="matches-pred-note" style="font-size:11px;color:var(--text3)"></span>
+    <span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3);margin-left:4px">
+      <span class="boost-icon" title="Price boost available on this match">B</span> = Oddschecker Price Boost available (First/Anytime scorer, 2+/3+ goals, Header, Outside box, Cards, Shots on target incl. 2+/3+/outside box/headed, Assist)
+    </span>
   </div>
 
   <div id="corner-bet-stats-panel" style="display:none;margin:-8px 0 16px;padding:10px 14px;border-radius:var(--radius);border:.5px solid var(--border);background:var(--surface);font-size:12.5px;color:var(--text2)"></div>
@@ -11369,15 +11389,17 @@ let MATCH_PRED_INTERVAL = null;
 function predCornersOn(){ return localStorage.getItem('bb_pred_corners') === '1'; }
 function predPensOn(){ return localStorage.getItem('bb_pred_pens') === '1'; }
 function predBetStatsOn(){ return localStorage.getItem('bb_pred_bet_stats') === '1'; }
+function predBoostsOn(){ return localStorage.getItem('bb_pred_boosts') !== '0'; } // default ON
 function syncPredToggles(){
   const c = document.getElementById('pred-corners-toggle'); if (c) c.checked = predCornersOn();
   const p = document.getElementById('pred-pens-toggle'); if (p) p.checked = predPensOn();
   const b = document.getElementById('pred-bet-stats-toggle'); if (b) b.checked = predBetStatsOn();
+  const bo = document.getElementById('pred-boosts-toggle'); if (bo) bo.checked = predBoostsOn();
   const panel = document.getElementById('corner-bet-stats-panel');
   if (panel) panel.style.display = predBetStatsOn() ? 'block' : 'none';
 }
 function setPredToggle(which, on){
-  const key = which === 'corners' ? 'bb_pred_corners' : which === 'pens' ? 'bb_pred_pens' : 'bb_pred_bet_stats';
+  const key = which === 'corners' ? 'bb_pred_corners' : which === 'pens' ? 'bb_pred_pens' : which === 'boosts' ? 'bb_pred_boosts' : 'bb_pred_bet_stats';
   localStorage.setItem(key, on ? '1' : '0');
   if (MATCHES_LEAGUES) renderFixtures(MATCHES_LEAGUES);
   if (which === 'bet-stats') {
@@ -11386,7 +11408,27 @@ function setPredToggle(which, on){
     if (on && CURRENT_FIXTURE_DATE) loadCornerBetStats(CURRENT_FIXTURE_DATE);
     return;
   }
+  if (which === 'boosts') {
+    if (on && !MATCH_BOOSTS_LOADED) loadMatchBoosts();
+    return;
+  }
   if (on && !MATCH_PRED_DATE && CURRENT_FIXTURE_DATE) loadMatchPredictions(CURRENT_FIXTURE_DATE);
+}
+
+// ── Oddschecker Price Boosts — existence-only per match (see /.netlify/functions/oc-boosts,
+// oc-scraper/oc/logic_boosts.py). Loaded once per Matches-page visit, independent of the date
+// tabs (it covers whichever matches the scraper found upcoming, not just the selected date) —
+// buildMatchRow looks it up by FotMob match id.
+let MATCH_BOOSTS = {};       // match_id (string) -> { count, markets }
+let MATCH_BOOSTS_LOADED = false;
+async function loadMatchBoosts(){
+  try{
+    const d = await fetch('/.netlify/functions/oc-boosts').then(r=>r.json());
+    MATCH_BOOSTS = {};
+    if (d && d.ok) (d.matches||[]).forEach(m => { if (m.match_id) MATCH_BOOSTS[String(m.match_id)] = { count: m.count, markets: m.markets }; });
+    MATCH_BOOSTS_LOADED = true;
+    if (MATCHES_LEAGUES) renderFixtures(MATCHES_LEAGUES);
+  }catch(e){ /* icon just won't show this pass — next poll tick retries */ }
 }
 
 // Which "assist -> header" corner-bet combos actually WON, and in which game — winners are
@@ -11495,6 +11537,7 @@ function initMatches(){
   wrap.innerHTML='';
   syncMatchesSortToggle();
   syncPredToggles();
+  if (predBoostsOn() && !MATCH_BOOSTS_LOADED) loadMatchBoosts();
   closeMatch();
   const now=new Date();
   for(let i=-1;i<5;i++){
@@ -11668,7 +11711,7 @@ function buildMatchRow(m, leagueName, isIntl, leagueCcode){
         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap${awayGreen?';color:var(--green)':''}">${m.away}</span>
       </div>
     </td>
-    <td style="text-align:right;color:var(--text3);font-size:12px;padding-left:2px;padding-right:12px"><i class="ti ti-chevron-right"></i></td>`;
+    <td style="text-align:right;color:var(--text3);font-size:12px;padding-left:2px;padding-right:12px"><span style="display:inline-flex;align-items:center;gap:6px">${(predBoostsOn()&&MATCH_BOOSTS[String(m.id)])?`<span class="boost-icon" title="${MATCH_BOOSTS[String(m.id)].count} price boost${MATCH_BOOSTS[String(m.id)].count===1?'':'s'} on this match">B</span>`:''}<i class="ti ti-chevron-right"></i></span></td>`;
   frag.appendChild(tr);
 
   // Prediction sub-row: only when a toggle is on and at least one side's lineup is confirmed.

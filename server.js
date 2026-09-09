@@ -181,6 +181,12 @@ const BET_ALERT_FEED_PATHS = {
   '/api/oc-f1-ew': require('path').join(__dirname, 'oc-scraper', 'data', 'oc_f1_ew_bets.json'),
   '/api/oc-arbs':  require('path').join(__dirname, 'oc-scraper', 'data', 'oc_arb_bets.json'),
   '/api/oc-dnf':   require('path').join(__dirname, 'oc-scraper', 'data', 'oc_dnf_bets.json'),
+  // Oddschecker Price Boosts +EV — same {t,match,mkt,sel,fair,bk,odds,ev} shape as the other
+  // feeds above, each row additionally tagged boost:true (see oc_boosts_scraper.py). Only
+  // covers markets with a fair-odds source already built (AGS/FGS/CARDS/SOT/HEADER/OTB) —
+  // GOALS_2PLUS/GOALS_3PLUS/OTB_SOT/HEADER_SOT/ASSIST are scraped (see /api/oc-boosts below)
+  // but not EV-scored yet.
+  '/api/oc-boost-ev': require('path').join(__dirname, 'oc-scraper', 'data', 'oc_boost_ev_bets.json'),
 };
 for (const [route, filePath] of Object.entries(BET_ALERT_FEED_PATHS)) {
   app.get(route, (req, res) => {
@@ -193,6 +199,28 @@ for (const [route, filePath] of Object.entries(BET_ALERT_FEED_PATHS)) {
     }
   });
 }
+
+// GET /api/oc-boosts — which matches currently have a qualifying Price Boost (any of
+// logic_boosts.TARGET_MARKETS), written by oc_boosts_scraper.py every ~3 min alongside the
+// main scan. Existence only (match_id + counts per market) — no prices here by design; the
+// user only ever wants to SEE an actual boosted price once it's confirmed +EV, on the
+// Oddschecker +EV page via /api/oc-boost-ev above. Powers the Today's Matches "B" icon.
+const OC_BOOSTS_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'oc_boosts.json');
+app.get('/api/oc-boosts', (req, res) => {
+  if (!fs.existsSync(OC_BOOSTS_PATH)) return res.json({ ok: true, updated: null, matches: [] });
+  try {
+    const payload = JSON.parse(fs.readFileSync(OC_BOOSTS_PATH, 'utf8'));
+    res.json({
+      ok: true,
+      updated: payload.updated || null,
+      targetMarkets: payload.targetMarkets || [],
+      marketsWithFairSource: payload.marketsWithFairSource || [],
+      matches: payload.matches || [],
+    });
+  } catch (e) {
+    res.json({ ok: false, error: 'Failed reading oc_boosts.json: ' + e.message });
+  }
+});
 
 // POST /api/oc-ev/refresh — kicks off the same run_pipeline.sh the systemd timer fires every
 // 10 minutes, on demand. Deliberately fire-and-forget (returns immediately, doesn't wait for
