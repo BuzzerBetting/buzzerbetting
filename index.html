@@ -13785,7 +13785,7 @@ const FREEZE_TABS = [
 let FREEZE_ACTIVE = (function(){ try { return localStorage.getItem('bb_freeze_tab') || 'builder'; } catch(e) { return 'builder'; } })();
 let FREEZE_DATA = null; // last-loaded { fixtures, updated } from netlify/functions/skybet-accafreeze
 let FREEZE_LEAD = null; // last-loaded { matches, updated } from netlify/functions/bb-lead (lead-at-any-time fairs)
-let FREEZE_SORT = 'kickoff'; // 'kickoff' | 'ev'
+let FREEZE_SORT = 'ev'; // 'kickoff' | 'ev'
 const FREEZE_LEAD_MIN_ODDS = 4.0; // only surface lead-anytime fairs for the likely freeze side
 
 function initFreeze(){ activateFreezeTab(FREEZE_ACTIVE); }
@@ -13820,23 +13820,32 @@ function activateFreezeTab(key){
 
 // forceRefresh is currently unused (there's only ever one thing to fetch) — kept as a named
 // param on the refresh button's onclick for clarity/future use (e.g. bypassing a cache).
+// Source: the VA-pasted Acca Freeze list (GET /api/ledger/freeze-eligible-list — see
+// freeze-eligible-parser.js), not the old direct-scrape skybet-accafreeze feed, which died with
+// the SkyBet ban and has no fix on that side (see skybet-throttle.js). Shape is already
+// {home, away, competition, kickoff, homeOdds, drawOdds, awayOdds} per team — exactly what
+// freezeEval()/renderFreezeList() below expect, so nothing downstream of FREEZE_DATA changes.
 async function loadFreezeList(forceRefresh){
   const statusEl = document.getElementById('freeze-list-status');
   const btn = document.getElementById('freeze-refresh-btn');
   if (btn) btn.disabled = true;
   if (statusEl) { statusEl.style.display = ''; statusEl.innerHTML = '<i class="ti ti-info-circle"></i> Loading eligible fixtures…'; }
   try {
-    // SkyBet freeze list + BookieBashing lead-anytime fairs in parallel. A bb-lead failure
+    // Pasted freeze list + BookieBashing lead-anytime fairs in parallel. A bb-lead failure
     // must not block the freeze list — the Lead/EV columns just fall back to "no fair" (red).
-    const [skyRes, leadRes] = await Promise.allSettled([
-      fetch('/.netlify/functions/skybet-accafreeze').then(r => r.json()),
+    const [pasteRes, leadRes] = await Promise.allSettled([
+      ledgerApi('freeze-eligible-list'),
       fetch('/.netlify/functions/bb-lead').then(r => r.json()),
     ]);
-    if (skyRes.status !== 'fulfilled') throw new Error(skyRes.reason && skyRes.reason.message || 'fetch failed');
-    if (!skyRes.value.ok) throw new Error(skyRes.value.error || 'unknown error');
-    FREEZE_DATA = skyRes.value;
+    if (pasteRes.status !== 'fulfilled') throw new Error(pasteRes.reason && pasteRes.reason.message || 'fetch failed');
+    if (!pasteRes.value.ok) throw new Error(pasteRes.value.error || 'unknown error');
+    FREEZE_DATA = { fixtures: pasteRes.value.teams || [], updated: pasteRes.value.updatedAt };
     FREEZE_LEAD = (leadRes.status === 'fulfilled' && leadRes.value && leadRes.value.ok) ? leadRes.value : null;
-    if (statusEl) statusEl.style.display = 'none';
+    if (statusEl) {
+      if (!FREEZE_DATA.fixtures.length) { statusEl.style.display = ''; statusEl.innerHTML = '<i class="ti ti-info-circle"></i> No list pasted yet — go to the "Paste Eligible List" tab.'; }
+      else statusEl.style.display = 'none';
+    }
+    syncFreezeSortBtn();
     renderFreezeList();
   } catch (e) {
     if (statusEl) { statusEl.style.display = ''; statusEl.innerHTML = `<i class="ti ti-alert-triangle"></i> Couldn't load fixtures: ${escapeHtml(e.message)}`; }
@@ -13900,14 +13909,16 @@ function freezeEval(f){
 }
 function toggleFreezeSort(){
   FREEZE_SORT = FREEZE_SORT === 'ev' ? 'kickoff' : 'ev';
-  const btn = document.getElementById('freeze-sort-btn');
-  if (btn){
-    const on = FREEZE_SORT === 'ev';
-    btn.style.borderColor = on ? 'var(--brand)' : 'var(--border)';
-    btn.style.color = on ? 'var(--brand)' : 'var(--text2)';
-    btn.innerHTML = `<i class="ti ti-arrows-sort"></i> ${on ? 'Sorted by EV' : 'Sort by EV'}`;
-  }
+  syncFreezeSortBtn();
   renderFreezeList();
+}
+function syncFreezeSortBtn(){
+  const btn = document.getElementById('freeze-sort-btn');
+  if (!btn) return;
+  const on = FREEZE_SORT === 'ev';
+  btn.style.borderColor = on ? 'var(--brand)' : 'var(--border)';
+  btn.style.color = on ? 'var(--brand)' : 'var(--text2)';
+  btn.innerHTML = `<i class="ti ti-arrows-sort"></i> ${on ? 'Sorted by EV' : 'Sort by EV'}`;
 }
 
 // Pure client-side filter over the already-loaded fixture list — the min-odds box re-slices
