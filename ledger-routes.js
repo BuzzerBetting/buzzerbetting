@@ -113,12 +113,14 @@ router.use((req, res, next) => {
 //   - /notifications: the header bell is available to every role.
 //   - /match-predictions: Calculations feature.
 //   - /strategy-prefs: per-user Freeze-builder UI settings, no financial data — every role.
+//   - /freeze-eligible-list: the VA-pasted Acca Freeze coupon (Freeze Builder), no financial data.
 router.use((req, res, next) => {
   if ((req.userRole === 'calculator' || req.userRole === 'freeze')
       && !req.path.startsWith('/fotmob-leagues')
       && !req.path.startsWith('/notifications')
       && !req.path.startsWith('/match-predictions')
-      && !req.path.startsWith('/strategy-prefs')) {
+      && !req.path.startsWith('/strategy-prefs')
+      && !req.path.startsWith('/freeze-eligible-list')) {
     return res.status(403).json({ ok: false, error: 'This account has no access to the Ledger.' });
   }
   next();
@@ -169,6 +171,40 @@ router.post('/strategy-prefs', (req, res) => {
      ON CONFLICT(username) DO UPDATE SET prefs = excluded.prefs, updated_at = excluded.updated_at`
   ).run(req.username, JSON.stringify(prefs), new Date().toISOString());
   res.json({ ok: true });
+});
+
+// ================== FREEZE-ELIGIBLE LIST (VA-pasted Acca Freeze coupon) ==================
+// Single shared row (id=1), not per-user — see freeze_eligible_list in ledger-db.js and
+// freeze-eligible-parser.js. Whoever's logged in (freeze role included) can paste an update;
+// last write wins, same as every other single-row config table in this app.
+
+// GET /api/ledger/freeze-eligible-list → { ok, updatedAt, updatedBy, teamCount, rawText, teams }
+router.get('/freeze-eligible-list', (req, res) => {
+  const row = db.prepare(`SELECT raw_text, parsed, team_count, updated_at, updated_by FROM freeze_eligible_list WHERE id = 1`).get();
+  if (!row) return res.json({ ok: true, updatedAt: null, updatedBy: null, teamCount: 0, rawText: '', teams: [] });
+  let parsed = {};
+  try { parsed = JSON.parse(row.parsed) || {}; } catch (e) { parsed = {}; }
+  res.json({
+    ok: true, updatedAt: row.updated_at, updatedBy: row.updated_by,
+    teamCount: row.team_count, rawText: row.raw_text || '', teams: parsed.teams || [],
+  });
+});
+
+// POST /api/ledger/freeze-eligible-list  body: { text: '<raw paste>' }
+router.post('/freeze-eligible-list', (req, res) => {
+  if (!req.username) return res.status(400).json({ ok: false, error: 'no session' });
+  const text = (req.body && req.body.text) || '';
+  if (!text.trim()) return res.status(400).json({ ok: false, error: 'Paste is empty.' });
+  const { parseFreezeEligibleText } = require('./freeze-eligible-parser');
+  const { teams, warnings } = parseFreezeEligibleText(text);
+  if (!teams.length) return res.status(400).json({ ok: false, error: "Couldn't parse any matches out of that paste.", warnings });
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO freeze_eligible_list (id, raw_text, parsed, team_count, updated_at, updated_by) VALUES (1, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET raw_text = excluded.raw_text, parsed = excluded.parsed,
+       team_count = excluded.team_count, updated_at = excluded.updated_at, updated_by = excluded.updated_by`
+  ).run(text, JSON.stringify({ teams, warnings }), teams.length, now, req.username);
+  res.json({ ok: true, teamCount: teams.length, warnings, updatedAt: now });
 });
 
 

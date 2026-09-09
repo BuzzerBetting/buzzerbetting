@@ -367,13 +367,14 @@ input::placeholder{color:var(--text3)}
 
   <!-- panel: builder -->
   <div id="freeze-panel-builder" style="display:none">
-    <div class="note" style="margin-bottom:14px"><i class="ti ti-info-circle"></i> Builds 5-leg SkyBet accas: 4 fodder legs (favourites that all kick off ≥ 1h45m before the freeze leg) + 1 freeze target. Fair odds = the 4 fodder BFEX lay prices × the freeze team's "lead at any time" fair.</div>
+    <div id="fb-strategy-note" class="note" style="margin-bottom:14px"><i class="ti ti-info-circle"></i> Builds 5-leg SkyBet accas: 4 fodder legs (favourites that all kick off ≥ 1h45m before the freeze leg) + 1 freeze target. Fair odds = the 4 fodder BFEX lay prices × the freeze team's "lead at any time" fair.</div>
 
     <div style="display:flex;flex-wrap:wrap;gap:16px 22px;align-items:flex-end;margin-bottom:12px">
       <div style="display:flex;flex-direction:column;gap:4px">
         <label class="fb-lbl">Strategy</label>
         <select id="fb-strategy" onchange="fbOnControlChange()" class="fb-in" style="width:180px">
           <option value="4fodder">4 Fodder + Freeze</option>
+          <option value="freezefirst">Freeze First + Fodder</option>
         </select>
       </div>
       <div style="display:flex;flex-direction:column;gap:4px">
@@ -446,6 +447,17 @@ input::placeholder{color:var(--text3)}
       <thead><tr><th style="min-width:72px">Kickoff</th><th>Competition</th><th>Home</th><th class="r">Home odds</th><th class="r">Draw</th><th>Away</th><th class="r">Away odds</th><th class="r">Lead @ any / EV</th></tr></thead>
       <tbody id="freeze-list-tbody"></tbody>
     </table></div>
+  </div>
+
+  <!-- panel: VA-pasted Acca Freeze eligible list -->
+  <div id="freeze-panel-paste" style="display:none">
+    <div class="note" style="margin-bottom:14px"><i class="ti ti-info-circle"></i> Paste the whole SkyBet Acca Freeze coupon here (select all, copy, paste raw — no need to clean it up) a couple of times a day. Every match on it is treated as freeze-eligible and feeds the Freeze Builder's "Select freeze team" list.</div>
+    <div id="fp-status" style="margin-bottom:12px;font-size:12.5px;color:var(--text2)">Loading current list…</div>
+    <textarea id="fp-textarea" placeholder="Paste the Acca Freeze coupon text here…" style="width:100%;min-height:320px;background:var(--surface);border:.5px solid var(--border);border-radius:var(--radius);padding:12px;font-size:12.5px;font-family:inherit;color:var(--text);resize:vertical;box-sizing:border-box"></textarea>
+    <div style="display:flex;align-items:center;gap:12px;margin-top:12px">
+      <button onclick="fpSave()" id="fp-save-btn" style="display:flex;align-items:center;gap:6px;background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:9px 18px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit"><i class="ti ti-device-floppy"></i> Save list</button>
+      <span id="fp-save-msg" style="font-size:12.5px"></span>
+    </div>
   </div>
 </div>
 
@@ -13768,6 +13780,7 @@ document.addEventListener('click', (e) => {
 const FREEZE_TABS = [
   { key: 'builder', label: 'Freeze Builder', panel: 'freeze-panel-builder' },
   { key: 'list',    label: 'Full Sky Freeze List', panel: 'freeze-panel-list' },
+  { key: 'paste',   label: 'Paste Eligible List', panel: 'freeze-panel-paste' },
 ];
 let FREEZE_ACTIVE = (function(){ try { return localStorage.getItem('bb_freeze_tab') || 'builder'; } catch(e) { return 'builder'; } })();
 let FREEZE_DATA = null; // last-loaded { fixtures, updated } from netlify/functions/skybet-accafreeze
@@ -13802,6 +13815,7 @@ function activateFreezeTab(key){
   renderFreezeTabs();
   if (key === 'list' && !FREEZE_DATA) loadFreezeList();
   if (key === 'builder') initFreezeBuilder();
+  if (key === 'paste') fpLoad();
 }
 
 // forceRefresh is currently unused (there's only ever one thing to fetch) — kept as a named
@@ -13968,13 +13982,59 @@ function renderFreezeList(){
   }
 }
 
+// ── FREEZE PASTE (Calculations > Freeze > Paste Eligible List) ────────────────
+// VA pastes the raw SkyBet Acca Freeze coupon here a couple of times a day — see
+// freeze-eligible-parser.js for the parsing and GET/POST /api/ledger/freeze-eligible-list.
+// Every match on that coupon is a valid freeze target (confirmed with the user 2026-09-09),
+// so this is now the source of Acca-Freeze eligibility that /api/skybet-bfex joins against
+// (see freeze-eligible-lib.js) — the old accafreeze feed died with the SkyBet scraping ban.
+let FP_LOADED = false;
+async function fpLoad(){
+  const statusEl = document.getElementById('fp-status'), ta = document.getElementById('fp-textarea');
+  try {
+    const d = await ledgerApi('freeze-eligible-list');
+    if (d && d.ok) {
+      if (statusEl) {
+        statusEl.textContent = d.updatedAt
+          ? `Current list: ${d.teamCount} match${d.teamCount === 1 ? '' : 'es'} · updated ${new Date(d.updatedAt).toLocaleString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}${d.updatedBy ? ` by ${d.updatedBy}` : ''}`
+          : 'No list pasted yet.';
+      }
+      // Only pre-fill the box the first time (don't clobber something being typed on a re-tab).
+      if (!FP_LOADED && ta && d.rawText) ta.value = d.rawText;
+    } else if (statusEl) statusEl.textContent = "Couldn't load the current list.";
+  } catch (e) { if (statusEl) statusEl.textContent = "Couldn't load the current list."; }
+  FP_LOADED = true;
+}
+async function fpSave(){
+  const ta = document.getElementById('fp-textarea'), btn = document.getElementById('fp-save-btn'), msg = document.getElementById('fp-save-msg');
+  const text = ta ? ta.value : '';
+  if (!text.trim()) { if (msg) msg.innerHTML = '<span style="color:var(--red)">Paste something first.</span>'; return; }
+  if (btn) btn.disabled = true;
+  if (msg) msg.innerHTML = '<span style="color:var(--text3)">Saving…</span>';
+  try {
+    const d = await ledgerApi('freeze-eligible-list', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+    if (d && d.ok) {
+      msg.innerHTML = `<span style="color:var(--green)">Saved — ${d.teamCount} match${d.teamCount === 1 ? '' : 'es'} parsed.</span>` +
+        (d.warnings && d.warnings.length ? `<br><span style="color:var(--amber);font-size:11.5px">${escapeHtml(d.warnings.join(' · '))}</span>` : '');
+      fpLoad();
+    } else {
+      msg.innerHTML = `<span style="color:var(--red)">${escapeHtml((d && d.error) || 'Save failed.')}</span>`;
+    }
+  } catch (e) { msg.innerHTML = '<span style="color:var(--red)">Save failed — network error.</span>'; }
+  if (btn) btn.disabled = false;
+}
+
 // ── FREEZE BUILDER (Calculations > Freeze > Freeze Builder) ───────────────────
 // Strategy: 5-leg SkyBet acca = 4 fodder favourites + 1 freeze target, where all 4 fodder
 // matches kick off ≥ 1h45m before the freeze leg. Data: /.netlify/functions/skybet-bfex
 // (fixtures + SkyBet back odds + BFEX lay odds + accaFreezeEligible) and bb-lead
 // (lead-at-any-time fairs). Fair odds = ∏(4 fodder BFEX lay) × freeze lead-any fair.
-const FB_GAP_MS = 105 * 60 * 1000; // 1h45m between latest fodder KO and the freeze KO
+const FB_GAP_MS = 105 * 60 * 1000; // '4fodder' strategy: 1h45m between latest fodder KO and the freeze KO
 const FB_DEFAULT_MIN_EV = 0.80;     // freeze min-EV when the box is left blank
+const FB_STRATEGY_NOTES = {
+  '4fodder':     'Builds 5-leg SkyBet accas: 4 fodder legs (favourites that all kick off ≥ 1h45m before the freeze leg) + 1 freeze target. Fair odds = the 4 fodder BFEX lay prices × the freeze team\'s "lead at any time" fair.',
+  freezefirst:   'Builds 5-leg SkyBet accas: 1 freeze target (the first team to kick off) + 4 fodder legs kicking off at the same time or any time after it — no other restriction on fodder kickoff. Fair odds = the 4 fodder BFEX lay prices × the freeze team\'s "lead at any time" fair.',
+};
 let FB_BFEX = null, FB_LEAD = null, FB_ACCAS = [], FB_LOADED = false;
 let FB_INIT_DONE = false, FB_PENDING_TEAM = null, FB_SAVE_T = null, FB_GEN_T = null;
 let FB_LAST_SIGS = new Set(); // fodder-set signatures from the previous Generate — penalised so re-generating gives a fresh mix
@@ -13994,6 +14054,13 @@ async function fbLoadPrefs(){
     set('fb-freeze-min-odds', p.freezeMinOdds); set('fb-freeze-max-odds', p.freezeMaxOdds); set('fb-freeze-min-ev', p.freezeMinEv);
     FB_PENDING_TEAM = p.freezeTeam || '';
   } catch (e) { /* calculator role / no session — fine */ }
+  fbUpdateStrategyNote();
+}
+function fbUpdateStrategyNote(){
+  const note = document.getElementById('fb-strategy-note');
+  if (!note) return;
+  const strategy = (document.getElementById('fb-strategy') || {}).value || '4fodder';
+  note.innerHTML = `<i class="ti ti-info-circle"></i> ${FB_STRATEGY_NOTES[strategy] || FB_STRATEGY_NOTES['4fodder']}`;
 }
 function fbSavePrefs(){
   clearTimeout(FB_SAVE_T);
@@ -14011,6 +14078,7 @@ function fbSavePrefs(){
 }
 function fbOnControlChange(){
   fbSavePrefs();
+  fbUpdateStrategyNote();
   clearTimeout(FB_GEN_T);
   FB_GEN_T = setTimeout(() => { if (FB_LOADED) fbGenerate(); }, 250);
 }
@@ -14091,17 +14159,22 @@ function fbEligibleFreezeTeams(){
   out.sort((a, b) => b.ev - a.ev);
   return out;
 }
-function fbFodderPoolFor(freezeKt, excludeEventName){
+function fbFodderPoolFor(freezeKt, excludeEventName, strategy){
   const fmin = parseFloat((document.getElementById('fb-fodder-min') || {}).value);
   const fmax = parseFloat((document.getElementById('fb-fodder-max') || {}).value);
-  const now = Date.now(), latest = freezeKt - FB_GAP_MS;
+  // '4fodder': fodder legs must all kick off >= 1h45m before the freeze leg.
+  // 'freezefirst': freeze leg is the first kickoff — fodder legs just need to be at the
+  // same time or any time after it, with no upper bound.
+  const isFreezeFirst = strategy === 'freezefirst';
+  const earliest = isFreezeFirst ? freezeKt : Date.now();
+  const latest = isFreezeFirst ? Infinity : freezeKt - FB_GAP_MS;
   const pool = [];
   for (const f of FB_BFEX.fixtures){
     if (!f.sky || !f.sky.odds || !f.bfex || !f.bfex.lay) continue;
     const evName = f.eventName || (f.home + ' v ' + f.away);
     if (evName === excludeEventName) continue;
     const kt = f.kickoff ? Date.parse(f.kickoff) : null;
-    if (!kt || kt < now || kt > latest) continue;
+    if (!kt || kt < earliest || kt > latest) continue;
     const ho = f.sky.odds.home, ao = f.sky.odds.away;
     if (ho == null && ao == null) continue;
     let side, skyBack;
@@ -14133,6 +14206,7 @@ function fbGenerate(){
   const allTeams = fbEligibleFreezeTeams();
   fbRebuildTeamDropdown(allTeams);
 
+  const strategy = (document.getElementById('fb-strategy') || {}).value || '4fodder';
   const N = Math.max(1, parseInt((document.getElementById('fb-num') || {}).value, 10) || 1);
   const selTeam = (document.getElementById('fb-team') || {}).value || '';
   const freezeTeams = selTeam ? allTeams.filter(t => t.team === selTeam) : allTeams;
@@ -14149,7 +14223,7 @@ function fbGenerate(){
   // Keep only freeze teams whose time-valid fodder pool has >= 4 matches, then round-robin
   // N accas across just those (EV-sorted) — so N is honoured whenever any team can build.
   const usable = freezeTeams.filter(ft => {
-    const pool = fbFodderPoolFor(ft.kickoff, ft.matchEventName);
+    const pool = fbFodderPoolFor(ft.kickoff, ft.matchEventName, strategy);
     poolCache.set(ft.team, pool);
     if (pool.length >= 4) return true;
     shortfalls.add(`${ft.team} (only ${pool.length} fodder)`);
@@ -14201,7 +14275,7 @@ function fbGenerate(){
       usage.set(l.eventName, (usage.get(l.eventName) || 0) + 1);
       inAccas.set(l.eventName, (inAccas.get(l.eventName) || 0) + 1);
     });
-    accas.push({ freeze: ft, fodder: legs });
+    accas.push({ freeze: ft, fodder: legs, strategy });
   }
 
   FB_LAST_SIGS = sigSet; // next Generate avoids reproducing this set
@@ -14234,12 +14308,15 @@ function fbRenderAccas(accas){
       <td class="r tn" style="font-weight:600">${fr.skyOdds.toFixed(2)}</td>
       <td class="r tn" style="color:var(--amber)">${fr.leadFair.toFixed(2)} fair</td>
       <td class="r tn" style="color:var(--text3);white-space:nowrap">${fbFmtKt(fr.kickoff)}</td></tr>`;
+    // 'freezefirst' accas kick off freeze-team-first chronologically, so show the freeze row
+    // first too; '4fodder' accas have the freeze leg last, as before.
+    const legRows = a.strategy === 'freezefirst' ? (freezeRow + fodderRows) : (fodderRows + freezeRow);
     return `<div class="fb-acca">
       <div class="fb-acca-head">
         <span><b>Acca ${idx + 1}</b> &nbsp;·&nbsp; freeze <b style="color:var(--blue)">${escapeHtml(fr.team)}</b> &nbsp;·&nbsp; acca fair <b>${fair.toFixed(2)}</b> &nbsp;·&nbsp; freeze EV <b style="color:var(--green)">+${Math.round(fr.ev * 100)}%</b></span>
         ${isAdmin ? `<button onclick="fbToggleAddBet(${idx})" id="fb-addbet-btn-${idx}" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit"><i class="ti ti-plus"></i> Add Bet</button>` : ''}
       </div>
-      <div style="overflow-x:auto"><table>${fodderRows}${freezeRow}</table></div>
+      <div style="overflow-x:auto"><table>${legRows}</table></div>
       <div id="fb-addbet-${idx}" style="display:none;padding:10px 14px;border-top:.5px solid var(--border);background:var(--surface)"></div>
     </div>`;
   }).join('');

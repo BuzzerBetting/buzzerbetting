@@ -25,6 +25,7 @@ const fs = require('fs');
 const path = require('path');
 const { skyThrottle, noteResponse, isBlocked, SKY_PROXY_AGENT } = require('./skybet-throttle');
 const oddsMonkeyLib = require('./oddsmonkey-lib');
+const freezeEligibleLib = require('./freeze-eligible-lib');
 
 // Every SkyBet request (skybet.com pages + apitbd GraphQL) goes through here: it paces
 // calls and, on a 429/503, opens a process-wide circuit so the warmer / builder / accafreeze
@@ -433,10 +434,24 @@ exports.handler = async (event) => {
       };
     });
 
-    // 3.5. OddsMonkey OddsMatcher bulk fill — SkyBet FTR back odds for anything the accafreeze
-    // feed didn't cover. Not a source of Acca-Freeze eligibility (OddsMonkey has no concept of
-    // that promo), so this never sets accaFreezeEligible; the live per-fixture scrape below still
-    // runs for anything still uncovered, in case it can add eligibility too. See oddsmonkey-lib.js.
+    // 3.4. VA-pasted Acca Freeze coupon (freeze-eligible-lib.js) — the real eligibility source
+    // now that the automated accafreeze feed is dead (see skybet-throttle.js). Runs BEFORE the
+    // OddsMonkey fill below so an eligible fixture isn't claimed by OddsMonkey first (which
+    // never sets accaFreezeEligible, and the "if (r.sky) continue" guards below would then skip
+    // it forever).
+    try {
+      const vaTeams = freezeEligibleLib.getStoredFreezeEligibleTeams();
+      for (const r of rows) {
+        if (r.sky) continue;
+        const m = freezeEligibleLib.findFreezeEligibleMatch(r.b, vaTeams);
+        if (m) r.sky = { eventId: null, url: null, odds: m.odds, accaFreezeEligible: true, source: 'va-paste' };
+      }
+    } catch (e) { /* leave uncovered rows for OddsMonkey/cache/live below */ }
+
+    // 3.5. OddsMonkey OddsMatcher bulk fill — SkyBet FTR back odds for anything still uncovered.
+    // Not a source of Acca-Freeze eligibility (OddsMonkey has no concept of that promo), so this
+    // never sets accaFreezeEligible; the live per-fixture scrape below still runs for anything
+    // still uncovered, in case it can add eligibility too. See oddsmonkey-lib.js.
     try {
       const omRows = await oddsMonkeyLib.fetchSkyBackOdds();
       for (const r of rows) {

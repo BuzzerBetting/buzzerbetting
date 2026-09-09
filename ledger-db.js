@@ -409,6 +409,20 @@ CREATE TABLE IF NOT EXISTS bet_alert_books (
   enabled INTEGER NOT NULL DEFAULT 1,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Single-row store for the VA-pasted SkyBet Acca Freeze coupon (see freeze-eligible-parser.js
+-- and the Freeze Builder's paste box in index.html). SkyBet's direct-scrape ban (2026-09-09,
+-- see skybet-throttle.js) knocked out the automated accafreeze feed, so eligibility now comes
+-- from a couple of manual pastes a day instead. raw_text is kept so the UI can show what was
+-- last pasted; parsed is the freeze-eligible-parser.js output (JSON: {teams, warnings}).
+CREATE TABLE IF NOT EXISTS freeze_eligible_list (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  raw_text TEXT,
+  parsed TEXT,
+  team_count INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_by TEXT
+);
 `);
 
 // Safe migration — ALTER TABLE ADD COLUMN errors if the column already exists, so this is
