@@ -11759,7 +11759,7 @@ async function openMatch(matchId, home, away, leagueName, isIntl, started, finis
   document.getElementById('player-panel').style.display='none';
   document.getElementById('lineups-wrap').innerHTML='';
   bbMatchOdds=null;bfexMatchOdds=null;lineupMarketType=null;lineupMethodKey=null;
-  lineupStatsCache={};lineupPlayersAll=[];currentMatchEventId=matchId;
+  lineupStatsCache={};lineupPlayersAll=[];currentMatchEventId=matchId;currentMatchLineupData=null;
   currentMatchHome=home;currentMatchAway=away;
   const _lms=document.getElementById('lineup-mkt-selector');
   if(_lms)_lms.style.display='none';
@@ -11802,6 +11802,33 @@ async function openMatch(matchId, home, away, leagueName, isIntl, started, finis
   }catch(err){
     document.getElementById('match-status').innerHTML=`<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-shirt-off"></i></div><div class="ph-t">Lineups not available yet</div><div class="ph-d">${err.message}</div></div></div>`;
   }
+  startMatchDetailPoll(matchId);
+}
+
+// Re-checks lineups every 60s while a match is open — the moment FotMob's confirmed XI shows up
+// (or changes), refreshes BB/BFEX fair odds so AGS auto-switches pre-lineup -> post-lineup (see
+// bbLineupParams/fetchBBOdds) without the user doing anything, and refreshes the open player
+// panel + its "BookieBashing Fair Odds" strip / calculator inputs if one's showing.
+function startMatchDetailPoll(matchId){
+  if(MATCH_DETAIL_POLL) clearInterval(MATCH_DETAIL_POLL);
+  MATCH_DETAIL_POLL = setInterval(async ()=>{
+    const v=document.getElementById('match-detail');
+    if(!v || v.style.display==='none' || currentMatchEventId!==matchId){ clearInterval(MATCH_DETAIL_POLL); MATCH_DETAIL_POLL=null; return; }
+    try{
+      const r=await fetch(`/.netlify/functions/lineups?matchId=${matchId}`);
+      const data=await r.json();
+      if(!data.ok) return;
+      const wasConfirmed = !!(currentMatchLineupData && currentMatchLineupData.confirmed);
+      renderLineups(data);
+      if(data.confirmed && !wasConfirmed){
+        await loadSourceOdds();
+        const panel=document.getElementById('player-panel');
+        if(panel && panel.style.display!=='none' && panel._playerId){
+          loadPlayerStats(panel._playerId, panel._playerName, currentMatchType);
+        }
+      }
+    }catch(e){}
+  }, 60000);
 }
 
 function closeMatch(){
@@ -11811,9 +11838,11 @@ function closeMatch(){
   document.getElementById('matches-count').style.display='';
   const _sortT=document.getElementById('matches-sort-toggle'); if(_sortT)_sortT.style.display='flex';
   const _predT=document.getElementById('matches-pred-toggles'); if(_predT)_predT.style.display='flex';
+  if(MATCH_DETAIL_POLL){clearInterval(MATCH_DETAIL_POLL);MATCH_DETAIL_POLL=null;}
 }
 
 function renderLineups(data){
+  currentMatchLineupData=data; // starters/confirmed for the BB AGS pre/post-lineup switch — see fetchBBOdds
   const wrap=document.getElementById('lineups-wrap');
   wrap.innerHTML='';
 
@@ -11944,8 +11973,8 @@ function renderPlayerStats(data, playerName, matchType){
         <div class="bb-odds-item" onclick="fillBBOdds('fgs',${_bbO.fgs||0})" title="FGS">
           <span class="bb-odds-lbl">FGS</span><span class="bb-odds-val">${_bbO.fgs||'—'}</span>
         </div>
-        <div class="bb-odds-item" onclick="fillBBOdds('ags',${_bbO.ags||0})" title="AGS — click to fill calculator">
-          <span class="bb-odds-lbl">AGS</span><span class="bb-odds-val">${_bbO.ags||'—'}</span>
+        <div class="bb-odds-item" onclick="fillBBOdds('ags',${_bbO.ags||0})" title="${_bbO.agsSource==='post-lineup'?'AGS, normalised against the confirmed lineup':_bbO.agsSource==='pre-lineup'?'AGS from market price only — lineup not confirmed yet, switches automatically once it is':'AGS'} — click to fill calculator">
+          <span class="bb-odds-lbl">AGS${_bbO.agsSource?` <span style="color:${_bbO.agsSource==='post-lineup'?'var(--green)':'var(--amber)'};font-weight:600">${_bbO.agsSource==='post-lineup'?'post':'pre'}</span>`:''}</span><span class="bb-odds-val">${_bbO.ags||'—'}</span>
         </div>
         <div class="bb-odds-item" onclick="fillBBOdds('sot',${_bbO.sot||0})" title="SOT — click to fill calculator">
           <span class="bb-odds-lbl">SOT</span><span class="bb-odds-val">${_bbO.sot||'—'}</span>
@@ -12720,13 +12749,31 @@ function renderEVResults(bets) {
 let bbMatchOdds=null,bfexMatchOdds=null,lineupMarketType=null,lineupMethodKey=null;
 let lineupStatsCache={},lineupPlayersAll=[],currentMatchEventId=null;
 let currentMatchHome=null,currentMatchAway=null;
+let currentMatchLineupData=null; // last-loaded FotMob lineups.js response — starters/confirmed for the BB AGS pre/post-lineup switch
+let MATCH_DETAIL_POLL=null; // re-checks lineup confirmation while a match is open — see openMatch/closeMatch
 
 const FAIR_ODDS_SOURCE_LABELS={bb:'BookieBashing',bfex:'BFEX',oc:'Oddschecker',mixed:'Mixed'};
 let fairOddsSource=localStorage.getItem('bb_fair_odds_source')||'bb';
 
+// Pre/post-lineup AGS switch: once currentMatchLineupData shows a real confirmed XI (our own
+// FotMob data, set by renderLineups — not BB's own lineup source), pass the starting-11 names
+// through so bb-odds.js can normalize against them (see bb-calc-lib.js's computePlayerAgs).
+// Before that, or if lineups aren't out yet, this sends nothing extra and bb-odds.js just
+// returns each player's pre-lineup Raw AGS (needs no lineup at all).
+function bbLineupParams(){
+  const ld=currentMatchLineupData;
+  if(!ld||!ld.confirmed)return {};
+  const starters=team=>{
+    const s=(ld[team]&&ld[team].lineup&&ld[team].lineup.starters)||[];
+    return s.length>=10?s.map(p=>({name:p.name,position:p.position})):null;
+  };
+  const homeStarters=starters('home'), awayStarters=starters('away');
+  if(!homeStarters||!awayStarters)return {};
+  return { homeStarters: JSON.stringify(homeStarters), awayStarters: JSON.stringify(awayStarters), confirmed: '1' };
+}
 async function fetchBBOdds(eventId, home, away){
   try{
-    const params = new URLSearchParams({eventId});
+    const params = new URLSearchParams({eventId, ...bbLineupParams()});
     if(home) params.set('home', home);
     if(away) params.set('away', away);
     const r=await fetch(`/.netlify/functions/bb-odds?${params}`);
@@ -12787,13 +12834,18 @@ function findPlayerInOddsList(playerName, list){
 
     const pairMatch=(a,b)=>a.length>=4&&b.length>=4&&Math.abs(a.length-b.length)<=1&&
       [...a].filter((c,i)=>c!==b[i]).length<=1;
+    // A single-letter first-name token ("D." shown as "d" once punctuation is stripped) matches
+    // any full first name starting with that letter ("Daniel") — FotMob often abbreviates to an
+    // initial where a source spells the name out; without this, "D. Banjaqui" never matches
+    // "Daniel Banjaqui" at all (found + fixed 2026-09-09 while wiring in the BB AGS pipeline).
+    const initialMatch=(a,b)=>(a.length===1&&b.length>=1&&b[0]===a)||(b.length===1&&a.length>=1&&a[0]===b);
     const lastNamesMatch = lastA===lastB || pairMatch(lastA,lastB);
     if(!lastNamesMatch) return false;
 
     const firstA=wa.slice(0,-1);
     const firstB=wb.slice(0,-1);
     if(!firstA.length||!firstB.length) return true; // single name — last name match is enough
-    return firstA.some(w=>w.length>1&&firstB.some(b=>b===w||pairMatch(w,b)));
+    return firstA.some(w=>firstB.some(b=>b===w||pairMatch(w,b)||initialMatch(w,b)));
   })||null;
 }
 

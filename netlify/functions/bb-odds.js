@@ -1,3 +1,24 @@
+// bb-odds.js — per-player BookieBashing fair odds for a fixture, feeding the "BookieBashing Fair
+// Odds" strip on the Today's Matches player panel (index.html openPlayerStats/renderPlayerStats)
+// and the mixed BFEX/BB fair-odds source used by the Header/OTB/GSM calculators.
+//
+// AGS (Anytime Goalscorer) is computed via our own reverse-engineered replica of BookieBashing's
+// Player xG "Standard" table — see ../../bb-calc-lib.js for the full derivation/provenance note
+// and computePlayerAgs(). Two modes, auto-selected per player:
+//   - pre-lineup:  margin-removed market price -> Poisson conversion. Needs no lineup at all, so
+//                  it's available the moment BB has enough bookmaker coverage — earlier than BB's
+//                  OWN page, which shows nothing (not even this) until ITS OWN lineup source has
+//                  confirmed a starting XI.
+//   - post-lineup: normalized against a confirmed starting XI's combined raw xG and the match's
+//                  team-goals split (deriveTeamXg) — matches BB's own "BB AGS" to ~3dp when it's
+//                  showing one. Only kicks in when the caller supplies homeStarters/awayStarters
+//                  (OUR OWN FotMob lineup data — see netlify/functions/lineups.js — not BB's).
+// FGS and SOT are NOT upgraded yet (FGS needs BB's much heavier correct-score model; SOT needs
+// separate reverse-engineering) — both still come straight off the raw feed, as before.
+
+import bbCalcLib from '../../bb-calc-lib.js';
+const { computePlayerAgs } = bbCalcLib;
+
 export const handler = async (event) => {
   const CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -6,7 +27,7 @@ export const handler = async (event) => {
 
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
 
-  const { eventId, home, away } = event.queryStringParameters || {};
+  const { eventId, home, away, homeStarters: homeStartersRaw, awayStarters: awayStartersRaw, confirmed } = event.queryStringParameters || {};
   if (!eventId) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'eventId required' }) };
 
   const hash    = process.env.BB_HASH;
@@ -15,10 +36,15 @@ export const handler = async (event) => {
 
   const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
+  let homeStarters = null, awayStarters = null;
+  try { if (homeStartersRaw) homeStarters = JSON.parse(homeStartersRaw); } catch (e) { /* ignore malformed — falls back to pre-lineup */ }
+  try { if (awayStartersRaw) awayStarters = JSON.parse(awayStartersRaw); } catch (e) { /* ignore malformed */ }
+  const isConfirmed = confirmed === '1' || confirmed === 'true';
+
   // ── Name normalisation ─────────────────────────────────────────────────────
   function norm(n) {
     return (n || '')
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
       .toLowerCase()
       .replace(/[^a-z0-9 ]/g, '')
       .replace(/\s+/g, ' ')
@@ -54,9 +80,9 @@ export const handler = async (event) => {
            (e.includes(norm(homeTeam).split(' ').pop()) && e.includes(norm(awayTeam).split(' ').pop()));
   }
 
-  try {
+  async function bbFetch(path) {
     const ts = Math.floor(Date.now() / 1000);
-    const res = await fetch(`https://www.bookiebashing.net/node/rest/goals/list?t=${ts}`, {
+    const res = await fetch(`https://www.bookiebashing.net/node/rest/${path}?t=${ts}`, {
       headers: {
         'User-Agent': UA,
         'Cookie': cookies,
@@ -68,45 +94,55 @@ export const handler = async (event) => {
         'Origin': 'https://www.bookiebashing.net'
       }
     });
-
     const text = await res.text();
-    if (text.trim().startsWith('<')) return { statusCode: 200, headers: CORS, body: JSON.stringify({
-      ok: false, error: 'BB returned HTML — hash or cookies may have expired'
-    })};
+    if (text.trim().startsWith('<')) throw new Error('BB returned HTML — hash or cookies may have expired');
+    return JSON.parse(text);
+  }
 
-    const list = JSON.parse(text);
+  try {
+    // config only actually needed once a confirmed lineup is supplied (it's an 11MB+ fetch) —
+    // skip it otherwise, pre-lineup Raw AGS doesn't need it.
+    const [list, config] = await Promise.all([
+      bbFetch('goals/list'),
+      isConfirmed && homeStarters && awayStarters ? bbFetch('goals/config') : Promise.resolve(null),
+    ]);
 
     // ── Find the match ─────────────────────────────────────────────────────
-    // 1. Try exact eventId match (in case BB ever uses FotMob IDs)
     let match = list.find(m =>
       String(m.eventId) === String(eventId) ||
       String(m.id)      === String(eventId) ||
       String(m._id)     === String(eventId)
     );
-
-    // 2. Try team name matching if we have home/away
     if (!match && home && away) {
       match = list.find(m => matchByTeams(m.event || m.name || m.eventName, home, away));
     }
-
     if (!match) return { statusCode: 200, headers: CORS, body: JSON.stringify({
       ok: false,
       error: `Match not found in BB list (tried eventId ${eventId}${home ? ` and teams "${home}" vs "${away}"` : ''})`,
-      available: list.slice(0, 15).map(m => ({ id: m.id || m._id, eventId: m.eventId, event: m.event || m.name || m.eventName }))
+      available: list.slice(0, 15).map(m => ({ id: m.id || m._id, eventId: m.eventId, event: m.event || m.name || m.eventName })),
     })};
 
-    // ── Build player odds map ──────────────────────────────────────────────
-    const playerOdds = {};
+    // ── AGS: pre-lineup always, post-lineup (normalized) when a real config + confirmed XI
+    // was supplied. computePlayerAgs itself falls back to pre-lineup per-player if the XI
+    // doesn't have enough BB-matched names to trust the normalization — see bb-calc-lib.js.
+    const agsByName = config
+      ? computePlayerAgs(match, config, { homeStarters, awayStarters, confirmed: isConfirmed })
+      : computePlayerAgs(match, null, {}); // config-less call still yields pre-lineup Raw AGS below
 
+    // ── Build player odds map — FGS/SOT untouched (raw feed, as before); AGS upgraded ──────
+    const playerOdds = {};
     const playerXg = match.playerXg || {};
     for (const [name, data] of Object.entries(playerXg)) {
       if (name === 'No Goalscorer') continue;
+      const agsEntry = agsByName[name] || null;
       playerOdds[name] = {
         name,
-        fgs: data.firstBbp    || null,
-        ags: data.anytimeBbp  || null,
+        fgs: data.firstBbp || null,
+        ags: agsEntry ? agsEntry.ags : (data.anytimeBbp || null), // last-ditch fallback if computePlayerAgs somehow skipped this name
+        agsRaw: agsEntry ? agsEntry.rawAgs : null,
+        agsSource: agsEntry ? agsEntry.agsSource : null,
         bfexAgs: data.anytimeExchange?.back || null,
-        sot: null
+        sot: null,
       };
     }
 
@@ -120,7 +156,7 @@ export const handler = async (event) => {
         if (!playerOdds[matchedKey].sot || sotBack < playerOdds[matchedKey].sot)
           playerOdds[matchedKey].sot = sotBack;
       } else {
-        playerOdds[sotName] = playerOdds[sotName] || { name: sotName, fgs: null, ags: null, bfexAgs: null, sot: sotBack };
+        playerOdds[sotName] = playerOdds[sotName] || { name: sotName, fgs: null, ags: null, agsRaw: null, agsSource: null, bfexAgs: null, sot: sotBack };
         if (!playerOdds[sotName].sot || sotBack < playerOdds[sotName].sot)
           playerOdds[sotName].sot = sotBack;
       }
@@ -130,6 +166,7 @@ export const handler = async (event) => {
       ok: true,
       eventId,
       event: match.event || match.name || match.eventName,
+      agsMode: config ? 'post-lineup-eligible' : 'pre-lineup-only',
       players: Object.values(playerOdds)
     })};
 
