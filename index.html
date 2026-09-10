@@ -10928,6 +10928,39 @@ function viperParseDate(s) {
   const iso = y + '-' + String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0') + 'T12:00:00.000Z';
   return isNaN(Date.parse(iso)) ? null : iso;
 }
+// ── Duplicate detection ──
+// Each real bet is unique: the same horse(s) on the same race date at the same bookie can't
+// be filed twice. Key = slip type + sorted horse names + race date + bookie.
+function viperDupKey(slip, bookie, horses, date) {
+  const hs = (horses || []).map(h => String(h || '').trim().toLowerCase()).filter(Boolean).sort().join('+');
+  return [slip || '', viperNormBookie(bookie), hs, String(date || '').trim()].join('|');
+}
+function viperRecordedDupKeys(group) {
+  const set = new Set();
+  (VIPER_STATE[group].bets || []).forEach(b => {
+    const f = b.fields || {};
+    if (f.slip && f.slip !== 'Single' && Array.isArray(f.legs) && f.legs.length) {
+      const l0 = f.legs[0] || {};
+      set.add(viperDupKey(f.slip, f.Bookie, f.legs.map(l => l.Horse || l.horse), l0.RaceDate || l0.raceDate || f.RaceDate));
+    } else {
+      set.add(viperDupKey('Single', f.Bookie, [f.Horse], f.RaceDate));
+    }
+  });
+  return set;
+}
+function viperBatchDupKey(bt) {
+  if (bt.slip === 'Single') {
+    const s = bt.selections[0] || {};
+    return viperDupKey('Single', bt.bookie, [s.horse], s.raceDate);
+  }
+  return viperDupKey(bt.slip, bt.bookie, bt.selections.map(s => s.horse), (bt.selections[0] || {}).raceDate);
+}
+function viperDupLabel(bt) {
+  const horses = bt.selections.map(s => s.horse).filter(Boolean).join(' / ') || 'this bet';
+  const date = (bt.selections[0] || {}).raceDate || '';
+  return horses + (date ? ' on ' + date : '') + (bt.bookie ? ' at ' + bt.bookie : '');
+}
+
 function viperNormBookie(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
 // Fuzzy bookie compare — tolerates Viper's odd spellings ("Boyleports" vs "Boylesports",
 // "SkyBet" vs "Sky Bet") without matching unrelated names.
@@ -10982,6 +11015,7 @@ async function openViperSection(group) {
     status.style.display = 'none';
     viperRenderKpis(group);
     viperRenderTab(group);
+    viperRenderBatch(group); // re-flag any batch dups against the freshly-loaded records
   } catch (e) {
     status.innerHTML = '<div class="card"><div class="ph" style="padding:26px 24px"><div class="ph-ico"><i class="ti ti-plug-connected-x"></i></div><div class="ph-t">Could not load</div><div class="ph-d">' + escapeHtml(e.message || String(e)) + '</div></div></div>';
   }
@@ -11308,6 +11342,19 @@ function viperRenderBatch(group) {
   const acctOpts = (selId) => '<option value="">— pick account —</option>' + vhAccounts.map(a =>
     '<option value="' + a.id + '"' + (String(a.id) === String(selId) ? ' selected' : '') + '>' + escapeHtml((a.account_id || '?') + ' — ' + (a.bookie || '') + (a.profile ? ' · ' + a.profile : '')) + '</option>').join('');
 
+  // Flag any parsed bet that's already recorded, or already appears earlier in this batch.
+  const dupSeen = viperRecordedDupKeys(group);
+  const dupMap = {};
+  vhBatch[group].forEach(entry => {
+    if (entry.status !== 'done') return;
+    entry.bets.forEach(bt => {
+      if (bt.booked) return;
+      const key = viperBatchDupKey(bt);
+      if (dupSeen.has(key)) dupMap[bt.key] = true;
+      else dupSeen.add(key);
+    });
+  });
+
   list.innerHTML = vhBatch[group].map(entry => {
     const thumb = entry.dataUrl ? '<img src="' + entry.dataUrl + '" style="width:72px;height:auto;border-radius:6px;border:.5px solid var(--border);flex-shrink:0">' : '<div style="width:72px;height:72px;border-radius:6px;border:.5px solid var(--border);flex-shrink:0"></div>';
     let inner;
@@ -11318,6 +11365,7 @@ function viperRenderBatch(group) {
         const k = bt.key;
         const warn = bt.warnings.length ? '<div style="color:var(--amber);font-size:11.5px;margin-bottom:6px"><i class="ti ti-alert-triangle"></i> ' + bt.warnings.map(escapeHtml).join(' · ') + '</div>' : '';
         if (bt.booked) return '<div style="border-top:.5px solid var(--border);padding:10px 0;color:var(--green);font-size:12.5px"><i class="ti ti-check"></i> Booked — ' + escapeHtml(bt.slip + ' · ' + (bt.accountCode || '') + ' · ' + viperMoney(viperNumF(bt.pl))) + '</div>';
+        const isDup = !!dupMap[bt.key];
         const err = bt.submitError ? '<div style="color:var(--red);font-size:12px;margin-top:6px">' + escapeHtml(bt.submitError) + '</div>' : '';
         let legFields = '';
         bt.selections.forEach((s, si) => {
@@ -11338,14 +11386,16 @@ function viperRenderBatch(group) {
           '<div><label class="lbl">Outcome</label><select onchange="viperField(\'' + group + '\',\'' + k + '\',\'top\',null,\'outcome\',this.value)">' + ['', 'Won', 'Placed', 'Lost', 'Void'].map(o => '<option' + (bt.outcome === o ? ' selected' : '') + '>' + (o || '—') + '</option>').join('') + '</select></div>' +
           (bt.slip !== 'Single' ? '<div><label class="lbl">Slip EV%</label><input type="number" step="0.01" value="' + bt.slipEvPct + '" oninput="viperField(\'' + group + '\',\'' + k + '\',\'top\',null,\'slipEvPct\',this.value)"></div>' : '') +
           '</div>' + legFields +
-          '<button class="add-btn" style="margin-top:8px;background:var(--brand);color:#fff;border-color:var(--brand);font-size:12px" onclick="viperBookOne(\'' + group + '\',\'' + entry.id + '\',\'' + k + '\')">Book this bet</button>' +
+          (isDup
+            ? '<div style="margin-top:8px;color:var(--red);font-size:12px;font-weight:600"><i class="ti ti-ban"></i> Duplicate — ' + escapeHtml(viperDupLabel(bt)) + ' is already recorded. This bet won\'t be booked.</div>'
+            : '<button class="add-btn" style="margin-top:8px;background:var(--brand);color:#fff;border-color:var(--brand);font-size:12px" onclick="viperBookOne(\'' + group + '\',\'' + entry.id + '\',\'' + k + '\')">Book this bet</button>') +
           err + '</div>';
       }).join('');
     }
     return '<div style="display:flex;gap:12px;padding:12px 0;border-bottom:.5px solid var(--border)">' + thumb + '<div style="flex:1;min-width:0">' + inner + '</div></div>';
   }).join('');
 
-  const ready = vhBatch[group].reduce((s, e) => s + (e.status === 'done' ? e.bets.filter(b => !b.booked).length : 0), 0);
+  const ready = vhBatch[group].reduce((s, e) => s + (e.status === 'done' ? e.bets.filter(b => !b.booked && !dupMap[b.key]).length : 0), 0);
   actions.style.display = vhBatch[group].length ? 'flex' : 'none';
   const rc = document.getElementById('vh-' + px + '-ready'); if (rc) rc.textContent = ready;
 }
@@ -11420,7 +11470,12 @@ function viperBuildPayload(group, bt) {
   };
 }
 
-async function viperBookBet(group, bt) {
+async function viperBookBet(group, bt, seen) {
+  const dupKey = viperBatchDupKey(bt);
+  if (seen && seen.has(dupKey)) {
+    bt.submitError = 'Duplicate — ' + viperDupLabel(bt) + ' is already recorded. Not booked.';
+    return false;
+  }
   const built = viperBuildPayload(group, bt);
   if (built.error) { bt.submitError = built.error; return false; }
   try {
@@ -11428,7 +11483,7 @@ async function viperBookBet(group, bt) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(built.body),
     });
-    if (d && d.ok) { bt.booked = true; bt.submitError = null; return true; }
+    if (d && d.ok) { bt.booked = true; bt.submitError = null; if (seen) seen.add(dupKey); return true; }
     bt.submitError = (d && d.error) || 'Could not book the bet.';
     return false;
   } catch (e) { bt.submitError = 'Network error booking the bet.'; return false; }
@@ -11436,7 +11491,7 @@ async function viperBookBet(group, bt) {
 async function viperBookOne(group, entryId, key) {
   const entry = vhBatch[group].find(e => e.id === entryId); if (!entry) return;
   const bt = entry.bets.find(b => b.key === key); if (!bt || bt.booked) return;
-  await viperBookBet(group, bt);
+  await viperBookBet(group, bt, viperRecordedDupKeys(group));
   viperRenderBatch(group);
   if (bt.booked) openViperSection(group);
 }
@@ -11445,10 +11500,11 @@ async function viperBookAll(group) {
   const pending = [];
   vhBatch[group].forEach(e => { if (e.status === 'done') e.bets.forEach(b => { if (!b.booked) pending.push(b); }); });
   if (!pending.length) { msg.innerHTML = '<span style="color:var(--amber)">Nothing ready to book.</span>'; return; }
+  const seen = viperRecordedDupKeys(group);
   let ok = 0, failed = 0;
   for (let i = 0; i < pending.length; i++) {
     msg.textContent = 'Booking ' + (i + 1) + '/' + pending.length + '…';
-    const done = await viperBookBet(group, pending[i]);
+    const done = await viperBookBet(group, pending[i], seen);
     done ? ok++ : failed++;
     viperRenderBatch(group);
   }
