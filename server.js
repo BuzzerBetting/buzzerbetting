@@ -182,10 +182,11 @@ const BET_ALERT_FEED_PATHS = {
   '/api/oc-arbs':  require('path').join(__dirname, 'oc-scraper', 'data', 'oc_arb_bets.json'),
   '/api/oc-dnf':   require('path').join(__dirname, 'oc-scraper', 'data', 'oc_dnf_bets.json'),
   // Oddschecker Price Boosts +EV — same {t,match,mkt,sel,fair,bk,odds,ev} shape as the other
-  // feeds above, each row additionally tagged boost:true (see oc_boosts_scraper.py). Only
-  // covers markets with a fair-odds source already built (AGS/FGS/CARDS/SOT/HEADER/OTB) —
-  // GOALS_2PLUS/GOALS_3PLUS/OTB_SOT/HEADER_SOT/ASSIST are scraped (see /api/oc-boosts below)
-  // but not EV-scored yet.
+  // feeds above, each row additionally tagged boost:true (see oc_boosts_scraper.py). Covers
+  // markets with a fair-odds source: AGS/FGS/CARDS/SOT (direct BFEX), HEADER/OTB (BFEX AGS x
+  // FotMob shot-share), and GOALS_2PLUS/GOALS_3PLUS/SOT_2PLUS/SOT_3PLUS (Poisson from the
+  // BFEX "1+" fair). OTB_SOT/HEADER_SOT/ASSIST are scraped (see /api/oc-boosts) but still
+  // need a BookieBashing + Oddschecker devig fair before they're EV-scored.
   '/api/oc-boost-ev': require('path').join(__dirname, 'oc-scraper', 'data', 'oc_boost_ev_bets.json'),
 };
 for (const [route, filePath] of Object.entries(BET_ALERT_FEED_PATHS)) {
