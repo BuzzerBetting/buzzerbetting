@@ -10928,11 +10928,23 @@ function viperParseDate(s) {
   const iso = y + '-' + String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0') + 'T12:00:00.000Z';
   return isNaN(Date.parse(iso)) ? null : iso;
 }
-// The human-readable account code (e.g. "C007") is stored on accounts.account_id (TEXT).
-function viperAccByCode(code) {
+function viperNormBookie(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+// The human-readable account code (e.g. "C007") is stored on accounts.account_id (TEXT), and
+// the SAME code can exist at several bookies — so match on the code AND the bookie off the
+// screenshot, not the code alone (that was picking a random C007).
+function viperAccByCode(code, bookie) {
   if (!code) return null;
   const c = String(code).trim().toUpperCase();
-  return vhAccounts.find(a => String(a.account_id || '').trim().toUpperCase() === c) || null;
+  const matches = vhAccounts.filter(a => String(a.account_id || '').trim().toUpperCase() === c);
+  if (matches.length <= 1) return matches[0] || null;
+  const b = viperNormBookie(bookie);
+  if (b) {
+    const exact = matches.find(a => viperNormBookie(a.bookie) === b);
+    if (exact) return exact;
+    const partial = matches.find(a => { const ab = viperNormBookie(a.bookie); return ab && (ab.includes(b) || b.includes(ab)); });
+    if (partial) return partial;
+  }
+  return matches[0]; // ambiguous — the review card warns and lets them pick
 }
 
 // Rendered inline on the Ledger > Bets page (into #bets-viper-wrap) when Bet type is
@@ -11070,7 +11082,7 @@ function viperSinglesTable(group, rows) {
       '</tr>';
   }).join('');
   return '<div class="card"><div style="overflow-x:auto;max-height:560px;overflow-y:auto"><table class="dt" style="min-width:840px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr>' +
-    '<th style="min-width:150px">Horse</th><th>Bookie</th><th>Account ID</th><th class="r">Odds</th><th class="r">EV%</th><th class="r">Stake (EW)</th><th>Terms</th><th>Outcome</th><th class="r">P/L</th><th></th>' +
+    '<th style="min-width:150px">Horse</th><th>Bookie</th><th>Account ID</th><th class="r">Odds</th><th class="r">EV%</th><th class="r">Total EW Stake</th><th>Terms</th><th>Outcome</th><th class="r">P/L</th><th></th>' +
     '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
 }
 
@@ -11245,14 +11257,23 @@ async function viperAddImage(group, blob) {
     else {
       entry.status = 'done';
       entry.bets = d.bets.map((p, i) => {
-        const acc = viperAccByCode(p.accountCode);
+        const acc = viperAccByCode(p.accountCode, p.bookie);
+        const warnings = (p.warnings || []).slice();
+        if (p.accountCode && acc && p.bookie && viperNormBookie(acc.bookie) !== viperNormBookie(p.bookie)) {
+          warnings.push(`Screenshot bookie "${p.bookie}" but matched account ${acc.account_id} is ${acc.bookie} — check the account.`);
+        }
+        // Viper's singles "Stake (EW)" column is the per-way stake (e.g. £10 e/w) — the true
+        // outlay we track is double that (£10 win + £10 place). Doubles/trebles already show
+        // a true "Total Stake" on the slip card, so only singles get doubled.
+        const rawStake = p.totalStake != null ? p.totalStake : null;
+        const totalStake = rawStake == null ? '' : (p.slip === 'Single' ? +(rawStake * 2).toFixed(2) : rawStake);
         return {
           key: entry.id + '_' + i, booked: false, submitError: null,
           slip: p.slip || 'Single',
           bookie: p.bookie || '',
           accountCode: p.accountCode || '',
           accountId: acc ? acc.id : '',
-          totalStake: p.totalStake != null ? p.totalStake : '',
+          totalStake,
           pl: p.pl != null ? p.pl : '',
           outcome: p.outcome || (p.pl > 0 ? 'Won' : p.pl < 0 ? 'Lost' : ''),
           slipEvPct: p.slipEvPct != null ? p.slipEvPct : '',
@@ -11262,7 +11283,7 @@ async function viperAddImage(group, blob) {
             odds: s.odds != null ? s.odds : '', evPct: s.evPct != null ? s.evPct : '',
             terms: s.terms || '', outcome: s.outcome || '',
           })),
-          warnings: p.warnings || [],
+          warnings,
         };
       });
     }
