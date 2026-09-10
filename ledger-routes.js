@@ -11,6 +11,8 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const db = require('./ledger-db');
 
 // A Free Bet is SNR (Stake Not Returned) — no real money was ever staked, so it should
@@ -3476,7 +3478,7 @@ router.delete('/bookie-settings/:bookie', (req, res) => {
 
 // Every edge the Bet Alerts page knows about, in tab order. Kept here so /bet-alert-stats
 // always returns a row per edge even before anything has been posted for it.
-const BET_ALERT_EDGES = ['oc-ev', 'calc-ev', 'ddhh', 'corners', 'f1-ew', 'arbs', 'dnf'];
+const BET_ALERT_EDGES = ['oc-ev', 'calc-ev', 'ddhh', 'corners', 'f1-ew', 'arbs', 'dnf', 'watch'];
 
 // London calendar day, 'YYYY-MM-DD' — matches how the rest of the app thinks about "today".
 function betAlertDay() {
@@ -3594,6 +3596,270 @@ router.post('/bet-alert-books', requireAdmin, (req, res) => {
       }
     });
     tx();
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// ================== BET365 SOT-METHOD ODDS (Today's Matches paste) ==================
+// Oddschecker has the header/OTB *goal* markets but not the SoT-method ones (headed shots on
+// target, shots on target outside the box). Staff paste Bet365 screenshots per match from the
+// Today's Matches list; Claude vision parses player + decimal odds; stored per match+market.
+// Read by the frontend's "365" tick + the box-side ones_to_watch_scan.py / boost-calc feed.
+
+const B365_SOT_MARKETS = ['OTB_SOT', 'HEADER_SOT'];
+
+// GET /api/ledger/bet365-sot-odds?matchId=123
+//   -> { ok, byMarket:{ OTB_SOT:[{player,odds}], HEADER_SOT:[...] }, filled:{ OTB_SOT:bool, HEADER_SOT:bool }, updatedAt }
+router.get('/bet365-sot-odds', (req, res) => {
+  try {
+    const matchId = String(req.query.matchId || '').trim();
+    if (!matchId) return res.status(400).json({ ok: false, error: 'matchId required' });
+    const rows = db.prepare(
+      `SELECT market, player, odds, updated_at FROM bet365_sot_odds WHERE match_id = ? ORDER BY market, player`
+    ).all(matchId);
+    const byMarket = { OTB_SOT: [], HEADER_SOT: [] };
+    let updatedAt = null;
+    for (const r of rows) {
+      (byMarket[r.market] = byMarket[r.market] || []).push({ player: r.player, odds: r.odds });
+      if (!updatedAt || r.updated_at > updatedAt) updatedAt = r.updated_at;
+    }
+    res.json({
+      ok: true,
+      byMarket,
+      filled: { OTB_SOT: byMarket.OTB_SOT.length > 0, HEADER_SOT: byMarket.HEADER_SOT.length > 0 },
+      updatedAt,
+    });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// GET /api/ledger/bet365-sot-status  -> { ok, matches:{ <matchId>: { OTB_SOT:bool, HEADER_SOT:bool } } }
+// One call to render every match row's "365" tick without N per-match fetches.
+router.get('/bet365-sot-status', (req, res) => {
+  try {
+    const rows = db.prepare(
+      `SELECT match_id, market, COUNT(*) AS n FROM bet365_sot_odds GROUP BY match_id, market`
+    ).all();
+    const matches = {};
+    for (const r of rows) {
+      const m = matches[r.match_id] || (matches[r.match_id] = { OTB_SOT: false, HEADER_SOT: false });
+      if (r.n > 0 && (r.market in m)) m[r.market] = true;
+    }
+    res.json({ ok: true, matches });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/bet365-sot-odds  body: { matchId, market, players:[{player, odds}] }
+// Replace-upsert for that match+market: every existing row for (matchId, market) is cleared
+// and the supplied players inserted. An empty players array clears the market. Any logged-in
+// role (staff file these) — the calculator/freeze block above already keeps those roles out.
+router.post('/bet365-sot-odds', (req, res) => {
+  try {
+    const { matchId, market } = req.body || {};
+    const mid = String(matchId || '').trim();
+    if (!mid) return res.status(400).json({ ok: false, error: 'matchId required' });
+    if (!B365_SOT_MARKETS.includes(market)) return res.status(400).json({ ok: false, error: 'market must be OTB_SOT or HEADER_SOT' });
+    const players = Array.isArray(req.body && req.body.players) ? req.body.players : [];
+    const clean = [];
+    for (const p of players) {
+      const player = String((p && p.player) || '').trim();
+      const odds = Number(p && p.odds);
+      if (!player || !isFinite(odds) || odds <= 1) continue;
+      clean.push({ player, odds: +odds.toFixed(3) });
+    }
+    const now = new Date().toISOString();
+    const by = req.username || null;
+    const tx = db.transaction(() => {
+      db.prepare(`DELETE FROM bet365_sot_odds WHERE match_id = ? AND market = ?`).run(mid, market);
+      const ins = db.prepare(
+        `INSERT INTO bet365_sot_odds (match_id, market, player, odds, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(match_id, market, player) DO UPDATE SET odds = excluded.odds, updated_at = excluded.updated_at, updated_by = excluded.updated_by`
+      );
+      for (const p of clean) ins.run(mid, market, p.player, p.odds, now, by);
+    });
+    tx();
+    res.json({ ok: true, saved: clean.length });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/parse-bet365-sot  { image: "<base64>", mediaType: "image/png" }
+// Reads one Bet365 screenshot of a "Player Shots on Target Outside the Box" or "Player Headed
+// Shots on Target" market and returns { players:[{player, odds}], marketHint, warnings }.
+// Not admin-only (staff paste these). Clone of /parse-viper's model call shape.
+const B365_SOT_MODEL = process.env.BETSLIP_MODEL || 'claude-opus-5';
+const B365_SOT_PROMPT = `You are reading ONE screenshot of a Bet365 football player market. It is either
+"Player Shots on Target Outside the Box" (shots on target from outside the penalty area) or
+"Player Headed Shots on Target" (headed shots on target). Each row is a player name and a
+price for 1 or more (sometimes shown as "1+", "Over 0.5", or just a single price column).
+
+Respond with ONLY a JSON object, no prose, no markdown fences, with exactly this shape:
+{
+  "marketHint": "OTB_SOT" | "HEADER_SOT" | null,   // which market the header text implies; null if unclear
+  "players": [
+    { "player": <player name in natural "Firstname Surname" order>, "odds": <decimal odds as a number, e.g. 3.75; convert fractional a/b -> a/b + 1> }
+  ],
+  "confidenceNotes": <brief note of anything unreadable/ambiguous> or null
+}
+
+Rules:
+- One entry per player row. If a row shows several columns (1+, 2+, 3+), take the "1+" / "Over 0.5" price only.
+- Read only what is visible. Never guess a player name or a number.
+- Odds as plain decimal numbers: "7/2" -> 4.5, "3.75" -> 3.75, "EVS" -> 2.0.
+- Skip header rows, "Cash Out", bet-slip and totals lines — players only.`;
+
+router.post('/parse-bet365-sot', async (req, res) => {
+  const t0 = Date.now();
+  try {
+    const client = getAnthropic();
+    if (!client) return res.json({ ok: false, error: 'Screenshot parsing is not configured on the server yet.' });
+    const { image, mediaType } = req.body || {};
+    if (!image || typeof image !== 'string') return res.status(400).json({ ok: false, error: 'image (base64) required' });
+    const data = image.replace(/^data:[^,]+,/, '');
+    const media = /jpe?g/i.test(mediaType || '') ? 'image/jpeg'
+      : /webp/i.test(mediaType || '') ? 'image/webp' : 'image/png';
+
+    let parsed;
+    try {
+      const msg = await client.messages.create({
+        model: B365_SOT_MODEL,
+        max_tokens: 2048,
+        output_config: { effort: 'low' },
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: media, data } },
+            { type: 'text', text: B365_SOT_PROMPT },
+          ],
+        }],
+      });
+      const text = (msg.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
+      try { parsed = JSON.parse(text); }
+      catch (e) { const m = text.match(/\{[\s\S]*\}/); parsed = JSON.parse(m ? m[0] : '{}'); }
+    } catch (e) {
+      console.error('[parse-bet365-sot] model call failed:', e && e.message);
+      return res.json({ ok: false, error: 'Could not read the screenshot — try a clearer crop.' });
+    }
+
+    const rawPlayers = Array.isArray(parsed.players) ? parsed.players : [];
+    const players = rawPlayers.map(p => {
+      let odds = viperNum(p && p.odds);
+      if (odds == null && p && p.oddsFractional) odds = fractionalToDecimal(p.oddsFractional);
+      return { player: (p && p.player) ? String(p.player).trim() : null, odds };
+    }).filter(p => p.player);
+
+    const warnings = [];
+    if (!players.length) warnings.push('No player rows read from that screenshot.');
+    if (players.some(p => p.odds == null)) warnings.push('An odds value was not read — check each row.');
+    if (parsed.confidenceNotes) warnings.push(String(parsed.confidenceNotes));
+
+    const marketHint = ['OTB_SOT', 'HEADER_SOT'].includes(parsed.marketHint) ? parsed.marketHint : null;
+    console.log('[parse-bet365-sot] done in', ((Date.now() - t0) / 1000).toFixed(1) + 's —', players.length, 'player(s), hint=' + marketHint);
+    res.json({ ok: true, players, marketHint, warnings });
+  } catch (err) {
+    console.error('[parse-bet365-sot]', err && err.message);
+    res.json({ ok: false, error: 'Screenshot read failed: ' + (err && err.message || 'unknown error') });
+  }
+});
+
+// ================== ONES TO WATCH (pre-lineup early-value sweep) ==================
+// Rows produced by oc-scraper/scripts/ones_to_watch_scan.py and POSTed to /ones-to-watch/
+// ingest. The Bet Alerts "Ones to Watch" tab reads /ones-to-watch, ticks via /:id/tick, and
+// removes via DELETE /:id. Shared/global (like bet_alert_books).
+
+const OTW_TRIGGER_DIR = path.join(__dirname, 'oc-scraper', 'data', 'otw_triggers');
+
+// GET /api/ledger/ones-to-watch -> { ok, rows:[...] }  (all rows, highest EV first; ticked pinned on top)
+router.get('/ones-to-watch', (req, res) => {
+  try {
+    const rows = db.prepare(
+      `SELECT id, match_id AS matchId, match, kickoff, market, selection, fair, conf, bookie, odds, ev, source, state
+         FROM ones_to_watch
+        ORDER BY (state = 'ticked') DESC, ev DESC`
+    ).all();
+    res.json({ ok: true, rows });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/ones-to-watch/ingest
+//   body: { matchId, match?, kickoff?, confirmed?:bool, rows:[{market,selection,fair,conf,bookie,odds,ev,source}] }
+// - confirmed:true  -> delete every row for that match (Calculated +EV takes over).
+// - otherwise       -> refresh this match's 'pending' rows from `rows`; leave 'ticked' rows untouched.
+router.post('/ones-to-watch/ingest', (req, res) => {
+  try {
+    const b = req.body || {};
+    const mid = String(b.matchId || '').trim();
+    if (!mid) return res.status(400).json({ ok: false, error: 'matchId required' });
+
+    if (b.confirmed) {
+      const info = db.prepare(`DELETE FROM ones_to_watch WHERE match_id = ?`).run(mid);
+      return res.json({ ok: true, cleared: info.changes });
+    }
+
+    const incoming = Array.isArray(b.rows) ? b.rows : [];
+    const now = new Date().toISOString();
+    const tx = db.transaction(() => {
+      db.prepare(`DELETE FROM ones_to_watch WHERE match_id = ? AND state = 'pending'`).run(mid);
+      const ins = db.prepare(
+        `INSERT INTO ones_to_watch (match_id, match, kickoff, market, selection, fair, conf, bookie, odds, ev, source, state, created_at, updated_at)
+         VALUES (@match_id, @match, @kickoff, @market, @selection, @fair, @conf, @bookie, @odds, @ev, @source, 'pending', @now, @now)
+         ON CONFLICT(match_id, market, selection) DO NOTHING`   // a ticked row already holds this key — keep it
+      );
+      for (const r of incoming) {
+        if (!r || !r.market || !r.selection) continue;
+        ins.run({
+          match_id: mid,
+          match: b.match || r.match || null,
+          kickoff: b.kickoff || r.kickoff || r.t || null,
+          market: String(r.market),
+          selection: String(r.selection),
+          fair: r.fair != null ? Number(r.fair) : null,
+          conf: r.conf || null,
+          bookie: r.bookie || r.bk || null,
+          odds: r.odds != null ? Number(r.odds) : null,
+          ev: r.ev != null ? Number(r.ev) : null,
+          source: r.source || null,
+          now,
+        });
+      }
+    });
+    tx();
+    const n = db.prepare(`SELECT COUNT(*) AS c FROM ones_to_watch WHERE match_id = ?`).get(mid).c;
+    res.json({ ok: true, rows: n });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/ones-to-watch/:id/tick  -> mark a pending row valid (turns green, persists across re-scans)
+router.post('/ones-to-watch/:id/tick', (req, res) => {
+  try {
+    const info = db.prepare(
+      `UPDATE ones_to_watch SET state = 'ticked', updated_at = ? WHERE id = ?`
+    ).run(new Date().toISOString(), req.params.id);
+    if (!info.changes) return res.status(404).json({ ok: false, error: 'not found' });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// DELETE /api/ledger/ones-to-watch/:id  -> the X: hard delete
+router.delete('/ones-to-watch/:id', (req, res) => {
+  try {
+    const info = db.prepare(`DELETE FROM ones_to_watch WHERE id = ?`).run(req.params.id);
+    if (!info.changes) return res.status(404).json({ ok: false, error: 'not found' });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/ones-to-watch/rescan  body: { matchId }
+// Drops a trigger file the box scan picks up next cycle to force a re-scan of that match
+// (e.g. right after its Bet365 SoT odds were filled). Fire-and-forget.
+router.post('/ones-to-watch/rescan', (req, res) => {
+  try {
+    const mid = String((req.body && req.body.matchId) || '').trim();
+    if (!mid || !/^[A-Za-z0-9_-]{1,40}$/.test(mid)) return res.status(400).json({ ok: false, error: 'valid matchId required' });
+    try {
+      fs.mkdirSync(OTW_TRIGGER_DIR, { recursive: true });
+      fs.writeFileSync(path.join(OTW_TRIGGER_DIR, mid), new Date().toISOString());
+    } catch (e) {
+      return res.json({ ok: false, error: 'could not queue rescan: ' + e.message });
+    }
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });

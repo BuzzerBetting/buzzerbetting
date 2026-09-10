@@ -423,6 +423,52 @@ CREATE TABLE IF NOT EXISTS freeze_eligible_list (
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_by TEXT
 );
+
+-- Bet365 shots-on-target-method odds, staff-entered from screenshots on Today's Matches.
+-- Oddschecker carries the header/OTB *goal* markets already, but not the SoT-method ones
+-- (headed SOT, SOT outside the box) — those come from a Bet365 screenshot paste, parsed by
+-- Claude vision (POST /parse-bet365-sot), stored one row per match+market+player. Replace-
+-- upsert per (match_id, market): re-saving a match's "OTB SOT" box wipes and re-inserts that
+-- market's players. Feeds ones_to_watch_scan.py's SoT-method EV leg and the Calculated +EV
+-- boost-calc feed. Shared/global, no per-user scoping (like bet_alert_books).
+CREATE TABLE IF NOT EXISTS bet365_sot_odds (
+  match_id   TEXT NOT NULL,
+  market     TEXT NOT NULL,          -- 'OTB_SOT' | 'HEADER_SOT'
+  player     TEXT NOT NULL,
+  odds       REAL NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_by TEXT,
+  PRIMARY KEY (match_id, market, player)
+);
+CREATE INDEX IF NOT EXISTS idx_bet365_sot_odds_match ON bet365_sot_odds(match_id);
+
+-- "Ones to Watch" — the pre-lineup early-value sweep. ones_to_watch_scan.py (box) scans every
+-- match in Today's Matches, every player in the FotMob *predicted* XI + bench, for OTB/Header
+-- goal + OTB/Headed SoT value off the OC/BB combo fair, and POSTs the hits here via
+-- /ones-to-watch/ingest. Each row starts 'pending'; the user ticks it ('ticked' -> green,
+-- persists across re-scans) or X's it (hard delete). When a match's real XI is confirmed the
+-- scan sends confirmed:true and every row for that match is deleted (Calculated +EV takes
+-- over). Shared/global list. UNIQUE key lets a re-scan refresh pending rows without touching
+-- ticked ones.
+CREATE TABLE IF NOT EXISTS ones_to_watch (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  match_id  TEXT NOT NULL,
+  match     TEXT,
+  kickoff   TEXT,                    -- 'HH:MM' Europe/London, display only
+  market    TEXT NOT NULL,           -- 'OTB Goal' | 'Header Goal' | 'OTB SOT' | 'Headed SOT'
+  selection TEXT NOT NULL,
+  fair      REAL,
+  conf      TEXT,                    -- 'green' | 'yellow'
+  bookie    TEXT,
+  odds      REAL,
+  ev        REAL,
+  source    TEXT,                    -- 'combo' | 'bfex' | ...
+  state     TEXT NOT NULL DEFAULT 'pending',   -- 'pending' | 'ticked'
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(match_id, market, selection)
+);
+CREATE INDEX IF NOT EXISTS idx_ones_to_watch_match ON ones_to_watch(match_id);
 `);
 
 // Safe migration — ALTER TABLE ADD COLUMN errors if the column already exists, so this is

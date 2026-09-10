@@ -2493,6 +2493,16 @@ input::placeholder{color:var(--text3)}
     <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:700px"><thead><tr><th>Time</th><th>Event</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="ba-dnf-body"></tbody></table></div></div>
     <div class="note"><i class="ti ti-info-circle"></i> Did-Not-Finish / retirement value. Feed not connected yet — this tab lights up automatically once the scraper starts publishing.</div>
   </div>
+
+  <!-- panel: Ones to Watch -->
+  <div id="ba-panel-watch" class="ba-panel" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      <div class="smeta" style="margin:0"><span class="pulse"></span><strong id="ba-watch-count" style="color:var(--green);font-weight:500">—</strong></div>
+      <button onclick="baRefreshActive(this)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+    </div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:820px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th class="r">✓ / ✗</th></tr></thead><tbody id="ba-watch-body"></tbody></table></div></div>
+    <div class="note"><i class="ti ti-info-circle"></i> Pre-lineup early-value sweep — every player in every predicted XI + bench, scored for OTB/Header goal and OTB/Headed SoT value off the Oddschecker/BookieBashing combo fair. SoT-method rows only appear once a match's Bet365 odds are entered on Today's Matches. Tick to mark one valid (turns green, stays put); ✗ removes it. When a match's real lineup is confirmed its rows drop off here and the Calculated +EV tab picks up anything still live.</div>
+  </div>
 </div>
 
 <!-- MANUAL CALCULATORS -->
@@ -12103,6 +12113,233 @@ async function loadMatchBoosts(){
   }catch(e){ /* icon just won't show this pass — next poll tick retries */ }
 }
 
+// ── Bet365 SoT-method odds (staff/admin paste from Today's Matches). Oddschecker carries the
+// header/OTB *goal* markets already; the SoT-method ones (headed SOT, SOT outside the box)
+// are Bet365-only and hand-entered per match. MATCH_B365_SOT drives the "365" tick on the row;
+// the modal below files screenshots via /parse-bet365-sot -> /bet365-sot-odds and then kicks a
+// Ones-to-Watch rescan for that match.
+let MATCH_B365_SOT = {};     // match_id (string) -> { OTB_SOT:bool, HEADER_SOT:bool }
+function b365SotCanEdit(){ return CURRENT_USER_ROLE === 'admin' || CURRENT_USER_ROLE === 'staff'; }
+async function loadMatchB365Sot(){
+  if (!b365SotCanEdit()) return;
+  try{
+    const d = await ledgerApi('bet365-sot-status');
+    MATCH_B365_SOT = (d && d.ok && d.matches) ? d.matches : {};
+    if (MATCHES_LEAGUES) renderFixtures(MATCHES_LEAGUES);
+  }catch(e){ /* tick just won't show this pass */ }
+}
+function b365SotCell(m){
+  if (!b365SotCanEdit()) return '';
+  const st = MATCH_B365_SOT[String(m.id)] || null;
+  const filled = st && (st.OTB_SOT || st.HEADER_SOT);
+  const both = st && st.OTB_SOT && st.HEADER_SOT;
+  const title = filled
+    ? `Bet365 SoT odds filled: ${[st.OTB_SOT && 'OTB', st.HEADER_SOT && 'Headed'].filter(Boolean).join(' + ')}${both ? '' : ' (one market still empty)'} — click to edit`
+    : 'Enter Bet365 SoT-method odds for this match';
+  const bg = filled ? (both ? 'var(--green-bg)' : 'var(--amber-bg)') : 'var(--surface2)';
+  const col = filled ? (both ? 'var(--green)' : 'var(--amber)') : 'var(--text3)';
+  const bd = filled ? (both ? 'var(--green)' : 'var(--amber)') : 'var(--border)';
+  return `<button title="${title}" onclick="event.stopPropagation();openB365SotModal('${m.id}',${JSON.stringify(String(m.home||'')).replace(/"/g,'&quot;')},${JSON.stringify(String(m.away||'')).replace(/"/g,'&quot;')})" style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;line-height:1;padding:3px 5px;border-radius:3px;background:${bg};color:${col};border:1px solid ${bd};cursor:pointer;font-family:inherit">365${filled ? '<i class="ti ti-check" style="font-size:11px"></i>' : ''}</button>`;
+}
+
+let B365_SOT_MODAL = null;   // { matchId, home, away, cols:{ OTB_SOT:{rows,entries,seq}, HEADER_SOT:{...} } }
+let b365ActiveCol = null;
+const B365_SOT_COL_LABEL = { OTB_SOT: 'SOT OTB', HEADER_SOT: 'Headed SOT' };
+
+async function openB365SotModal(matchId, home, away){
+  if (!b365SotCanEdit()) return;
+  document.getElementById('b365-sot-overlay')?.remove();
+  B365_SOT_MODAL = {
+    matchId: String(matchId), home: home || '', away: away || '',
+    cols: {
+      OTB_SOT:    { rows: [], entries: [], seq: 0 },
+      HEADER_SOT: { rows: [], entries: [], seq: 0 },
+    },
+  };
+  const ov = document.createElement('div');
+  ov.id = 'b365-sot-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow:auto';
+  ov.onclick = e => { if (e.target === ov) b365CloseModal(); };
+  ov.innerHTML =
+    '<div class="card card-pad" style="max-width:860px;width:100%">' +
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">' +
+    '<div><div class="sec-title" style="margin:0 0 2px;font-size:15px">Bet365 shots-on-target odds</div>' +
+    '<div style="font-size:12px;color:var(--text3)">' + escapeHtml((home || '') + ' v ' + (away || '')) + ' — paste one or more Bet365 screenshots per box, then Save each side.</div></div>' +
+    '<button class="add-btn" onclick="b365CloseModal()">Close</button>' +
+    '</div>' +
+    '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:14px">' +
+    ['OTB_SOT', 'HEADER_SOT'].map(b365SotColHtml).join('') +
+    '</div></div>';
+  document.body.appendChild(ov);
+  b365InstallPaste();
+  b365LoadExisting();
+}
+function b365SotColHtml(colKey){
+  const px = colKey === 'OTB_SOT' ? 'otb' : 'hdr';
+  return '<div style="flex:1;min-width:320px;border:.5px solid var(--border);border-radius:var(--radius);padding:12px">' +
+    '<div style="font-weight:600;font-size:13px;margin-bottom:8px">' + B365_SOT_COL_LABEL[colKey] +
+      ' <span id="b365-' + px + '-tick" style="font-size:11px;color:var(--green);display:none">● saved</span></div>' +
+    '<div id="b365-' + px + '-drop" tabindex="0" onclick="this.focus();b365ActiveCol=\'' + colKey + '\'" onfocus="b365ActiveCol=\'' + colKey + '\'" ' +
+      'ondragover="event.preventDefault();this.style.borderColor=\'var(--brand)\'" ondragleave="this.style.borderColor=\'var(--border)\'" ' +
+      'ondrop="b365HandleDrop(\'' + colKey + '\',event)" ' +
+      'style="border:1.5px dashed var(--border);border-radius:var(--radius);padding:14px 12px;text-align:center;color:var(--text3);font-size:12.5px;cursor:pointer;outline:none">' +
+      '<i class="ti ti-clipboard" style="font-size:16px;display:block;margin-bottom:4px"></i>Click here, then Ctrl+V — paste as many as you need' +
+      '<div style="margin-top:4px"><button type="button" onclick="event.stopPropagation();document.getElementById(\'b365-' + px + '-file\').click()" style="background:none;border:none;color:var(--brand);text-decoration:underline;cursor:pointer;font-family:inherit;font-size:12px">choose file(s)</button></div>' +
+    '</div>' +
+    '<input type="file" id="b365-' + px + '-file" accept="image/*" multiple style="display:none" onchange="b365HandleFiles(\'' + colKey + '\',this.files)">' +
+    '<div id="b365-' + px + '-entries" style="margin-top:8px;font-size:12px"></div>' +
+    '<div id="b365-' + px + '-rows" style="margin-top:8px"></div>' +
+    '<button class="add-btn" style="margin-top:6px;font-size:12px" onclick="b365AddRow(\'' + colKey + '\')"><i class="ti ti-plus"></i> Add player</button>' +
+    '<div style="display:flex;gap:8px;align-items:center;margin-top:10px">' +
+      '<button class="add-btn" style="background:var(--brand);color:#fff;border-color:var(--brand)" onclick="b365SaveCol(\'' + colKey + '\')"><i class="ti ti-check"></i> Save ' + B365_SOT_COL_LABEL[colKey] + '</button>' +
+      '<span id="b365-' + px + '-msg" style="font-size:12px"></span>' +
+    '</div></div>';
+}
+function b365Px(colKey){ return colKey === 'OTB_SOT' ? 'otb' : 'hdr'; }
+function b365CloseModal(){
+  document.getElementById('b365-sot-overlay')?.remove();
+  B365_SOT_MODAL = null; b365ActiveCol = null;
+}
+async function b365LoadExisting(){
+  if (!B365_SOT_MODAL) return;
+  try{
+    const d = await ledgerApi('bet365-sot-odds?matchId=' + encodeURIComponent(B365_SOT_MODAL.matchId));
+    if (!d || !d.ok || !B365_SOT_MODAL) return;
+    ['OTB_SOT', 'HEADER_SOT'].forEach(k => {
+      const ex = (d.byMarket && d.byMarket[k]) || [];
+      B365_SOT_MODAL.cols[k].rows = ex.map(r => ({ player: r.player, odds: r.odds }));
+      b365RenderRows(k);
+      const tick = document.getElementById('b365-' + b365Px(k) + '-tick');
+      if (tick) tick.style.display = ex.length ? '' : 'none';
+    });
+  }catch(e){}
+}
+function b365InstallPaste(){
+  if (b365InstallPaste._on) return;
+  b365InstallPaste._on = true;
+  document.addEventListener('paste', e => {
+    if (!B365_SOT_MODAL) return;
+    const col = b365ActiveCol || 'OTB_SOT';
+    const dt = e.clipboardData || window.clipboardData; if (!dt) return;
+    let file = null;
+    for (const it of (dt.items || [])) { if (it.kind === 'file' && it.type && it.type.indexOf('image') === 0) { file = it.getAsFile(); break; } }
+    if (!file) for (const f of (dt.files || [])) { if (f.type && f.type.indexOf('image') === 0) { file = f; break; } }
+    if (!file) return;
+    const t = e.target;
+    if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+    e.preventDefault();
+    b365AddImage(col, file);
+  }, true);
+}
+function b365HandleDrop(colKey, e){
+  e.preventDefault();
+  const el = document.getElementById('b365-' + b365Px(colKey) + '-drop'); if (el) el.style.borderColor = 'var(--border)';
+  for (const f of ((e.dataTransfer && e.dataTransfer.files) || [])) if (f.type && f.type.indexOf('image') === 0) b365AddImage(colKey, f);
+}
+function b365HandleFiles(colKey, list){
+  for (const f of Array.from(list || [])) if (f.type && f.type.indexOf('image') === 0) b365AddImage(colKey, f);
+}
+async function b365AddImage(colKey, blob){
+  if (!B365_SOT_MODAL || !blob) return;
+  const col = B365_SOT_MODAL.cols[colKey];
+  const entry = { id: 'b365' + (++col.seq), status: 'parsing', error: null, n: 0 };
+  col.entries.unshift(entry);
+  b365RenderEntries(colKey);
+  let dataUrl, mediaType = 'image/jpeg';
+  try { dataUrl = await qbDownscale(blob, 1600, 0.85); }
+  catch (e) {
+    dataUrl = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
+    mediaType = blob.type || 'image/png';
+  }
+  try {
+    const d = await ledgerApi('parse-bet365-sot', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: dataUrl, mediaType }),
+    });
+    if (!B365_SOT_MODAL) return;
+    if (!d || !d.ok) { entry.status = 'error'; entry.error = (d && d.error) || 'Could not read the screenshot.'; }
+    else {
+      entry.status = 'done';
+      const players = Array.isArray(d.players) ? d.players : [];
+      entry.n = players.length;
+      // merge into the editable rows — later paste wins on a name clash
+      players.forEach(p => {
+        if (!p.player) return;
+        const key = String(p.player).trim().toLowerCase();
+        const existing = col.rows.find(r => r.player.trim().toLowerCase() === key);
+        if (existing) { if (p.odds != null) existing.odds = p.odds; }
+        else col.rows.push({ player: String(p.player).trim(), odds: p.odds != null ? p.odds : null });
+      });
+      if (d.marketHint && d.marketHint !== colKey) entry.error = 'Heads up: this looks like a ' + (B365_SOT_COL_LABEL[d.marketHint] || d.marketHint) + ' screenshot.';
+    }
+  } catch (e) {
+    entry.status = 'error'; entry.error = 'Request failed.';
+  }
+  b365RenderEntries(colKey);
+  b365RenderRows(colKey);
+}
+function b365RenderEntries(colKey){
+  if (!B365_SOT_MODAL) return;
+  const box = document.getElementById('b365-' + b365Px(colKey) + '-entries');
+  if (!box) return;
+  box.innerHTML = B365_SOT_MODAL.cols[colKey].entries.map(en => {
+    const ic = en.status === 'parsing' ? '<i class="ti ti-loader-2"></i> reading…'
+      : en.status === 'error' ? '<span style="color:var(--red)"><i class="ti ti-alert-triangle"></i> ' + escapeHtml(en.error || 'failed') + '</span>'
+      : '<span style="color:var(--green)"><i class="ti ti-check"></i> ' + en.n + ' player' + (en.n === 1 ? '' : 's') + '</span>' + (en.error ? ' <span style="color:var(--amber)">· ' + escapeHtml(en.error) + '</span>' : '');
+    return '<div style="padding:2px 0">' + ic + '</div>';
+  }).join('');
+}
+function b365RenderRows(colKey){
+  if (!B365_SOT_MODAL) return;
+  const box = document.getElementById('b365-' + b365Px(colKey) + '-rows');
+  if (!box) return;
+  const rows = B365_SOT_MODAL.cols[colKey].rows;
+  if (!rows.length) { box.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:4px 0">No players yet.</div>'; return; }
+  box.innerHTML = rows.map((r, i) =>
+    '<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">' +
+    '<input value="' + escapeHtml(r.player || '') + '" oninput="B365_SOT_MODAL.cols[\'' + colKey + '\'].rows[' + i + '].player=this.value" placeholder="Player" style="flex:1;font-size:12px;padding:4px 6px">' +
+    '<input type="number" step="0.01" value="' + (r.odds != null ? r.odds : '') + '" oninput="B365_SOT_MODAL.cols[\'' + colKey + '\'].rows[' + i + '].odds=parseFloat(this.value)" placeholder="Odds" style="width:74px;font-size:12px;padding:4px 6px">' +
+    '<button class="add-btn" style="padding:3px 6px;color:var(--red)" onclick="b365RemoveRow(\'' + colKey + '\',' + i + ')"><i class="ti ti-x"></i></button>' +
+    '</div>'
+  ).join('');
+}
+function b365AddRow(colKey){
+  if (!B365_SOT_MODAL) return;
+  B365_SOT_MODAL.cols[colKey].rows.push({ player: '', odds: null });
+  b365RenderRows(colKey);
+}
+function b365RemoveRow(colKey, i){
+  if (!B365_SOT_MODAL) return;
+  B365_SOT_MODAL.cols[colKey].rows.splice(i, 1);
+  b365RenderRows(colKey);
+}
+async function b365SaveCol(colKey){
+  if (!B365_SOT_MODAL) return;
+  const px = b365Px(colKey);
+  const msg = document.getElementById('b365-' + px + '-msg');
+  const players = B365_SOT_MODAL.cols[colKey].rows
+    .map(r => ({ player: String(r.player || '').trim(), odds: Number(r.odds) }))
+    .filter(r => r.player && isFinite(r.odds) && r.odds > 1);
+  if (msg) { msg.style.color = 'var(--text3)'; msg.textContent = 'Saving…'; }
+  try {
+    const d = await ledgerApi('bet365-sot-odds', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ matchId: B365_SOT_MODAL.matchId, market: colKey, players }),
+    });
+    if (!d || !d.ok) { if (msg) { msg.style.color = 'var(--red)'; msg.textContent = (d && d.error) || 'Save failed.'; } return; }
+    if (msg) { msg.style.color = 'var(--green)'; msg.textContent = 'Saved ' + d.saved + ' player' + (d.saved === 1 ? '' : 's') + '.'; }
+    const tick = document.getElementById('b365-' + px + '-tick');
+    if (tick) tick.style.display = players.length ? '' : 'none';
+    // reflect on the match row + trigger a fresh Ones-to-Watch scan for this match
+    const st = MATCH_B365_SOT[B365_SOT_MODAL.matchId] || (MATCH_B365_SOT[B365_SOT_MODAL.matchId] = { OTB_SOT: false, HEADER_SOT: false });
+    st[colKey] = players.length > 0;
+    if (MATCHES_LEAGUES) renderFixtures(MATCHES_LEAGUES);
+    ledgerApi('ones-to-watch/rescan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ matchId: B365_SOT_MODAL.matchId }) }).catch(() => {});
+  } catch (e) {
+    if (msg) { msg.style.color = 'var(--red)'; msg.textContent = 'Network error.'; }
+  }
+}
+
 // Which "assist -> header" corner-bet combos actually WON, and in which game — winners are
 // listed in full, per the ask — plus the total number of combos predicted today (every
 // assist-candidate x header-candidate pairing across every team, exactly what gets staked under
@@ -12210,6 +12447,7 @@ function initMatches(){
   syncMatchesSortToggle();
   syncPredToggles();
   if (predBoostsOn() && !MATCH_BOOSTS_LOADED) loadMatchBoosts();
+  loadMatchB365Sot();
   closeMatch();
   const now=new Date();
   for(let i=-1;i<5;i++){
@@ -12383,7 +12621,7 @@ function buildMatchRow(m, leagueName, isIntl, leagueCcode){
         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap${awayGreen?';color:var(--green)':''}">${m.away}</span>
       </div>
     </td>
-    <td style="text-align:right;color:var(--text3);font-size:12px;padding-left:2px;padding-right:12px"><span style="display:inline-flex;align-items:center;gap:6px">${(predBoostsOn()&&MATCH_BOOSTS[String(m.id)])?`<span class="boost-icon" title="${MATCH_BOOSTS[String(m.id)].count} price boost${MATCH_BOOSTS[String(m.id)].count===1?'':'s'} on this match">B</span>`:''}<i class="ti ti-chevron-right"></i></span></td>`;
+    <td style="text-align:right;color:var(--text3);font-size:12px;padding-left:2px;padding-right:12px"><span style="display:inline-flex;align-items:center;gap:6px">${b365SotCell(m)}${(predBoostsOn()&&MATCH_BOOSTS[String(m.id)])?`<span class="boost-icon" title="${MATCH_BOOSTS[String(m.id)].count} price boost${MATCH_BOOSTS[String(m.id)].count===1?'':'s'} on this match">B</span>`:''}<i class="ti ti-chevron-right"></i></span></td>`;
   frag.appendChild(tr);
 
   // Prediction sub-row: only when a toggle is on and at least one side's lineup is confirmed.
@@ -14152,6 +14390,7 @@ function renderDDHH(matchName, results) {
 const BA_EDGES = [
   { key: 'oc-ev',   label: 'Oddschecker +EV', panel: 'view-oddschecker',  priced: true  },
   { key: 'calc-ev', label: 'Calculated +EV',  panel: 'view-calculated',   priced: true  },
+  { key: 'watch',   label: 'Ones to Watch',   panel: 'ba-panel-watch',    priced: true  },
   { key: 'ddhh',    label: 'DDHH',            panel: 'view-ddhh',         priced: false },
   { key: 'corners', label: 'Corners',         panel: 'ba-panel-corners',  priced: false },
   { key: 'f1-ew',   label: 'F1 EW',           panel: 'ba-panel-f1-ew',    priced: true  },
@@ -14356,9 +14595,80 @@ function loadBaEdge(key, isPoll){
     if (!isPoll) initDDHH(null);               // guarded by ddhhLoaded, cheap on re-entry
   } else if (key === 'corners') {
     loadBaCorners();
+  } else if (key === 'watch') {
+    loadBaWatch();
   } else {
     loadBaStubFeed(key);
   }
+}
+
+// ---- Ones to Watch ----
+let BA_WATCH_ROWS = [];
+async function loadBaWatch(){
+  let rows = [];
+  try {
+    const d = await ledgerApi('ones-to-watch');
+    if (d && d.ok && Array.isArray(d.rows)) rows = d.rows;
+  } catch(e) {}
+  BA_WATCH_ROWS = rows;
+  renderBaWatch();
+  const shown = rows.filter(r => baBookEnabled(r.bookie));
+  baSetCount('watch', shown.length);
+  baReportSeen('watch', shown.map(r => ({ match: r.match, market: r.market, selection: r.selection, bk: r.bookie, odds: r.odds, ev: r.ev })));
+}
+function renderBaWatch(){
+  const body = document.getElementById('ba-watch-body');
+  const countEl = document.getElementById('ba-watch-count');
+  if (!body) return;
+  const rows = BA_WATCH_ROWS.filter(r => baBookEnabled(r.bookie));
+  if (countEl) countEl.textContent = `${rows.length} early value bet${rows.length === 1 ? '' : 's'}`;
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">Nothing on the watchlist right now — the pre-lineup scan runs each pipeline cycle.</td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.map(r => {
+    const ticked = r.state === 'ticked';
+    const ev = r.ev != null ? Number(r.ev) : null;
+    const evTxt = ev != null ? `${ev >= 0 ? '+' : ''}${ev.toFixed(1)}%` : '—';
+    const evCol = ev == null ? 'var(--text3)' : ev >= 10 ? 'var(--green)' : ev >= 5 ? 'var(--amber)' : 'var(--blue)';
+    const rowStyle = ticked
+      ? 'background:var(--green-bg);border-left:3px solid var(--green)'
+      : (r.conf === 'yellow' ? 'background:var(--amber-bg)' : '');
+    return `<tr style="${rowStyle}">
+      <td style="font-size:12px;color:var(--text3);white-space:nowrap">${r.kickoff ?? ''}</td>
+      <td style="font-size:12px;color:var(--text3);white-space:nowrap">${escapeHtml(r.match || '')}</td>
+      <td style="font-size:12px;color:var(--text2)">${escapeHtml(r.market || '')}</td>
+      <td style="font-weight:500">${escapeHtml(r.selection || '')}</td>
+      <td class="r tn">${r.fair != null ? Number(r.fair).toFixed(2) : '—'}</td>
+      <td class="r" style="font-size:12px;color:var(--text2)">${escapeHtml(ocBookieName(r.bookie) || r.bookie || '')}</td>
+      <td class="r tn" style="font-weight:600;color:var(--green)">${r.odds != null ? Number(r.odds).toFixed(2) : '—'}</td>
+      <td class="r"><span class="badge" style="color:${evCol}">${evTxt}</span></td>
+      <td class="r" style="white-space:nowrap">
+        <button title="${ticked ? 'Marked valid' : 'Mark valid'}" onclick="baWatchTick(${r.id})" ${ticked ? 'disabled' : ''} style="background:none;border:.5px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer;color:${ticked ? 'var(--green)' : 'var(--text2)'};line-height:1"><i class="ti ti-check"></i></button>
+        <button title="Remove" onclick="baWatchDelete(${r.id})" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer;color:var(--red);line-height:1;margin-left:4px"><i class="ti ti-x"></i></button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+async function baWatchTick(id){
+  try {
+    const d = await ledgerApi('ones-to-watch/' + id + '/tick', { method: 'POST' });
+    if (d && d.ok) {
+      const r = BA_WATCH_ROWS.find(x => x.id === id);
+      if (r) r.state = 'ticked';
+      renderBaWatch();
+    }
+  } catch(e) {}
+}
+async function baWatchDelete(id){
+  try {
+    const d = await ledgerApi('ones-to-watch/' + id, { method: 'DELETE' });
+    if (d && d.ok) {
+      BA_WATCH_ROWS = BA_WATCH_ROWS.filter(x => x.id !== id);
+      renderBaWatch();
+      baSetCount('watch', BA_WATCH_ROWS.filter(r => baBookEnabled(r.bookie)).length);
+    }
+  } catch(e) {}
 }
 
 // Called by renderOddscheckerEV / renderEVResults once they've built their (filtered) list.
