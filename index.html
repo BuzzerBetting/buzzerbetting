@@ -575,14 +575,6 @@ input::placeholder{color:var(--text3)}
   </div>
 </div>
 
-<!-- BET TRACKING: VIPER HORSES (bespoke — Singles/Doubles/Trebles/4-Folds + screenshot filing) -->
-<div id="view-viper" class="sec" style="display:none">
-  <button class="back wide" onclick="backToBetTrackingGroup()"><i class="ti ti-arrow-left"></i> Back</button>
-  <div class="sec-title wide" id="viper-title">Viper Horses</div>
-  <div class="wide" id="vh-p-root" style="display:none"></div>
-  <div class="wide" id="vh-v-root" style="display:none"></div>
-</div>
-
 <!-- BET TRACKING: LINK ACCOUNT MODAL (for open bets migrated with no account attached yet) -->
 <div id="bt-link-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;padding:16px">
   <div class="card card-pad" style="max-width:400px;width:100%">
@@ -884,7 +876,7 @@ input::placeholder{color:var(--text3)}
       <div style="font-size:11px;color:var(--text3);margin-top:6px">Downloads every corner bet logged on that date (manual, Quick Bet and Discord) as a CSV.</div>
     </div>
 
-    <div class="card card-pad" style="margin-bottom:16px">
+    <div class="card card-pad" style="margin-bottom:16px" id="bets-add-card">
       <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleBetsAddForm()">
         <div class="sec-title" style="margin:0;font-size:16px"><i class="ti ti-plus"></i> Add new bet</div>
         <i class="ti ti-chevron-down" id="bets-add-chevron"></i>
@@ -893,6 +885,13 @@ input::placeholder{color:var(--text3)}
     </div>
 
     <div id="bets-tracker-wrap"></div>
+
+    <!-- Viper Horses bespoke view (Singles/Doubles/Trebles/4-Folds + screenshot filing) —
+         shown here instead of the generic tracker when Bet type = Viper Horses. -->
+    <div id="bets-viper-wrap" style="display:none">
+      <div id="vh-p-root" style="display:none"></div>
+      <div id="vh-v-root" style="display:none"></div>
+    </div>
   </div>
 </div>
 
@@ -7052,7 +7051,6 @@ const BET_TRACKING_GROUPS = {
     {key:'Freeze', label:'Freeze'},
     {key:'Ninja Golf BFEX', label:'Ninja Golf BFEX'},
     {key:'Corners', label:'Corners'},
-    {key:'Viper Horse', label:'Viper Horses'},
     {key:'Offers (Personal)', label:'Offers'},
     {key:'Other Bets', label:'Other Bets'},
     {key:'Casino (Personal)', label:'Casino'},
@@ -7065,14 +7063,9 @@ const BET_TRACKING_GROUPS = {
     {key:'Casino', label:'Casino'},
     {key:'Offers (VA)', label:'Offers'},
     {key:'Dogs + Horses (VA)', label:'Dogs + Horses DogBot'},
-    {key:'Viper Horse (VA)', label:'Viper Horses'},
     {key:'Other', label:'Other'},
   ],
 };
-
-// Bet Tracking keys that open a bespoke section instead of the generic openBetTrackingDetail
-// list — Viper Horses has its own Singles/Doubles/Trebles/4-Folds tabs + screenshot filing.
-const BET_TRACKING_CUSTOM_VIEWS = { 'Viper Horse': 'personal', 'Viper Horse (VA)': 'va' };
 
 let betTrackingLastGroup = null;
 
@@ -7085,19 +7078,12 @@ function showBetTrackingGroup(group) {
   document.getElementById('bettracking-group-title').textContent = group==='personal' ? 'Personal Bets' : 'VA Bets';
   const list = BET_TRACKING_GROUPS[group];
   const colors = ['var(--green)','var(--blue)','var(--purple)','var(--amber)','var(--red)'];
-  document.getElementById('bettracking-group-list').innerHTML = list.map((t,i) => {
-    const custom = BET_TRACKING_CUSTOM_VIEWS[t.key];
-    const onclick = custom
-      ? `openViperSection('${custom}')`
-      : `openBetTrackingDetail('${t.key.replace(/'/g,"\\'")}','${t.label.replace(/'/g,"\\'")}')`;
-    const ico = custom ? 'ti-horseshoe' : 'ti-list';
-    return `
-    <div class="cat" style="--accent:${colors[i%colors.length]}" onclick="${onclick}">
-      <div class="cat-ico" style="background:var(--surface2);color:var(--text2)"><i class="ti ${ico}"></i></div>
+  document.getElementById('bettracking-group-list').innerHTML = list.map((t,i) => `
+    <div class="cat" style="--accent:${colors[i%colors.length]}" onclick="openBetTrackingDetail('${t.key.replace(/'/g,"\\'")}','${t.label.replace(/'/g,"\\'")}')">
+      <div class="cat-ico" style="background:var(--surface2);color:var(--text2)"><i class="ti ti-list"></i></div>
       <div><div class="cat-title">${t.label}</div>${BET_TRACKING_REVIEWED.includes(t.key) ? `<div style="font-size:11px;color:var(--green);font-weight:600;margin-top:2px"><i class="ti ti-check"></i> Completed</div>` : ''}</div>
       <i class="ti ti-arrow-right cat-arr"></i>
-    </div>`;
-  }).join('');
+    </div>`).join('');
   document.getElementById('view-home').style.display='none';
   document.querySelectorAll('.sec').forEach(s=>s.style.display='none');
   document.getElementById('view-bettracking-group').style.display='block';
@@ -7632,6 +7618,22 @@ function onBetsTypeChange() {
   if (!key) { document.getElementById('bets-content').style.display = 'none'; return; }
   const item = BET_TYPE_GROUPS[group].find(t => t.key === key);
   document.getElementById('bets-content').style.display = 'block';
+
+  // Viper Horses gets a bespoke view (screenshot-filed, Singles/Doubles/Trebles/4-Folds
+  // tabs) rendered into #bets-viper-wrap instead of the generic add-form + tracker.
+  const viperGroup = VIPER_TYPE_KEYS[key];
+  const isViper = !!viperGroup;
+  document.getElementById('bets-add-card').style.display = isViper ? 'none' : '';
+  document.getElementById('bets-tracker-wrap').style.display = isViper ? 'none' : '';
+  document.getElementById('bets-viper-wrap').style.display = isViper ? 'block' : 'none';
+  if (isViper) {
+    btDetailType = null;
+    ['crn-discord-card', 'crn-export-card'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+    document.getElementById('bets-add-form-wrap').style.display = 'none';
+    document.getElementById('bets-add-chevron').className = 'ti ti-chevron-down';
+    openViperSection(viperGroup);
+    return;
+  }
 
   selectBetType(key, item ? item.label : key);
   document.getElementById('bets-add-form-wrap').style.display = 'none';
@@ -10879,6 +10881,8 @@ const VIPER_GROUPS = {
   personal: { type: 'Viper Horse',      prefix: 'p' },
   va:       { type: 'Viper Horse (VA)', prefix: 'v' },
 };
+// bet_type key -> VIPER_GROUPS key, so the Bets page can branch on the selected type.
+const VIPER_TYPE_KEYS = { 'Viper Horse': 'personal', 'Viper Horse (VA)': 'va' };
 const VIPER_SLIPS = ['Single', 'Double', 'Treble', '4-Fold'];
 const VIPER_SLIP_TAB = { Single: 'Singles', Double: 'Doubles', Treble: 'Trebles', '4-Fold': '4-Folds' };
 const VIPER_STATE = { personal: { tab: 'Single', bets: [] }, va: { tab: 'Single', bets: [] } };
@@ -10920,21 +10924,16 @@ function viperAccByCode(code) {
   return vhAccounts.find(a => String(a.account_id || '').trim().toUpperCase() === c) || null;
 }
 
+// Rendered inline on the Ledger > Bets page (into #bets-viper-wrap) when Bet type is
+// "Viper Horses" — onBetsTypeChange swaps it in for the generic add-form + tracker.
 async function openViperSection(group) {
   const g = VIPER_GROUPS[group]; if (!g) return;
   const root = document.getElementById('vh-' + g.prefix + '-root'); if (!root) return;
   vhActiveGroup = group;
-  betTrackingLastGroup = group; // so the Back button returns to the right Bet Tracking group grid
-  // Swap into the bespoke Viper view (a .sec like every other Bet Tracking screen).
-  document.getElementById('view-home').style.display = 'none';
-  document.querySelectorAll('.sec').forEach(s => s.style.display = 'none');
-  document.getElementById('view-viper').style.display = 'block';
-  document.getElementById('viper-title').textContent = 'Viper Horses — ' + (group === 'personal' ? 'Buzzer' : 'Assistant');
   document.getElementById('vh-p-root').style.display = group === 'personal' ? 'block' : 'none';
   document.getElementById('vh-v-root').style.display = group === 'va' ? 'block' : 'none';
-  window.scrollTo({ top: 0, behavior: 'smooth' });
   if (group === 'personal' && CURRENT_USER_ROLE !== 'admin') {
-    root.innerHTML = '<div class="card card-pad" style="color:var(--text2);font-size:13px">The Buzzer Viper Horses sheet is admin-only — file Assistant bets from the VA Bets grid.</div>';
+    root.innerHTML = '<div class="card card-pad" style="color:var(--text2);font-size:13px">Buzzer Viper Horses is admin-only — pick Assistant to file VA bets.</div>';
     return;
   }
   if (!vhEl(group, 'kpis')) {
