@@ -27,8 +27,9 @@ export const handler = async (event) => {
 
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
 
-  const { eventId, home, away, homeStarters: homeStartersRaw, awayStarters: awayStartersRaw, confirmed } = event.queryStringParameters || {};
+  const { eventId, home, away, homeStarters: homeStartersRaw, awayStarters: awayStartersRaw, confirmed, stats } = event.queryStringParameters || {};
   if (!eventId) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'eventId required' }) };
+  const includeStatOdds = stats === '1' || stats === 'true';
 
   const hash    = process.env.BB_HASH;
   const cookies = process.env.BB_COOKIES;
@@ -162,11 +163,38 @@ export const handler = async (event) => {
       }
     }
 
+    // ── Optional (stats=1): per-player, per-bookmaker "Over 0.5" odds for Shots on Target and
+    // Assists, straight off BB's playerStatsData block. Feeds the oc-scraper's own
+    // BB-stage-1 devig (bb_stat_fair.py) + BB/OC combo fair — the raw numbers only, no
+    // model applied here. playerStatsData is keyed [bookmakerName][playerName].
+    if (includeStatOdds && match.playerStatsData) {
+      const psd = match.playerStatsData;
+      const byName = {}; // normalised BB name -> { sot:{book:odds}, assist:{book:odds}, name }
+      for (const [book, players] of Object.entries(psd)) {
+        for (const [pName, rec] of Object.entries(players || {})) {
+          if (!rec) continue;
+          const key = norm(pName);
+          const slot = byName[key] || (byName[key] = { name: pName, sot: {}, assist: {} });
+          if (rec.overSot && rec.overSot.odds) slot.sot[book] = rec.overSot.odds;
+          if (rec.overAssists && rec.overAssists.odds) slot.assist[book] = rec.overAssists.odds;
+        }
+      }
+      // attach onto the matching playerOdds entry; create a bare one if BB only has stat odds.
+      for (const slot of Object.values(byName)) {
+        const matchedKey = Object.keys(playerOdds).find(k => fuzzyMatch(k, slot.name));
+        const target = matchedKey
+          ? playerOdds[matchedKey]
+          : (playerOdds[slot.name] = { name: slot.name, fgs: null, ags: null, agsRaw: null, agsSource: null, bfexAgs: null, sot: null });
+        target.statOdds = { sot: slot.sot, assist: slot.assist };
+      }
+    }
+
     return { statusCode: 200, headers: CORS, body: JSON.stringify({
       ok: true,
       eventId,
       event: match.event || match.name || match.eventName,
       agsMode: config ? 'post-lineup-eligible' : 'pre-lineup-only',
+      hasStatOdds: includeStatOdds && !!match.playerStatsData,
       players: Object.values(playerOdds)
     })};
 
