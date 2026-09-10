@@ -7597,10 +7597,20 @@ async function refreshBetsPageAccounts() {
   } catch (e) { LEDGER_ACCOUNTS = []; }
 }
 
+// Quick Bet (the Corners betslip-screenshot filer) is only relevant before a sheet is picked
+// or while the Corners sheet is open — hide it once any other individual bet page is opened,
+// so it doesn't sit as clutter on every other tracker. Admin-only card; no-op otherwise.
+function updateQuickBetVisibility(key) {
+  const qb = document.getElementById('quick-bet-card');
+  if (!qb || CURRENT_USER_ROLE !== 'admin') return;
+  qb.style.display = (!key || key === 'Corners') ? 'block' : 'none';
+}
+
 function onBetsUserChange() {
   const group = document.getElementById('bets-user-select').value;
   const typeSel = document.getElementById('bets-type-select');
   document.getElementById('bets-content').style.display = 'none';
+  updateQuickBetVisibility('');
   if (!group) {
     typeSel.innerHTML = '<option value="">Select a user first…</option>';
     typeSel.disabled = true;
@@ -7615,9 +7625,10 @@ function onBetsUserChange() {
 function onBetsTypeChange() {
   const group = document.getElementById('bets-user-select').value;
   const key = document.getElementById('bets-type-select').value;
-  if (!key) { document.getElementById('bets-content').style.display = 'none'; return; }
+  if (!key) { document.getElementById('bets-content').style.display = 'none'; updateQuickBetVisibility(''); return; }
   const item = BET_TYPE_GROUPS[group].find(t => t.key === key);
   document.getElementById('bets-content').style.display = 'block';
+  updateQuickBetVisibility(key);
 
   // Viper Horses gets a bespoke view (screenshot-filed, Singles/Doubles/Trebles/4-Folds
   // tabs) rendered into #bets-viper-wrap instead of the generic add-form + tracker.
