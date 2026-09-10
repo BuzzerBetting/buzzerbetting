@@ -10929,11 +10929,11 @@ function viperParseDate(s) {
   return isNaN(Date.parse(iso)) ? null : iso;
 }
 // ── Duplicate detection ──
-// Each real bet is unique: the same horse(s) on the same race date at the same bookie can't
-// be filed twice. Key = slip type + sorted horse names + race date + bookie.
-function viperDupKey(slip, bookie, horses, date) {
+// Each real bet is unique. Match on the horse(s) + race date ALONE — a horse already
+// recorded on that date is a duplicate regardless of bookie, stake or slip type.
+function viperDupKey(horses, date) {
   const hs = (horses || []).map(h => String(h || '').trim().toLowerCase()).filter(Boolean).sort().join('+');
-  return [slip || '', viperNormBookie(bookie), hs, String(date || '').trim()].join('|');
+  return hs + '|' + String(date || '').trim();
 }
 function viperRecordedDupKeys(group) {
   const set = new Set();
@@ -10941,19 +10941,15 @@ function viperRecordedDupKeys(group) {
     const f = b.fields || {};
     if (f.slip && f.slip !== 'Single' && Array.isArray(f.legs) && f.legs.length) {
       const l0 = f.legs[0] || {};
-      set.add(viperDupKey(f.slip, f.Bookie, f.legs.map(l => l.Horse || l.horse), l0.RaceDate || l0.raceDate || f.RaceDate));
+      set.add(viperDupKey(f.legs.map(l => l.Horse || l.horse), l0.RaceDate || l0.raceDate || f.RaceDate));
     } else {
-      set.add(viperDupKey('Single', f.Bookie, [f.Horse], f.RaceDate));
+      set.add(viperDupKey([f.Horse], f.RaceDate));
     }
   });
   return set;
 }
 function viperBatchDupKey(bt) {
-  if (bt.slip === 'Single') {
-    const s = bt.selections[0] || {};
-    return viperDupKey('Single', bt.bookie, [s.horse], s.raceDate);
-  }
-  return viperDupKey(bt.slip, bt.bookie, bt.selections.map(s => s.horse), (bt.selections[0] || {}).raceDate);
+  return viperDupKey(bt.selections.map(s => s.horse), (bt.selections[0] || {}).raceDate);
 }
 function viperDupLabel(bt) {
   const horses = bt.selections.map(s => s.horse).filter(Boolean).join(' / ') || 'this bet';
