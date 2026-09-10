@@ -185,9 +185,14 @@ const BET_ALERT_FEED_PATHS = {
   // feeds above, each row additionally tagged boost:true (see oc_boosts_scraper.py). Covers
   // markets with a fair-odds source: AGS/FGS/CARDS/SOT (direct BFEX), HEADER/OTB (BFEX AGS x
   // FotMob shot-share), and GOALS_2PLUS/GOALS_3PLUS/SOT_2PLUS/SOT_3PLUS (Poisson from the
-  // BFEX "1+" fair). OTB_SOT/HEADER_SOT/ASSIST are scraped (see /api/oc-boosts) but still
-  // need a BookieBashing + Oddschecker devig fair before they're EV-scored.
+  // BFEX "1+" fair).
   '/api/oc-boost-ev': require('path').join(__dirname, 'oc-scraper', 'data', 'oc_boost_ev_bets.json'),
+  // Oddschecker Price Boosts, calculated family — OTB-SoT / Headed-SoT / Assist boosts,
+  // priced by the fair_resolver priority chain (BFEX green -> else OC-ladder-devig / BB
+  // stage-1 combo) + the FotMob on-target split (see ev_engine.compute_boost_calc_ev_bets).
+  // No direct Betfair market, so these surface on the Calculated +EV page, merged with
+  // /api/oc-calc-ev rather than Oddschecker +EV. Rows tagged boost:true.
+  '/api/oc-boost-calc-ev': require('path').join(__dirname, 'oc-scraper', 'data', 'oc_boost_calc_ev_bets.json'),
 };
 for (const [route, filePath] of Object.entries(BET_ALERT_FEED_PATHS)) {
   app.get(route, (req, res) => {

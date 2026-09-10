@@ -13390,18 +13390,27 @@ async function scanAllCalcEV(statusEl, opts) {
   // oc-scraper's ev_engine.compute_header_otb_ev_bets) alongside the client-side WH-based
   // Left Foot/Right Foot/6 Yard Box/SOT-Outside-Box scan above — same table, one merge.
   // Market IDs for these are auto-detected server-side now, no manual entry needed.
-  try {
-    const r = await fetch('/.netlify/functions/oc-calc-ev');
-    const d = await r.json();
-    if (d.ok && Array.isArray(d.bets)) {
-      d.bets.forEach(b => allEvBets.push({
-        t: b.t, match: b.match, market: b.mkt, player: b.sel,
-        bestFair: b.fair, bookie: b.bk,
-        ocOdds: typeof b.odds === 'number' ? b.odds.toFixed(2) : b.odds,
-        bestEv: b.ev, isConfident: b.conf === 'green', noCalc: false,
-      }));
-    }
-  } catch(e) { console.warn('oc-calc-ev fetch failed:', e.message); }
+  // Regular Header/OTB calc feed + the OTB-SoT/Headed-SoT/Assist Price Boost calc feed
+  // (fair_resolver combo + FotMob on-target split — see oc_boosts_scraper.py). Same table,
+  // one merge each; boost rows carry boost:true so renderEVResults shows the "B" icon. A
+  // boost-feed failure must not blank the regular calc scan, so both are best-effort.
+  const [rCalc, rBoostCalc] = await Promise.allSettled([
+    fetch('/.netlify/functions/oc-calc-ev').then(x => x.json()),
+    fetch('/.netlify/functions/oc-boost-calc-ev').then(x => x.json()),
+  ]);
+  const pushCalcFeed = (d, isBoost) => {
+    if (d && d.status === 'fulfilled') d = d.value;
+    if (!d || !d.ok || !Array.isArray(d.bets)) return;
+    d.bets.forEach(b => allEvBets.push({
+      t: b.t, match: b.match, market: b.mkt, player: b.sel,
+      bestFair: b.fair, bookie: b.bk,
+      ocOdds: typeof b.odds === 'number' ? b.odds.toFixed(2) : b.odds,
+      bestEv: b.ev, isConfident: b.conf === 'green', noCalc: false,
+      boost: isBoost || !!b.boost,
+    }));
+  };
+  try { pushCalcFeed(rCalc, false); } catch(e) { console.warn('oc-calc-ev fetch failed:', e.message); }
+  try { pushCalcFeed(rBoostCalc, true); } catch(e) { console.warn('oc-boost-calc-ev fetch failed:', e.message); }
 
   allEvBets.sort((a, b) => {
     if (a.noCalc && !b.noCalc) return 1;
@@ -13444,11 +13453,13 @@ function renderEVResults(bets) {
     const fairLabel = bet.bestFair ? bet.bestFair.toFixed(2) : '—';
     const rowStyle = bet.noCalc ? '' : (bet.isConfident ? '' : 'background:var(--amber-bg)');
 
+    const boostIcon = bet.boost ? '<span class="boost-icon" title="Oddschecker Price Boost" style="margin-right:6px;vertical-align:middle">B</span>' : '';
+
     const tr = document.createElement('tr');
     tr.style.cssText = rowStyle;
     tr.innerHTML = `
       <td style="font-size:12px;color:var(--text3);white-space:nowrap">${bet.t ?? ''}</td>
-      <td style="font-size:12px;color:var(--text3);white-space:nowrap">${bet.match ?? ''}</td>
+      <td style="font-size:12px;color:var(--text3);white-space:nowrap">${boostIcon}${bet.match ?? ''}</td>
       <td style="font-size:12px;color:var(--text2)">${bet.market}</td>
       <td style="font-weight:500">${bet.player}</td>
       <td class="r tn" style="font-weight:500">${fairLabel}</td>
