@@ -1851,6 +1851,7 @@ input::placeholder{color:var(--text3)}
       <div class="cat" onclick="showTrackerSection('personal','keithbot')"><div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-robot"></i></div><div><div class="cat-title">KeithBot</div><div class="cat-desc">KeithBot bet history and stats</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('personal','dogs')"><div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-activity"></i></div><div><div class="cat-title">Dogs + Horses DogBot</div><div class="cat-desc">Greyhound and horse racing results</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('personal','bbhorses')"><div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-trophy"></i></div><div><div class="cat-title">BB Horses</div><div class="cat-desc">BB horse racing bets and performance</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
+      <div class="cat" onclick="showTrackerSection('personal','viper')"><div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-horseshoe"></i></div><div><div class="cat-title">Viper Horses</div><div class="cat-desc">Viper each-way singles &amp; multiples — filed from settled-bet screenshots</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('personal','bbgolf')"><div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-circle-dot"></i></div><div><div class="cat-title">BB Golf</div><div class="cat-desc">BB golf bet results and ROI</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('personal','american')"><div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-flag"></i></div><div><div class="cat-title">American Props</div><div class="cat-desc">US sports prop bet history</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('personal','freeze')"><div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-snowflake"></i></div><div><div class="cat-title">Freeze</div><div class="cat-desc">Freeze bet results and performance</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
@@ -1868,6 +1869,7 @@ input::placeholder{color:var(--text3)}
       <div class="cat" onclick="showTrackerSection('va','monthly')"><div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-calendar-stats"></i></div><div><div class="cat-title">Monthly Summary</div><div class="cat-desc">Month by month P/L and EV across all VA categories</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('va','discord')"><div class="cat-ico" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-brand-discord"></i></div><div><div class="cat-title">Discord</div><div class="cat-desc">Discord channel bets and results</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('va','racing')"><div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-trophy"></i></div><div><div class="cat-title">BB Racing Tracker Pro</div><div class="cat-desc">BB professional racing tracker results</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
+      <div class="cat" onclick="showTrackerSection('va','viper')"><div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-horseshoe"></i></div><div><div class="cat-title">Viper Horses</div><div class="cat-desc">Viper each-way singles &amp; multiples — filed from settled-bet screenshots</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('va','bettracker')"><div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-clipboard-list"></i></div><div><div class="cat-title">BB Bet Tracker</div><div class="cat-desc">BB bet tracker history and stats</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('va','casino')"><div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-diamond"></i></div><div><div class="cat-title">Casino</div><div class="cat-desc">VA casino session results</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
       <div class="cat" onclick="showTrackerSection('va','offers')"><div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-tag"></i></div><div><div class="cat-title">Offers</div><div class="cat-desc">Promotional offer results and P&amp;L</div></div><i class="ti ti-arrow-right cat-arr"></i></div>
@@ -2026,6 +2028,11 @@ input::placeholder{color:var(--text3)}
     <div id="bbh-kpi-wrap" style="display:none"><div class="kpis" id="bbh-kpis" style="grid-template-columns:repeat(6,1fr);margin-bottom:16px"></div></div>
     <div id="bbh-table-wrap" style="display:none"><div class="card"><div style="padding:12px 20px;border-bottom:.5px solid var(--border)"><span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500" id="bbh-table-hdr">Bets</span></div><div style="overflow-x:auto;max-height:520px;overflow-y:auto"><table class="dt" style="min-width:640px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr><th style="min-width:72px">Date</th><th style="min-width:80px">Race</th><th style="min-width:140px">Horse</th><th>Places</th><th class="r">Odds</th><th class="r">Stake</th><th class="r">P/L</th><th class="r">EV</th></tr></thead><tbody id="bbh-tbody"></tbody></table></div></div></div>
   </div>
+  <div id="ts-personal-viper" class="tracker-section" style="display:none">
+    <button class="back" onclick="backToTrackerSection('personal')"><i class="ti ti-arrow-left"></i> Personal bets</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px"><div class="sec-title" style="margin-bottom:0">Viper Horses <span style="font-size:12px;color:var(--text3);font-weight:400">— Buzzer</span></div><button onclick="openViperSection('personal')" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'"><i class="ti ti-refresh"></i> Refresh</button></div>
+    <div id="vh-p-root"></div>
+  </div>
   <div id="ts-personal-bbgolf" class="tracker-section" style="display:none">
     <button class="back" onclick="backToTrackerSection('personal')"><i class="ti ti-arrow-left"></i> Personal bets</button>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px"><div class="sec-title" style="margin-bottom:0">BB Golf</div><button onclick="openBBGolfSection()" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--brand)';this.style.color='var(--brand)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'"><i class="ti ti-refresh"></i> Refresh</button></div>
@@ -2130,6 +2137,13 @@ input::placeholder{color:var(--text3)}
         <table class="dt" style="min-width:600px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr><th>Date</th><th>Result</th><th>Race</th><th style="min-width:160px">Horse</th><th class="r">Odds</th><th class="r">Stake</th><th class="r">P/L</th><th class="r">EV</th></tr></thead><tbody id="va-rtp-tbody"></tbody></table>
       </div>
     </div>
+  </div>
+
+  <!-- VA: VIPER HORSES -->
+  <div id="ts-va-viper" class="tracker-section" style="display:none">
+    <button class="back" onclick="backToTrackerSection('va')"><i class="ti ti-arrow-left"></i> VA bets</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px"><div class="sec-title" style="margin-bottom:0">Viper Horses <span style="font-size:12px;color:var(--text3);font-weight:400">— Assistant</span></div><button onclick="openViperSection('va')" style="display:flex;align-items:center;gap:6px;background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button></div>
+    <div id="vh-v-root"></div>
   </div>
 
   <!-- VA: BB BET TRACKER -->
@@ -3365,6 +3379,12 @@ const BET_TYPE_CONFIG = {
   // Entry form, EV/profit boxes, submit, and settlement all get dedicated handling instead of
   // going through the generic oddsMode/legs machinery — see back-lay-bet-input-spec memory.
   'Back & Lay': { layout:'backLay', bookie:true, bookieFieldKey:'Bookie' },
+  // Viper Horses — bets are never entered through the generic form; they're filed from
+  // settled-bet screenshots on the dedicated Viper Horses tracker section (openViperSection)
+  // and booked already-settled via POST /bets autoSettlePl. This config only exists so the
+  // generic Bet Tracking detail view / dashboards don't choke on the type.
+  'Viper Horse':      { layout:'standard', bookie:true, bookieFieldKey:'Bookie', evPercentInput:true, oddsMode:'blendedProfit', hideProfitBreakdown:true, stakeFieldKey:'Total Stake', fields:[{key:'Horse',label:'Horse',type:'text'},{key:'Race',label:'Race',type:'text'},{key:'Terms',label:'Each-way terms (e.g. 3 @ 1/5)',type:'text'}] },
+  'Viper Horse (VA)': { layout:'standard', bookie:true, bookieFieldKey:'Bookie', evPercentInput:true, oddsMode:'blendedProfit', hideProfitBreakdown:true, stakeFieldKey:'Total Stake', fields:[{key:'Horse',label:'Horse',type:'text'},{key:'Race',label:'Race',type:'text'},{key:'Terms',label:'Each-way terms (e.g. 3 @ 1/5)',type:'text'}] },
 };
 
 // Bet types the "Add Account" button (merges a 2nd/3rd bookmaker+account onto one bet row —
@@ -3452,6 +3472,7 @@ const BET_TYPE_GROUPS = {
     {key:'Freeze', label:'Freeze'},
     {key:'Ninja Golf BFEX', label:'Ninja Golf BFEX'},
     {key:'Corners', label:'Corners'},
+    {key:'Viper Horse', label:'Viper Horses'},
     {key:'Offers (Personal)', label:'Offers'},
     {key:'Other Bets', label:'Other Bets'},
     {key:'Casino (Personal)', label:'Casino'},
@@ -3464,6 +3485,7 @@ const BET_TYPE_GROUPS = {
     {key:'Casino', label:'Casino'},
     {key:'Offers (VA)', label:'Offers'},
     {key:'Dogs + Horses (VA)', label:'Dogs + Horses DogBot'},
+    {key:'Viper Horse (VA)', label:'Viper Horses'},
   ],
 };
 
@@ -7056,7 +7078,7 @@ let betTrackingLastGroup = null;
 
 // Manually maintained — add a bet_type key here once you've finished reviewing/fixing its
 // columns, so the list shows which tabs are done vs still need checking.
-const BET_TRACKING_REVIEWED = ['Value', 'Keithbot', 'Dogs + Horses', 'Dogs + Horses (VA)', 'BB Horse', 'BB Golf', 'American Props', 'Freeze', 'Offers (Personal)', 'Casino (Personal)', 'Ninja Golf BFEX', 'Corners', 'Other Bets', 'Discord', 'BB - RTP', 'BB - BT', 'Offers (VA)'];
+const BET_TRACKING_REVIEWED = ['Value', 'Keithbot', 'Dogs + Horses', 'Dogs + Horses (VA)', 'BB Horse', 'BB Golf', 'American Props', 'Freeze', 'Offers (Personal)', 'Casino (Personal)', 'Ninja Golf BFEX', 'Corners', 'Other Bets', 'Discord', 'BB - RTP', 'BB - BT', 'Offers (VA)', 'Viper Horse', 'Viper Horse (VA)'];
 
 function showBetTrackingGroup(group) {
   betTrackingLastGroup = group;
@@ -8733,7 +8755,7 @@ async function loadDogRace(marketId, opts) {
 }
 function showTracker(name){document.getElementById('tracker-hub').style.display='none';document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.getElementById('tracker-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='overall')openOverallSection();}
 function backToTrackerHub(){document.querySelectorAll('.tracker-view').forEach(v=>v.style.display='none');document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('tracker-hub').style.display='';window.scrollTo({top:0,behavior:'smooth'});}
-function showTrackerSection(parent,name){document.getElementById('tracker-'+parent).style.display='none';document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('ts-'+parent+'-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(parent==='personal'&&name==='dogs')openDogsSection();if(parent==='personal'&&name==='american')openAmericanSection();if(parent==='personal'&&name==='value')openValueSection();if(parent==='personal'&&name==='keithbot')openKeithbotSection();if(parent==='personal'&&name==='bbhorses')openBBHorseSection();if(parent==='personal'&&name==='bbgolf')openBBGolfSection();if(parent==='personal'&&name==='freeze')openFreezeSection();if(parent==='personal'&&name==='ninja')openNinjaSection();if(parent==='personal'&&name==='corners')openCornersSection();if(parent==='personal'&&name==='other')openOtherSection();if(parent==='va'&&name==='discord')openVADiscordSection();if(parent==='va'&&name==='racing')openVARacingSection();if(parent==='va'&&name==='bettracker')openVABetTrackerSection();if(parent==='va'&&name==='casino')openVACasinoSection();if(parent==='va'&&name==='offers')openVAOffersSection();if(parent==='va'&&name==='other')openVAOtherSection();if(parent==='personal'&&name==='monthly')openPersonalMonthlySection();if(parent==='va'&&name==='monthly')openVAMonthlySection();}
+function showTrackerSection(parent,name){document.getElementById('tracker-'+parent).style.display='none';document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('ts-'+parent+'-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(parent==='personal'&&name==='dogs')openDogsSection();if(parent==='personal'&&name==='american')openAmericanSection();if(parent==='personal'&&name==='value')openValueSection();if(parent==='personal'&&name==='keithbot')openKeithbotSection();if(parent==='personal'&&name==='bbhorses')openBBHorseSection();if(parent==='personal'&&name==='bbgolf')openBBGolfSection();if(parent==='personal'&&name==='freeze')openFreezeSection();if(parent==='personal'&&name==='ninja')openNinjaSection();if(parent==='personal'&&name==='corners')openCornersSection();if(parent==='personal'&&name==='viper')openViperSection('personal');if(parent==='personal'&&name==='other')openOtherSection();if(parent==='va'&&name==='discord')openVADiscordSection();if(parent==='va'&&name==='racing')openVARacingSection();if(parent==='va'&&name==='viper')openViperSection('va');if(parent==='va'&&name==='bettracker')openVABetTrackerSection();if(parent==='va'&&name==='casino')openVACasinoSection();if(parent==='va'&&name==='offers')openVAOffersSection();if(parent==='va'&&name==='other')openVAOtherSection();if(parent==='personal'&&name==='monthly')openPersonalMonthlySection();if(parent==='va'&&name==='monthly')openVAMonthlySection();}
 function backToTrackerSection(parent){document.querySelectorAll('.tracker-section').forEach(v=>v.style.display='none');document.getElementById('tracker-'+parent).style.display='block';window.scrollTo({top:0,behavior:'smooth'});}
 
 // ── GREETING ──
@@ -10838,6 +10860,548 @@ function renderBBHorseTable(rows,summary){
     tbody.appendChild(tr);
   });
   trkFinish('bbh',tbody,rows,summary,pl,wins,losses,8);
+}
+
+// ══════════════════════ VIPER HORSES ══════════════════════
+// DB-backed tracker section (Personal bets grid + VA bets grid). Bets are filed from
+// screenshots of ALREADY-SETTLED Viper bets: POST /parse-viper reads each bet off the image,
+// then POST /bets books it with autoSettlePl = the P/L off the slip, so the account balance
+// moves immediately. Sub-tabs split Singles / Doubles / Trebles / 4-Folds. P/L is trusted
+// verbatim from the screenshot; odds/EV/terms are stored for the tables only.
+const VIPER_GROUPS = {
+  personal: { type: 'Viper Horse',      prefix: 'p' },
+  va:       { type: 'Viper Horse (VA)', prefix: 'v' },
+};
+const VIPER_SLIPS = ['Single', 'Double', 'Treble', '4-Fold'];
+const VIPER_SLIP_TAB = { Single: 'Singles', Double: 'Doubles', Treble: 'Trebles', '4-Fold': '4-Folds' };
+const VIPER_STATE = { personal: { tab: 'Single', bets: [] }, va: { tab: 'Single', bets: [] } };
+let vhAccounts = [];
+const vhBatch = { personal: [], va: [] };
+let vhSeq = 0;
+let vhPasteInstalled = false;
+let vhActiveGroup = null;
+
+function vhId(group, suffix) { return 'vh-' + VIPER_GROUPS[group].prefix + '-' + suffix; }
+function vhEl(group, suffix) { return document.getElementById(vhId(group, suffix)); }
+function viperNumF(v) { const n = parseFloat(v); return isFinite(n) ? n : 0; }
+function viperMoney(v) { const n = viperNumF(v); return (n > 0 ? '+' : n < 0 ? '-' : '') + '£' + Math.abs(n).toFixed(2); }
+function viperPct(v) {
+  const n = parseFloat(v);
+  if (!isFinite(n)) return '<span style="color:var(--text3)">—</span>';
+  const c = n > 0 ? 'var(--green)' : n < 0 ? 'var(--red)' : 'var(--text2)';
+  return '<span style="color:' + c + '">' + n.toFixed(2) + '%</span>';
+}
+function viperOutcomeBadge(o) {
+  const map = { Won: ['var(--green-bg)', 'var(--green)'], Placed: ['var(--blue-bg)', 'var(--blue)'], Lost: ['var(--red-bg)', 'var(--red)'], Void: ['var(--surface2)', 'var(--text2)'] };
+  if (!o) return '<span style="color:var(--text3)">—</span>';
+  const [bg, fg] = map[o] || ['var(--surface2)', 'var(--text2)'];
+  return '<span style="background:' + bg + ';color:' + fg + ';padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500">' + escapeHtml(o) + '</span>';
+}
+// DD/MM/YY(YY) -> ISO at noon UTC (dodges timezone date-shift); null if unparseable.
+function viperParseDate(s) {
+  const m = String(s || '').match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
+  if (!m) return null;
+  let [, d, mo, y] = m;
+  y = y.length === 2 ? '20' + y : y;
+  const iso = y + '-' + String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0') + 'T12:00:00.000Z';
+  return isNaN(Date.parse(iso)) ? null : iso;
+}
+// The human-readable account code (e.g. "C007") is stored on accounts.account_id (TEXT).
+function viperAccByCode(code) {
+  if (!code) return null;
+  const c = String(code).trim().toUpperCase();
+  return vhAccounts.find(a => String(a.account_id || '').trim().toUpperCase() === c) || null;
+}
+
+async function openViperSection(group) {
+  const g = VIPER_GROUPS[group]; if (!g) return;
+  const root = document.getElementById('vh-' + g.prefix + '-root'); if (!root) return;
+  vhActiveGroup = group;
+  if (group === 'personal' && CURRENT_USER_ROLE !== 'admin') {
+    root.innerHTML = '<div class="card card-pad" style="color:var(--text2);font-size:13px">The Buzzer Viper Horses sheet is admin-only — file Assistant bets from the VA bets grid.</div>';
+    return;
+  }
+  if (!vhEl(group, 'kpis')) {
+    root.innerHTML = viperSkeletonHtml(group);
+    viperRenderFileCard(group);
+    vhInstallPaste();
+  }
+  const status = vhEl(group, 'status');
+  status.style.display = '';
+  status.innerHTML = '<div class="card"><div class="ph" style="padding:26px 24px"><div class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t">Loading Viper bets…</div></div></div>';
+  try {
+    const [betsRes, acctRes] = await Promise.all([
+      ledgerApi('bets?type=' + encodeURIComponent(g.type) + '&limit=5000'),
+      ledgerApi('accounts?excludeClosed=1'),
+    ]);
+    if (acctRes && acctRes.ok && Array.isArray(acctRes.accounts)) vhAccounts = acctRes.accounts;
+    if (!betsRes || !betsRes.ok) throw new Error((betsRes && betsRes.error) || 'Could not load bets');
+    VIPER_STATE[group].bets = betsRes.bets || [];
+    status.style.display = 'none';
+    viperRenderKpis(group);
+    viperRenderTab(group);
+  } catch (e) {
+    status.innerHTML = '<div class="card"><div class="ph" style="padding:26px 24px"><div class="ph-ico"><i class="ti ti-plug-connected-x"></i></div><div class="ph-t">Could not load</div><div class="ph-d">' + escapeHtml(e.message || String(e)) + '</div></div></div>';
+  }
+}
+
+function viperSkeletonHtml(group) {
+  const px = VIPER_GROUPS[group].prefix;
+  const tabs = VIPER_SLIPS.map(s =>
+    '<button class="sub-btn2' + (s === 'Single' ? ' active' : '') + '" id="vh-' + px + '-tab-' + s + '" onclick="viperSetTab(\'' + group + '\',\'' + s + '\')">' + VIPER_SLIP_TAB[s] + '</button>'
+  ).join('');
+  return '' +
+    '<div id="vh-' + px + '-status" style="display:none"></div>' +
+    '<div id="vh-' + px + '-kpis" class="kpis" style="grid-template-columns:repeat(6,1fr);margin-bottom:14px"></div>' +
+    '<div id="vh-' + px + '-breakdown" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px"></div>' +
+    '<div id="vh-' + px + '-filecard"></div>' +
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' + tabs + '</div>' +
+    '<div id="vh-' + px + '-table"></div>';
+}
+
+function viperAgg(bets) {
+  let stake = 0, pl = 0, ev = 0, won = 0, placed = 0, lost = 0, voids = 0;
+  bets.forEach(b => {
+    stake += viperNumF(b.total_stake);
+    pl += viperNumF(b.pl);
+    ev += viperNumF(b.fields && b.fields.EV);
+    const o = b.fields && b.fields.Outcome;
+    if (o === 'Won') won++; else if (o === 'Placed') placed++; else if (o === 'Lost') lost++; else if (o === 'Void') voids++;
+  });
+  const decided = won + placed + lost;
+  return { n: bets.length, stake, pl, ev, won, placed, lost, voids,
+    roi: stake > 0 ? pl / stake * 100 : 0,
+    wr: decided > 0 ? (won + placed) / decided * 100 : 0 };
+}
+
+function viperKpiCard(l, v, s, col) {
+  return '<div class="kpi"><div class="kpi-l">' + l + '</div><div class="kpi-v"' + (col ? ' style="color:' + col + '"' : '') + '>' + v + '</div>' + (s ? '<div class="kpi-s">' + s + '</div>' : '') + '</div>';
+}
+
+function viperRenderKpis(group) {
+  const bets = VIPER_STATE[group].bets;
+  const a = viperAgg(bets);
+  const plc = a.pl > 0 ? 'var(--green)' : a.pl < 0 ? 'var(--red)' : 'var(--text2)';
+  const evc = a.ev > 0 ? 'var(--green)' : a.ev < 0 ? 'var(--red)' : 'var(--text2)';
+  vhEl(group, 'kpis').innerHTML =
+    viperKpiCard('Total bets', a.n.toLocaleString(), a.won + 'W · ' + a.placed + 'P · ' + a.lost + 'L') +
+    viperKpiCard('Turnover', fmtGBP(a.stake, false)) +
+    viperKpiCard('EV', fmtGBP(a.ev), null, evc) +
+    viperKpiCard('P/L', fmtGBP(a.pl), null, plc) +
+    viperKpiCard('ROI', (a.roi >= 0 ? '+' : '') + a.roi.toFixed(1) + '%', null, plc) +
+    viperKpiCard('Win rate', a.wr.toFixed(0) + '%', 'won or placed');
+  vhEl(group, 'breakdown').innerHTML = VIPER_SLIPS.map(s => {
+    const sub = viperAgg(bets.filter(b => (b.fields && b.fields.slip) === s));
+    const c = sub.pl > 0 ? 'var(--green)' : sub.pl < 0 ? 'var(--red)' : 'var(--text2)';
+    return '<div class="card" style="padding:12px 14px">' +
+      '<div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.08em">' + VIPER_SLIP_TAB[s] + '</div>' +
+      '<div style="font-size:18px;font-weight:600;color:' + c + ';margin-top:2px">' + fmtGBP(sub.pl) + '</div>' +
+      '<div style="font-size:11px;color:var(--text3);margin-top:2px">' + sub.n + ' bet' + (sub.n === 1 ? '' : 's') + ' · ' + fmtGBP(sub.stake, false) + ' · EV ' + fmtGBP(sub.ev) + '</div>' +
+      '</div>';
+  }).join('');
+}
+
+function viperSetTab(group, slip) {
+  VIPER_STATE[group].tab = slip;
+  const px = VIPER_GROUPS[group].prefix;
+  VIPER_SLIPS.forEach(s => { const el = document.getElementById('vh-' + px + '-tab-' + s); if (el) el.classList.toggle('active', s === slip); });
+  viperRenderTab(group);
+}
+
+function viperRenderTab(group) {
+  const slip = VIPER_STATE[group].tab;
+  const rows = VIPER_STATE[group].bets
+    .filter(b => (b.fields && b.fields.slip) === slip)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const wrap = vhEl(group, 'table');
+  if (!rows.length) {
+    wrap.innerHTML = '<div class="card" style="padding:22px;color:var(--text3);font-size:13px">No ' + VIPER_SLIP_TAB[slip].toLowerCase() + ' filed yet.</div>';
+    return;
+  }
+  wrap.innerHTML = slip === 'Single' ? viperSinglesTable(group, rows) : viperMultiTable(group, rows);
+}
+
+function viperEditBtn(id) {
+  return '<button onclick="viperEditBet(' + id + ')" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--text2);cursor:pointer;font-family:inherit">Edit</button>';
+}
+
+function viperSinglesTable(group, rows) {
+  const body = rows.map(b => {
+    const f = b.fields || {};
+    const sub = [f.RaceDate || (formatLedgerDate ? formatLedgerDate(b.date) : String(b.date || '').slice(0, 10)), f.Race].filter(Boolean).join(' · ');
+    const pl = viperNumF(b.pl), plc = pl > 0 ? 'var(--green)' : pl < 0 ? 'var(--red)' : 'var(--text2)';
+    return '<tr>' +
+      '<td><div style="font-weight:500">' + escapeHtml(f.Horse || '—') + '</div><div style="font-size:11px;color:var(--text3)">' + escapeHtml(sub) + '</div></td>' +
+      '<td>' + escapeHtml(f.Bookie || '—') + '</td>' +
+      '<td>' + escapeHtml(f.AccountCode || b.account_code || '—') + '</td>' +
+      '<td class="r tn">' + (f.Odds ? viperNumF(f.Odds).toFixed(2) : '—') + '</td>' +
+      '<td class="r tn">' + viperPct(f['EV%']) + '</td>' +
+      '<td class="r tn">£' + viperNumF(b.total_stake).toFixed(2) + '</td>' +
+      '<td style="white-space:nowrap">' + escapeHtml(f.Terms || '—') + '</td>' +
+      '<td>' + viperOutcomeBadge(f.Outcome) + '</td>' +
+      '<td class="r tn" style="color:' + plc + ';font-weight:500">' + (pl === 0 ? '—' : viperMoney(pl)) + '</td>' +
+      '<td class="r">' + viperEditBtn(b.id) + '</td>' +
+      '</tr>';
+  }).join('');
+  return '<div class="card"><div style="overflow-x:auto;max-height:560px;overflow-y:auto"><table class="dt" style="min-width:840px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr>' +
+    '<th style="min-width:150px">Horse</th><th>Bookie</th><th>Account ID</th><th class="r">Odds</th><th class="r">EV%</th><th class="r">Stake (EW)</th><th>Terms</th><th>Outcome</th><th class="r">P/L</th><th></th>' +
+    '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
+}
+
+function viperMultiTable(group, rows) {
+  const body = rows.map(b => {
+    const f = b.fields || {};
+    const legs = (Array.isArray(f.legs) && f.legs.length) ? f.legs : [{}];
+    const n = legs.length;
+    const pl = viperNumF(b.pl), plc = pl > 0 ? 'var(--green)' : pl < 0 ? 'var(--red)' : 'var(--text2)';
+    return legs.map((lg, i) => {
+      const race = [lg.RaceDate || lg.raceDate, lg.Race || lg.race].filter(Boolean).join(' ');
+      const first = i === 0;
+      let tr = '<tr style="' + (first ? 'border-top:2px solid var(--border)' : '') + '">' +
+        '<td style="font-size:12px;color:var(--text2);white-space:nowrap">' + escapeHtml(race || '—') + '</td>' +
+        '<td style="font-weight:500">' + escapeHtml(lg.Horse || lg.horse || '—') + '</td>' +
+        '<td class="r tn">' + ((lg.Odds || lg.odds) ? viperNumF(lg.Odds || lg.odds).toFixed(2) : '—') + '</td>' +
+        '<td class="r tn">' + viperPct(lg['EV%'] != null ? lg['EV%'] : lg.evPct) + '</td>';
+      if (first) tr +=
+        '<td class="r tn" rowspan="' + n + '" style="vertical-align:top">' + viperPct(f['SlipEV%']) + '</td>' +
+        '<td class="r tn" rowspan="' + n + '" style="vertical-align:top">£' + viperNumF(b.total_stake).toFixed(2) + '</td>';
+      tr += '<td style="white-space:nowrap">' + escapeHtml(lg.Terms || lg.terms || '—') + '</td>';
+      if (first) tr +=
+        '<td rowspan="' + n + '" style="vertical-align:top">' + viperOutcomeBadge(f.Outcome) + '</td>' +
+        '<td class="r tn" rowspan="' + n + '" style="vertical-align:top;color:' + plc + ';font-weight:500">' + (pl === 0 ? '—' : viperMoney(pl)) + '</td>' +
+        '<td class="r" rowspan="' + n + '" style="vertical-align:top">' + viperEditBtn(b.id) + '</td>';
+      return tr + '</tr>';
+    }).join('');
+  }).join('');
+  return '<div class="card"><div style="overflow-x:auto;max-height:560px;overflow-y:auto"><table class="dt" style="min-width:920px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr>' +
+    '<th>Race</th><th style="min-width:130px">Horse</th><th class="r">Odds</th><th class="r">EV%</th><th class="r">Slip EV%</th><th class="r">Total EW Stake</th><th>Terms</th><th>Outcome</th><th class="r">P/L</th><th></th>' +
+    '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
+}
+
+// ── Edit / correct a filed Viper bet (P/L + Outcome), or delete it ──
+function viperFindBet(id) {
+  for (const grp of ['personal', 'va']) { const b = VIPER_STATE[grp].bets.find(x => x.id === id); if (b) return { group: grp, bet: b }; }
+  return null;
+}
+function viperEditBet(id) {
+  const hit = viperFindBet(id); if (!hit) return;
+  const { group, bet } = hit; const f = bet.fields || {};
+  document.getElementById('viper-edit-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'viper-edit-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.onclick = e => { if (e.target === ov) ov.remove(); };
+  const label = f.slip === 'Single' ? (f.Horse || 'Single') : (f.slip + ' — ' + ((f.legs || []).map(l => l.Horse || l.horse).filter(Boolean).join(' / ') || 'multiple'));
+  ov.innerHTML =
+    '<div class="card card-pad" style="max-width:420px;width:100%">' +
+    '<div class="sec-title" style="margin:0 0 4px;font-size:15px">Correct Viper bet</div>' +
+    '<div style="font-size:12px;color:var(--text3);margin-bottom:14px">' + escapeHtml(label) + ' · ' + escapeHtml(f.Bookie || '') + ' · ' + escapeHtml(f.AccountCode || '') + '</div>' +
+    '<label class="lbl">Outcome</label><select id="viper-edit-outcome">' +
+    ['Won', 'Placed', 'Lost', 'Void'].map(o => '<option' + (f.Outcome === o ? ' selected' : '') + '>' + o + '</option>').join('') +
+    '</select>' +
+    '<label class="lbl" style="margin-top:10px">P/L (£, as shown on Viper)</label>' +
+    '<input type="number" step="0.01" id="viper-edit-pl" value="' + viperNumF(bet.pl) + '">' +
+    '<div style="display:flex;gap:8px;margin-top:16px">' +
+    '<button class="add-btn" style="background:var(--brand);color:#fff;border-color:var(--brand)" onclick="viperSaveEdit(' + id + ',\'' + group + '\')">Save</button>' +
+    '<button class="add-btn" onclick="document.getElementById(\'viper-edit-overlay\').remove()">Cancel</button>' +
+    '<button class="add-btn" style="margin-left:auto;color:var(--red);border-color:var(--red-bd)" onclick="viperDeleteBet(' + id + ',\'' + group + '\')">Delete bet</button>' +
+    '</div><div id="viper-edit-msg" style="font-size:12px;margin-top:10px"></div></div>';
+  document.body.appendChild(ov);
+}
+async function viperSaveEdit(id, group) {
+  const msg = document.getElementById('viper-edit-msg');
+  const outcome = document.getElementById('viper-edit-outcome').value;
+  const pl = parseFloat(document.getElementById('viper-edit-pl').value);
+  if (!isFinite(pl)) { msg.innerHTML = '<span style="color:var(--red)">Enter a P/L figure.</span>'; return; }
+  const result = outcome === 'Lost' ? 'lost' : outcome === 'Void' ? 'void' : 'won';
+  msg.textContent = 'Saving…';
+  try {
+    const d = await ledgerApi('bets/' + id + '/settle', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ result, pl: +pl.toFixed(2), extraFields: { Outcome: outcome } }),
+    });
+    if (!d.ok) { msg.innerHTML = '<span style="color:var(--red)">' + escapeHtml(d.error || 'Failed') + '</span>'; return; }
+    document.getElementById('viper-edit-overlay').remove();
+    openViperSection(group);
+  } catch (e) { msg.innerHTML = '<span style="color:var(--red)">Network error.</span>'; }
+}
+async function viperDeleteBet(id, group) {
+  if (!confirm('Delete this Viper bet? Its effect on the account balance is reversed.')) return;
+  const msg = document.getElementById('viper-edit-msg');
+  msg.textContent = 'Deleting…';
+  try {
+    const d = await ledgerApi('bets/' + id, { method: 'DELETE' });
+    if (!d.ok) { msg.innerHTML = '<span style="color:var(--red)">' + escapeHtml(d.error || 'Failed') + '</span>'; return; }
+    document.getElementById('viper-edit-overlay').remove();
+    openViperSection(group);
+  } catch (e) { msg.innerHTML = '<span style="color:var(--red)">Network error.</span>'; }
+}
+
+// ── Screenshot filing ──
+function viperRenderFileCard(group) {
+  const px = VIPER_GROUPS[group].prefix;
+  vhEl(group, 'filecard').innerHTML =
+    '<div class="card card-pad" style="margin-bottom:18px">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">' +
+    '<div class="sec-title" style="margin:0;font-size:15px"><i class="ti ti-camera"></i> File settled Viper screenshots</div>' +
+    '<button class="add-btn" onclick="viperToggleFileBody(\'' + group + '\')" id="vh-' + px + '-filetoggle">Open</button>' +
+    '</div>' +
+    '<div id="vh-' + px + '-filebody" style="display:none">' +
+    '<div style="font-size:12.5px;color:var(--text3);margin:8px 0 12px">Paste screenshots of <b>settled</b> Viper bets — singles list rows or multiple slips, one or many per image. Each bet\'s account is read from its <b>Notes</b> value; the P/L shown on the slip is what hits the balance.</div>' +
+    '<div id="vh-' + px + '-paste" tabindex="0" onclick="this.focus()" ondragover="event.preventDefault();this.style.borderColor=\'var(--brand)\'" ondragleave="this.style.borderColor=\'var(--border)\'" ondrop="viperHandleDrop(\'' + group + '\',event)" ' +
+    'style="border:1.5px dashed var(--border);border-radius:var(--radius);padding:18px 16px;text-align:center;color:var(--text3);font-size:13px;cursor:pointer;outline:none">' +
+    '<i class="ti ti-clipboard" style="font-size:18px;display:block;margin-bottom:6px"></i>Click here, then press Ctrl+V — paste as many as you like' +
+    '<div style="margin-top:6px;font-size:12px">or <button type="button" onclick="event.stopPropagation();document.getElementById(\'vh-' + px + '-fileinput\').click()" style="background:none;border:none;color:var(--brand);text-decoration:underline;cursor:pointer;font-family:inherit;font-size:12px">choose image file(s)</button></div>' +
+    '</div>' +
+    '<input type="file" id="vh-' + px + '-fileinput" accept="image/*" multiple style="display:none" onchange="viperHandleFiles(\'' + group + '\',this.files)">' +
+    '<div id="vh-' + px + '-batch" style="margin-top:14px"></div>' +
+    '<div id="vh-' + px + '-batch-actions" style="display:none;gap:10px;align-items:center;margin-top:6px;flex-wrap:wrap">' +
+    '<button class="add-btn" style="background:var(--brand);color:#fff;border-color:var(--brand)" onclick="viperBookAll(\'' + group + '\')"><i class="ti ti-check"></i> Book all ready (<span id="vh-' + px + '-ready">0</span>)</button>' +
+    '<button class="add-btn" onclick="viperClearBatch(\'' + group + '\')">Clear all</button>' +
+    '<span id="vh-' + px + '-book-msg" style="font-size:13px"></span>' +
+    '</div></div></div>';
+}
+function viperToggleFileBody(group) {
+  const body = vhEl(group, 'filebody');
+  const btn = vhEl(group, 'filetoggle');
+  const open = body.style.display === 'none';
+  body.style.display = open ? '' : 'none';
+  btn.textContent = open ? 'Close' : 'Open';
+}
+function vhInstallPaste() {
+  if (vhPasteInstalled) return;
+  vhPasteInstalled = true;
+  document.addEventListener('paste', e => {
+    const group = vhActiveGroup;
+    if (!group) return;
+    const body = vhEl(group, 'filebody');
+    if (!body || body.style.display === 'none') return;
+    const dt = e.clipboardData || window.clipboardData; if (!dt) return;
+    let file = null;
+    for (const it of (dt.items || [])) { if (it.kind === 'file' && it.type && it.type.indexOf('image') === 0) { file = it.getAsFile(); break; } }
+    if (!file) for (const f of (dt.files || [])) { if (f.type && f.type.indexOf('image') === 0) { file = f; break; } }
+    if (!file) return;
+    const t = e.target;
+    if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+    e.preventDefault();
+    viperAddImage(group, file);
+  }, true);
+}
+function viperHandleDrop(group, e) {
+  e.preventDefault();
+  const el = vhEl(group, 'paste'); if (el) el.style.borderColor = 'var(--border)';
+  for (const f of ((e.dataTransfer && e.dataTransfer.files) || [])) if (f.type && f.type.indexOf('image') === 0) viperAddImage(group, f);
+}
+function viperHandleFiles(group, list) {
+  for (const f of Array.from(list || [])) if (f.type && f.type.indexOf('image') === 0) viperAddImage(group, f);
+}
+
+async function viperAddImage(group, blob) {
+  if (!blob) return;
+  const entry = { id: 'vh' + (++vhSeq), status: 'parsing', dataUrl: null, error: null, bets: [] };
+  vhBatch[group].unshift(entry);
+  viperRenderBatch(group);
+  let dataUrl, mediaType = 'image/jpeg';
+  try { dataUrl = await qbDownscale(blob, 1800, 0.85); }
+  catch (e) {
+    dataUrl = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
+    mediaType = blob.type || 'image/png';
+  }
+  entry.dataUrl = dataUrl;
+  viperRenderBatch(group);
+  try {
+    const d = await ledgerApi('parse-viper', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: dataUrl, mediaType }),
+    });
+    if (!d || !d.ok) { entry.status = 'error'; entry.error = (d && d.error) || 'Could not read the screenshot.'; }
+    else if (!d.bets || !d.bets.length) { entry.status = 'error'; entry.error = (d.warnings && d.warnings[0]) || 'No bets found in that screenshot.'; }
+    else {
+      entry.status = 'done';
+      entry.bets = d.bets.map((p, i) => {
+        const acc = viperAccByCode(p.accountCode);
+        return {
+          key: entry.id + '_' + i, booked: false, submitError: null,
+          slip: p.slip || 'Single',
+          bookie: p.bookie || '',
+          accountCode: p.accountCode || '',
+          accountId: acc ? acc.id : '',
+          totalStake: p.totalStake != null ? p.totalStake : '',
+          pl: p.pl != null ? p.pl : '',
+          outcome: p.outcome || (p.pl > 0 ? 'Won' : p.pl < 0 ? 'Lost' : ''),
+          slipEvPct: p.slipEvPct != null ? p.slipEvPct : '',
+          potentialReturn: p.potentialReturn != null ? p.potentialReturn : '',
+          selections: (p.selections || []).map(s => ({
+            horse: s.horse || '', race: s.race || '', raceDate: s.raceDate || '',
+            odds: s.odds != null ? s.odds : '', evPct: s.evPct != null ? s.evPct : '',
+            terms: s.terms || '', outcome: s.outcome || '',
+          })),
+          warnings: p.warnings || [],
+        };
+      });
+    }
+  } catch (e) { entry.status = 'error'; entry.error = 'Request failed: ' + (e && e.message || 'unknown'); }
+  viperRenderBatch(group);
+}
+
+function viperRenderBatch(group) {
+  const list = vhEl(group, 'batch');
+  const actions = vhEl(group, 'batch-actions');
+  if (!list) return;
+  const px = VIPER_GROUPS[group].prefix;
+  const acctOpts = (selId) => '<option value="">— pick account —</option>' + vhAccounts.map(a =>
+    '<option value="' + a.id + '"' + (String(a.id) === String(selId) ? ' selected' : '') + '>' + escapeHtml((a.account_id || '?') + ' — ' + (a.bookie || '') + (a.profile ? ' · ' + a.profile : '')) + '</option>').join('');
+
+  list.innerHTML = vhBatch[group].map(entry => {
+    const thumb = entry.dataUrl ? '<img src="' + entry.dataUrl + '" style="width:72px;height:auto;border-radius:6px;border:.5px solid var(--border);flex-shrink:0">' : '<div style="width:72px;height:72px;border-radius:6px;border:.5px solid var(--border);flex-shrink:0"></div>';
+    let inner;
+    if (entry.status === 'parsing') inner = '<div style="color:var(--text2);font-size:13px"><i class="ti ti-loader"></i> Reading screenshot…</div>';
+    else if (entry.status === 'error') inner = '<div style="color:var(--red);font-size:12.5px">' + escapeHtml(entry.error || 'Could not read.') + '</div><button class="add-btn" style="margin-top:6px;font-size:12px" onclick="viperRemoveEntry(\'' + group + '\',\'' + entry.id + '\')">Remove</button>';
+    else {
+      inner = entry.bets.map((bt, bi) => {
+        const k = bt.key;
+        const warn = bt.warnings.length ? '<div style="color:var(--amber);font-size:11.5px;margin-bottom:6px"><i class="ti ti-alert-triangle"></i> ' + bt.warnings.map(escapeHtml).join(' · ') + '</div>' : '';
+        if (bt.booked) return '<div style="border-top:.5px solid var(--border);padding:10px 0;color:var(--green);font-size:12.5px"><i class="ti ti-check"></i> Booked — ' + escapeHtml(bt.slip + ' · ' + (bt.accountCode || '') + ' · ' + viperMoney(viperNumF(bt.pl))) + '</div>';
+        const err = bt.submitError ? '<div style="color:var(--red);font-size:12px;margin-top:6px">' + escapeHtml(bt.submitError) + '</div>' : '';
+        let legFields = '';
+        bt.selections.forEach((s, si) => {
+          legFields += '<div style="display:grid;grid-template-columns:1.4fr .7fr .7fr .9fr;gap:6px;margin-top:6px">' +
+            '<input type="text" placeholder="Horse" value="' + escapeHtml(s.horse) + '" oninput="viperField(\'' + group + '\',\'' + k + '\',\'sel\',' + si + ',\'horse\',this.value)">' +
+            '<input type="number" placeholder="Odds" step="0.01" value="' + s.odds + '" oninput="viperField(\'' + group + '\',\'' + k + '\',\'sel\',' + si + ',\'odds\',this.value)">' +
+            '<input type="number" placeholder="EV%" step="0.01" value="' + s.evPct + '" oninput="viperField(\'' + group + '\',\'' + k + '\',\'sel\',' + si + ',\'evPct\',this.value)">' +
+            '<input type="text" placeholder="Terms" value="' + escapeHtml(s.terms) + '" oninput="viperField(\'' + group + '\',\'' + k + '\',\'sel\',' + si + ',\'terms\',this.value)">' +
+            '</div>';
+        });
+        return '<div style="border-top:.5px solid var(--border);padding:10px 0 4px">' + warn +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+          '<div><label class="lbl">Type</label><select onchange="viperField(\'' + group + '\',\'' + k + '\',\'top\',null,\'slip\',this.value);viperRenderBatch(\'' + group + '\')">' + VIPER_SLIPS.map(o => '<option' + (bt.slip === o ? ' selected' : '') + '>' + o + '</option>').join('') + '</select></div>' +
+          '<div><label class="lbl">Bookie</label><input type="text" value="' + escapeHtml(bt.bookie) + '" oninput="viperField(\'' + group + '\',\'' + k + '\',\'top\',null,\'bookie\',this.value)"></div>' +
+          '<div style="grid-column:1/3"><label class="lbl">Account' + (bt.accountCode ? ' — Notes read as "' + escapeHtml(bt.accountCode) + '"' + (bt.accountId ? '' : ' (no match)') : '') + '</label><select onchange="viperField(\'' + group + '\',\'' + k + '\',\'top\',null,\'accountId\',this.value)">' + acctOpts(bt.accountId) + '</select></div>' +
+          '<div><label class="lbl">Total EW stake £</label><input type="number" step="0.01" value="' + bt.totalStake + '" oninput="viperField(\'' + group + '\',\'' + k + '\',\'top\',null,\'totalStake\',this.value)"></div>' +
+          '<div><label class="lbl">P/L £ (off the slip)</label><input type="number" step="0.01" value="' + bt.pl + '" oninput="viperField(\'' + group + '\',\'' + k + '\',\'top\',null,\'pl\',this.value)"></div>' +
+          '<div><label class="lbl">Outcome</label><select onchange="viperField(\'' + group + '\',\'' + k + '\',\'top\',null,\'outcome\',this.value)">' + ['', 'Won', 'Placed', 'Lost', 'Void'].map(o => '<option' + (bt.outcome === o ? ' selected' : '') + '>' + (o || '—') + '</option>').join('') + '</select></div>' +
+          (bt.slip !== 'Single' ? '<div><label class="lbl">Slip EV%</label><input type="number" step="0.01" value="' + bt.slipEvPct + '" oninput="viperField(\'' + group + '\',\'' + k + '\',\'top\',null,\'slipEvPct\',this.value)"></div>' : '') +
+          '</div>' + legFields +
+          '<button class="add-btn" style="margin-top:8px;background:var(--brand);color:#fff;border-color:var(--brand);font-size:12px" onclick="viperBookOne(\'' + group + '\',\'' + entry.id + '\',\'' + k + '\')">Book this bet</button>' +
+          err + '</div>';
+      }).join('');
+    }
+    return '<div style="display:flex;gap:12px;padding:12px 0;border-bottom:.5px solid var(--border)">' + thumb + '<div style="flex:1;min-width:0">' + inner + '</div></div>';
+  }).join('');
+
+  const ready = vhBatch[group].reduce((s, e) => s + (e.status === 'done' ? e.bets.filter(b => !b.booked).length : 0), 0);
+  actions.style.display = vhBatch[group].length ? 'flex' : 'none';
+  const rc = document.getElementById('vh-' + px + '-ready'); if (rc) rc.textContent = ready;
+}
+
+function viperField(group, key, scope, idx, field, value) {
+  for (const entry of vhBatch[group]) {
+    const bt = entry.bets.find(b => b.key === key);
+    if (!bt) continue;
+    if (scope === 'sel') bt.selections[idx][field] = value;
+    else bt[field] = value;
+    return;
+  }
+}
+function viperRemoveEntry(group, id) {
+  vhBatch[group] = vhBatch[group].filter(e => e.id !== id);
+  viperRenderBatch(group);
+}
+function viperClearBatch(group) {
+  vhBatch[group] = [];
+  viperRenderBatch(group);
+  const m = vhEl(group, 'book-msg'); if (m) m.textContent = '';
+}
+
+function viperBuildPayload(group, bt) {
+  const stake = parseFloat(bt.totalStake);
+  const pl = parseFloat(bt.pl);
+  if (!(stake > 0)) return { error: 'Total EW stake must be greater than £0.' };
+  if (!isFinite(pl)) return { error: 'Enter the P/L shown on the slip.' };
+  if (!bt.accountId) return { error: 'Pick the account.' };
+  const acc = vhAccounts.find(a => String(a.id) === String(bt.accountId));
+  const code = acc ? (acc.account_id || bt.accountCode) : bt.accountCode;
+  const evPctForCalc = bt.slip === 'Single'
+    ? viperNumF(bt.selections[0] && bt.selections[0].evPct)
+    : viperNumF(bt.slipEvPct);
+  const fields = {
+    slip: bt.slip,
+    Bookie: (bt.bookie || '').trim(),
+    AccountCode: code || '',
+    Outcome: bt.outcome || '',
+    EV: +(stake * evPctForCalc / 100).toFixed(2),
+  };
+  let raceDate = null;
+  if (bt.slip === 'Single') {
+    const s = bt.selections[0] || {};
+    Object.assign(fields, {
+      Horse: (s.horse || '').trim(),
+      Race: (s.race || '').trim(),
+      RaceDate: (s.raceDate || '').trim(),
+      Odds: viperNumF(s.odds) || null,
+      'EV%': s.evPct === '' ? null : viperNumF(s.evPct),
+      Terms: (s.terms || '').trim(),
+    });
+    raceDate = viperParseDate(s.raceDate);
+  } else {
+    fields['SlipEV%'] = bt.slipEvPct === '' ? null : viperNumF(bt.slipEvPct);
+    fields.PotentialReturn = bt.potentialReturn === '' ? null : viperNumF(bt.potentialReturn);
+    fields.legs = bt.selections.map(s => ({
+      Race: (s.race || '').trim(), RaceDate: (s.raceDate || '').trim(), Horse: (s.horse || '').trim(),
+      Odds: viperNumF(s.odds) || null, 'EV%': s.evPct === '' ? null : viperNumF(s.evPct),
+      Terms: (s.terms || '').trim(), Outcome: s.outcome || '',
+    }));
+    raceDate = viperParseDate((bt.selections[0] || {}).raceDate);
+  }
+  return {
+    body: {
+      bet_type: VIPER_GROUPS[group].type,
+      date: raceDate || undefined,
+      fields,
+      legs: [{ account_id: +bt.accountId, stake: +stake.toFixed(2) }],
+      autoSettlePl: +pl.toFixed(2),
+    },
+  };
+}
+
+async function viperBookBet(group, bt) {
+  const built = viperBuildPayload(group, bt);
+  if (built.error) { bt.submitError = built.error; return false; }
+  try {
+    const d = await ledgerApi('bets', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(built.body),
+    });
+    if (d && d.ok) { bt.booked = true; bt.submitError = null; return true; }
+    bt.submitError = (d && d.error) || 'Could not book the bet.';
+    return false;
+  } catch (e) { bt.submitError = 'Network error booking the bet.'; return false; }
+}
+async function viperBookOne(group, entryId, key) {
+  const entry = vhBatch[group].find(e => e.id === entryId); if (!entry) return;
+  const bt = entry.bets.find(b => b.key === key); if (!bt || bt.booked) return;
+  await viperBookBet(group, bt);
+  viperRenderBatch(group);
+  if (bt.booked) openViperSection(group);
+}
+async function viperBookAll(group) {
+  const msg = vhEl(group, 'book-msg');
+  const pending = [];
+  vhBatch[group].forEach(e => { if (e.status === 'done') e.bets.forEach(b => { if (!b.booked) pending.push(b); }); });
+  if (!pending.length) { msg.innerHTML = '<span style="color:var(--amber)">Nothing ready to book.</span>'; return; }
+  let ok = 0, failed = 0;
+  for (let i = 0; i < pending.length; i++) {
+    msg.textContent = 'Booking ' + (i + 1) + '/' + pending.length + '…';
+    const done = await viperBookBet(group, pending[i]);
+    done ? ok++ : failed++;
+    viperRenderBatch(group);
+  }
+  msg.innerHTML = failed
+    ? '<span style="color:var(--amber)">' + ok + ' booked, ' + failed + ' failed — see below.</span>'
+    : '<span style="color:var(--green)"><i class="ti ti-check"></i> ' + ok + ' bet' + (ok === 1 ? '' : 's') + ' booked.</span>';
+  vhBatch[group] = vhBatch[group].filter(e => e.status !== 'done' || e.bets.some(b => !b.booked));
+  viperRenderBatch(group);
+  openViperSection(group);
 }
 
 // ── BB GOLF ──

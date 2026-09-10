@@ -53,9 +53,10 @@ function legCommitted(leg) {
 // group is looked up from custom_sheets.user_group instead.
 const HARDCODED_BUZZER_TYPES = [
   'Value', 'Keithbot', 'Dogs + Horses', 'BB Horse', 'BB Golf', 'American Props', 'Freeze',
-  'Ninja Golf BFEX', 'Corners', 'Offers (Personal)', 'Other Bets', 'Casino (Personal)', 'Back & Lay'
+  'Ninja Golf BFEX', 'Corners', 'Offers (Personal)', 'Other Bets', 'Casino (Personal)', 'Back & Lay',
+  'Viper Horse'
 ];
-const HARDCODED_ASSISTANT_TYPES = ['Discord', 'BB - RTP', 'BB - BT', 'Casino', 'Offers (VA)', 'Dogs + Horses (VA)'];
+const HARDCODED_ASSISTANT_TYPES = ['Discord', 'BB - RTP', 'BB - BT', 'Casino', 'Offers (VA)', 'Dogs + Horses (VA)', 'Viper Horse (VA)'];
 function getBetTypeGroup(bet_type) {
   if (HARDCODED_BUZZER_TYPES.includes(bet_type)) return 'buzzer';
   if (HARDCODED_ASSISTANT_TYPES.includes(bet_type)) return 'assistant';
@@ -3008,6 +3009,188 @@ router.post('/parse-betslip', requireAdmin, async (req, res) => {
     });
   } catch (err) {
     console.error('[parse-betslip]', err && err.message);
+    res.json({ ok: false, error: 'Screenshot read failed: ' + (err && err.message || 'unknown error') });
+  }
+});
+
+// ================== VIPER HORSES — parse a settled-bet screenshot ==================
+//
+// POST /api/ledger/parse-viper  { image: "<base64>", mediaType: "image/png" }
+// Reads a screenshot from the Viper racing tool of one or more ALREADY-SETTLED each-way bets
+// and returns one entry per bet found in the image. The frontend (Bet Tracker -> Viper Horses)
+// then books each via the normal POST /bets with autoSettlePl set to the P/L off the slip, so
+// the account balance moves immediately and there's no separate settle step.
+//
+// Two Viper layouts are supported in the same image:
+//  - Singles list: a table with columns Horse (course + time + date on a sub-line), Book, Odds,
+//    EV %, Stake (EW), Terms ("N @ f/f"), Outcome, P/L, Notes (= our account code).
+//  - Multiples: a card per slip — header "Double"/"Treble"/"Fourfold" + bookmaker + date, a left
+//    panel with Slip EV %, Total Stake, Potential Return, P/L and Notes, and a right-hand table
+//    with one row per leg (Race incl. date+course+time, Horse, Odds, EV %, Terms, Outcome).
+//
+// NOT admin-only: staff file the Assistant-side ("Viper Horse (VA)") screenshots. Booking is
+// still gated by POST /bets' staff-can-only-use-Assistant check, so this only reads an image.
+const VIPER_MODEL = process.env.BETSLIP_MODEL || 'claude-opus-5';
+const VIPER_PROMPT = `You are reading a screenshot from a horse-racing bet tracker ("Viper"). It shows one or more
+ALREADY-PLACED each-way bets, either as rows in a "Singles" list or as one card per multiple
+(Double / Treble / Fourfold). The same screenshot may contain several bets — return every one.
+
+Respond with ONLY a JSON object, no prose, no markdown fences, with exactly this shape:
+{
+  "bets": [
+    {
+      "slipType": "Single" | "Double" | "Treble" | "4-Fold",   // "Fourfold"/"4 fold" -> "4-Fold"
+      "bookie": <bookmaker name shown, e.g. "Boylesports", "SkyBet">, or null,
+      "accountCode": <the "Notes" value, e.g. "C007">, or null,
+      "totalStake": <total each-way stake in pounds as a number (strip the currency symbol and commas); for a Single this is the "Stake (EW)" cell; for a multiple it is "Total Stake">, or null,
+      "potentialReturn": <"Potential Return" in pounds as a number, multiples only>, or null,
+      "slipEvPct": <"Slip EV %" as a number, e.g. 109.57, multiples only>, or null,
+      "outcome": <the slip's overall Outcome text exactly as shown, e.g. "Won", "Placed", "Lost", "Void", "-">, or null,
+      "pl": <the "P/L" value in pounds as a number, may be negative, 0 is allowed; null ONLY if the P/L cell is blank or shows "-">,
+      "selections": [
+        {
+          "horse": <horse name>,
+          "course": <racecourse, e.g. "Worcester">, or null,
+          "time": <race time, e.g. "15:20">, or null,
+          "raceDate": <race date exactly as shown, e.g. "10/09/26">, or null,
+          "oddsDecimal": <odds as a decimal number, e.g. 101.00>, or null,
+          "oddsFractional": <odds if only shown fractional, e.g. "100/1">, or null,
+          "evPct": <that selection's "EV %" as a number>, or null,
+          "terms": <the each-way terms exactly as shown, e.g. "3 @ 1/5">, or null,
+          "outcome": <that selection's Outcome text if the multiple's leg table has one>, or null
+        }
+      ]
+    }
+  ],
+  "confidenceNotes": <brief note of anything unreadable or ambiguous>, or null
+}
+
+Rules:
+- A Single has exactly one entry in "selections". A Double has 2, a Treble 3, a 4-Fold 4.
+- Read only what is visible. Never guess a horse name, a number, or an account code.
+- Give money as plain numbers: "£7,065.20" -> 7065.2, "-£10.00" -> -10, "+£1,234" -> 1234.
+- Percentages as plain numbers: "28.45%" -> 28.45.
+- If a cell shows "-" or is blank, use null for that field.`;
+
+function viperNormaliseOutcome(raw) {
+  const s = String(raw || '').trim().toLowerCase();
+  if (!s || s === '-' || s === '—') return null;
+  if (/void|non[-\s]?runner|\bnr\b|refund/.test(s)) return 'Void';
+  if (/(^|\b)(won|win|winner)\b/.test(s)) return 'Won';
+  if (/place/.test(s)) return 'Placed';
+  if (/los(t|e)|lose|lost/.test(s)) return 'Lost';
+  return null;
+}
+function viperNum(v) {
+  if (v == null) return null;
+  if (typeof v === 'number') return isFinite(v) ? v : null;
+  const s = String(v).replace(/[£$,\s]/g, '').replace(/[–—]/g, '-');
+  if (s === '' || s === '-') return null;
+  const n = Number(s);
+  return isFinite(n) ? n : null;
+}
+function viperSlipType(raw, legCount) {
+  const byCount = { 1: 'Single', 2: 'Double', 3: 'Treble', 4: '4-Fold' };
+  if (byCount[legCount]) return byCount[legCount];
+  const s = String(raw || '').trim().toLowerCase().replace(/[\s-]/g, '');
+  if (s.startsWith('single')) return 'Single';
+  if (s.startsWith('double')) return 'Double';
+  if (s.startsWith('treble') || s.startsWith('triple')) return 'Treble';
+  if (s === '4fold' || s === 'fourfold' || s.startsWith('4fold') || s.startsWith('fourfold')) return '4-Fold';
+  return legCount === 1 ? 'Single' : null;
+}
+
+router.post('/parse-viper', async (req, res) => {
+  const t0 = Date.now();
+  try {
+    console.log('[parse-viper] request received, body image chars =', (req.body && req.body.image || '').length);
+    const client = getAnthropic();
+    if (!client) return res.json({ ok: false, error: 'Screenshot parsing is not configured on the server yet.' });
+
+    const { image, mediaType } = req.body || {};
+    if (!image || typeof image !== 'string') return res.status(400).json({ ok: false, error: 'image (base64) required' });
+    const data = image.replace(/^data:[^,]+,/, '');
+    const media = /jpe?g/i.test(mediaType || '') ? 'image/jpeg'
+      : /webp/i.test(mediaType || '') ? 'image/webp' : 'image/png';
+
+    let parsed;
+    try {
+      const msg = await client.messages.create({
+        model: VIPER_MODEL,
+        max_tokens: 4096,
+        output_config: { effort: 'low' },
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: media, data } },
+            { type: 'text', text: VIPER_PROMPT },
+          ],
+        }],
+      });
+      const text = (msg.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
+      try { parsed = JSON.parse(text); }
+      catch (e) { const m = text.match(/\{[\s\S]*\}/); parsed = JSON.parse(m ? m[0] : '{}'); }
+    } catch (e) {
+      console.error('[parse-viper] model call failed:', e && e.message);
+      return res.json({ ok: false, error: 'Could not read the screenshot — try a clearer crop.' });
+    }
+    console.log('[parse-viper] model replied in', ((Date.now() - t0) / 1000).toFixed(1) + 's');
+
+    const rawBets = Array.isArray(parsed.bets) ? parsed.bets : (parsed.slipType || parsed.selections ? [parsed] : []);
+    const bets = rawBets.map(b => {
+      const rawSels = Array.isArray(b.selections) ? b.selections : [];
+      const selections = rawSels.map(s => {
+        let odds = viperNum(s.oddsDecimal);
+        if (odds == null && s.oddsFractional) odds = fractionalToDecimal(s.oddsFractional);
+        const course = s.course || null, time = s.time || null;
+        const race = [course, time].filter(Boolean).join(' ') || null;
+        return {
+          horse: s.horse || null,
+          course, time, race,
+          raceDate: s.raceDate || null,
+          odds,
+          evPct: viperNum(s.evPct),
+          terms: s.terms || null,
+          outcome: viperNormaliseOutcome(s.outcome),
+          outcomeRaw: s.outcome || null,
+        };
+      });
+      const slip = viperSlipType(b.slipType, selections.length);
+      const pl = viperNum(b.pl);
+      const totalStake = viperNum(b.totalStake);
+      const warnings = [];
+      if (!b.accountCode) warnings.push('No account code (Notes) read — pick the account manually.');
+      if (totalStake == null) warnings.push('Stake not read — enter it before booking.');
+      if (pl == null) warnings.push('P/L not read — this bet looks unsettled or the P/L cell was blank.');
+      if (!slip) warnings.push('Could not tell if this is a single/double/treble/4-fold.');
+      else if (slip !== 'Single') {
+        const need = { Double: 2, Treble: 3, '4-Fold': 4 }[slip];
+        if (need && selections.length !== need) warnings.push(`${slip} should have ${need} selections but ${selections.length} were read.`);
+      }
+      if (selections.some(s => s.odds == null)) warnings.push('An odds value was not read — check each leg.');
+      return {
+        slip,
+        bookie: b.bookie || null,
+        accountCode: b.accountCode ? String(b.accountCode).trim() : null,
+        totalStake,
+        potentialReturn: viperNum(b.potentialReturn),
+        slipEvPct: viperNum(b.slipEvPct),
+        outcome: viperNormaliseOutcome(b.outcome),
+        outcomeRaw: b.outcome || null,
+        pl,
+        selections,
+        warnings,
+      };
+    });
+
+    const warnings = [];
+    if (!bets.length) warnings.push('No bets were found in that screenshot.');
+    if (parsed.confidenceNotes) warnings.push(String(parsed.confidenceNotes));
+
+    console.log('[parse-viper] done in', ((Date.now() - t0) / 1000).toFixed(1) + 's —', bets.length, 'bet(s)');
+    res.json({ ok: true, bets, warnings });
+  } catch (err) {
+    console.error('[parse-viper]', err && err.message);
     res.json({ ok: false, error: 'Screenshot read failed: ' + (err && err.message || 'unknown error') });
   }
 });
