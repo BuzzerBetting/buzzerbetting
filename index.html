@@ -13530,23 +13530,19 @@ async function runScanCore(matchId, home, away, competition) {
       return { fair, confidence };
     }
 
-    // Fetch all WH markets in parallel
-    const [whSotOtbPlayers, whLfPlayers, whRfPlayers, wh6ydPlayers] = await Promise.all([
-      fetchWHMarket(home, away, `${home} ${away} shot on target from outside the penalty area`, 'outside'),
-      fetchWHMarket(home, away, 'to score with left foot', 'with left foot'),
-      fetchWHMarket(home, away, 'to score with right foot', 'with right foot'),
+    // SOT Outside Box / Left Foot / Right Foot Goal moved server-side 2026-09-11 (see
+    // ev_engine.compute_wh_ev_bets, merged into oc_calc_ev_bets.json alongside Header/OTB —
+    // same reason those already left the browser: a bet only ever computed client-side depends
+    // on a tab being open/focused/non-calculator-role, so it could go all evening unlogged).
+    // 6 Yard Box has no fair-odds model (display-only, WH price with no EV) and stays here —
+    // there's no automated bet to migrate, just a price to show.
+    const [wh6ydPlayers] = await Promise.all([
       fetchWHMarket(home, away, 'to score inside the 6 yard box', 'inside the 6 yard box'),
     ]);
     const whLookups = {
-      sot_otb: {},
-      lf_goal: {},
-      rf_goal: {},
-      six_yd:  {},
+      six_yd: {},
     };
-    for (const p of whSotOtbPlayers) whLookups.sot_otb[p.name.toLowerCase()] = p;
-    for (const p of whLfPlayers)     whLookups.lf_goal[p.name.toLowerCase()] = p;
-    for (const p of whRfPlayers)     whLookups.rf_goal[p.name.toLowerCase()] = p;
-    for (const p of wh6ydPlayers)    whLookups.six_yd[p.name.toLowerCase()] = p;
+    for (const p of wh6ydPlayers) whLookups.six_yd[p.name.toLowerCase()] = p;
 
     const allPlayers = [];
     for (const team of [lineupData.home, lineupData.away]) {
@@ -13577,10 +13573,10 @@ async function runScanCore(matchId, home, away, competition) {
       { key: 'last2Seasons',  label: '+2 Seasons' },
     ];
 
+    // SOT Outside Box / Left Foot / Right Foot Goal entries removed 2026-09-11 — computed
+    // server-side now (see ev_engine.compute_wh_ev_bets). 6 Yard Box has no fair-odds model and
+    // stays a display-only client-side lookup, same as always.
     const MARKET_CONFIG = [
-      { key: 'sot_otb',  label: 'SOT Outside Box',  calcKey: 'otbSOTP',    needsAGS: false, isShot: true,  useWH: true,  whKey: 'sot_otb' },
-      { key: 'lf_goal',  label: 'Left Foot Goal',   calcKey: 'lfGoal',     needsAGS: true,  isShot: false, useWH: true,  whKey: 'lf_goal' },
-      { key: 'rf_goal',  label: 'Right Foot Goal',  calcKey: 'rfGoal',     needsAGS: true,  isShot: false, useWH: true,  whKey: 'rf_goal' },
       { key: 'six_yd',   label: '6 Yard Box',       calcKey: null,         needsAGS: false, isShot: false, useWH: true,  whKey: 'six_yd',  noCalc: true },
     ];
 
