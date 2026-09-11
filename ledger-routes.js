@@ -117,6 +117,8 @@ router.use((req, res, next) => {
 //   - /match-predictions: Calculations feature.
 //   - /pen-taker: manual penalty-taker override (GET/POST/DELETE /pen-taker-override) plus
 //     the box-facing /pen-taker resolver — same Calculations feature as match-predictions.
+//   - /calc-ev-bets: Calculated +EV bet log/settlement/stats — same Calculations feature as
+//     match-predictions, no financial/ledger data.
 //   - /strategy-prefs: per-user Freeze-builder UI settings, no financial data — every role.
 //   - /freeze-eligible-list: the VA-pasted Acca Freeze coupon (Freeze Builder), no financial data.
 router.use((req, res, next) => {
@@ -125,6 +127,7 @@ router.use((req, res, next) => {
       && !req.path.startsWith('/notifications')
       && !req.path.startsWith('/match-predictions')
       && !req.path.startsWith('/pen-taker')
+      && !req.path.startsWith('/calc-ev-bets')
       && !req.path.startsWith('/strategy-prefs')
       && !req.path.startsWith('/freeze-eligible-list')) {
     return res.status(403).json({ ok: false, error: 'This account has no access to the Ledger.' });
@@ -2734,6 +2737,13 @@ const realCornerBetStats = (() => {
   try { return require('./corner-model/realBetXg'); }
   catch (e) { return null; }
 })();
+// Calculated +EV bet log/settlement/stats — see corner-model/calcEvLog.js. Same optional-
+// require pattern as the others above; its absence just means the "Bet stats" panel has nothing
+// to show, not a broken Calculated +EV page.
+const calcEvLog = (() => {
+  try { return require('./corner-model/calcEvLog'); }
+  catch (e) { console.error('[calc-ev-bets] calcEvLog not loaded:', e.message); return null; }
+})();
 
 // matchDetails fetch with a short in-memory TTL cache — pre-match lineups flip
 // predicted -> confirmed, so this is deliberately NOT the immutable disk cache.
@@ -2969,6 +2979,33 @@ router.get('/corner-bet-stats', async (req, res) => {
   try {
     if (cornerBetSettle) { try { await cornerBetSettle.settleDate(date); } catch (e) { /* leave unsettled, try again next read */ } }
     res.json({ ok: true, ...predictionLog.getStats(date), ...realBetFields });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/calc-ev-bets/ingest — body: { bets: [{matchId, match, kickoff, market,
+// selection, selId, fair, bookie, odds, ev, xg}, ...] }. Called by the client after every
+// Calculated +EV scan with whatever it's currently showing (see index.html recordCalcEvBets) —
+// calcEvLog.recordBets dedups on (matchId, market, selId) and keeps only the first-seen price,
+// so this is safe to call on every scan without inflating the log. Best-effort: no calcEvLog
+// (module missing) or a bad payload just means nothing gets logged, not a failed scan.
+router.post('/calc-ev-bets/ingest', (req, res) => {
+  if (!calcEvLog) return res.json({ ok: true, inserted: 0 });
+  try {
+    const bets = Array.isArray(req.body && req.body.bets) ? req.body.bets : [];
+    const result = calcEvLog.recordBets(bets);
+    res.json({ ok: true, ...result });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// GET /api/ledger/calc-ev-bets/stats — backs the "Bet stats" panel under Calculated +EV.
+// Settles anything gradeable first (cheap no-op once nothing's pending — see
+// calcEvLog.settleAll), then returns running totals + a £50-flat-stake P/L, a per-market
+// breakdown, and accumulated Header/OTB-goal xG.
+router.get('/calc-ev-bets/stats', async (req, res) => {
+  if (!calcEvLog) return res.json({ ok: true, overall: { total: 0, settled: 0, wins: 0, winPct: null, pl: 0 }, byMarket: [], headerXg: 0, otbXg: 0 });
+  try {
+    try { await calcEvLog.settleAll(); } catch (e) { /* leave unsettled, try again next read */ }
+    res.json({ ok: true, ...calcEvLog.getStats() });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
