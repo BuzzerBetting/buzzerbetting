@@ -2417,7 +2417,7 @@ input::placeholder{color:var(--text3)}
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block"></span>BFex fair — high confidence (£500+ matched, tight spread)</span>
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--amber);display:inline-block"></span>Usable but thinner BFEX data</span>
     </div>
-    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">BFex fair</th><th class="r">Last traded</th><th class="r">Total traded</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th></th></tr></thead><tbody id="scanner-body"></tbody></table></div></div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Fair odds</th><th class="r">Last traded</th><th class="r">Total traded</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th></th></tr></thead><tbody id="scanner-body"></tbody></table></div></div>
     <div class="note"><i class="ti ti-info-circle"></i> Auto-refreshes every 60s. Scanning starts once a match's lineup is confirmed and runs every 10 minutes until kickoff, tightening to every 3 minutes in the last 15 minutes before kickoff — First Goalscorer, Anytime Goalscorer, Player Shown a Card and Player Shots on Target markets, sorted by EV%. These all compare Oddschecker directly against the matching BFEX market. Header and Outside-the-Box goal need their own fair-odds calculation instead (no direct BFEX market for either) — see the <a href="javascript:void(0)" onclick="baTab('calc-ev')">Calculated +EV</a> tab.</div>
   </div>
 
@@ -2431,7 +2431,7 @@ input::placeholder{color:var(--text3)}
     </div>
     <div id="cev-status"></div>
     <div id="cev-results" style="display:none;margin-top:10px">
-      <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="cev-tbody"></tbody></table></div></div>
+      <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:860px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">AGS/SOT fair</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="cev-tbody"></tbody></table></div></div>
     </div>
     <div id="calc-ev-stats-panel" style="display:none;margin-top:14px"></div>
     <div class="note"><i class="ti ti-info-circle"></i> Markets with no direct Betfair equivalent — Header and Outside-the-Box goal (Oddschecker, auto-detected, no more manual market IDs) and Left Foot/Right Foot/6 Yard Box (William Hill) — all vs a BFEX-AGS-derived fair, sorted by EV%. Direct BFEX comparisons (AGS/FGS/Cards/SOT) live on the <a href="javascript:void(0)" onclick="baTab('oc-ev')">Oddschecker +EV</a> tab instead.</div>
@@ -8870,8 +8870,10 @@ function renderOddscheckerEV(){
     const lastTraded=(typeof b.lastTraded==='number')?b.lastTraded.toFixed(2):'—';
     const matched=(typeof b.matched==='number')?`£${b.matched.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}`:'—';
     const boostIcon=b.boost?'<span class="boost-icon" title="Oddschecker Price Boost" style="margin-right:6px;vertical-align:middle">B</span>':'';
+    const sourceLabel=b.source==='combo'?'OC/BB':(b.source==='bfex'?'BFEX':(b.source||''));
+    const fairCell=sourceLabel?`${b.fair.toFixed(2)} <span style="color:var(--text3);font-size:11px">(${sourceLabel})</span>`:b.fair.toFixed(2);
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${boostIcon}${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:${fairColor};font-weight:500">${b.fair.toFixed(2)}</td><td class="r tn" style="color:var(--text2)">${lastTraded}</td><td class="r tn" style="color:var(--text2)">${matched}</td><td class="r" style="color:var(--text2);font-size:12px">${ocBookieName(b.bk)}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td><td class="r"><button onclick="copyOddscheckerLine(${i},this)" title="Copy line" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td>`;
+    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${boostIcon}${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:${fairColor};font-weight:500">${fairCell}</td><td class="r tn" style="color:var(--text2)">${lastTraded}</td><td class="r tn" style="color:var(--text2)">${matched}</td><td class="r" style="color:var(--text2);font-size:12px">${ocBookieName(b.bk)}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td><td class="r"><button onclick="copyOddscheckerLine(${i},this)" title="Copy line" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td>`;
     sb.appendChild(tr);
   });
   if(!shown.length){
@@ -13727,6 +13729,7 @@ async function runScanCore(matchId, home, away, competition) {
           bfexConfidence,
           bestEv,
           bestFair,
+          baseFair: market.needsAGS ? agsForCalc : (market.isShot ? sotForCalc : null),
           isConfident,
         });
       }
@@ -13782,10 +13785,10 @@ async function scanAllCalcEV(statusEl, opts) {
     if (!d || !d.ok || !Array.isArray(d.bets)) return;
     d.bets.forEach(b => allEvBets.push({
       t: b.t, matchId: b.matchId, match: b.match, market: b.mkt, player: b.sel, playerId: b.selId,
-      bestFair: b.fair, bookie: b.bk,
+      bestFair: b.fair, baseFair: b.baseFair, bookie: b.bk,
       ocOdds: typeof b.odds === 'number' ? b.odds.toFixed(2) : b.odds,
       bestEv: b.ev, isConfident: b.conf === 'green', noCalc: false,
-      boost: isBoost || !!b.boost, xg: b.xg,
+      boost: isBoost || !!b.boost, xg: b.xg, allOdds: b.allOdds,
     }));
   };
   try { pushCalcFeed(rCalc, false); } catch(e) { console.warn('oc-calc-ev fetch failed:', e.message); }
@@ -13889,6 +13892,26 @@ function renderCalcEvStats(d){
 }
 
 // Same table shape as the Oddschecker +EV page — Time/Match/Market/Selection/Fair/Bookie/Odds/EV%.
+// If a bet's current best book has been filtered out by the Bet Alerts bookmaker toggles, but
+// the bet carries other bookmakers' prices too (allOdds — only Header/OTB goal rows have this;
+// William Hill/boost-market rows are genuinely single-bookmaker, so there's nothing to fall
+// back to), swap to the best-priced still-ALLOWED book instead of hiding the row outright.
+// Recomputes EV against the new price using the same fair — the fair doesn't change, only
+// which bookmaker's odds it's compared against. Returns null (drop the row) only when no
+// allowed book has a price for this bet at all.
+function remapToAllowedBook(bet) {
+  if (typeof baBookEnabled !== 'function' || baBookEnabled(bet.bookie)) return bet;
+  if (!bet.allOdds) return null;
+  let bestCode = null, bestPrice = null;
+  for (const [code, price] of Object.entries(bet.allOdds)) {
+    if (!baBookEnabled(code)) continue;
+    if (bestPrice == null || price > bestPrice) { bestPrice = price; bestCode = code; }
+  }
+  if (bestPrice == null) return null;
+  const fair = bet.bestFair;
+  const ev = fair ? ((bestPrice / fair - 1) * 100) : bet.bestEv;
+  return { ...bet, bookie: bestCode, ocOdds: bestPrice.toFixed(2), bestEv: ev };
+}
 function renderEVResults(bets) {
   const resultsEl = document.getElementById('cev-results');
   const tbody = document.getElementById('cev-tbody');
@@ -13897,7 +13920,7 @@ function renderEVResults(bets) {
   // Bet Alerts bookmaker filter + daily-post reporting. cevLastBets keeps the *unfiltered*
   // list so re-applying a more permissive filter can recover hidden rows without a re-scan.
   cevLastBets = bets;
-  if (typeof baBookEnabled === 'function') bets = bets.filter(b => baBookEnabled(b.bookie));
+  if (typeof baBookEnabled === 'function') bets = bets.map(remapToAllowedBook).filter(Boolean);
   const cevCountEl = document.getElementById('cev-smeta-count');
   if (cevCountEl) cevCountEl.textContent = `${bets.length} bet${bets.length === 1 ? '' : 's'} found`;
   // noCalc rows (e.g. 6 Yard Box) are display-only — WH price with no fair-odds model, so
@@ -13905,7 +13928,7 @@ function renderEVResults(bets) {
   if (typeof baOnEdgeRendered === 'function') baOnEdgeRendered('calc-ev', bets.filter(b => !b.noCalc).map(b => ({ match: b.match, market: b.market, selection: b.player, bk: ocBookieName(b.bookie), odds: parseFloat(b.ocOdds) || null, ev: b.bestEv })));
 
   if (!bets.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:32px;font-size:13px">No +EV bets found</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:32px;font-size:13px">No +EV bets found</td></tr>`;
     resultsEl.style.display = '';
     return;
   }
@@ -13916,6 +13939,7 @@ function renderEVResults(bets) {
     const evBg  = bet.noCalc ? 'var(--surface2)' : (ev >= 20 ? 'var(--green-bg)' : ev >= 10 ? 'var(--amber-bg)' : 'var(--blue-bg)');
     const evLabel = bet.noCalc ? 'No calc' : `+${ev.toFixed(1)}%`;
     const fairLabel = bet.bestFair ? bet.bestFair.toFixed(2) : '—';
+    const baseFairLabel = bet.baseFair ? bet.baseFair.toFixed(2) : '—';
     const rowStyle = bet.noCalc ? '' : (bet.isConfident ? '' : 'background:var(--amber-bg)');
 
     const boostIcon = bet.boost ? '<span class="boost-icon" title="Oddschecker Price Boost" style="margin-right:6px;vertical-align:middle">B</span>' : '';
@@ -13927,6 +13951,7 @@ function renderEVResults(bets) {
       <td style="font-size:12px;color:var(--text3);white-space:nowrap">${boostIcon}${bet.match ?? ''}</td>
       <td style="font-size:12px;color:var(--text2)">${bet.market}</td>
       <td style="font-weight:500">${bet.player}</td>
+      <td class="r tn" style="color:var(--text2)">${baseFairLabel}</td>
       <td class="r tn" style="font-weight:500">${fairLabel}</td>
       <td class="r" style="font-size:12px;color:var(--text2)">${ocBookieName(bet.bookie)}</td>
       <td class="r tn" style="font-weight:600;color:var(--green)">${bet.ocOdds}</td>
