@@ -11,8 +11,11 @@
 // GET /api/betfair-f1  ->
 //   { ok:true, race:{ name, startTime }, markets:{
 //       winner:[{name,fair}], podium:[...], top6:[...], points:[...] } }
-// where `fair` is the no-vig price between best back and best lay (2*b*l/(b+l)), or the one
-// side that exists. Markets with no Betfair equivalent for the next race come back as [].
+// where `fair` is the no-vig price between best back and best lay (2*b*l/(b+l)) once both
+// clear a minimum liquidity bar, or the one side that exists once IT clears a higher bar alone
+// — see fairPrice(). A runner with nothing but a stray thin order resting on it is simply
+// omitted rather than treated as priced. Markets with no Betfair equivalent for the next race
+// come back as [].
 const https = require('https');
 const fs = require('fs');
 
@@ -117,11 +120,26 @@ function classifyMarket(name) {
   return null;
 }
 
-// No-vig price between best back `b` and best lay `l`.
-function fairPrice(b, l) {
-  if (b > 1 && l > 1) return +((2 * b * l) / (b + l)).toFixed(3);
-  if (b > 1) return +b.toFixed(3);
-  if (l > 1) return +l.toFixed(3);
+// No-vig price between best back `b` and best lay `l` — gated on liquidity, unlike a bare
+// price/price average. F1's thinner markets (especially Top 6/Points Finish props, and any
+// market on a backmarker driver) can have a single stray order of a few pounds sitting at an
+// arbitrary long price with nothing real behind it; treating that as "the fair price" produced
+// nonsense (confirmed live 2026-09-11: a Top 6 Finish "fair" of 15.0 built from one thin lay
+// order, against a real ~500-1000 bookmaker price, read as a "6573% arb"). Mirrors the
+// liquidity/spread reasoning deriveBfexFair already applies to football markets, sized down for
+// F1's naturally lower volume rather than reusing football's exact thresholds.
+const MIN_SIZE = 10;       // £ — below this a two-sided quote is too thin to average
+const SOLO_MIN_SIZE = 50;  // £ — a ONE-sided price needs more size before standing alone as fair
+const MAX_SPREAD_PCT = 0.5; // wider tolerance than football's 15% — F1 props are inherently thinner
+function fairPrice(b, bSize, l, lSize) {
+  const hasBack = b > 1 && bSize >= MIN_SIZE;
+  const hasLay = l > 1 && lSize >= MIN_SIZE;
+  if (hasBack && hasLay) {
+    const mid = (b + l) / 2;
+    if ((l - b) / mid <= MAX_SPREAD_PCT) return +mid.toFixed(3);
+  }
+  if (l > 1 && lSize >= SOLO_MIN_SIZE) return +l.toFixed(3);
+  if (b > 1 && bSize >= SOLO_MIN_SIZE) return +b.toFixed(3);
   return null;
 }
 
@@ -182,9 +200,13 @@ async function buildF1(appKey, session) {
     for (const r of mkt.runners) nameById[r.selectionId] = r.runnerName;
     for (const r of book.runners || []) {
       if (r.status !== 'ACTIVE') continue;
-      const b = (r.ex && r.ex.availableToBack && r.ex.availableToBack[0] && r.ex.availableToBack[0].price) || 0;
-      const l = (r.ex && r.ex.availableToLay && r.ex.availableToLay[0] && r.ex.availableToLay[0].price) || 0;
-      const fair = fairPrice(b, l);
+      const backLevel = r.ex && r.ex.availableToBack && r.ex.availableToBack[0];
+      const layLevel = r.ex && r.ex.availableToLay && r.ex.availableToLay[0];
+      const b = (backLevel && backLevel.price) || 0;
+      const bSize = (backLevel && backLevel.size) || 0;
+      const l = (layLevel && layLevel.price) || 0;
+      const lSize = (layLevel && layLevel.size) || 0;
+      const fair = fairPrice(b, bSize, l, lSize);
       if (!fair) continue;
       out[k].push({ name: nameById[r.selectionId] || String(r.selectionId), fair });
     }
