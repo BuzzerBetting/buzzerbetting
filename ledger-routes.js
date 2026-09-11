@@ -115,6 +115,8 @@ router.use((req, res, next) => {
 //   - /fotmob-leagues: part of Calculations (Today's Matches / Edit Leagues), not Ledger data.
 //   - /notifications: the header bell is available to every role.
 //   - /match-predictions: Calculations feature.
+//   - /pen-taker: manual penalty-taker override (GET/POST/DELETE /pen-taker-override) plus
+//     the box-facing /pen-taker resolver — same Calculations feature as match-predictions.
 //   - /strategy-prefs: per-user Freeze-builder UI settings, no financial data — every role.
 //   - /freeze-eligible-list: the VA-pasted Acca Freeze coupon (Freeze Builder), no financial data.
 router.use((req, res, next) => {
@@ -122,6 +124,7 @@ router.use((req, res, next) => {
       && !req.path.startsWith('/fotmob-leagues')
       && !req.path.startsWith('/notifications')
       && !req.path.startsWith('/match-predictions')
+      && !req.path.startsWith('/pen-taker')
       && !req.path.startsWith('/strategy-prefs')
       && !req.path.startsWith('/freeze-eligible-list')) {
     return res.status(403).json({ ok: false, error: 'This account has no access to the Ledger.' });
@@ -2775,12 +2778,35 @@ function mpLineupConfirmed(lineupType) {
 // that narrow pre-kickoff window would silently never get logged at all, even though the XI
 // was fully known and the match has since finished. Confirmed missing in exactly this way for a
 // live Levante vs Betis game (2026-08-29) — this is the fix for that.
+// Manual penalty-taker override — see pen_taker_overrides in ledger-db.js. Always wins over
+// corner-model's prediction, everywhere a pen taker feeds the goal/SOT fair-odds calc.
+function getPenTakerOverride(matchId, teamId) {
+  return db.prepare(`SELECT * FROM pen_taker_overrides WHERE match_id = ? AND team_id = ?`)
+    .get(String(matchId), String(teamId));
+}
+// Resolves a team's penalty taker for the goal/SOT fair-odds calc: manual override first, else
+// corner-model's own predictPenTaker. Deliberately independent of `confirmed`/xiKnown — called
+// with whatever XI is currently known (predicted, last-match placeholder, or confirmed), because
+// Ones to Watch (the pre-lineup scan) and the goal/SOT calc both need this ahead of confirmation,
+// not just once the real XI is out. Returns null if there's no XI to predict from at all.
+function resolvePenTaker(matchId, teamId, teamName, xi, asOfDate) {
+  const override = teamId ? getPenTakerOverride(matchId, teamId) : null;
+  if (override) return { id: override.player_id, name: override.player_name, pct: 100, note: null, source: 'override' };
+  if (!cornerModel || !teamId || !xi || !xi.length) return null;
+  try { return { ...cornerModel.predictPenTaker(teamId, xi, asOfDate), source: 'model' }; }
+  catch (e) { return { id: null, name: 'error', pct: 0, note: e.message, source: 'model' }; }
+}
+
 function mpSide(lineupSide, confirmed, xiKnown, isHome, homeTeamName, awayTeamName, matchId, date) {
   const teamId = lineupSide ? String(lineupSide.id) : null;
   const teamName = lineupSide ? lineupSide.name : null;
-  let cornerTakers = null, penTaker = null, cornerThreat = null, cornerThreatTargets = null;
-  if (xiKnown && teamId && cornerModel && lineupSide && Array.isArray(lineupSide.starters)) {
-    const xi = lineupSide.starters.map(p => ({ id: p.id, name: p.name, positionId: p.positionId }));
+  const xi = lineupSide && Array.isArray(lineupSide.starters)
+    ? lineupSide.starters.map(p => ({ id: p.id, name: p.name, positionId: p.positionId })) : null;
+  let cornerTakers = null, cornerThreat = null, cornerThreatTargets = null;
+  // Penalty taker: resolved as soon as ANY lineup is out (predicted, last-XI placeholder, or
+  // confirmed) — not gated on `confirmed` like cornerTakers below. See resolvePenTaker.
+  const penTaker = xi ? resolvePenTaker(matchId, teamId, teamName, xi, new Date().toISOString()) : null;
+  if (xiKnown && teamId && cornerModel && xi) {
     try {
       // homeTeamName/awayTeamName (the fixture's own names, not the lineup object's) are what
       // cornerThreat needs to find this fixture's cached Anytime Goalscorer odds — see
@@ -2799,7 +2825,7 @@ function mpSide(lineupSide, confirmed, xiKnown, isHome, homeTeamName, awayTeamNa
           cornerTakers: p.cornerTakers, headerTargets: p.cornerThreatTargets,
         });
       }
-      if (confirmed) { cornerTakers = p.cornerTakers; penTaker = p.penTaker; cornerThreat = p.cornerThreat; cornerThreatTargets = p.cornerThreatTargets; }
+      if (confirmed) { cornerTakers = p.cornerTakers; cornerThreat = p.cornerThreat; cornerThreatTargets = p.cornerThreatTargets; }
     } catch (e) { if (confirmed) cornerTakers = [{ name: 'error', pct: 0, side: null, note: e.message }]; }
   }
   return { teamId, teamName, lineupConfirmed: !!confirmed, cornerTakers, penTaker, cornerThreat, cornerThreatTargets };
@@ -2854,6 +2880,69 @@ router.get('/match-predictions', async (req, res) => {
     // keep the pred cache from growing unbounded across days
     if (_mpPredCache.size > 400) _mpPredCache.clear();
     res.json({ ok: true, date, matches });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// GET /api/ledger/pen-taker?matchId=123 — lean per-match pen-taker resolution (override, else
+// corner-model), independent of the per-date bulk loop above. This is what oc-scraper's Python
+// pipelines (ev_engine.py, ones_to_watch_scan.py) call to get the `pen=` flag for gsm_fair.py's
+// header/OTB-goal and headed/OTB-SOT fair-odds formulas — the box already knows the matchId
+// it's scanning, so a single-fixture lookup avoids re-walking every fixture for the day.
+router.get('/pen-taker', async (req, res) => {
+  try {
+    const matchId = String(req.query.matchId || '').trim();
+    if (!matchId) return res.status(400).json({ ok: false, error: 'matchId is required' });
+    const lu = await mpGetLineup(matchId);
+    const side = (lineupSide) => {
+      const teamId = lineupSide ? String(lineupSide.id) : null;
+      const teamName = lineupSide ? lineupSide.name : null;
+      const xi = lineupSide && Array.isArray(lineupSide.starters)
+        ? lineupSide.starters.map(p => ({ id: p.id, name: p.name, positionId: p.positionId })) : null;
+      return { teamId, teamName, penTaker: xi ? resolvePenTaker(matchId, teamId, teamName, xi, new Date().toISOString()) : null };
+    };
+    res.json({ ok: true, matchId, home: side(lu && lu.homeTeam), away: side(lu && lu.awayTeam) });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// GET /api/ledger/pen-taker-override?matchId=123 — current manual overrides for a fixture.
+router.get('/pen-taker-override', (req, res) => {
+  try {
+    const matchId = String(req.query.matchId || '').trim();
+    if (!matchId) return res.status(400).json({ ok: false, error: 'matchId is required' });
+    const overrides = db.prepare(`SELECT * FROM pen_taker_overrides WHERE match_id = ?`).all(matchId);
+    res.json({ ok: true, overrides });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/pen-taker-override — body: { matchId, teamId, teamName, playerId, playerName }
+// Sets/replaces the manual penalty-taker override for a team in a fixture. Wins over corner-
+// model's prediction everywhere pen taker feeds the fair-odds calc — see resolvePenTaker above.
+router.post('/pen-taker-override', (req, res) => {
+  try {
+    const { matchId, teamId, teamName, playerId, playerName } = req.body || {};
+    if (!matchId || !teamId || !playerId || !playerName) {
+      return res.status(400).json({ ok: false, error: 'matchId, teamId, playerId and playerName are required' });
+    }
+    db.prepare(`
+      INSERT INTO pen_taker_overrides (match_id, team_id, team_name, player_id, player_name, updated_at, updated_by)
+      VALUES (?, ?, ?, ?, ?, datetime('now'), ?)
+      ON CONFLICT(match_id, team_id) DO UPDATE SET
+        team_name = excluded.team_name, player_id = excluded.player_id,
+        player_name = excluded.player_name, updated_at = excluded.updated_at, updated_by = excluded.updated_by
+    `).run(String(matchId), String(teamId), teamName || null, String(playerId), playerName, req.username || null);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// DELETE /api/ledger/pen-taker-override?matchId=123&teamId=456 — clears a manual override,
+// reverting that team back to corner-model's own prediction.
+router.delete('/pen-taker-override', (req, res) => {
+  try {
+    const matchId = String(req.query.matchId || (req.body && req.body.matchId) || '').trim();
+    const teamId = String(req.query.teamId || (req.body && req.body.teamId) || '').trim();
+    if (!matchId || !teamId) return res.status(400).json({ ok: false, error: 'matchId and teamId are required' });
+    db.prepare(`DELETE FROM pen_taker_overrides WHERE match_id = ? AND team_id = ?`).run(matchId, teamId);
+    res.json({ ok: true });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 

@@ -12742,7 +12742,9 @@ async function openMatch(matchId, home, away, leagueName, isIntl, started, finis
           ? `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--green-bg);color:var(--green);padding:5px 14px;border-radius:var(--radius);font-size:12px;font-weight:600"><span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block"></span> Game Live</span>`
           : ''}
       </div>
+      ${penTakerCanEdit() ? `<div style="text-align:center;margin-top:10px"><button class="add-btn" style="font-size:12px" onclick="openPenTakerModal()"><i class="ti ti-flag"></i> Select Pen Taker</button> <span id="pen-taker-summary" style="font-size:11.5px;color:var(--text3);margin-left:6px"></span></div>` : ''}
     </div>`;
+  if (penTakerCanEdit()) loadPenTakerSummary(matchId, home, away);
   document.getElementById('match-status').innerHTML=`<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t">Loading lineups</div></div></div>`;
   try{
     const r=await fetch(`/.netlify/functions/lineups?matchId=${matchId}`);
@@ -12878,6 +12880,123 @@ function renderLineups(data){
     }
     wrap.appendChild(col);
   });
+}
+
+// ── Manual penalty-taker override — see ledger-routes.js resolvePenTaker / pen_taker_overrides.
+// corner-model's predictPenTaker is a guess from historical pens-taken data; this lets staff/
+// admin override it per (match, team) off whatever lineup is currently showing (predicted,
+// last-XI placeholder, or confirmed). The override wins everywhere pen taker feeds the goal/SOT
+// fair-odds calc (Header/OTB goal EV, the boost-calc feed, Ones to Watch, and the client SOT-
+// Outside-Box scan) — see gsm_fair.py's `pen` flag and calcAutoGSM's penAdj.
+function penTakerCanEdit(){ return CURRENT_USER_ROLE === 'admin' || CURRENT_USER_ROLE === 'staff'; }
+
+async function loadPenTakerSummary(matchId, home, away){
+  const el = document.getElementById('pen-taker-summary');
+  if (!el) return;
+  try {
+    const d = await ledgerApi('pen-taker?matchId=' + encodeURIComponent(matchId));
+    if (!d || !d.ok) { el.textContent = ''; return; }
+    const parts = [];
+    for (const [side, label] of [['home', home], ['away', away]]) {
+      const pt = d[side] && d[side].penTaker;
+      if (!pt || !pt.name || pt.id == null) continue;
+      const tag = pt.source === 'override' ? 'manual' : (pt.pct != null ? pt.pct + '% model' : 'model');
+      parts.push(`${label}: ${pt.name} (${tag})`);
+    }
+    el.textContent = parts.length ? parts.join('   ·   ') : '';
+  } catch (e) { el.textContent = ''; }
+}
+
+let PEN_TAKER_MODAL = null;
+async function openPenTakerModal(){
+  if (!penTakerCanEdit()) return;
+  if (!currentMatchLineupData) { alert('Lineups not loaded yet.'); return; }
+  document.getElementById('pen-taker-overlay')?.remove();
+  const matchId = currentMatchEventId;
+  PEN_TAKER_MODAL = { matchId, resolved: { home: null, away: null } };
+  const ov = document.createElement('div');
+  ov.id = 'pen-taker-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow:auto';
+  ov.onclick = e => { if (e.target === ov) closePenTakerModal(); };
+  ov.innerHTML =
+    '<div class="card card-pad" style="max-width:640px;width:100%">' +
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">' +
+    '<div><div class="sec-title" style="margin:0 0 2px;font-size:15px">Select penalty taker</div>' +
+    '<div style="font-size:12px;color:var(--text3)">Click a player to mark them as their team’s penalty taker — overrides the model prediction everywhere it feeds the goal/SOT fair-odds calc.</div></div>' +
+    '<button class="add-btn" onclick="closePenTakerModal()">Close</button>' +
+    '</div>' +
+    '<div id="pen-taker-body" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:14px">Loading…</div></div>';
+  document.body.appendChild(ov);
+  const d = await ledgerApi('pen-taker?matchId=' + encodeURIComponent(matchId)).catch(() => null);
+  if (!PEN_TAKER_MODAL) return; // closed while the fetch was in flight
+  PEN_TAKER_MODAL.resolved.home = d && d.ok ? d.home.penTaker : null;
+  PEN_TAKER_MODAL.resolved.away = d && d.ok ? d.away.penTaker : null;
+  renderPenTakerModal();
+}
+function closePenTakerModal(){
+  document.getElementById('pen-taker-overlay')?.remove();
+  PEN_TAKER_MODAL = null;
+}
+function renderPenTakerModal(){
+  const body = document.getElementById('pen-taker-body');
+  const data = currentMatchLineupData;
+  if (!body || !PEN_TAKER_MODAL || !data) return;
+  const cols = [{ side: 'home', team: data.home }, { side: 'away', team: data.away }];
+  body.innerHTML = cols.map(({ side, team }) => {
+    const players = [...((team.lineup && team.lineup.starters) || []), ...((team.lineup && team.lineup.bench) || [])];
+    const resolved = PEN_TAKER_MODAL.resolved[side];
+    const currentId = resolved && resolved.id != null ? String(resolved.id) : null;
+    const isOverride = resolved && resolved.source === 'override';
+    const rows = players.map(p => {
+      const active = currentId === String(p.id);
+      // Only ids (always plain numeric FotMob ids) go into the onclick string — names are
+      // looked up inside pickPenTaker itself, so a player name with a quote/apostrophe in it
+      // (e.g. "O'Brien") can never break out of the attribute.
+      return '<div onclick="pickPenTaker(\'' + side + '\',\'' + p.id + '\')" ' +
+        'style="padding:7px 10px;border-radius:var(--radius);cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px;' + (active ? 'background:var(--brand);color:#fff' : '') + '">' +
+        (active ? '<i class="ti ti-flag-2-filled"></i>' : '') + escapeHtml(p.name || '') + '</div>';
+    }).join('');
+    return '<div style="flex:1;min-width:220px;border:.5px solid var(--border);border-radius:var(--radius);padding:10px">' +
+      '<div style="font-weight:600;font-size:13px;margin-bottom:4px">' + escapeHtml(team.name || '') + '</div>' +
+      '<div style="font-size:11.5px;color:var(--text3);margin-bottom:8px">' +
+        (resolved && resolved.name ? 'Current: ' + escapeHtml(resolved.name) + (isOverride ? ' (manual)' : ' (model' + (resolved.pct != null ? ', ' + resolved.pct + '%' : '') + ')') : 'No prediction yet') +
+      '</div>' +
+      (isOverride ? '<button class="add-btn" style="font-size:11.5px;margin-bottom:8px" onclick="clearPenTakerOverrideUI(\'' + side + '\',\'' + team.id + '\')"><i class="ti ti-x"></i> Clear override — revert to model</button>' : '') +
+      '<div style="max-height:280px;overflow:auto">' + (rows || '<div style="color:var(--text3);font-size:12px">No lineup yet</div>') + '</div></div>';
+  }).join('');
+}
+async function pickPenTaker(side, playerId){
+  if (!PEN_TAKER_MODAL || !currentMatchLineupData) return;
+  const team = currentMatchLineupData[side];
+  if (!team) return;
+  const players = [...((team.lineup && team.lineup.starters) || []), ...((team.lineup && team.lineup.bench) || [])];
+  const player = players.find(p => String(p.id) === String(playerId));
+  if (!player) return;
+  const teamId = team.id, teamName = team.name, playerName = player.name;
+  try {
+    const d = await ledgerApi('pen-taker-override', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ matchId: PEN_TAKER_MODAL.matchId, teamId, teamName, playerId, playerName }),
+    });
+    if (!d.ok) { alert(d.error || 'Failed to save'); return; }
+    PEN_TAKER_MODAL.resolved[side] = { id: playerId, name: playerName, source: 'override' };
+    renderPenTakerModal();
+    loadPenTakerSummary(PEN_TAKER_MODAL.matchId, currentMatchHome, currentMatchAway);
+    ledgerApi('ones-to-watch/rescan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ matchId: PEN_TAKER_MODAL.matchId }) }).catch(() => {});
+  } catch (e) { alert('Network error.'); }
+}
+async function clearPenTakerOverrideUI(side, teamId){
+  if (!PEN_TAKER_MODAL) return;
+  const matchId = PEN_TAKER_MODAL.matchId;
+  try {
+    const d = await ledgerApi('pen-taker-override?matchId=' + encodeURIComponent(matchId) + '&teamId=' + encodeURIComponent(teamId), { method: 'DELETE' });
+    if (!d.ok) { alert(d.error || 'Failed to clear'); return; }
+    const re = await ledgerApi('pen-taker?matchId=' + encodeURIComponent(matchId)).catch(() => null);
+    if (PEN_TAKER_MODAL) PEN_TAKER_MODAL.resolved[side] = re && re.ok ? re[side].penTaker : null;
+    renderPenTakerModal();
+    loadPenTakerSummary(matchId, currentMatchHome, currentMatchAway);
+    ledgerApi('ones-to-watch/rescan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ matchId }) }).catch(() => {});
+  } catch (e) { alert('Network error.'); }
 }
 
 // ── PLAYER STATS ──
@@ -13315,12 +13434,23 @@ async function runScanCore(matchId, home, away, competition) {
     .then(r => r.json()).catch(() => ({ ok: false }));
   if (!lineupData.ok || !lineupData.confirmed) return [];
 
-  // Fetch BB odds and Betfair in parallel.
-  const [, bfexData] = await Promise.all([
+  // Fetch BB odds, Betfair, and the resolved pen taker (override, else corner-model — see
+  // ledger-routes.js resolvePenTaker) in parallel. penTakerIds feeds calcAutoGSM's `pen` flag
+  // below so SOT-Outside-Box fair odds aren't overstated for a confirmed taker; failure here
+  // is non-fatal (falls back to no adjustment, same as every player before this existed).
+  const [, bfexData, penTakerData] = await Promise.all([
     fetchBBOdds(matchId, home, away),
     fetch(`/.netlify/functions/betfair-proxy?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`)
-      .then(r => r.json()).catch(() => ({ ok: false }))
+      .then(r => r.json()).catch(() => ({ ok: false })),
+    ledgerApi('pen-taker?matchId=' + encodeURIComponent(matchId)).catch(() => ({ ok: false }))
   ]);
+  const penTakerIds = new Set();
+  if (penTakerData && penTakerData.ok) {
+    for (const side of ['home', 'away']) {
+      const pt = penTakerData[side] && penTakerData[side].penTaker;
+      if (pt && pt.id != null) penTakerIds.add(String(pt.id));
+    }
+  }
 
     // Build Betfair price lookup: normalised player name → full runner data
     // Build separate BFEX lookups for goal (AGS) and shot markets
@@ -13546,6 +13676,7 @@ async function runScanCore(matchId, home, away, competition) {
         // Recalculate every timeframe using BFEX input where available, keeping whichever
         // gives the best (highest) positive EV — same "best of 4 timeframes" rule the
         // Oddschecker +EV server pipeline applies to Header/OTB.
+        const isPenTaker = penTakerIds.has(String(player.id));
         let bestEv = null, bestFair = null;
         for (const tf of TIMEFRAMES) {
           const tfStats = statsData.timeframes?.[tf.key];
@@ -13557,7 +13688,7 @@ async function runScanCore(matchId, home, away, competition) {
             market.needsAGS ? agsForCalc : null,
             null,
             !market.needsAGS ? sotForCalc : null,
-            false
+            isPenTaker
           );
 
           let fairOdds = null;

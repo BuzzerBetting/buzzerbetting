@@ -469,6 +469,25 @@ CREATE TABLE IF NOT EXISTS ones_to_watch (
   UNIQUE(match_id, market, selection)
 );
 CREATE INDEX IF NOT EXISTS idx_ones_to_watch_match ON ones_to_watch(match_id);
+
+-- Manual penalty-taker override, per (match, team). corner-model's predictPenTaker() is an
+-- algorithmic guess from historical pens-taken data — usually right, but the user can see
+-- team news or gut-know a change the model has no data for yet. Setting a row here wins over
+-- the model prediction everywhere pen-taker feeds the goal/SOT fair-odds calc (Header/OTB goal
+-- EV, the boost-calc feed, Ones to Watch, and the client SOT-Outside-Box scan) — see
+-- GET/POST/DELETE /pen-taker-override in ledger-routes.js. Deleting the row reverts to the
+-- model's own prediction. Shared/global (like bet365_sot_odds), one row per team per match.
+CREATE TABLE IF NOT EXISTS pen_taker_overrides (
+  match_id   TEXT NOT NULL,
+  team_id    TEXT NOT NULL,
+  team_name  TEXT,
+  player_id  TEXT NOT NULL,
+  player_name TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_by TEXT,
+  PRIMARY KEY (match_id, team_id)
+);
+CREATE INDEX IF NOT EXISTS idx_pen_taker_overrides_match ON pen_taker_overrides(match_id);
 `);
 
 // Safe migration — ALTER TABLE ADD COLUMN errors if the column already exists, so this is
