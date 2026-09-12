@@ -143,19 +143,47 @@ exports.handler = async (event) => {
     return shorter.filter(w => w.length > 1).every(w => longer.includes(w));
   }
 
+  // 2026-09-12 fix: the fuzzy match above only ever runs against whatever Betfair's OWN
+  // textQuery search decided to return — and that search can come back completely empty
+  // for a club's full FotMob name, not just an abbreviated name a client-side fuzzy check
+  // could still catch. Confirmed live: "Manchester United", "Wolverhampton Wanderers",
+  // "Sheffield United" and "Nottingham Forest" all returned zero events; every player in
+  // that fixture then silently fell back to the weaker OC+BB combo source for the WHOLE
+  // match, not just one player, because fetch_bfex_markets() got {} back. A small alias
+  // table for the clubs Betfair renames outright, plus a first-word retry for everything
+  // else (catches "Tottenham Hotspur"->"Tottenham", "Newcastle United"->"Newcastle", etc.),
+  // fixes the common cases without needing every club worldwide mapped by hand.
+  const TEAM_SEARCH_ALIASES = {
+    'manchester united': 'Man Utd', 'manchester city': 'Man City',
+    'wolverhampton wanderers': 'Wolves', 'sheffield united': 'Sheff Utd',
+    'nottingham forest': 'Nottm Forest', 'west bromwich albion': 'West Brom',
+    'west ham united': 'West Ham',
+  };
+  function searchQueries(name) {
+    const alias = TEAM_SEARCH_ALIASES[name.toLowerCase().trim()];
+    const firstWord = name.trim().split(/\s+/)[0];
+    return [...new Set([alias, name, firstWord].filter(Boolean))];
+  }
+
   try {
     const session = await getCachedSessionToken(appKey);
 
-    const events = await bfCall('listEvents', {
-      filter: { eventTypeIds: ['1'], textQuery: home }
-    }, appKey, session);
-
-    const match = (events || []).find(e => {
-      const parts = (e.event?.name || '').split(' v ');
-      if (parts.length !== 2) return false;
-      return (fuzzyTeamMatch(home, parts[0]) && fuzzyTeamMatch(away, parts[1])) ||
-             (fuzzyTeamMatch(away, parts[0]) && fuzzyTeamMatch(home, parts[1]));
-    });
+    let events = [];
+    let match = null;
+    for (const q of searchQueries(home)) {
+      events = await bfCall('listEvents', {
+        filter: { eventTypeIds: ['1'], textQuery: q }
+      }, appKey, session);
+      match = (events || []).find(e => {
+        const name = e.event?.name || '';
+        if (/\(w\)/i.test(name)) return false; // exclude women's fixtures — same club names, wrong market
+        const parts = name.split(' v ');
+        if (parts.length !== 2) return false;
+        return (fuzzyTeamMatch(home, parts[0]) && fuzzyTeamMatch(away, parts[1])) ||
+               (fuzzyTeamMatch(away, parts[0]) && fuzzyTeamMatch(home, parts[1]));
+      });
+      if (match) break;
+    }
 
     if (!match) return {
       statusCode: 200, headers: CORS,
