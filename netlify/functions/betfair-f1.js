@@ -10,7 +10,7 @@
 //
 // GET /api/betfair-f1  ->
 //   { ok:true, race:{ name, startTime }, markets:{
-//       winner:[{name,fair}], podium:[...], top6:[...], points:[...] } }
+//       winner:[{name,fair}], podium:[...], top6:[...], points:[...], classified:[...] } }
 // where `fair` is the no-vig price between best back and best lay (2*b*l/(b+l)) once both
 // clear a minimum liquidity bar, or the one side that exists once IT clears a higher bar alone
 // — see fairPrice(). A runner with nothing but a stray thin order resting on it is simply
@@ -30,6 +30,12 @@ const MARKET_MAP = [
   { key: 'podium', needles: ['podium finish', 'podium', 'top 3 finish'] },
   { key: 'top6',   needles: ['top 6 finish', 'top six finish', 'top 6'] },
   { key: 'points', needles: ['points finish', 'to finish in the points', 'top 10 finish'] },
+  // Betfair's actual market name is "Yes To be Classified" (marketType TO_BE_CLASSIFIED) — one
+  // market, one runner per driver, each independently backable (same shape as winner/podium/
+  // etc, not a mutually-exclusive field book). `fair` here is the no-vig price to back a driver
+  // AS classified; the DNF feed (oc-scraper/scripts/dnf_scan.py) inverts it into a Not-Classified
+  // fair price per driver, then Poisson-combines the field into Any-DNF / Under X.5 totals fairs.
+  { key: 'classified', needles: ['yes to be classified'] },
 ];
 
 function directFetch(targetUrl, options = {}) {
@@ -181,7 +187,7 @@ async function buildF1(appKey, session) {
   }
   const race = events[0];
 
-  const wantKeys = ['winner', 'podium', 'top6', 'points'];
+  const wantKeys = ['winner', 'podium', 'top6', 'points', 'classified'];
   const marketIds = wantKeys.filter((k) => race.markets[k]).map((k) => race.markets[k].marketId);
   const books = await bfCall('listMarketBook', {
     marketIds,
@@ -190,7 +196,7 @@ async function buildF1(appKey, session) {
   const bookById = {};
   for (const b of books || []) bookById[b.marketId] = b;
 
-  const out = { winner: [], podium: [], top6: [], points: [] };
+  const out = { winner: [], podium: [], top6: [], points: [], classified: [] };
   for (const k of wantKeys) {
     const mkt = race.markets[k];
     if (!mkt) continue;
