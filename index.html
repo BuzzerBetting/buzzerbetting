@@ -13874,6 +13874,8 @@ function renderCalcEvStats(d){
       <td class="r tn">${m.settled}</td>
       <td class="r tn">${m.wins}</td>
       <td class="r tn">${pctFmt(m.winPct)}</td>
+      <td class="r tn">${m.avgOdds != null ? Number(m.avgOdds).toFixed(2) : '—'}</td>
+      <td class="r tn">${m.avgEv != null ? Number(m.avgEv).toFixed(1) + '%' : '—'}</td>
       <td class="r tn" style="color:${(m.pl||0)>=0?'var(--green)':'var(--red)'}">${plFmt(m.pl||0)}</td>
     </tr>`).join('');
   panel.innerHTML = `
@@ -13893,7 +13895,7 @@ function renderCalcEvStats(d){
         <div class="card" style="padding:10px 12px"><div style="font-size:10.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Header Goal — accum. xG</div><div style="font-size:16px;font-weight:700">${(d.headerXg||0).toFixed(2)}</div></div>
         <div class="card" style="padding:10px 12px"><div style="font-size:10.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">OTB Goal — accum. xG</div><div style="font-size:16px;font-weight:700">${(d.otbXg||0).toFixed(2)}</div></div>
       </div>
-      <div style="overflow-x:auto"><table class="dt" style="min-width:480px"><thead><tr><th>Market</th><th class="r">Bets</th><th class="r">Settled</th><th class="r">Won</th><th class="r">Win%</th><th class="r">P/L</th></tr></thead><tbody>${marketRows || '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:14px">No bets logged yet</td></tr>'}</tbody></table></div>
+      <div style="overflow-x:auto"><table class="dt" style="min-width:620px"><thead><tr><th>Market</th><th class="r">Bets</th><th class="r">Settled</th><th class="r">Won</th><th class="r">Win%</th><th class="r">Avg Odds</th><th class="r">Avg EV%</th><th class="r">P/L</th></tr></thead><tbody>${marketRows || '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:14px">No bets logged yet</td></tr>'}</tbody></table></div>
       <div style="font-size:11px;color:var(--text3);margin-top:8px">Every +EV row Calculated +EV has ever shown is logged once (first fair/odds seen), then graded against the real match result. P/L assumes a flat £50 stake on every logged bet at the odds recorded; unsettled bets (match not finished, or result not yet checked) aren't counted in P/L or win%. Click a market row to see its winners from the last 24 hours.</div>
     </div>`;
 }
