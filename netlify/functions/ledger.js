@@ -67,6 +67,13 @@ exports.handler = async (event) => {
         headers: CORS,
         body: data
       }));
+      // Same gap fixed in betfair.js's directFetch 2026-09-12 — a socket error after headers
+      // arrive with no 'error' listener on `res` throws as an uncaught exception.
+      res.on('error', (err) => resolve({
+        statusCode: 200,
+        headers: CORS,
+        body: JSON.stringify({ ok: false, error: err.message })
+      }));
     });
     req.on('error', (err) => resolve({
       statusCode: 200,

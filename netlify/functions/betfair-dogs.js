@@ -40,6 +40,9 @@ function directFetch(targetUrl, options = {}) {
         text: () => Promise.resolve(data),
         json: () => Promise.resolve(JSON.parse(data))
       }));
+      // See betfair.js's directFetch — without this, a socket error after headers arrive
+      // crashes the whole process (unhandled 'error' event, no global handler anywhere here).
+      res.on('error', reject);
     });
     req.on('error', reject);
     if (options.body) req.write(options.body);

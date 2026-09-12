@@ -33,6 +33,12 @@ function directFetch(targetUrl, options = {}) {
         text: () => Promise.resolve(data),
         json: () => Promise.resolve(JSON.parse(data))
       }));
+      // Without this, a socket error after headers arrive (timeout, reset mid-body — real,
+      // seen live 2026-09-12: repeated ETIMEDOUT crashing the whole server, not just this
+      // call) fires 'error' on `res` with no listener, which Node throws as an uncaught
+      // exception with no global handler anywhere in this app. reject() instead just fails
+      // this one promise, caught by every caller's existing try/catch.
+      res.on('error', reject);
     });
     req.on('error', reject);
     if (options.body) req.write(options.body);
