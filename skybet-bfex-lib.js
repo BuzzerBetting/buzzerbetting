@@ -106,6 +106,20 @@ async function getSessionToken() {
   return data.sessionToken;
 }
 
+// Same fix as netlify/functions/betfair.js (2026-09-12 CPU/memory incident) — this handler
+// runs every 15 min via startWarmer plus on-demand hits, and was doing a fresh certlogin each
+// time. Reuse one session across calls, only re-logging in once stale or Betfair reports expiry.
+let cachedSession = null; // { token, appKey, obtainedAt }
+const SESSION_TTL_MS = 3 * 60 * 60 * 1000;
+async function getCachedSessionToken(appKey) {
+  if (cachedSession && cachedSession.appKey === appKey && (Date.now() - cachedSession.obtainedAt) < SESSION_TTL_MS) {
+    return cachedSession.token;
+  }
+  const token = await getSessionToken();
+  cachedSession = { token, appKey, obtainedAt: Date.now() };
+  return token;
+}
+
 async function bfCall(method, params, appKey, session) {
   const res = await directFetch(`${BFEX_BASE}/${method}/`, {
     method: 'POST',
@@ -409,7 +423,7 @@ exports.handler = async (event) => {
 
   try {
     // 1. Betfair MATCH_ODDS for the next 5 days — the fixture spine
-    const session = await getSessionToken();
+    const session = await getCachedSessionToken(appKey);
     const bfexList = await fetchBfexMatchOdds(appKey, session);
 
     // 2. accafreeze feed → free SkyBet odds for the coupon fixtures
@@ -516,6 +530,7 @@ exports.handler = async (event) => {
     };
   } catch (err) {
     const expired = err.message === 'SESSION_EXPIRED';
+    if (expired) cachedSession = null; // next call re-logs in instead of reusing the stale token
     return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: err.message, sessionExpired: expired }) };
   }
 };
