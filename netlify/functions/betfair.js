@@ -69,6 +69,22 @@ async function getSessionToken() {
   return data.sessionToken;
 }
 
+// This is called once per fixture by every +EV/boost/DDHH scan iterating today's card, so with
+// no caching it was doing a full certlogin handshake per fixture per scan — the actual source
+// of a 2026-09-12 CPU/memory incident (see betfair-dogs.js / betfair-f1.js, which already had
+// this same fix). Reuse one session across requests, only re-logging in once it's stale or
+// Betfair itself reports it's expired (see the SESSION_EXPIRED retry in the handler below).
+let cachedSession = null; // { token, appKey, obtainedAt }
+const SESSION_TTL_MS = 3 * 60 * 60 * 1000; // conservative — real Betfair sessions last longer
+async function getCachedSessionToken(appKey) {
+  if (cachedSession && cachedSession.appKey === appKey && (Date.now() - cachedSession.obtainedAt) < SESSION_TTL_MS) {
+    return cachedSession.token;
+  }
+  const token = await getSessionToken();
+  cachedSession = { token, appKey, obtainedAt: Date.now() };
+  return token;
+}
+
 async function bfCall(method, params, appKey, session) {
   const res = await directFetch(`${BFEX_BASE}/${method}/`, {
     method: 'POST',
@@ -122,7 +138,7 @@ exports.handler = async (event) => {
   }
 
   try {
-    const session = await getSessionToken();
+    const session = await getCachedSessionToken(appKey);
 
     const events = await bfCall('listEvents', {
       filter: { eventTypeIds: ['1'], textQuery: home }
@@ -192,6 +208,7 @@ exports.handler = async (event) => {
 
   } catch (err) {
     const expired = err.message === 'SESSION_EXPIRED';
+    if (expired) cachedSession = null; // next call re-logs in instead of reusing the stale token
     return {
       statusCode: expired ? 200 : 500, headers: CORS,
       body: JSON.stringify({ ok: false, error: err.message, sessionExpired: expired })
