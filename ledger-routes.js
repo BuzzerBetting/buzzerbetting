@@ -3009,6 +3009,19 @@ router.get('/calc-ev-bets/stats', async (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// GET /api/ledger/calc-ev-bets/winners?market=Header&hours=24 — click-through from a "Bet
+// stats" market row: every WIN for that market whose result was confirmed within the window
+// (default/max clamped 1-720h so a stray huge value can't scan the whole table pointlessly).
+router.get('/calc-ev-bets/winners', (req, res) => {
+  if (!calcEvLog) return res.json({ ok: true, rows: [] });
+  const market = req.query.market;
+  if (!market) return res.status(400).json({ ok: false, error: 'market required' });
+  const hours = Math.min(Math.max(parseInt(req.query.hours, 10) || 24, 1), 720);
+  try {
+    res.json({ ok: true, rows: calcEvLog.getWinners(market, hours) });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 // ================== QUICK BET — parse a placed-bet screenshot ==================
 //
 // POST /api/ledger/parse-betslip  { image: "<base64>", mediaType: "image/png" }
