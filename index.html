@@ -13859,12 +13859,23 @@ function syncCalcEvStatsToggle(){
   if (on) loadCalcEvStats();
 }
 function calcEvPl(row){ return row.won ? 50 * (row.odds - 1) : -50; }
+
+// Which window the bet-stats panel is scoped to — 'overall' (all-time, the original behaviour)
+// or the London-calendar 'today'/'yesterday' (see calcEvLog.getStats' range filter). Persisted
+// so the panel reopens on whichever tab was last picked.
+let CALC_EV_STATS_RANGE = 'overall';
+try { CALC_EV_STATS_RANGE = localStorage.getItem('bb_calc_ev_stats_range') || 'overall'; } catch(e) {}
+function setCalcEvStatsRange(range){
+  CALC_EV_STATS_RANGE = range;
+  try { localStorage.setItem('bb_calc_ev_stats_range', range); } catch(e) {}
+  loadCalcEvStats();
+}
 async function loadCalcEvStats(){
   const panel = document.getElementById('calc-ev-stats-panel');
   if (!panel) return;
   panel.innerHTML = `<div class="card" style="padding:20px;text-align:center;color:var(--text3);font-size:13px"><i class="ti ti-loader"></i> Loading bet stats…</div>`;
   try {
-    const d = await ledgerApi('calc-ev-bets/stats');
+    const d = await ledgerApi(`calc-ev-bets/stats?range=${CALC_EV_STATS_RANGE}`);
     if (!d || !d.ok) { panel.innerHTML = `<div class="card" style="padding:16px;color:var(--text3);font-size:13px">Bet stats not available.</div>`; return; }
     renderCalcEvStats(d);
   } catch (e) { panel.innerHTML = `<div class="card" style="padding:16px;color:var(--text3);font-size:13px">Failed to load bet stats.</div>`; }
@@ -13887,12 +13898,18 @@ function renderCalcEvStats(d){
       <td class="r tn" style="color:${(m.evGbp||0)>=0?'var(--green)':'var(--red)'}">${plFmt(m.evGbp||0)}</td>
       <td class="r tn" style="color:${(m.pl||0)>=0?'var(--green)':'var(--red)'}">${plFmt(m.pl||0)}</td>
     </tr>`).join('');
+  const rangeTabs = [['overall', 'Overall'], ['yesterday', 'Yesterday'], ['today', 'Today']];
+  const rangeTabsHtml = rangeTabs.map(([key, label]) => {
+    const active = CALC_EV_STATS_RANGE === key;
+    return `<button onclick="setCalcEvStatsRange('${key}')" style="padding:6px 14px;border:.5px solid var(--border);border-radius:var(--radius);background:${active ? 'var(--brand)' : 'var(--surface)'};color:${active ? '#fff' : 'var(--text2)'};font-weight:${active ? '600' : '400'};font-size:12.5px;cursor:pointer;font-family:inherit">${label}</button>`;
+  }).join('');
   panel.innerHTML = `
     <div class="card" style="padding:16px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
         <strong style="font-size:14px">Calculated +EV — bet stats</strong>
         <span style="font-size:11px;color:var(--text3)">£50 flat stake, settled bets only</span>
       </div>
+      <div style="display:flex;gap:6px;margin-bottom:14px">${rangeTabsHtml}</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:14px">
         <div class="card" style="padding:10px 12px"><div style="font-size:10.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Bets logged</div><div style="font-size:18px;font-weight:700">${o.total||0}</div></div>
         <div class="card" style="padding:10px 12px"><div style="font-size:10.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Settled</div><div style="font-size:18px;font-weight:700">${o.settled||0}</div></div>
@@ -13906,7 +13923,7 @@ function renderCalcEvStats(d){
         <div class="card" style="padding:10px 12px"><div style="font-size:10.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">OTB Goal — accum. realized xG</div><div style="font-size:16px;font-weight:700">${(d.otbXg||0).toFixed(2)}</div></div>
       </div>
       <div style="overflow-x:auto"><table class="dt" style="min-width:700px"><thead><tr><th>Market</th><th class="r">Bets</th><th class="r">Settled</th><th class="r">Won</th><th class="r">Win%</th><th class="r">Avg Odds</th><th class="r">Avg EV%</th><th class="r">EV £</th><th class="r">P/L</th></tr></thead><tbody>${marketRows || '<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:14px">No bets logged yet</td></tr>'}</tbody></table></div>
-      <div style="font-size:11px;color:var(--text3);margin-top:8px">Every +EV row Calculated +EV has ever shown is logged once (first fair/odds seen), then graded against the real match result. "EV £" is the theoretical expected profit at a flat £50 stake, from the back odds taken and the fair odds priced (odds/fair - 1) x £50 — knowable pre-match, summed across every logged bet regardless of settlement. "P/L" is what actually happened at that same flat £50 stake, settled bets only. Accumulated Header/OTB xG is the real shotmap xG behind each settled bet's actual header/OTB-shot attempt(s) — not a forecast. Click a market row to see its winners from the last 24 hours.</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">Every +EV row Calculated +EV has ever shown is logged once (first fair/odds seen), then graded against the real match result. "EV £" is the theoretical expected profit at a flat £50 stake, from the back odds taken and the fair odds priced (odds/fair - 1) x £50 — knowable pre-match, summed across every logged bet regardless of settlement. "P/L" is what actually happened at that same flat £50 stake, settled bets only. Accumulated Header/OTB xG is the real shotmap xG behind each settled bet's actual header/OTB-shot attempt(s) — not a forecast. Overall/Yesterday/Today scope every figure above to bets logged in that window (London calendar day); clicking a market row always opens its winners from the last 24 hours regardless of which tab is selected.</div>
     </div>`;
 }
 
@@ -14836,7 +14853,7 @@ function renderBaTabs(){
     const active = e.key === BA_ACTIVE;
     const n = BA_COUNTS[e.key];
     const b = document.createElement('button');
-    b.textContent = `${e.label}${n != null ? ` (${n})` : ''}`;
+    b.innerHTML = `${escapeHtml(e.label)}${n != null ? ` <span style="color:var(--red);font-weight:700">(${n})</span>` : ''}`;
     b.onclick = () => baTab(e.key);
     b.style.cssText = `padding:8px 12px;border:none;border-bottom:2px solid ${active ? 'var(--brand)' : 'transparent'};background:none;color:${active ? 'var(--text)' : 'var(--text3)'};font-weight:${active ? '600' : '400'};font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap`;
     wrap.appendChild(b);

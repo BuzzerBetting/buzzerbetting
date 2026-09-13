@@ -2997,15 +2997,17 @@ router.post('/calc-ev-bets/ingest', (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
-// GET /api/ledger/calc-ev-bets/stats — backs the "Bet stats" panel under Calculated +EV.
-// Settles anything gradeable first (cheap no-op once nothing's pending — see
-// calcEvLog.settleAll), then returns running totals + a £50-flat-stake P/L, a per-market
-// breakdown, and accumulated Header/OTB-goal xG.
+// GET /api/ledger/calc-ev-bets/stats?range=overall|today|yesterday — backs the "Bet stats" panel
+// under Calculated +EV. Settles anything gradeable first (cheap no-op once nothing's pending —
+// see calcEvLog.settleAll), then returns running totals + a £50-flat-stake P/L, a per-market
+// breakdown, and accumulated Header/OTB-goal xG, all scoped to `range` (default overall/all-time
+// — see calcEvLog.getStats).
 router.get('/calc-ev-bets/stats', async (req, res) => {
   if (!calcEvLog) return res.json({ ok: true, overall: { total: 0, settled: 0, wins: 0, winPct: null, pl: 0 }, byMarket: [], headerXg: 0, otbXg: 0 });
   try {
     try { await calcEvLog.settleAll(); } catch (e) { /* leave unsettled, try again next read */ }
-    res.json({ ok: true, ...calcEvLog.getStats() });
+    const range = ['today', 'yesterday'].includes(req.query.range) ? req.query.range : 'overall';
+    res.json({ ok: true, ...calcEvLog.getStats(range) });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
