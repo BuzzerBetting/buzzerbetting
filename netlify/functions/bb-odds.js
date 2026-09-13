@@ -54,6 +54,13 @@ export const handler = async (event) => {
 
   function fuzzyMatch(a, b) {
     const na = norm(a), nb = norm(b);
+    // Neither side should ever "match" an empty/missing comparand — without this, a caller
+    // passing undefined (e.g. matchByTeams splitting on a separator that isn't actually
+    // present, leaving one side undefined) hits every().every() on an empty filtered array,
+    // which is vacuously true, so ANYTHING "matches" nothing. Caught live 2026-09-13: this
+    // silently matched Coventry City v Brighton to an unrelated Busan IPark v Gimhae City
+    // fixture, feeding zero-player BB data into the AGS fair combo with no error anywhere.
+    if (!na || !nb) return false;
     if (na === nb) return true;
     const wa = na.split(' '), wb = nb.split(' ');
     const [shorter, longer] = wa.length <= wb.length ? [wa, nb] : [wb, na];
@@ -71,12 +78,21 @@ export const handler = async (event) => {
   function matchByTeams(bbEvent, homeTeam, awayTeam) {
     if (!bbEvent || !homeTeam || !awayTeam) return false;
     const e = norm(bbEvent);
+    // Only split on a separator that's actually present — splitting on one that isn't gives
+    // back the WHOLE untouched event string as "part 1", which then gets compared against a
+    // single team name as if it were the other team's name. That's how "Coventry City" ended
+    // up fuzzy-matching the full string "busan ipark v gimhae city": fuzzyMatch's near-match
+    // check found "city" (shared with "Gimhae City") a "match" for the whole string, even
+    // though "coventry" has nothing in common with any of it. Guarding on separator presence
+    // stops the wrong half of the OR chain from ever running, on top of fuzzyMatch's own fix.
+    const vParts = e.includes(' v ') ? e.split(' v ') : null;
+    const vsParts = e.includes(' vs ') ? e.split(' vs ') : null;
     // Try both "home v away" and "away v home" orderings
-    return (fuzzyMatch(homeTeam, e.split(' v ')[0]) && fuzzyMatch(awayTeam, e.split(' v ')[1])) ||
-           (fuzzyMatch(awayTeam, e.split(' v ')[0]) && fuzzyMatch(homeTeam, e.split(' v ')[1])) ||
+    return (!!vParts && fuzzyMatch(homeTeam, vParts[0]) && fuzzyMatch(awayTeam, vParts[1])) ||
+           (!!vParts && fuzzyMatch(awayTeam, vParts[0]) && fuzzyMatch(homeTeam, vParts[1])) ||
            // Also handle "vs" separator
-           (fuzzyMatch(homeTeam, e.split(' vs ')[0]) && fuzzyMatch(awayTeam, e.split(' vs ')[1])) ||
-           (fuzzyMatch(awayTeam, e.split(' vs ')[0]) && fuzzyMatch(homeTeam, e.split(' vs ')[1])) ||
+           (!!vsParts && fuzzyMatch(homeTeam, vsParts[0]) && fuzzyMatch(awayTeam, vsParts[1])) ||
+           (!!vsParts && fuzzyMatch(awayTeam, vsParts[0]) && fuzzyMatch(homeTeam, vsParts[1])) ||
            // Fallback: both team names appear somewhere in the event string
            (e.includes(norm(homeTeam).split(' ').pop()) && e.includes(norm(awayTeam).split(' ').pop()));
   }
