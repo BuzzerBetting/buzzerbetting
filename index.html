@@ -9143,7 +9143,11 @@ function calcGSMOTBGoal(){
   const M24=-Math.log(1-(1/ags));   // game xG from AGS
   const M26=penTaker?0.125:0;        // game xPens
   const M28=M24-M26;                 // game xG minus pens
-  const M29=totXG-penXG-hdrXG;      // non-pen non-header xG
+  // non-pen xG — does NOT exclude header xG (fixed 2026-09-13): a header can occasionally
+  // come from outside the box, so it's not categorically ineligible the way a penalty (always
+  // inside the box) is. Excluding it overstated every other shot type's share and inflated
+  // this fair — caught live via Rodri (10.07 with it excluded vs the correct 15.25 without).
+  const M29=totXG-penXG;
   if(M29<=0){reset();return;}
   const M30=otbXG/M29;               // OTB proportion
   const M31=M28*M30;                 // game OTB xG
@@ -13246,7 +13250,11 @@ function calcAutoGSM(s,ags,so,sotV,pen){
     const rawXG=s.xG||0; // total xG includes all situations
     const G29=rawXG-(s.penaltyXG||0)-(s.freeKickXG||0);
     if(G29>0&&s.headedXG>0)headerGoal=1/(1-Math.exp(-Math.max(0,G28*(s.headedXG/G29))));
-    const M29=rawXG-(s.penaltyXG||0)-(s.headedXG||0);
+    // non-pen xG — does NOT exclude header xG (fixed 2026-09-13): a header can occasionally
+    // come from outside the box, so it's not categorically ineligible the way a penalty
+    // (always inside the box) is. Excluding it overstated every other shot type's share and
+    // inflated this fair — caught live via Rodri (10.07 with it excluded vs 15.25 without).
+    const M29=rawXG-(s.penaltyXG||0);
     if(M29>0&&s.otbXG>0)otbGoal=1/(1-Math.exp(-Math.max(0,G28*(s.otbXG/M29))));
     if(rawXG>0&&s.leftFootXG>0)lfGoal=1/(1-Math.exp(-Math.max(0,gameXG*(s.leftFootXG/rawXG))));
     if(rawXG>0&&s.rightFootXG>0)rfGoal=1/(1-Math.exp(-Math.max(0,gameXG*(s.rightFootXG/rawXG))));
