@@ -4004,4 +4004,68 @@ router.post('/ones-to-watch/rescan', (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// ================== BOYLESPORTS PLAYER PROPS (raw scraped odds) ==================
+// Fed by a Tampermonkey userscript run from the user's own real Chrome — server-side fetching
+// of boylesports.com is blocked by a Cloudflare Turnstile challenge (confirmed via curl,
+// curl_cffi Chrome-impersonation, and three separate Playwright attempts, 2026-09-13 — see
+// [[boylesports-scraping]] memory). The userscript loops over today's matches on its own,
+// extracts every player-prop market already present in the DOM (no per-player interaction
+// needed — confirmed live that BoyleSports pre-renders every player/sub-market combination,
+// zero extra network calls to switch between them), and POSTs a snapshot per match here. No
+// fair-odds calc consumes this yet — purely a raw-odds store for whenever that gets built.
+
+// GET /api/ledger/boylesports-props?matchSlug=coventry-v-brighton (matchSlug optional — omit
+// for every match currently stored)
+router.get('/boylesports-props', (req, res) => {
+  try {
+    const slug = (req.query.matchSlug || '').trim();
+    const rows = slug
+      ? db.prepare(`SELECT * FROM boylesports_player_props WHERE match_slug = ? ORDER BY market, selection, line`).all(slug)
+      : db.prepare(`SELECT * FROM boylesports_player_props ORDER BY match_slug, market, selection, line`).all();
+    res.json({ ok: true, rows });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/boylesports-props/ingest
+//   body: { matchSlug, match?, kickoff?, rows: [{market, selection, line, oddsFrac, odds}, ...] }
+// Upserts every row (a re-scrape just refreshes the odds/scraped_at on the same
+// match_slug+market+selection+line key) — this is a live snapshot, not an append-only log.
+router.post('/boylesports-props/ingest', (req, res) => {
+  try {
+    const b = req.body || {};
+    const matchSlug = String(b.matchSlug || '').trim();
+    if (!matchSlug) return res.status(400).json({ ok: false, error: 'matchSlug required' });
+
+    const incoming = Array.isArray(b.rows) ? b.rows : [];
+    const now = new Date().toISOString();
+    const ins = db.prepare(`
+      INSERT INTO boylesports_player_props (match_slug, match, kickoff, market, selection, line, odds_frac, odds, scraped_at)
+      VALUES (@match_slug, @match, @kickoff, @market, @selection, @line, @odds_frac, @odds, @now)
+      ON CONFLICT(match_slug, market, selection, line) DO UPDATE SET
+        match = excluded.match, kickoff = excluded.kickoff,
+        odds_frac = excluded.odds_frac, odds = excluded.odds, scraped_at = excluded.scraped_at
+    `);
+    let upserted = 0;
+    const tx = db.transaction(() => {
+      for (const r of incoming) {
+        if (!r || !r.market || !r.selection) continue;
+        ins.run({
+          match_slug: matchSlug,
+          match: b.match || null,
+          kickoff: b.kickoff || null,
+          market: String(r.market),
+          selection: String(r.selection),
+          line: r.line != null ? Number(r.line) : null,
+          odds_frac: r.oddsFrac || null,
+          odds: r.odds != null ? Number(r.odds) : null,
+          now,
+        });
+        upserted++;
+      }
+    });
+    tx();
+    res.json({ ok: true, upserted });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 module.exports = router;

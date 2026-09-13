@@ -523,4 +523,29 @@ try { db.exec(`ALTER TABLE discord_corners_config ADD COLUMN catchup_from TEXT`)
 // never plumbed it through to here. Display only, never used in any calc.
 try { db.exec(`ALTER TABLE ones_to_watch ADD COLUMN base_fair REAL`); } catch (e) { /* already exists */ }
 
+// BoyleSports player-prop odds (Shots Inside/Outside Box, SOT Right/Left/Header/Inside/Outside
+// Box, Goals Right/Left/Header/Inside(incl 6yd)/Outside) — scraped by a Tampermonkey userscript
+// run from the user's own real Chrome (server-side fetching is Cloudflare-Turnstile-blocked;
+// see [[boylesports-scraping]] memory for the full investigation) and POSTed here on a loop.
+// No fair-odds calc for these yet (2026-09-13) — this table is purely the raw scraped odds,
+// keyed on BoyleSports' own match-page URL slug (there's no FotMob matchId available from the
+// scrape itself; whatever calc gets built later resolves player names the same fuzzy way
+// ones_to_watch_scan.py already does for OC/BB). Re-scraped odds for an existing
+// (match_slug, market, selection, line) upsert in place — this is a live snapshot, not a log.
+db.exec(`
+CREATE TABLE IF NOT EXISTS boylesports_player_props (
+  match_slug TEXT NOT NULL,        -- BoyleSports URL slug, e.g. 'coventry-v-brighton'
+  match      TEXT,                 -- display name, e.g. 'Coventry V Brighton'
+  kickoff    TEXT,                 -- as scraped, display string
+  market     TEXT NOT NULL,        -- e.g. 'Player Shots On Target Header'
+  selection  TEXT NOT NULL,        -- player display name as BoyleSports shows it
+  line       REAL,                 -- Over-threshold (0.5/1.5/...); NULL for a single-price market
+  odds_frac  TEXT,                 -- raw fractional odds as scraped, e.g. '15/4'
+  odds       REAL,                 -- decimal odds, converted from odds_frac
+  scraped_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (match_slug, market, selection, line)
+);
+CREATE INDEX IF NOT EXISTS idx_boylesports_props_match ON boylesports_player_props(match_slug);
+`);
+
 module.exports = db;
