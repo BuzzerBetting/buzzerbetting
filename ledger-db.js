@@ -516,4 +516,11 @@ try { db.exec(`ALTER TABLE bet_legs ADD COLUMN free_bet INTEGER DEFAULT 0`); } c
 // only, no backfill.
 try { db.exec(`ALTER TABLE discord_corners_config ADD COLUMN catchup_from TEXT`); } catch (e) { /* already exists */ }
 
+// The AGS (goal methods) or SOT-1+ (SOT-split methods) fair odds a row's market fair was
+// derived from — e.g. Header Goal's fair comes from AGS fair x the player's headed-xG share,
+// so this is that AGS fair. Lets the user sanity-check the source price behind a row, same
+// info Calculated +EV's own rows already carry as `baseFair` — ones_to_watch_scan.py just
+// never plumbed it through to here. Display only, never used in any calc.
+try { db.exec(`ALTER TABLE ones_to_watch ADD COLUMN base_fair REAL`); } catch (e) { /* already exists */ }
+
 module.exports = db;

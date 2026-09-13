@@ -3910,7 +3910,7 @@ const OTW_TRIGGER_DIR = path.join(__dirname, 'oc-scraper', 'data', 'otw_triggers
 router.get('/ones-to-watch', (req, res) => {
   try {
     const rows = db.prepare(
-      `SELECT id, match_id AS matchId, match, kickoff, market, selection, fair, conf, bookie, odds, ev, source, state
+      `SELECT id, match_id AS matchId, match, kickoff, market, selection, fair, base_fair AS baseFair, conf, bookie, odds, ev, source, state
          FROM ones_to_watch
         ORDER BY (state = 'ticked') DESC, ev DESC`
     ).all();
@@ -3919,7 +3919,7 @@ router.get('/ones-to-watch', (req, res) => {
 });
 
 // POST /api/ledger/ones-to-watch/ingest
-//   body: { matchId, match?, kickoff?, confirmed?:bool, rows:[{market,selection,fair,conf,bookie,odds,ev,source}] }
+//   body: { matchId, match?, kickoff?, confirmed?:bool, rows:[{market,selection,fair,baseFair,conf,bookie,odds,ev,source}] }
 // - confirmed:true  -> delete every row for that match (Calculated +EV takes over).
 // - otherwise       -> refresh this match's 'pending' rows from `rows`; leave 'ticked' rows untouched.
 router.post('/ones-to-watch/ingest', (req, res) => {
@@ -3938,8 +3938,8 @@ router.post('/ones-to-watch/ingest', (req, res) => {
     const tx = db.transaction(() => {
       db.prepare(`DELETE FROM ones_to_watch WHERE match_id = ? AND state = 'pending'`).run(mid);
       const ins = db.prepare(
-        `INSERT INTO ones_to_watch (match_id, match, kickoff, market, selection, fair, conf, bookie, odds, ev, source, state, created_at, updated_at)
-         VALUES (@match_id, @match, @kickoff, @market, @selection, @fair, @conf, @bookie, @odds, @ev, @source, 'pending', @now, @now)
+        `INSERT INTO ones_to_watch (match_id, match, kickoff, market, selection, fair, base_fair, conf, bookie, odds, ev, source, state, created_at, updated_at)
+         VALUES (@match_id, @match, @kickoff, @market, @selection, @fair, @base_fair, @conf, @bookie, @odds, @ev, @source, 'pending', @now, @now)
          ON CONFLICT(match_id, market, selection) DO NOTHING`   // a ticked row already holds this key — keep it
       );
       for (const r of incoming) {
@@ -3951,6 +3951,7 @@ router.post('/ones-to-watch/ingest', (req, res) => {
           market: String(r.market),
           selection: String(r.selection),
           fair: r.fair != null ? Number(r.fair) : null,
+          base_fair: r.baseFair != null ? Number(r.baseFair) : null,
           conf: r.conf || null,
           bookie: r.bookie || r.bk || null,
           odds: r.odds != null ? Number(r.odds) : null,
