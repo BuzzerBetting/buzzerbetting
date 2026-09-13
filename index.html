@@ -2445,7 +2445,7 @@ input::placeholder{color:var(--text3)}
       <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:860px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">AGS/SOT fair</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="cev-tbody"></tbody></table></div></div>
     </div>
     <div id="calc-ev-stats-panel" style="display:none;margin-top:14px"></div>
-    <div class="note"><i class="ti ti-info-circle"></i> Markets with no direct Betfair equivalent — Header and Outside-the-Box goal (Oddschecker, auto-detected, no more manual market IDs) and Left Foot/Right Foot/6 Yard Box (William Hill) — all vs a BFEX-AGS-derived fair, sorted by EV%. Direct BFEX comparisons (AGS/FGS/Cards/SOT) live on the <a href="javascript:void(0)" onclick="baTab('oc-ev')">Oddschecker +EV</a> tab instead.</div>
+    <div class="note"><i class="ti ti-info-circle"></i> Markets with no direct Betfair equivalent — Header and Outside-the-Box goal (Oddschecker, auto-detected, no more manual market IDs) and Left Foot/Right Foot/6 Yard Box (William Hill) — all vs a BFEX-AGS-derived fair, sorted by EV%. Direct BFEX comparisons (AGS/FGS/Cards/SOT) live on the <a href="javascript:void(0)" onclick="baTab('oc-ev')">Oddschecker +EV</a> tab instead. Header/OTB goal rows show every +EV bookmaker (up to the top 3 price tiers, tied prices on one line) under Bookie — the Odds column stays the single best price.</div>
   </div>
 
   <!-- panel: DDHH -->
@@ -4172,6 +4172,23 @@ function ocBookieName(code) {
   if (code == null) return '';
   const c = String(code).trim();
   return OC_BOOKIE_NAMES[c] || OC_BOOKIE_NAMES[c.toUpperCase()] || c;
+}
+
+// Short labels for the same OC bookmaker codes — used where several +EV prices have to sit on
+// one line (see bookieLinesHtml) and a full name each would wrap. Falls through to ocBookieName
+// (then the raw code) for anything unlisted.
+const OC_BOOKIE_SHORT = {
+  B3:'B365', SK:'Sky', WH:'WH', LD:'Ladbrokes', CE:'Coral', PP:'PP',
+  BY:'Boyle', VC:'BetVictor', UN:'Unibet', FR:'Betfred', FB:'Betfred', EE:'888',
+  WA:'BWay', KN:'BetMGM', QN:'Quinn', OE:'10bet', S6:'Star', PUP:'PU',
+  G5:'Goodwin', AKB:'AK', BAH:'BetAhoy', BTT:'BetTom', IVB:'IvyBet', SI:'SportIdx',
+  SX:'Spreadex', BF:'Betfair', MA:'Matchbook', DZ:'DAZN', KW:'Kwiff', NB:'NetBet',
+  '32':'32Red', MK:'Midnite', FS:'FansBet', TF:'TheFA', RM:'MrQ', GB:'Grosvenor',
+};
+function ocBookieShort(code) {
+  if (code == null) return '';
+  const c = String(code).trim();
+  return OC_BOOKIE_SHORT[c] || OC_BOOKIE_SHORT[c.toUpperCase()] || ocBookieName(code);
 }
 
 function normalizeBookieInput(raw) {
@@ -13989,6 +14006,30 @@ function remapToAllowedBook(bet) {
   const ev = fair ? ((bestPrice / fair - 1) * 100) : bet.bestEv;
   return { ...bet, bookie: bestCode, ocOdds: bestPrice.toFixed(2), bestEv: ev };
 }
+
+// Groups a bet's whole odds ladder (allOdds — Header/OTB rows only) into +EV price tiers:
+// every bookmaker still priced above fair, bucketed by identical price (tied books share a
+// line), highest tier first, capped to the top 3 tiers. Mirrors how you'd actually read the
+// price — "who's up at 29, who's next at 26" — rather than a flat list of bookmaker names.
+// Bets with no ladder (William Hill/boost markets, genuinely single-bookmaker) or no fair to
+// compare against just fall back to the single best-book name, unchanged from before.
+function bookieLinesHtml(bet) {
+  const fair = bet.bestFair;
+  if (!bet.allOdds || !fair) return escapeHtml(ocBookieName(bet.bookie));
+  const byPrice = new Map();
+  for (const [code, price] of Object.entries(bet.allOdds)) {
+    if (typeof price !== 'number' || price <= fair) continue; // +EV only
+    if (typeof baBookEnabled === 'function' && !baBookEnabled(code)) continue;
+    const key = price.toFixed(2);
+    if (!byPrice.has(key)) byPrice.set(key, []);
+    byPrice.get(key).push(ocBookieShort(code));
+  }
+  if (!byPrice.size) return escapeHtml(ocBookieName(bet.bookie));
+  const tiers = [...byPrice.entries()].sort((a, b) => Number(b[0]) - Number(a[0])).slice(0, 3);
+  return tiers.map(([price, codes]) =>
+    `<div>${escapeHtml(codes.sort().join(', '))} - ${price}</div>`
+  ).join('');
+}
 function renderEVResults(bets) {
   const resultsEl = document.getElementById('cev-results');
   const tbody = document.getElementById('cev-tbody');
@@ -14030,7 +14071,7 @@ function renderEVResults(bets) {
       <td style="font-weight:500">${bet.player}</td>
       <td class="r tn" style="color:var(--text2)">${baseFairLabel}</td>
       <td class="r tn" style="font-weight:500">${fairLabel}</td>
-      <td class="r" style="font-size:12px;color:var(--text2)">${ocBookieName(bet.bookie)}</td>
+      <td class="r" style="font-size:12px;color:var(--text2);line-height:1.5">${bookieLinesHtml(bet)}</td>
       <td class="r tn" style="font-weight:600;color:var(--green)">${bet.ocOdds}</td>
       <td class="r"><span class="badge" style="background:${evBg};color:${evCol}">${evLabel}</span></td>`;
     tbody.appendChild(tr);
