@@ -2517,7 +2517,7 @@ input::placeholder{color:var(--text3)}
       <div class="smeta" style="margin:0"><span class="pulse"></span><strong id="ba-watch-count" style="color:var(--green);font-weight:500">—</strong></div>
       <button onclick="baRefreshActive(this)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
     </div>
-    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:900px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r" title="The AGS (or SOT 1+) fair odds this market's fair was derived from">AGS/SOT Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th class="r">✓ / ✗</th></tr></thead><tbody id="ba-watch-body"></tbody></table></div></div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:900px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r" title="The AGS (or SOT 1+) fair odds this market's fair was derived from">Source Fair</th><th class="r">Bet Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th class="r">✓ / ✗</th></tr></thead><tbody id="ba-watch-body"></tbody></table></div></div>
     <div class="note"><i class="ti ti-info-circle"></i> Pre-lineup early-value sweep — every player in every predicted XI + bench, scored for OTB/Header goal and OTB/Headed SoT value off the Oddschecker/BookieBashing combo fair. SoT-method rows only appear once a match's Bet365 odds are entered on Today's Matches. Tick to mark one valid (turns green, stays put); ✗ removes it. When a match's real lineup is confirmed its rows drop off here and the Calculated +EV tab picks up anything still live.</div>
   </div>
 </div>
@@ -14946,8 +14946,8 @@ function renderBaWatch(){
       <td style="font-size:12px;color:var(--text3);white-space:nowrap">${escapeHtml(r.match || '')}</td>
       <td style="font-size:12px;color:var(--text2)">${escapeHtml(r.market || '')}</td>
       <td style="font-weight:500">${escapeHtml(r.selection || '')}</td>
-      <td class="r tn">${r.fair != null ? Number(r.fair).toFixed(2) : '—'}</td>
       <td class="r tn" style="color:var(--text3)">${r.baseFair != null ? Number(r.baseFair).toFixed(2) : '—'}</td>
+      <td class="r tn">${r.fair != null ? Number(r.fair).toFixed(2) : '—'}</td>
       <td class="r" style="font-size:12px;color:var(--text2)">${escapeHtml(ocBookieName(r.bookie) || r.bookie || '')}</td>
       <td class="r tn" style="font-weight:600;color:var(--green)">${r.odds != null ? Number(r.odds).toFixed(2) : '—'}</td>
       <td class="r"><span class="badge" style="color:${evCol}">${evTxt}</span></td>
