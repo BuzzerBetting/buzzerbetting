@@ -32,6 +32,7 @@ app.all('/api/betfair', wrap(require('./netlify/functions/betfair').handler));
 app.all('/api/betfair-dogs', wrap(require('./netlify/functions/betfair-dogs').handler));
 app.all('/api/betfair-f1', wrap(require('./netlify/functions/betfair-f1').handler));
 app.all('/api/betfair-horses', wrap(require('./netlify/functions/betfair-horses').handler));
+app.all('/api/betfair-match-odds', wrap(require('./netlify/functions/betfair-match-odds').handler));
 app.all('/api/ddhh', wrap(require('./netlify/functions/ddhh').handler));
 app.all('/api/sheets', wrap(require('./netlify/functions/sheets').handler));
 app.all('/api/bb-odds', wrap(require('./netlify/functions/bb-odds').handler));
@@ -186,6 +187,23 @@ app.get('/api/pricedup-horse-ev', (req, res) => {
     res.json({ ok: true, updated: payload.updated || null, bets: payload.bets || [] });
   } catch (e) {
     res.json({ ok: false, error: 'Failed reading pricedup_horse_ev_bets.json: ' + e.message });
+  }
+});
+
+// GET /api/pricedup-acca-ev — PricedUp simple win-acca ("Team A & Team B Both To Win" /
+// "Team A, B & C All To Win") football +EV bets, written by oc-scraper's
+// pricedup_acca_ev_scan.py: each team's own BFEX MATCH_ODDS fair odds
+// (bfex_fair.derive_bfex_fair) multiplied together for the acca's fair odds, compared
+// against PricedUp's boosted price. Same read-only contract as /api/oc-ev, merged into the
+// same "Normal +EV" table client-side alongside the regular bets and the horse doubles.
+const PRICEDUP_ACCA_EV_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'pricedup_acca_ev_bets.json');
+app.get('/api/pricedup-acca-ev', (req, res) => {
+  if (!fs.existsSync(PRICEDUP_ACCA_EV_PATH)) return res.json({ ok: true, updated: null, bets: [] });
+  try {
+    const payload = JSON.parse(fs.readFileSync(PRICEDUP_ACCA_EV_PATH, 'utf8'));
+    res.json({ ok: true, updated: payload.updated || null, bets: payload.bets || [] });
+  } catch (e) {
+    res.json({ ok: false, error: 'Failed reading pricedup_acca_ev_bets.json: ' + e.message });
   }
 });
 
