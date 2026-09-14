@@ -207,6 +207,39 @@ app.get('/api/pricedup-acca-ev', (req, res) => {
   }
 });
 
+// GET /api/paddypower-horse-ev — Paddy Power "Racing Specials" (POWER_PRICES) horse double
+// +EV bets, written by oc-scraper's paddypower_horse_ev_scan.py: same principle as
+// /api/pricedup-horse-ev above, each leg's own BFEX WIN-market fair odds multiplied
+// together, compared against Paddy Power's own decimal price. Merged into the same "Normal
+// +EV" table client-side, alongside the regular bets, PricedUp horse doubles, and PricedUp
+// win accas.
+const PADDYPOWER_HORSE_EV_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'paddypower_horse_ev_bets.json');
+app.get('/api/paddypower-horse-ev', (req, res) => {
+  if (!fs.existsSync(PADDYPOWER_HORSE_EV_PATH)) return res.json({ ok: true, updated: null, bets: [] });
+  try {
+    const payload = JSON.parse(fs.readFileSync(PADDYPOWER_HORSE_EV_PATH, 'utf8'));
+    res.json({ ok: true, updated: payload.updated || null, bets: payload.bets || [] });
+  } catch (e) {
+    res.json({ ok: false, error: 'Failed reading paddypower_horse_ev_bets.json: ' + e.message });
+  }
+});
+
+// GET /api/bet-alert-errors — the Bet Alerts "Errors" tab: market-integrity flags (a
+// bookmaker's market still open past when it should have suspended), not value bets. First
+// fed by paddypower_horse_ev_scan.py (Paddy Power's "Racing Specials" doubles occasionally
+// staying open after their first leg's race has already gone off) via
+// oc_cache.store_bet_alert_errors, but the shape is bookmaker-agnostic for future sources.
+const BET_ALERT_ERRORS_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'bet_alert_errors.json');
+app.get('/api/bet-alert-errors', (req, res) => {
+  if (!fs.existsSync(BET_ALERT_ERRORS_PATH)) return res.json({ ok: true, updated: null, rows: [] });
+  try {
+    const payload = JSON.parse(fs.readFileSync(BET_ALERT_ERRORS_PATH, 'utf8'));
+    res.json({ ok: true, updated: payload.updated || null, rows: payload.bets || [] });
+  } catch (e) {
+    res.json({ ok: false, error: 'Failed reading bet_alert_errors.json: ' + e.message });
+  }
+});
+
 // GET /api/oc-f1-ew, /api/oc-arbs, /api/oc-dnf — the new Bet Alerts edges (F1 Each-Way,
 // Arbs, DNFs). Same "just read whatever the scraper last wrote" contract as /api/oc-ev and
 // /api/oc-calc-ev above; the oc-scraper side that writes these JSON files doesn't exist yet,

@@ -2524,6 +2524,20 @@ input::placeholder{color:var(--text3)}
     <div class="note"><i class="ti ti-info-circle"></i> Did-Not-Finish / retirement value. Feed not connected yet — this tab lights up automatically once the scraper starts publishing.</div>
   </div>
 
+  <!-- panel: Errors (2026-09-14 — market-integrity flags, not value bets: a bookmaker's own
+       market still open past when it should have suspended. First source: Paddy Power's
+       "Racing Specials" horse doubles, occasionally left open after their first leg's race
+       has already gone off. Polled globally, not just while this tab is open — see
+       startBaErrorsPolling — so a new one still sounds an alert from any page.) -->
+  <div id="ba-panel-errors" class="ba-panel" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      <div class="smeta" style="margin:0"><span class="pulse"></span><strong id="ba-errors-count" style="color:var(--red);font-weight:500">—</strong></div>
+      <button onclick="baRefreshActive(this)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+    </div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>First leg</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Bookie</th><th class="r">Odds</th><th>Detected</th><th>Why</th></tr></thead><tbody id="ba-errors-body"></tbody></table></div></div>
+    <div class="note"><i class="ti ti-info-circle"></i> A bookmaker's own market that's still open — and still taking bets — more than a minute after its first leg's race has already gone off. This is a bookmaker-side bug signal, not a value signal: a bet lands here whether or not it was +EV. Sounds an alert the moment a new one appears, on any page.</div>
+  </div>
+
   <!-- panel: Ones to Watch -->
   <div id="ba-panel-watch" class="ba-panel" style="display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
@@ -3587,6 +3601,7 @@ function applyRoleRestrictions() {
   if (!noLedger) startTodoPolling(); // Calculator/Freeze have no Ledger access — polling would just produce repeated 403s
   if (!noLedger) startCalcEVBackground(); // Calculated +EV rescans in the background (every 5 min, 3 min within 15 min of a kickoff)
   if (!isFreeze) startNotifPolling(); // header notification bell — every role except Freeze (which is locked to one tool)
+  if (!isFreeze) startBaErrorsPolling(); // Bet Alerts "Errors" sound alert — global, not tied to that tab being open, same reasoning as the notif bell
   if (isFreeze) {
     // Lock the view to Freeze immediately (no flash of Home / other sections) and hide the
     // header notification bell (it has no meaning for this role).
@@ -8968,20 +8983,23 @@ async function loadOddscheckerEV(){
     // renderOddscheckerEV's boostIcon), boost rows tagged boost:true (oc_boosts_scraper.py)
     // for the red "B" icon, horse-double rows just carry mkt:'Horse Double' like any other
     // market. Neither feed failing should blank the regular scan, so both are best-effort.
-    const [r,rBoost,rHorse,rAcca]=await Promise.allSettled([
+    const [r,rBoost,rHorse,rAcca,rPPHorse]=await Promise.allSettled([
       fetch('/.netlify/functions/oc-ev').then(x=>x.json()),
       fetch('/.netlify/functions/oc-boost-ev').then(x=>x.json()),
       fetch('/.netlify/functions/oc-pricedup-horse-ev').then(x=>x.json()),
       fetch('/.netlify/functions/oc-pricedup-acca-ev').then(x=>x.json()),
+      fetch('/.netlify/functions/oc-paddypower-horse-ev').then(x=>x.json()),
     ]);
     const d=(r.status==='fulfilled')?r.value:{ok:false};
     const dBoost=(rBoost.status==='fulfilled'&&rBoost.value&&rBoost.value.ok)?rBoost.value:null;
     const dHorse=(rHorse.status==='fulfilled'&&rHorse.value&&rHorse.value.ok)?rHorse.value:null;
     const dAcca=(rAcca.status==='fulfilled'&&rAcca.value&&rAcca.value.ok)?rAcca.value:null;
+    const dPPHorse=(rPPHorse.status==='fulfilled'&&rPPHorse.value&&rPPHorse.value.ok)?rPPHorse.value:null;
     ocEvBets=(d.ok&&Array.isArray(d.bets))?d.bets:[];
     if(dBoost&&Array.isArray(dBoost.bets))ocEvBets=ocEvBets.concat(dBoost.bets);
     if(dHorse&&Array.isArray(dHorse.bets))ocEvBets=ocEvBets.concat(dHorse.bets);
     if(dAcca&&Array.isArray(dAcca.bets))ocEvBets=ocEvBets.concat(dAcca.bets);
+    if(dPPHorse&&Array.isArray(dPPHorse.bets))ocEvBets=ocEvBets.concat(dPPHorse.bets);
     ocEvLastUpdated=d.updated||ocEvLastUpdated;
     const countEl=document.getElementById('oc-ev-smeta-count');
     const refEl=document.getElementById('oc-ev-smeta-refreshed');
@@ -14824,6 +14842,7 @@ const BA_EDGES = [
   { key: 'f1-ew',   label: 'F1 EW',           panel: 'ba-panel-f1-ew',    priced: true  },
   { key: 'arbs',    label: 'Arbs',            panel: 'ba-panel-arbs',     priced: true  },
   { key: 'dnf',     label: 'DNFs',            panel: 'ba-panel-dnf',      priced: true  },
+  { key: 'errors',  label: 'Errors',          panel: 'ba-panel-errors',   priced: true  },
 ];
 let BA_BOOKS = null;             // { canonicalBookie: bool } — null until first load (= all on)
 let BA_ACTIVE = (function(){ try { return localStorage.getItem('bb_betalert_tab') || 'oc-ev'; } catch(e) { return 'oc-ev'; } })();
@@ -15028,6 +15047,8 @@ function loadBaEdge(key, isPoll){
     loadBaCorners();
   } else if (key === 'watch') {
     loadBaWatch();
+  } else if (key === 'errors') {
+    loadBaErrors();
   } else {
     loadBaStubFeed(key);
   }
@@ -15181,6 +15202,96 @@ async function baWatchRestore(id){
       loadBaWatch(); // pull the restored row straight back into the live list
     }
   } catch(e) {}
+}
+
+// ---- Bet Alerts: Errors (2026-09-14) — market-integrity flags, not value bets: a
+// bookmaker's own market still open past when it should have suspended. First source: Paddy
+// Power's "Racing Specials" horse doubles (paddypower_horse_ev_scan.py), occasionally left
+// open after their own first leg's race has already gone off. Polled globally (see
+// startBaErrorsPolling, wired in at login alongside the other global pollers) — not just
+// while this tab is open — so a brand new one sounds an alert no matter which page is up.
+let BA_ERRORS_ROWS = [];
+let BA_ERRORS_POLL = null;
+function baErrorRowKey(r){ return `${r.source || ''}||${r.match || ''}||${r.selection || ''}`; }
+function baErrorsSeenSet(){
+  try { return new Set(JSON.parse(localStorage.getItem('bb_ba_errors_seen') || '[]')); }
+  catch(e) { return new Set(); }
+}
+function baErrorsSaveSeen(set){
+  try { localStorage.setItem('bb_ba_errors_seen', JSON.stringify([...set])); } catch(e) {}
+}
+// Distinct from playTodoAlertSound — three quick low/urgent tones rather than two, so an
+// Errors ping doesn't read as just another To Do notification. Reuses TODO_AUDIO_CTX (already
+// unlocked at login) rather than a second AudioContext.
+function playErrorAlertSound(){
+  if (!TODO_AUDIO_CTX) return;
+  const now = TODO_AUDIO_CTX.currentTime;
+  [0, 0.14, 0.28].forEach((offset) => {
+    const osc = TODO_AUDIO_CTX.createOscillator();
+    const gain = TODO_AUDIO_CTX.createGain();
+    osc.type = 'square';
+    osc.frequency.value = 523.25; // C5 — lower/harsher than the To Do beep's 880/1046.5
+    gain.gain.setValueAtTime(0.0001, now + offset);
+    gain.gain.exponentialRampToValueAtTime(0.22, now + offset + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.13);
+    osc.connect(gain).connect(TODO_AUDIO_CTX.destination);
+    osc.start(now + offset);
+    osc.stop(now + offset + 0.15);
+  });
+}
+async function pollBaErrors(){
+  let rows = [];
+  try {
+    const r = await fetch('/.netlify/functions/oc-bet-alert-errors');
+    const d = await r.json();
+    if (d && d.ok && Array.isArray(d.rows)) rows = d.rows;
+  } catch(e) {}
+  const seen = baErrorsSeenSet();
+  const fresh = rows.filter(r => !seen.has(baErrorRowKey(r)));
+  if (fresh.length) {
+    unlockTodoAudio(); // no-op if already unlocked; harmless if audio's still locked (silent)
+    playErrorAlertSound();
+    fresh.forEach(r => {
+      showToast(`⚠ ${escapeHtml(r.selection || 'Market')} — still open past its first leg`, { color: 'var(--red)', bg: 'var(--red-bg)', duration: 9000 });
+      seen.add(baErrorRowKey(r));
+    });
+    baErrorsSaveSeen(seen);
+  }
+  BA_ERRORS_ROWS = rows;
+  baSetCount('errors', rows.length);
+  if (BA_ACTIVE === 'errors') renderBaErrors();
+}
+async function loadBaErrors(){ await pollBaErrors(); }
+function renderBaErrors(){
+  const body = document.getElementById('ba-errors-body');
+  const countEl = document.getElementById('ba-errors-count');
+  if (!body) return;
+  const rows = BA_ERRORS_ROWS;
+  if (countEl) countEl.textContent = `${rows.length} market error${rows.length === 1 ? '' : 's'}`;
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">No market errors right now.</td></tr>`;
+    return;
+  }
+  const fmtDetected = iso => {
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+    catch(e) { return iso; }
+  };
+  body.innerHTML = rows.map(r => `<tr style="background:var(--red-bg)">
+    <td style="font-size:12px;color:var(--text2);white-space:nowrap">${escapeHtml(r.firstLegTime || '')}</td>
+    <td style="font-size:12.5px">${escapeHtml(r.match || '')}</td>
+    <td style="font-size:12px;color:var(--text2)">${escapeHtml(r.market || '')}</td>
+    <td style="font-weight:500">${escapeHtml(r.selection || '')}</td>
+    <td class="r" style="font-size:12px;color:var(--text2)">${escapeHtml(r.bookie || '')}</td>
+    <td class="r tn" style="font-weight:500">${r.odds != null ? Number(r.odds).toFixed(2) : '—'}</td>
+    <td style="font-size:11.5px;color:var(--text3);white-space:nowrap">${fmtDetected(r.detectedAt)}</td>
+    <td style="font-size:11.5px;color:var(--text3)">${escapeHtml(r.reason || '')}</td>
+  </tr>`).join('');
+}
+function startBaErrorsPolling(){
+  pollBaErrors();
+  if (BA_ERRORS_POLL) clearInterval(BA_ERRORS_POLL);
+  BA_ERRORS_POLL = setInterval(pollBaErrors, 60000);
 }
 
 // Called by renderOddscheckerEV / renderEVResults once they've built their (filtered) list.
