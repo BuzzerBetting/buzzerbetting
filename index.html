@@ -331,7 +331,7 @@ input::placeholder{color:var(--text3)}
   <div class="grid">
     <div class="cat" onclick="showSec('oddschecker')">
       <div class="cat-ico" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-bolt"></i></div>
-      <div><div class="cat-title">Oddschecker +EV</div><div class="cat-desc">Live value bets pulled from Oddschecker vs BFex fairs</div><div class="cat-tag" id="oc-ev-menu-tag" style="background:var(--amber-bg);color:var(--amber)">—</div></div>
+      <div><div class="cat-title">Normal +EV</div><div class="cat-desc">Live value bets vs BFex fairs — Oddschecker, PricedUp horse doubles, and more</div><div class="cat-tag" id="oc-ev-menu-tag" style="background:var(--amber-bg);color:var(--amber)">—</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
     <div class="cat" onclick="showSec('ddhh')">
@@ -2445,7 +2445,7 @@ input::placeholder{color:var(--text3)}
       <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:860px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">AGS/SOT fair</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="cev-tbody"></tbody></table></div></div>
     </div>
     <div id="calc-ev-stats-panel" style="display:none;margin-top:14px"></div>
-    <div class="note"><i class="ti ti-info-circle"></i> Markets with no direct Betfair equivalent — Header and Outside-the-Box goal (Oddschecker, auto-detected, no more manual market IDs) and Left Foot/Right Foot/6 Yard Box (William Hill) — all vs a BFEX-AGS-derived fair, sorted by EV%. Direct BFEX comparisons (AGS/FGS/Cards/SOT) live on the <a href="javascript:void(0)" onclick="baTab('oc-ev')">Oddschecker +EV</a> tab instead. Header/OTB goal rows show every +EV bookmaker (up to the top 3 price tiers, tied prices on one line) under Bookie — the Odds column stays the single best price.</div>
+    <div class="note"><i class="ti ti-info-circle"></i> Markets with no direct Betfair equivalent — Header and Outside-the-Box goal (Oddschecker, auto-detected, no more manual market IDs) and Left Foot/Right Foot/6 Yard Box (William Hill) — all vs a BFEX-AGS-derived fair, sorted by EV%. Direct BFEX comparisons (AGS/FGS/Cards/SOT) live on the <a href="javascript:void(0)" onclick="baTab('oc-ev')">Normal +EV</a> tab instead. Header/OTB goal rows show every +EV bookmaker (up to the top 3 price tiers, tied prices on one line) under Bookie — the Odds column stays the single best price.</div>
   </div>
 
   <!-- panel: DDHH -->
@@ -8878,7 +8878,8 @@ const OC_EV_MARKET_BADGE={
   'AGS':'background:var(--green-bg);color:var(--green)',
   'First scorer':'background:var(--blue-bg);color:var(--blue)',
   'Cards':'background:var(--purple-bg);color:var(--purple)',
-  'SOT':'background:var(--red-bg);color:var(--red)'
+  'SOT':'background:var(--red-bg);color:var(--red)',
+  'Horse Double':'background:var(--amber-bg);color:var(--amber)'
 };
 
 // The line copyOddscheckerLine() puts on the clipboard — kept in one place so the button and
@@ -8931,18 +8932,22 @@ function renderOddscheckerEV(){
 
 async function loadOddscheckerEV(){
   try{
-    // Regular OC scan + Oddschecker Price Boosts +EV in parallel — boosts feed straight into
-    // the same table (see renderOddscheckerEV's boostIcon), just each row additionally
-    // tagged boost:true (set server-side, oc_boosts_scraper.py) so it gets the red "B" icon.
-    // A boost-feed failure must not blank the regular scan, so this is best-effort.
-    const [r,rBoost]=await Promise.allSettled([
+    // Regular OC scan + Oddschecker Price Boosts +EV + PricedUp horse-racing Enhanced-Double
+    // +EV, all in parallel — boosts/horse-doubles feed straight into the same table (see
+    // renderOddscheckerEV's boostIcon), boost rows tagged boost:true (oc_boosts_scraper.py)
+    // for the red "B" icon, horse-double rows just carry mkt:'Horse Double' like any other
+    // market. Neither feed failing should blank the regular scan, so both are best-effort.
+    const [r,rBoost,rHorse]=await Promise.allSettled([
       fetch('/.netlify/functions/oc-ev').then(x=>x.json()),
       fetch('/.netlify/functions/oc-boost-ev').then(x=>x.json()),
+      fetch('/.netlify/functions/oc-pricedup-horse-ev').then(x=>x.json()),
     ]);
     const d=(r.status==='fulfilled')?r.value:{ok:false};
     const dBoost=(rBoost.status==='fulfilled'&&rBoost.value&&rBoost.value.ok)?rBoost.value:null;
+    const dHorse=(rHorse.status==='fulfilled'&&rHorse.value&&rHorse.value.ok)?rHorse.value:null;
     ocEvBets=(d.ok&&Array.isArray(d.bets))?d.bets:[];
     if(dBoost&&Array.isArray(dBoost.bets))ocEvBets=ocEvBets.concat(dBoost.bets);
+    if(dHorse&&Array.isArray(dHorse.bets))ocEvBets=ocEvBets.concat(dHorse.bets);
     ocEvLastUpdated=d.updated||ocEvLastUpdated;
     const countEl=document.getElementById('oc-ev-smeta-count');
     const refEl=document.getElementById('oc-ev-smeta-refreshed');
@@ -14777,7 +14782,7 @@ function renderDDHH(matchName, results) {
 // day so the tab's "N unique bets posted today" note and the Bet post stats panel can be
 // shown.
 const BA_EDGES = [
-  { key: 'oc-ev',   label: 'Oddschecker +EV', panel: 'view-oddschecker',  priced: true  },
+  { key: 'oc-ev',   label: 'Normal +EV', panel: 'view-oddschecker',  priced: true  },
   { key: 'calc-ev', label: 'Calculated +EV',  panel: 'view-calculated',   priced: true  },
   { key: 'watch',   label: 'Ones to Watch',   panel: 'ba-panel-watch',    priced: true  },
   { key: 'ddhh',    label: 'DDHH',            panel: 'view-ddhh',         priced: false },

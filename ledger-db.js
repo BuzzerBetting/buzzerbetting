@@ -548,4 +548,24 @@ CREATE TABLE IF NOT EXISTS boylesports_player_props (
 CREATE INDEX IF NOT EXISTS idx_boylesports_props_match ON boylesports_player_props(match_slug);
 `);
 
+// Same "raw snapshot, upsert in place" shape as boylesports_player_props above — PricedUp's
+// Price Boosts page (Horse Racing + Football, both sports on one page — see
+// boylesports-player-props-scraping / pricedup-boosts-scraping memory), fed by its own
+// Tampermonkey userscript since PricedUp's boost data is client-rendered behind a real
+// (non-public) session token, not a plain API. group_title is the boost's own name as
+// PricedUp shows it — either a match name ("Leeds United vs Newcastle United Price Boosts")
+// for football or a specific boost name ("Thirsk Enhanced Double") for horse racing — since
+// that's the only reliable "what is this boost about" label the page itself gives per row.
+db.exec(`
+CREATE TABLE IF NOT EXISTS pricedup_boosts (
+  sport        TEXT,                 -- 'Horse Racing' | 'Football' | NULL if not resolved
+  group_title  TEXT NOT NULL,        -- e.g. 'Leeds United vs Newcastle United Price Boosts' or 'Thirsk Enhanced Double'
+  selection    TEXT NOT NULL,        -- e.g. 'Newcastle To Win Either Half'
+  odds_frac    TEXT,                 -- raw fractional odds as scraped, e.g. '5/4'
+  odds         REAL,                 -- decimal odds, converted from odds_frac
+  scraped_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (group_title, selection)
+);
+`);
+
 module.exports = db;

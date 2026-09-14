@@ -31,6 +31,7 @@ const wrap = (handler) => async (req, res) => {
 app.all('/api/betfair', wrap(require('./netlify/functions/betfair').handler));
 app.all('/api/betfair-dogs', wrap(require('./netlify/functions/betfair-dogs').handler));
 app.all('/api/betfair-f1', wrap(require('./netlify/functions/betfair-f1').handler));
+app.all('/api/betfair-horses', wrap(require('./netlify/functions/betfair-horses').handler));
 app.all('/api/ddhh', wrap(require('./netlify/functions/ddhh').handler));
 app.all('/api/sheets', wrap(require('./netlify/functions/sheets').handler));
 app.all('/api/bb-odds', wrap(require('./netlify/functions/bb-odds').handler));
@@ -168,6 +169,23 @@ app.get('/api/oc-calc-ev', (req, res) => {
     res.json({ ok: true, updated: payload.updated || null, bets: payload.bets || [] });
   } catch (e) {
     res.json({ ok: false, error: 'Failed reading oc_calc_ev_bets.json: ' + e.message });
+  }
+});
+
+// GET /api/pricedup-horse-ev — PricedUp Enhanced-Double horse racing +EV bets, written by
+// oc-scraper's pricedup_horse_ev_scan.py (see that file's docstring): each leg's own BFEX
+// WIN-market fair odds (bfex_fair.derive_bfex_fair, the exact same per-runner methodology
+// oc-ev.js's other markets use) multiplied together for the double's fair odds, compared
+// against PricedUp's own boosted price. Merged into the same "Normal +EV" (renamed from
+// Oddschecker +EV, 2026-09-14) table client-side, same read-only contract as /api/oc-ev.
+const PRICEDUP_HORSE_EV_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'pricedup_horse_ev_bets.json');
+app.get('/api/pricedup-horse-ev', (req, res) => {
+  if (!fs.existsSync(PRICEDUP_HORSE_EV_PATH)) return res.json({ ok: true, updated: null, bets: [] });
+  try {
+    const payload = JSON.parse(fs.readFileSync(PRICEDUP_HORSE_EV_PATH, 'utf8'));
+    res.json({ ok: true, updated: payload.updated || null, bets: payload.bets || [] });
+  } catch (e) {
+    res.json({ ok: false, error: 'Failed reading pricedup_horse_ev_bets.json: ' + e.message });
   }
 });
 

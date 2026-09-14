@@ -4072,4 +4072,60 @@ router.post('/boylesports-props/ingest', (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// ================== PRICEDUP BOOSTS (raw scraped odds) ==================
+// Fed by its own Tampermonkey userscript, same reason as BoyleSports above — PricedUp's
+// Price Boosts page renders entirely client-side behind a real session token their own
+// frontend bootstraps on page load (not a plain public API key — confirmed live 2026-09-14,
+// see [[pricedup-boosts-scraping]] memory), so a browser tab is the only practical way to
+// read it. One page covers both sports (Horse Racing + Football), unlike BoyleSports' one
+// scrape per match — the userscript reloads that single page on a timer (default 30 min,
+// see the script itself) rather than looping continuously. No fair-odds calc consumes this
+// yet — purely a raw-odds store for whenever that gets built.
+
+// GET /api/ledger/pricedup-boosts (no filter — this is one page's worth of rows, not per-match)
+router.get('/pricedup-boosts', (req, res) => {
+  try {
+    const rows = db.prepare(`SELECT * FROM pricedup_boosts ORDER BY sport, group_title, selection`).all();
+    res.json({ ok: true, rows });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/pricedup-boosts/ingest
+//   body: { rows: [{sport?, groupTitle, selection, oddsFrac, odds}, ...] }
+// Upserts every row (a re-scrape just refreshes the odds/scraped_at on the same
+// group_title+selection key) — this is a live snapshot, not an append-only log. Rows from a
+// previous scrape whose boost has since disappeared from the page are left in place rather
+// than deleted (PricedUp doesn't say "this boost ended", it just stops rendering it) — stale
+// rows age out via scraped_at if that ever needs cleaning up, not handled here.
+router.post('/pricedup-boosts/ingest', (req, res) => {
+  try {
+    const b = req.body || {};
+    const incoming = Array.isArray(b.rows) ? b.rows : [];
+    const now = new Date().toISOString();
+    const ins = db.prepare(`
+      INSERT INTO pricedup_boosts (sport, group_title, selection, odds_frac, odds, scraped_at)
+      VALUES (@sport, @group_title, @selection, @odds_frac, @odds, @now)
+      ON CONFLICT(group_title, selection) DO UPDATE SET
+        sport = excluded.sport, odds_frac = excluded.odds_frac, odds = excluded.odds, scraped_at = excluded.scraped_at
+    `);
+    let upserted = 0;
+    const tx = db.transaction(() => {
+      for (const r of incoming) {
+        if (!r || !r.groupTitle || !r.selection) continue;
+        ins.run({
+          sport: r.sport || null,
+          group_title: String(r.groupTitle),
+          selection: String(r.selection),
+          odds_frac: r.oddsFrac || null,
+          odds: r.odds != null ? Number(r.odds) : null,
+          now,
+        });
+        upserted++;
+      }
+    });
+    tx();
+    res.json({ ok: true, upserted });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 module.exports = router;
