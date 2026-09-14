@@ -3918,13 +3918,30 @@ router.post('/parse-bet365-sot', async (req, res) => {
 
 const OTW_TRIGGER_DIR = path.join(__dirname, 'oc-scraper', 'data', 'otw_triggers');
 
-// GET /api/ledger/ones-to-watch -> { ok, rows:[...] }  (all rows, highest EV first; ticked pinned on top)
+// GET /api/ledger/ones-to-watch -> { ok, rows:[...] }  (all non-removed rows, highest EV first; ticked pinned on top)
 router.get('/ones-to-watch', (req, res) => {
   try {
     const rows = db.prepare(
       `SELECT id, match_id AS matchId, match, kickoff, market, selection, fair, base_fair AS baseFair, conf, bookie, odds, ev, source, state
          FROM ones_to_watch
+        WHERE state != 'removed'
         ORDER BY (state = 'ticked') DESC, ev DESC`
+    ).all();
+    res.json({ ok: true, rows });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// GET /api/ledger/ones-to-watch/removed -> { ok, rows:[...] }  (2026-09-14 — the X button used
+// to hard-delete; a real bet got accidentally clicked off and had to be manually reconstructed
+// from a stray test-response capture since nothing else remembered it. Most recently removed
+// first, so a mistaken click is easy to find and undo via /:id/restore below.)
+router.get('/ones-to-watch/removed', (req, res) => {
+  try {
+    const rows = db.prepare(
+      `SELECT id, match_id AS matchId, match, kickoff, market, selection, fair, base_fair AS baseFair, conf, bookie, odds, ev, source, state, updated_at AS removedAt
+         FROM ones_to_watch
+        WHERE state = 'removed'
+        ORDER BY updated_at DESC`
     ).all();
     res.json({ ok: true, rows });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
@@ -3990,11 +4007,32 @@ router.post('/ones-to-watch/:id/tick', (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
-// DELETE /api/ledger/ones-to-watch/:id  -> the X: hard delete
+// DELETE /api/ledger/ones-to-watch/:id  -> the X. Soft delete (2026-09-14 — was a hard
+// DELETE; a genuine bet got clicked off by mistake with no way to get it back short of
+// reconstructing it by hand from whatever happened to still be lying around). Just moves the
+// row to state='removed', which GET /ones-to-watch now filters out — the "Removed Bets"
+// list (GET /ones-to-watch/removed) and /:id/restore below are the recovery path. A rescan's
+// own DELETE...WHERE state='pending' (see /ones-to-watch/ingest) never touches a removed row,
+// and its ON CONFLICT(match_id,market,selection) DO NOTHING means a removed edge also won't
+// silently reappear on its own while still removed — same "stays gone until someone actively
+// restores it" behaviour the ticked state already has, just for the opposite intent.
 router.delete('/ones-to-watch/:id', (req, res) => {
   try {
-    const info = db.prepare(`DELETE FROM ones_to_watch WHERE id = ?`).run(req.params.id);
+    const info = db.prepare(
+      `UPDATE ones_to_watch SET state = 'removed', updated_at = ? WHERE id = ?`
+    ).run(new Date().toISOString(), req.params.id);
     if (!info.changes) return res.status(404).json({ ok: false, error: 'not found' });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/ones-to-watch/:id/restore  -> undo a removal, back to 'pending'
+router.post('/ones-to-watch/:id/restore', (req, res) => {
+  try {
+    const info = db.prepare(
+      `UPDATE ones_to_watch SET state = 'pending', updated_at = ? WHERE id = ? AND state = 'removed'`
+    ).run(new Date().toISOString(), req.params.id);
+    if (!info.changes) return res.status(404).json({ ok: false, error: 'not found (or not currently removed)' });
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });

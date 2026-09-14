@@ -759,6 +759,19 @@ input::placeholder{color:var(--text3)}
   </div>
 </div>
 
+<!-- ONES TO WATCH: REMOVED BETS MODAL (2026-09-14 — the X used to be a hard delete; a real
+     bet got clicked off by mistake with no way back. Now soft-deleted server-side, this is
+     the recovery list.) -->
+<div id="ba-watch-removed-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;padding:16px">
+  <div class="card card-pad" style="max-width:820px;width:100%;max-height:80vh;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="sec-title" style="margin:0;font-size:16px">Removed bets — Ones to Watch</div>
+      <button class="add-btn" onclick="closeBaWatchRemovedModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="ba-watch-removed-body" style="font-size:13px;overflow:auto">Loading…</div>
+  </div>
+</div>
+
 <!-- BET TRACKING: CHANGE ACCOUNT MODAL (fix a leg accidentally logged against the wrong account) -->
 <div id="bt-reassign-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:210;align-items:center;justify-content:center;padding:16px">
   <div class="card card-pad" style="max-width:400px;width:100%">
@@ -2515,7 +2528,10 @@ input::placeholder{color:var(--text3)}
   <div id="ba-panel-watch" class="ba-panel" style="display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
       <div class="smeta" style="margin:0"><span class="pulse"></span><strong id="ba-watch-count" style="color:var(--green);font-weight:500">—</strong></div>
-      <button onclick="baRefreshActive(this)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+      <div style="display:flex;gap:8px">
+        <button onclick="openBaWatchRemovedModal()" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-trash"></i> Removed bets<span id="ba-watch-removed-badge" style="display:none;margin-left:2px;background:var(--red);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:600"></span></button>
+        <button onclick="baRefreshActive(this)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+      </div>
     </div>
     <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:900px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r" title="The AGS (or SOT 1+) fair odds this market's fair was derived from">Source Fair</th><th class="r">Bet Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th class="r">✓ / ✗</th></tr></thead><tbody id="ba-watch-body"></tbody></table></div></div>
     <div class="note"><i class="ti ti-info-circle"></i> Pre-lineup early-value sweep — every player in every predicted XI + bench, scored for OTB/Header goal and OTB/Headed SoT value off the Oddschecker/BookieBashing combo fair. SoT-method rows only appear once a match's Bet365 odds are entered on Today's Matches. Tick to mark one valid (turns green, stays put); ✗ removes it. When a match's real lineup is confirmed its rows drop off here and the Calculated +EV tab picks up anything still live.</div>
@@ -15030,6 +15046,7 @@ async function loadBaWatch(){
   const shown = rows.filter(r => baBookEnabled(r.bookie));
   baSetCount('watch', shown.length);
   baReportSeen('watch', shown.map(r => ({ match: r.match, market: r.market, selection: r.selection, bk: r.bookie, odds: r.odds, ev: r.ev })));
+  refreshBaWatchRemovedBadge();
 }
 function renderBaWatch(){
   const body = document.getElementById('ba-watch-body');
@@ -15083,6 +15100,85 @@ async function baWatchDelete(id){
       BA_WATCH_ROWS = BA_WATCH_ROWS.filter(x => x.id !== id);
       renderBaWatch();
       baSetCount('watch', BA_WATCH_ROWS.filter(r => baBookEnabled(r.bookie)).length);
+      bumpBaWatchRemovedBadge(1);
+    }
+  } catch(e) {}
+}
+
+// ---- Ones to Watch: Removed Bets (2026-09-14 — the X above soft-deletes now; this is the
+// recovery list + undo, built after a real bet got clicked off by mistake with no way back) ----
+function bumpBaWatchRemovedBadge(delta){
+  const el = document.getElementById('ba-watch-removed-badge');
+  if (!el) return;
+  const n = Math.max(0, (parseInt(el.textContent, 10) || 0) + delta);
+  el.textContent = String(n);
+  el.style.display = n > 0 ? 'inline-block' : 'none';
+}
+async function refreshBaWatchRemovedBadge(){
+  try {
+    const d = await ledgerApi('ones-to-watch/removed');
+    const n = (d && d.ok && Array.isArray(d.rows)) ? d.rows.length : 0;
+    const el = document.getElementById('ba-watch-removed-badge');
+    if (el) { el.textContent = String(n); el.style.display = n > 0 ? 'inline-block' : 'none'; }
+  } catch(e) {}
+}
+function closeBaWatchRemovedModal(){
+  const overlay = document.getElementById('ba-watch-removed-modal-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+async function openBaWatchRemovedModal(){
+  const overlay = document.getElementById('ba-watch-removed-modal-overlay');
+  const body = document.getElementById('ba-watch-removed-body');
+  if (!overlay || !body) return;
+  overlay.style.display = 'flex';
+  body.innerHTML = 'Loading…';
+  let rows = [];
+  try {
+    const d = await ledgerApi('ones-to-watch/removed');
+    if (d && d.ok && Array.isArray(d.rows)) rows = d.rows;
+  } catch(e) {}
+  renderBaWatchRemoved(rows);
+  const badge = document.getElementById('ba-watch-removed-badge');
+  if (badge) { badge.textContent = String(rows.length); badge.style.display = rows.length > 0 ? 'inline-block' : 'none'; }
+}
+function renderBaWatchRemoved(rows){
+  const body = document.getElementById('ba-watch-removed-body');
+  if (!body) return;
+  if (!rows.length) {
+    body.innerHTML = `<div style="text-align:center;color:var(--text3);padding:28px">Nothing removed right now.</div>`;
+    return;
+  }
+  const fmtRemovedAt = iso => {
+    if (!iso) return '—';
+    try { return new Date(iso + (iso.endsWith('Z') ? '' : 'Z')).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+    catch (e) { return iso; }
+  };
+  body.innerHTML = `<div style="overflow-x:auto"><table class="dt" style="min-width:720px"><thead><tr><th>Removed</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th></th></tr></thead><tbody>${rows.map(r => {
+    const ev = r.ev != null ? Number(r.ev) : null;
+    const evTxt = ev != null ? `${ev >= 0 ? '+' : ''}${ev.toFixed(1)}%` : '—';
+    return `<tr id="ba-watch-removed-row-${r.id}">
+      <td style="font-size:11.5px;color:var(--text3);white-space:nowrap">${fmtRemovedAt(r.removedAt)}</td>
+      <td style="font-size:12.5px">${escapeHtml(r.match || '')}</td>
+      <td style="font-size:12.5px;color:var(--text2)">${escapeHtml(r.market || '')}</td>
+      <td style="font-weight:500">${escapeHtml(r.selection || '')}</td>
+      <td class="r tn">${r.fair != null ? Number(r.fair).toFixed(2) : '—'}</td>
+      <td class="r" style="font-size:12px;color:var(--text2)">${escapeHtml(ocBookieName(r.bookie) || r.bookie || '')}</td>
+      <td class="r tn">${r.odds != null ? Number(r.odds).toFixed(2) : '—'}</td>
+      <td class="r tn" style="color:var(--green)">${evTxt}</td>
+      <td class="r"><button onclick="baWatchRestore(${r.id})" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;color:var(--green);font-size:12px;font-family:inherit;white-space:nowrap"><i class="ti ti-arrow-back-up"></i> Restore</button></td>
+    </tr>`;
+  }).join('')}</tbody></table></div>`;
+}
+async function baWatchRestore(id){
+  try {
+    const d = await ledgerApi('ones-to-watch/' + id + '/restore', { method: 'POST' });
+    if (d && d.ok) {
+      const row = document.getElementById('ba-watch-removed-row-' + id);
+      if (row) row.remove();
+      bumpBaWatchRemovedBadge(-1);
+      const body = document.getElementById('ba-watch-removed-body');
+      if (body && !body.querySelector('tbody tr')) renderBaWatchRemoved([]);
+      loadBaWatch(); // pull the restored row straight back into the live list
     }
   } catch(e) {}
 }
