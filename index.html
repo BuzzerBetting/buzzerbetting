@@ -2455,7 +2455,7 @@ input::placeholder{color:var(--text3)}
     </div>
     <div id="cev-status"></div>
     <div id="cev-results" style="display:none;margin-top:10px">
-      <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:1020px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">AGS/SOT fair</th><th>Source</th><th class="r">BFEX traded</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="cev-tbody"></tbody></table></div></div>
+      <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:940px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">AGS/SOT fair</th><th class="r">BFEX traded</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="cev-tbody"></tbody></table></div></div>
     </div>
     <div id="calc-ev-stats-panel" style="display:none;margin-top:14px"></div>
     <div class="note"><i class="ti ti-info-circle"></i> Markets with no direct Betfair equivalent — Header and Outside-the-Box goal (Oddschecker, auto-detected, no more manual market IDs) and Left Foot/Right Foot/6 Yard Box (William Hill) — all vs a BFEX-AGS-derived fair, sorted by EV%. Direct BFEX comparisons (AGS/FGS/Cards/SOT) live on the <a href="javascript:void(0)" onclick="baTab('oc-ev')">Normal +EV</a> tab instead. Header/OTB goal rows show every +EV bookmaker (up to the top 3 price tiers, tied prices on one line) under Bookie — the Odds column stays the single best price.</div>
@@ -14123,7 +14123,7 @@ function renderEVResults(bets) {
   if (typeof baOnEdgeRendered === 'function') baOnEdgeRendered('calc-ev', bets.filter(b => !b.noCalc).map(b => ({ match: b.match, market: b.market, selection: b.player, bk: ocBookieName(b.bookie), odds: parseFloat(b.ocOdds) || null, ev: b.bestEv })));
 
   if (!bets.length) {
-    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:32px;font-size:13px">No +EV bets found</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:32px;font-size:13px">No +EV bets found</td></tr>`;
     resultsEl.style.display = '';
     return;
   }
@@ -14140,11 +14140,15 @@ function renderEVResults(bets) {
     const boostIcon = bet.boost ? '<span class="boost-icon" title="Oddschecker Price Boost" style="margin-right:6px;vertical-align:middle">B</span>' : '';
 
     // Which source actually produced the AGS/SOT fair (fair_resolver.py's priority chain —
-    // direct BFEX exchange market, else the OC/BB devig+stats blend), and how much has
-    // traded on that player's BFEX market regardless of which source won — a player still
-    // sat at £0 needs far more scepticism/attention than one at £950 that just missed the
-    // spread/size bar. See fair_resolver.py's bfexMatched docstring (2026-09-14).
-    const sourceLabel = bet.source === 'combo' ? 'OC/BB' : (bet.source === 'bfex' ? 'BFEX' : '—');
+    // direct BFEX exchange market, else the OC/BB devig+stats blend) — shown bracketed right
+    // next to the AGS/SOT fair value itself (same pattern Normal +EV's fairCell already uses),
+    // and how much has traded on that player's BFEX market regardless of which source won — a
+    // player still sat at £0 needs far more scepticism/attention than one at £950 that just
+    // missed the spread/size bar. See fair_resolver.py's bfexMatched docstring (2026-09-14).
+    const sourceLabel = bet.source === 'combo' ? 'OC/BB' : (bet.source === 'bfex' ? 'BFEX' : '');
+    const baseFairCell = sourceLabel
+      ? `${baseFairLabel} <span style="color:var(--text3);font-size:11px">(${sourceLabel})</span>`
+      : baseFairLabel;
     const bfexMatchedLabel = (typeof bet.bfexMatched === 'number')
       ? `£${bet.bfexMatched.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}`
       : '—';
@@ -14156,8 +14160,7 @@ function renderEVResults(bets) {
       <td style="font-size:12px;color:var(--text3);white-space:nowrap">${boostIcon}${bet.match ?? ''}</td>
       <td style="font-size:12px;color:var(--text2)">${bet.market}</td>
       <td style="font-weight:500">${bet.player}</td>
-      <td class="r tn" style="color:var(--text2)">${baseFairLabel}</td>
-      <td style="font-size:11px;color:var(--text3)">${sourceLabel}</td>
+      <td class="r tn" style="color:var(--text2)">${baseFairCell}</td>
       <td class="r tn" style="color:var(--text2)">${bfexMatchedLabel}</td>
       <td class="r tn" style="font-weight:500">${fairLabel}</td>
       <td class="r" style="font-size:12px;color:var(--text2);line-height:1.5">${bookieLinesHtml(bet)}</td>
