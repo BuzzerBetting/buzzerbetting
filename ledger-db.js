@@ -523,6 +523,14 @@ try { db.exec(`ALTER TABLE discord_corners_config ADD COLUMN catchup_from TEXT`)
 // never plumbed it through to here. Display only, never used in any calc.
 try { db.exec(`ALTER TABLE ones_to_watch ADD COLUMN base_fair REAL`); } catch (e) { /* already exists */ }
 
+// Raw BFEX Last Price Matched + totalMatched behind a row's base AGS/SOT-1+ fair, regardless
+// of whether BFEX actually won as the fair-odds source (see fair_resolver.py's `bfexLpm`/
+// `bfexMatched`, 2026-09-14) — lets staff see how much liquidity/price is on BFEX for a
+// player even while the displayed fair came from the OC/BB combo, as a signal of how urgently
+// that combo fair needs re-checking. Display only, never used in any calc.
+try { db.exec(`ALTER TABLE ones_to_watch ADD COLUMN bfex_lpm REAL`); } catch (e) { /* already exists */ }
+try { db.exec(`ALTER TABLE ones_to_watch ADD COLUMN bfex_matched REAL`); } catch (e) { /* already exists */ }
+
 // BoyleSports player-prop odds (Shots Inside/Outside Box, SOT Right/Left/Header/Inside/Outside
 // Box, Goals Right/Left/Header/Inside(incl 6yd)/Outside) — scraped by a Tampermonkey userscript
 // run from the user's own real Chrome (server-side fetching is Cloudflare-Turnstile-blocked;

@@ -3922,7 +3922,7 @@ const OTW_TRIGGER_DIR = path.join(__dirname, 'oc-scraper', 'data', 'otw_triggers
 router.get('/ones-to-watch', (req, res) => {
   try {
     const rows = db.prepare(
-      `SELECT id, match_id AS matchId, match, kickoff, market, selection, fair, base_fair AS baseFair, conf, bookie, odds, ev, source, state
+      `SELECT id, match_id AS matchId, match, kickoff, market, selection, fair, base_fair AS baseFair, conf, bookie, odds, ev, source, bfex_lpm AS bfexLpm, bfex_matched AS bfexMatched, state
          FROM ones_to_watch
         WHERE state != 'removed'
         ORDER BY (state = 'ticked') DESC, ev DESC`
@@ -3938,7 +3938,7 @@ router.get('/ones-to-watch', (req, res) => {
 router.get('/ones-to-watch/removed', (req, res) => {
   try {
     const rows = db.prepare(
-      `SELECT id, match_id AS matchId, match, kickoff, market, selection, fair, base_fair AS baseFair, conf, bookie, odds, ev, source, state, updated_at AS removedAt
+      `SELECT id, match_id AS matchId, match, kickoff, market, selection, fair, base_fair AS baseFair, conf, bookie, odds, ev, source, bfex_lpm AS bfexLpm, bfex_matched AS bfexMatched, state, updated_at AS removedAt
          FROM ones_to_watch
         WHERE state = 'removed'
         ORDER BY updated_at DESC`
@@ -3948,7 +3948,7 @@ router.get('/ones-to-watch/removed', (req, res) => {
 });
 
 // POST /api/ledger/ones-to-watch/ingest
-//   body: { matchId, match?, kickoff?, confirmed?:bool, rows:[{market,selection,fair,baseFair,conf,bookie,odds,ev,source}] }
+//   body: { matchId, match?, kickoff?, confirmed?:bool, rows:[{market,selection,fair,baseFair,conf,bookie,odds,ev,source,bfexLpm,bfexMatched}] }
 // - confirmed:true  -> delete every row for that match (Calculated +EV takes over).
 // - otherwise       -> refresh this match's 'pending' rows from `rows`; leave 'ticked' rows untouched.
 router.post('/ones-to-watch/ingest', (req, res) => {
@@ -3967,8 +3967,8 @@ router.post('/ones-to-watch/ingest', (req, res) => {
     const tx = db.transaction(() => {
       db.prepare(`DELETE FROM ones_to_watch WHERE match_id = ? AND state = 'pending'`).run(mid);
       const ins = db.prepare(
-        `INSERT INTO ones_to_watch (match_id, match, kickoff, market, selection, fair, base_fair, conf, bookie, odds, ev, source, state, created_at, updated_at)
-         VALUES (@match_id, @match, @kickoff, @market, @selection, @fair, @base_fair, @conf, @bookie, @odds, @ev, @source, 'pending', @now, @now)
+        `INSERT INTO ones_to_watch (match_id, match, kickoff, market, selection, fair, base_fair, conf, bookie, odds, ev, source, bfex_lpm, bfex_matched, state, created_at, updated_at)
+         VALUES (@match_id, @match, @kickoff, @market, @selection, @fair, @base_fair, @conf, @bookie, @odds, @ev, @source, @bfex_lpm, @bfex_matched, 'pending', @now, @now)
          ON CONFLICT(match_id, market, selection) DO NOTHING`   // a ticked row already holds this key — keep it
       );
       for (const r of incoming) {
@@ -3986,6 +3986,8 @@ router.post('/ones-to-watch/ingest', (req, res) => {
           odds: r.odds != null ? Number(r.odds) : null,
           ev: r.ev != null ? Number(r.ev) : null,
           source: r.source || null,
+          bfex_lpm: r.bfexLpm != null ? Number(r.bfexLpm) : null,
+          bfex_matched: r.bfexMatched != null ? Number(r.bfexMatched) : null,
           now,
         });
       }
