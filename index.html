@@ -3372,6 +3372,13 @@ async function loadAccountSummary() {
 // the each-way fraction parsed from the pasted "Terms" column (e.g. "1/5" -> 0.2). Worth checking
 // this matches how you actually think about each-way value before relying on it.
 
+// Market names for the Goal SOT Methods tabs. Deliberately the exact strings Calculated +EV
+// logs and grades against (corner-model/calcEvLog.js grade()), so a filed bet can be lined up
+// with its originating +EV row later without a translation table. '6 Yard Box' is the one
+// display-only market there (William Hill price, no fair-odds model) — the bet still files,
+// there just won't be a fair to enter alongside it.
+const GSM_BET_MARKETS = ['Header', 'OTB', 'Headed SOT', 'OTB SOT', 'Assist', 'Left Foot Goal', 'Right Foot Goal', '6 Yard Box'];
+
 const BET_TYPE_CONFIG = {
   'Value':            { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Bet Description',label:'Bet description',type:'text'}], oddsMode:'pairedBlended' },
   'Keithbot':         { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Player',label:'Player',type:'text'},{key:'Bet',label:'Bet',type:'text'}], oddsMode:'pairedBlended' },
@@ -3383,6 +3390,13 @@ const BET_TYPE_CONFIG = {
   'Dogs + Horses (VA)': { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Race',label:'Race',type:'text'},{key:'Horse/Trap',label:'Horse / trap',type:'text'},{key:'Each-Way',label:'Each-way?',type:'checkbox',revealsField:'Terms'},{key:'Terms',label:'Each-way terms (e.g. 1/5)',type:'text',hiddenUnless:'Each-Way'}], oddsMode:'blendedProfit',
                         note:'Fair odds aren\u2019t captured here — this bet is priced at the off (BFEX SP), so EV is calculated at settlement, not at entry.' },
   'Corners':          { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Team',label:'Team',type:'text'},{key:'Assist',label:'Assist',type:'text'},{key:'Scorer',label:'Scorer',type:'text'}], oddsMode:'blendedProfit' },
+  // Goal SOT Methods — the bets actually taken off the Calculated +EV page, so the columns
+  // mirror that page's row: Match / Market / Selection / the AGS-or-SOT fair the method fair
+  // was derived from. Odds / Fair Odds / EV £ then come from the generic pairedBlended path,
+  // same as Value and Keithbot — Calculated +EV shows EV as a %, but every other tab stores
+  // it in £ off the real stake, and consistency with the rest of the ledger wins here.
+  'Goal SOT Methods':      { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Match',label:'Match',type:'text'},{key:'Market',label:'Market',type:'select',options:GSM_BET_MARKETS},{key:'Player',label:'Player',type:'text'},{key:'AGS/SOT Fair',label:'AGS/SOT fair odds',type:'number'}], oddsMode:'pairedBlended' },
+  'Goal SOT Methods (VA)': { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Match',label:'Match',type:'text'},{key:'Market',label:'Market',type:'select',options:GSM_BET_MARKETS},{key:'Player',label:'Player',type:'text'},{key:'AGS/SOT Fair',label:'AGS/SOT fair odds',type:'number'}], oddsMode:'pairedBlended' },
   'Ninja Golf BFEX':  { layout:'standard', bookie:true, bookieFieldKey:'Bookie', bookieDefault:'Betfair', stakeFieldKey:'Total Stake', fields:[{key:'Comp',label:'Competition',type:'text'},{key:'Player',label:'Player',type:'text'},{key:'Points Advised',label:'Points advised',type:'number'}], oddsMode:'blendedProfitCommission',
                         note:'The potential profit above already accounts for the 2% commission on this market — apply the same 2% again at settlement.' },
   'BB Horse':         { layout:'paste', pasteSpec:'bbhorse', bookie:true, bookieFieldKey:'Bookie', oddsMode:'eachWay', hideProfitBreakdown:true, stakeFieldKey:'Total Stake' },
@@ -3416,6 +3430,7 @@ const BET_TYPE_CONFIG = {
 const ADD_ACCOUNT_TYPES = [
   'Value', 'Keithbot', 'American Props', 'Corners', 'Discord', 'Offers (Personal)',
   'Offers (VA)', 'Other Bets', 'Dogs + Horses', 'Dogs + Horses (VA)', 'BB - BT',
+  'Goal SOT Methods', 'Goal SOT Methods (VA)',
 ];
 
 // Column layout guesses for paste-to-autofill types. `key` becomes the stored field name.
@@ -3492,6 +3507,7 @@ const BET_TYPE_GROUPS = {
     {key:'Freeze', label:'Freeze'},
     {key:'Ninja Golf BFEX', label:'Ninja Golf BFEX'},
     {key:'Corners', label:'Corners'},
+    {key:'Goal SOT Methods', label:'Goal SOT Methods'},
     {key:'Viper Horse', label:'Viper Horses'},
     {key:'Offers (Personal)', label:'Offers'},
     {key:'Other Bets', label:'Other Bets'},
@@ -3506,6 +3522,7 @@ const BET_TYPE_GROUPS = {
     {key:'Offers (VA)', label:'Offers'},
     {key:'Dogs + Horses (VA)', label:'Dogs + Horses DogBot'},
     {key:'Viper Horse (VA)', label:'Viper Horses'},
+    {key:'Goal SOT Methods (VA)', label:'Goal SOT Methods'},
   ],
 };
 
@@ -7095,6 +7112,7 @@ const BET_TRACKING_GROUPS = {
     {key:'Freeze', label:'Freeze'},
     {key:'Ninja Golf BFEX', label:'Ninja Golf BFEX'},
     {key:'Corners', label:'Corners'},
+    {key:'Goal SOT Methods', label:'Goal SOT Methods'},
     {key:'Offers (Personal)', label:'Offers'},
     {key:'Other Bets', label:'Other Bets'},
     {key:'Casino (Personal)', label:'Casino'},
@@ -7107,6 +7125,7 @@ const BET_TRACKING_GROUPS = {
     {key:'Casino', label:'Casino'},
     {key:'Offers (VA)', label:'Offers'},
     {key:'Dogs + Horses (VA)', label:'Dogs + Horses DogBot'},
+    {key:'Goal SOT Methods (VA)', label:'Goal SOT Methods'},
     {key:'Other', label:'Other'},
   ],
 };

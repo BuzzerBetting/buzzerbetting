@@ -56,9 +56,10 @@ function legCommitted(leg) {
 const HARDCODED_BUZZER_TYPES = [
   'Value', 'Keithbot', 'Dogs + Horses', 'BB Horse', 'BB Golf', 'American Props', 'Freeze',
   'Ninja Golf BFEX', 'Corners', 'Offers (Personal)', 'Other Bets', 'Casino (Personal)', 'Back & Lay',
-  'Viper Horse'
+  'Viper Horse', 'Goal SOT Methods'
 ];
-const HARDCODED_ASSISTANT_TYPES = ['Discord', 'BB - RTP', 'BB - BT', 'Casino', 'Offers (VA)', 'Dogs + Horses (VA)', 'Viper Horse (VA)'];
+const HARDCODED_ASSISTANT_TYPES = ['Discord', 'BB - RTP', 'BB - BT', 'Casino', 'Offers (VA)', 'Dogs + Horses (VA)', 'Viper Horse (VA)',
+  'Goal SOT Methods (VA)'];
 function getBetTypeGroup(bet_type) {
   if (HARDCODED_BUZZER_TYPES.includes(bet_type)) return 'buzzer';
   if (HARDCODED_ASSISTANT_TYPES.includes(bet_type)) return 'assistant';
@@ -1538,6 +1539,7 @@ router.post('/bets/:id/legs', (req, res) => {
 const ADD_ACCOUNT_TYPES = [
   'Value', 'Keithbot', 'American Props', 'Corners', 'Discord', 'Offers (Personal)',
   'Offers (VA)', 'Other Bets', 'Dogs + Horses', 'Dogs + Horses (VA)', 'BB - BT',
+  'Goal SOT Methods', 'Goal SOT Methods (VA)',
 ];
 
 // POST /api/ledger/bets/:id/add-account — folds a second (third, ...) bookmaker/account leg
