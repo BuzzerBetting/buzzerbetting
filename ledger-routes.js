@@ -4093,10 +4093,18 @@ router.get('/pricedup-boosts', (req, res) => {
 // POST /api/ledger/pricedup-boosts/ingest
 //   body: { rows: [{sport?, groupTitle, selection, oddsFrac, odds}, ...] }
 // Upserts every row (a re-scrape just refreshes the odds/scraped_at on the same
-// group_title+selection key) — this is a live snapshot, not an append-only log. Rows from a
-// previous scrape whose boost has since disappeared from the page are left in place rather
-// than deleted (PricedUp doesn't say "this boost ended", it just stops rendering it) — stale
-// rows age out via scraped_at if that ever needs cleaning up, not handled here.
+// group_title+selection key), THEN deletes every existing row this run didn't touch
+// (scraped_at still older than this run's timestamp) — 2026-09-14 fix: the original version
+// left a removed boost's row in place forever once scraped (reasoning at the time: "PricedUp
+// doesn't say a boost ended, it just stops rendering it"), but the userscript re-scrapes the
+// *entire* boosts page every cycle, not incrementally — so a boost's absence from an
+// otherwise-successful scrape IS the "this ended" signal, and the PricedUp horse/acca +EV
+// scans (which just read whatever's currently in this table) kept flagging boosts that had
+// long since been pulled from the live site as confirmed live: the AS Roma & Internazionale
+// acca and all four horse doubles stayed on the Normal +EV page well after PricedUp itself
+// had removed them. The stale-delete only runs when this scrape actually found rows at all
+// (`incoming.length`) — an empty/failed scrape must never be allowed to wipe the table just
+// because nothing came through that cycle.
 router.post('/pricedup-boosts/ingest', (req, res) => {
   try {
     const b = req.body || {};
@@ -4109,6 +4117,7 @@ router.post('/pricedup-boosts/ingest', (req, res) => {
         sport = excluded.sport, odds_frac = excluded.odds_frac, odds = excluded.odds, scraped_at = excluded.scraped_at
     `);
     let upserted = 0;
+    let removed = 0;
     const tx = db.transaction(() => {
       for (const r of incoming) {
         if (!r || !r.groupTitle || !r.selection) continue;
@@ -4122,9 +4131,12 @@ router.post('/pricedup-boosts/ingest', (req, res) => {
         });
         upserted++;
       }
+      if (upserted > 0) {
+        removed = db.prepare(`DELETE FROM pricedup_boosts WHERE scraped_at != ?`).run(now).changes;
+      }
     });
     tx();
-    res.json({ ok: true, upserted });
+    res.json({ ok: true, upserted, removed });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
