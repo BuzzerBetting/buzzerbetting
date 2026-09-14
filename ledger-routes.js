@@ -122,6 +122,10 @@ router.use((req, res, next) => {
 //     match-predictions, no financial/ledger data.
 //   - /strategy-prefs: per-user Freeze-builder UI settings, no financial data — every role.
 //   - /freeze-eligible-list: the VA-pasted Acca Freeze coupon (Freeze Builder), no financial data.
+//   - /bet-alert-books, /bet-alert-seen, /bet-alert-stats, /ones-to-watch: the Bet Alerts
+//     page (2026-09-14 — Calculator role given access to Bet Alerts alongside Calculations;
+//     none of these touch live betting/financial ledger data either, same reasoning as
+//     everything else already allowed here).
 router.use((req, res, next) => {
   if ((req.userRole === 'calculator' || req.userRole === 'freeze')
       && !req.path.startsWith('/fotmob-leagues')
@@ -130,7 +134,11 @@ router.use((req, res, next) => {
       && !req.path.startsWith('/pen-taker')
       && !req.path.startsWith('/calc-ev-bets')
       && !req.path.startsWith('/strategy-prefs')
-      && !req.path.startsWith('/freeze-eligible-list')) {
+      && !req.path.startsWith('/freeze-eligible-list')
+      && !req.path.startsWith('/bet-alert-books')
+      && !req.path.startsWith('/bet-alert-seen')
+      && !req.path.startsWith('/bet-alert-stats')
+      && !req.path.startsWith('/ones-to-watch')) {
     return res.status(403).json({ ok: false, error: 'This account has no access to the Ledger.' });
   }
   next();

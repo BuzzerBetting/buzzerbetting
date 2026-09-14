@@ -288,12 +288,12 @@ input::placeholder{color:var(--text3)}
     </div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
-    <div class="cat" style="--accent:var(--blue)" onclick="showTopSec('stats')">
+    <div class="cat" id="home-card-stats" style="--accent:var(--blue)" onclick="showTopSec('stats')">
       <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-chart-bar"></i></div>
       <div><div class="cat-title">Stats</div><div class="cat-desc">Today's stats, monthly profit tracker and more to come</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
-    <div class="cat" style="--accent:var(--red)" onclick="showSec('todo')">
+    <div class="cat" id="home-card-todo" style="--accent:var(--red)" onclick="showSec('todo')">
       <div class="cat-ico" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-list-details"></i></div>
       <div><div class="cat-title">To Do<span id="todo-badge" style="display:none;margin-left:8px;background:var(--red);color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600"></span></div><div class="cat-desc">Requests between Admin and Assistant</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
@@ -308,7 +308,7 @@ input::placeholder{color:var(--text3)}
       <div><div class="cat-title">Bet Alerts</div><div class="cat-desc">Every live edge in one place — value, DDHH, corners, arbs</div><div class="cat-tag" id="betalerts-menu-tag" style="background:var(--amber-bg);color:var(--amber)">—</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
-    <div class="cat" style="--accent:var(--blue)" onclick="showTopSec('ledger')">
+    <div class="cat" id="home-card-ledger" style="--accent:var(--blue)" onclick="showTopSec('ledger')">
       <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-wallet"></i></div>
       <div><div class="cat-title">Ledger</div><div class="cat-desc">Account tracking, live balances and bet entry</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
@@ -3007,8 +3007,11 @@ function checkPin(){
       document.getElementById('pin-overlay').style.display='none';
       document.getElementById('login-passcode').value='';
       applyRoleRestrictions();
-      if (d.role === 'calculator') showTopSec('calc');
-      else if (d.role === 'freeze') showSec('freeze');
+      // Calculator lands on the home screen like every other role now (2026-09-14 — it
+      // used to jump straight to Calculations, which meant it could never reach Bet Alerts
+      // either since goHome() always bounced it back to 'calc'); applyRoleRestrictions()
+      // above hides every home card except Calculations/Bet Alerts for that role.
+      if (d.role === 'freeze') showSec('freeze');
     } else {
       errEl.textContent = d.error || 'Incorrect username or passcode — try again';
       errEl.style.display='block';
@@ -3030,8 +3033,7 @@ function checkPin(){
     const o=document.getElementById('pin-overlay');
     if(o)o.style.display='none';
     setTimeout(applyRoleRestrictions, 0);
-    if (CURRENT_USER_ROLE === 'calculator') setTimeout(()=>showTopSec('calc'), 0);
-    else if (CURRENT_USER_ROLE === 'freeze') setTimeout(()=>showSec('freeze'), 0);
+    if (CURRENT_USER_ROLE === 'freeze') setTimeout(()=>showSec('freeze'), 0);
   } else {
     setTimeout(()=>{const i=document.getElementById('login-username');if(i)i.focus();},200);
   }
@@ -3047,7 +3049,7 @@ function freezeRoleBlocks(name){
   }
   return false;
 }
-function goHome(){stopBetAlerts();if(CURRENT_USER_ROLE==='freeze'){showSec('freeze');return;}if(CURRENT_USER_ROLE==='calculator'){showTopSec('calc');return;}document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
+function goHome(){stopBetAlerts();if(CURRENT_USER_ROLE==='freeze'){showSec('freeze');return;}document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
 function showSec(name){
   if(freezeRoleBlocks(name))return;
   // Oddschecker +EV / Calculated +EV / DDHH now live as tabs inside the Bet Alerts page —
@@ -3545,13 +3547,25 @@ function applyRoleRestrictions() {
   const isFreeze = CURRENT_USER_ROLE === 'freeze'; // Freeze tool only — no other Calculations, no Ledger
   const noLedger = isCalculator || isFreeze;
   const profitCard = document.getElementById('home-card-profit');
-  if (profitCard) profitCard.style.display = isStaff ? 'none' : '';
+  if (profitCard) profitCard.style.display = (isStaff || isCalculator) ? 'none' : '';
+  // Calculator now gets a real Home screen (2026-09-14 — used to be hard-locked to
+  // Calculations, which meant it could never reach Bet Alerts either) with only
+  // Calculations and Bet Alerts left visible; everything else on Home stays hidden since
+  // this role still has no Ledger access (see the server-side allowlist in ledger-routes.js).
+  const statsCard = document.getElementById('home-card-stats');
+  if (statsCard) statsCard.style.display = isCalculator ? 'none' : '';
+  const todoCard = document.getElementById('home-card-todo');
+  if (todoCard) todoCard.style.display = isCalculator ? 'none' : '';
+  const ledgerCard = document.getElementById('home-card-ledger');
+  if (ledgerCard) ledgerCard.style.display = isCalculator ? 'none' : '';
   const transferBtn = document.getElementById('money-type-transfer');
   if (transferBtn) transferBtn.style.display = isStaff ? 'none' : '';
   const externalBtn = document.getElementById('money-type-external');
   if (externalBtn) externalBtn.style.display = isStaff ? 'none' : '';
+  // calc-menu-back-btn ("← Menu") now only hides for Freeze — that role genuinely has
+  // nowhere else to go, but Calculator can navigate back Home to reach Bet Alerts now.
   const calcBackBtn = document.getElementById('calc-menu-back-btn');
-  if (calcBackBtn) calcBackBtn.style.display = isCalculator ? 'none' : '';
+  if (calcBackBtn) calcBackBtn.style.display = isFreeze ? 'none' : '';
   const freezeBackBtn = document.getElementById('freeze-back-btn');
   if (freezeBackBtn) freezeBackBtn.style.display = isFreeze ? 'none' : ''; // Freeze role can't leave the Freeze page
   if (!noLedger) startTodoPolling(); // Calculator/Freeze have no Ledger access — polling would just produce repeated 403s
