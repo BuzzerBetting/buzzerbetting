@@ -6,13 +6,35 @@
 // login as netlify/functions/betfair.js (deliberately duplicated, not shared — see that
 // file's own header note on why).
 //
-// One action, via ?action=team-win&team=<name>:
+// action=team-win&team=<name>:
 //   Finds the team's own fixture by searching Betfair events for that team name alone (no
 //   opponent needed — PricedUp's acca text only ever gives team names, not who they're
 //   playing), fetches that match's MATCH_ODDS market, and returns raw runner data
 //   (totalMatched/lastPriceTraded/back/lay) for the team's own "to win" runner — deriving the
 //   actual fair odds from that (bfex_fair.derive_bfex_fair) is left to the Python caller,
 //   same split as betfair-dogs.js/betfair-horses.js.
+//
+// Six more actions added 2026-09-15 for oc-scraper's football_boost_scan.py — the "other"
+// per-match boosts (Win To Nil, HT/FT, Correct Score, Over 2.5, BTTS, Win & BTTS) that PricedUp/
+// StarSports/PlanetSportBet/DragonBet run alongside the plain win-accas, confirmed live to all
+// exist as their own genuine BFEX markets on every fixture probed (2026-09-15, tonight's EFL
+// Cup card). Unlike team-win, these need BOTH team names (home & away) to find the fixture
+// precisely, same as betfair.js's own home/away search — a single-team search is too loose once
+// the market itself (not just the runner within it) has to be picked out by name.
+//   action=win-to-nil&home=<H>&away=<A>&team=<T>        — "<T> Win to Nil", runner "Yes"
+//   action=draw&home=<H>&away=<A>                       — "Match Odds", runner "The Draw"
+//   action=over25&home=<H>&away=<A>                     — "Over/Under 2.5 Goals", runner "Over 2.5 Goals"
+//   action=btts&home=<H>&away=<A>                       — "Both teams to Score?", runner "Yes"
+//   action=correct-score&home=<H>&away=<A>&homeScore=<N>&awayScore=<M>
+//                                                         — "Correct Score", runner "<N> - <M>"
+//   action=ht-ft&home=<H>&away=<A>&ht=<team-or-Draw>&ft=<team-or-Draw>
+//                                                         — "Half Time/Full Time", runner "<ht>/<ft>"
+//   action=win-and-btts&home=<H>&away=<A>&team=<T>       — "Match Odds and Both teams to Score",
+//                                                            runner "<T>/Yes"
+// All six return the same {ok, eventName, marketName, marketId, runner} shape as team-win — the
+// runner's own name in each combo market (e.g. "Draw/Arsenal", "Arsenal/Yes") uses Betfair's own
+// short club names, not the caller's, so matching is fuzzy on each "/"-separated side rather
+// than an exact string compare.
 const https = require('https');
 const fs = require('fs');
 
@@ -200,6 +222,136 @@ async function findTeamWin(team, appKey, session) {
   };
 }
 
+// Finds the ONE fixture matching both team names — precise, unlike findTeamWin's single-name
+// search, because the six actions below need to pick a specific MARKET out by name (e.g. "Win
+// to Nil", "Correct Score") on top of the runner, so a loosely-matched wrong fixture would fail
+// far less obviously than it does for a plain MATCH_ODDS lookup. Same soonest-kickoff tie-break
+// as findTeamWin, searched off the home team's name (matches betfair.js's own approach).
+async function findEventByHomeAway(home, away, appKey, session) {
+  let candidates = [];
+  for (const q of searchQueries(home)) {
+    const events = await bfCall('listEvents', { filter: { eventTypeIds: [FOOTBALL_EVENT_TYPE_ID], textQuery: q } }, appKey, session);
+    candidates = (events || []).filter(e => {
+      const name = e.event?.name || '';
+      if (/\(w\)/i.test(name)) return false;
+      if (/\bU1[6-9]\b|\bU2[0-3]\b|\byouth\b|\breserves?\b/i.test(name)) return false;
+      const parts = name.split(' v ');
+      if (parts.length !== 2) return false;
+      return (fuzzyTeamMatch(home, parts[0]) && fuzzyTeamMatch(away, parts[1])) ||
+             (fuzzyTeamMatch(away, parts[0]) && fuzzyTeamMatch(home, parts[1]));
+    });
+    if (candidates.length) break;
+  }
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => new Date(a.event.openDate) - new Date(b.event.openDate));
+  return candidates[0].event;
+}
+
+// Generic "find one market by name, one runner within it by name" fetch — every one of the six
+// new boost actions is this same shape, just with a different marketNameTest/runnerTest pair.
+// Lists ALL of the event's markets (no marketTypeCodes filter — these boost markets don't all
+// have stable/memorable codes the way MATCH_ODDS does, and matching on Betfair's own displayed
+// marketName is simpler and just as reliable) rather than guessing a market type code.
+async function findEventMarketRunner(eventId, eventName, marketNameTest, runnerTest, appKey, session) {
+  const catalogue = await bfCall('listMarketCatalogue', {
+    filter: { eventIds: [eventId] },
+    marketProjection: ['RUNNER_DESCRIPTION'],
+    maxResults: 300,
+  }, appKey, session);
+  const market = (catalogue || []).find(m => marketNameTest(m.marketName || ''));
+  if (!market) return { error: 'market not found', eventName, available: (catalogue || []).map(m => m.marketName) };
+  const runnerMeta = (market.runners || []).find(r => runnerTest(r.runnerName || ''));
+  if (!runnerMeta) return { error: 'runner not found', eventName, marketName: market.marketName, runners: (market.runners || []).map(r => r.runnerName) };
+
+  const books = await bfCall('listMarketBook', {
+    marketIds: [market.marketId],
+    priceProjection: { priceData: ['EX_BEST_OFFERS'] },
+  }, appKey, session);
+  const runnerBook = (books[0]?.runners || []).find(r => r.selectionId === runnerMeta.selectionId);
+
+  return {
+    eventName,
+    marketName: market.marketName,
+    marketId: market.marketId,
+    runner: {
+      totalMatched: runnerBook?.totalMatched ?? 0,
+      lastPriceTraded: runnerBook?.lastPriceTraded ?? null,
+      back: (runnerBook?.ex?.availableToBack ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
+      lay: (runnerBook?.ex?.availableToLay ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
+    },
+  };
+}
+
+// A "/"-separated combo runner (Half Time/Full Time, Match Odds and BTTS) uses Betfair's own
+// short club name on each side, not the caller's — split and fuzzy-match each side rather than
+// comparing the whole runner name as one string.
+function splitSlashRunner(runnerName) {
+  const parts = (runnerName || '').split('/');
+  return parts.length === 2 ? [parts[0].trim(), parts[1].trim()] : null;
+}
+function matchesTeamOrDraw(expected, actual) {
+  return expected.toLowerCase().trim() === 'draw' ? /^draw$/i.test(actual) : fuzzyTeamMatch(expected, actual);
+}
+
+async function runAction(action, params, appKey, session) {
+  if (action === 'team-win') {
+    if (!params.team) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team required' }) };
+    const result = await findTeamWin(params.team, appKey, session);
+    if (result.error) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, ...result }) };
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, ...result }) };
+  }
+
+  const BOOST_ACTIONS = ['win-to-nil', 'draw', 'over25', 'btts', 'correct-score', 'ht-ft', 'win-and-btts'];
+  if (BOOST_ACTIONS.includes(action)) {
+    const { home, away, team, homeScore, awayScore, ht, ft } = params;
+    if (!home || !away) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'home and away required' }) };
+
+    const event = await findEventByHomeAway(home, away, appKey, session);
+    if (!event) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: `event not found: ${home} v ${away}` }) };
+
+    let marketNameTest, runnerTest;
+    if (action === 'win-to-nil') {
+      if (!team) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team required' }) };
+      marketNameTest = n => /win to nil/i.test(n) && fuzzyTeamMatch(team, n.replace(/win to nil/i, '').trim());
+      runnerTest = n => /^yes$/i.test(n.trim());
+    } else if (action === 'draw') {
+      marketNameTest = n => n.trim().toLowerCase() === 'match odds';
+      runnerTest = n => /draw/i.test(n);
+    } else if (action === 'over25') {
+      marketNameTest = n => n.trim().toLowerCase() === 'over/under 2.5 goals';
+      runnerTest = n => /^over/i.test(n.trim());
+    } else if (action === 'btts') {
+      marketNameTest = n => /^both teams to score\??$/i.test(n.trim());
+      runnerTest = n => /^yes$/i.test(n.trim());
+    } else if (action === 'correct-score') {
+      if (homeScore == null || awayScore == null) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'homeScore and awayScore required' }) };
+      marketNameTest = n => n.trim().toLowerCase() === 'correct score';
+      const target = `${homeScore} - ${awayScore}`;
+      runnerTest = n => n.trim() === target;
+    } else if (action === 'ht-ft') {
+      if (!ht || !ft) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'ht and ft required' }) };
+      marketNameTest = n => n.trim().toLowerCase() === 'half time/full time';
+      runnerTest = n => {
+        const sides = splitSlashRunner(n);
+        return !!sides && matchesTeamOrDraw(ht, sides[0]) && matchesTeamOrDraw(ft, sides[1]);
+      };
+    } else if (action === 'win-and-btts') {
+      if (!team) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team required' }) };
+      marketNameTest = n => n.trim().toLowerCase() === 'match odds and both teams to score';
+      runnerTest = n => {
+        const sides = splitSlashRunner(n);
+        return !!sides && fuzzyTeamMatch(team, sides[0]) && /^yes$/i.test(sides[1]);
+      };
+    }
+
+    const result = await findEventMarketRunner(event.id, event.name, marketNameTest, runnerTest, appKey, session);
+    if (result.error) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, ...result }) };
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, ...result }) };
+  }
+
+  return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: `unknown action: ${action}` }) };
+}
+
 let cachedSession = null;
 const SESSION_TTL_MS = 3 * 60 * 60 * 1000;
 
@@ -212,33 +364,24 @@ async function getCachedSessionToken(appKey) {
   return token;
 }
 
-async function runAction(action, team, appKey, session) {
-  if (action === 'team-win') {
-    if (!team) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team required' }) };
-    const result = await findTeamWin(team, appKey, session);
-    if (result.error) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, ...result }) };
-    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, ...result }) };
-  }
-  return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'action must be "team-win"' }) };
-}
-
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
 
   const appKey = process.env.BFEX_APP_KEY;
   if (!appKey) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'BFEX_APP_KEY not set' }) };
 
-  const { action, team } = event.queryStringParameters || {};
+  const params = event.queryStringParameters || {};
+  const { action } = params;
 
   try {
     const session = await getCachedSessionToken(appKey);
     try {
-      return await runAction(action, team, appKey, session);
+      return await runAction(action, params, appKey, session);
     } catch (err) {
       if (err.message === 'SESSION_EXPIRED') {
         cachedSession = null;
         const freshSession = await getCachedSessionToken(appKey);
-        return await runAction(action, team, appKey, freshSession);
+        return await runAction(action, params, appKey, freshSession);
       }
       throw err;
     }

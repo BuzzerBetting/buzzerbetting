@@ -8959,7 +8959,18 @@ const OC_EV_MARKET_BADGE={
   'Cards':'background:var(--purple-bg);color:var(--purple)',
   'SOT':'background:var(--red-bg);color:var(--red)',
   'Horse Double':'background:var(--amber-bg);color:var(--amber)',
-  'Win Acca':'background:var(--amber-bg);color:var(--amber)'
+  'Win Acca':'background:var(--amber-bg);color:var(--amber)',
+  // Individual-match football boosts (Win To Nil, Win & BTTS, Correct Score, HT/FT, Over 2.5,
+  // BTTS, Draw) — see oc/football_boost_markets.py. Same amber "boost" bucket as Horse
+  // Double/Win Acca above; AGS/First scorer rows from these boosts reuse those two keys
+  // directly instead of a new one.
+  'Win To Nil':'background:var(--amber-bg);color:var(--amber)',
+  'Win & BTTS':'background:var(--amber-bg);color:var(--amber)',
+  'Correct Score':'background:var(--amber-bg);color:var(--amber)',
+  'HT/FT':'background:var(--amber-bg);color:var(--amber)',
+  'Over 2.5':'background:var(--amber-bg);color:var(--amber)',
+  'BTTS':'background:var(--amber-bg);color:var(--amber)',
+  'Draw':'background:var(--amber-bg);color:var(--amber)'
 };
 
 // ── Shared "Best EV% / Start time" sort toggle — Normal +EV ('oc-ev'), Calculated +EV
@@ -9051,38 +9062,26 @@ async function loadOddscheckerEV(){
     // renderOddscheckerEV's boostIcon), boost rows tagged boost:true (oc_boosts_scraper.py)
     // for the red "B" icon, horse-double rows just carry mkt:'Horse Double' like any other
     // market. Neither feed failing should blank the regular scan, so both are best-effort.
-    const [r,rBoost,rHorse,rAcca,rPPHorse,rSSAcca,rDBAcca,rPSBAcca,rPSBHorse,rWHHorse]=await Promise.allSettled([
+    // Secondary feeds — each best-effort (a failure just contributes zero rows, never blanks
+    // the primary scan). Grown to this many one bookmaker/market at a time; a plain array of
+    // endpoint names is far easier to keep extending than a named variable per feed.
+    const SECONDARY_EV_FEEDS=[
+      'oc-boost-ev','oc-pricedup-horse-ev','oc-pricedup-acca-ev','oc-paddypower-horse-ev',
+      'oc-starsports-acca-ev','oc-dragonbet-acca-ev','oc-planetsportbet-acca-ev',
+      'oc-planetsportbet-horse-ev','oc-williamhill-horse-ev',
+      'oc-pricedup-football-boost-ev','oc-starsports-football-boost-ev',
+      'oc-planetsportbet-football-boost-ev','oc-dragonbet-football-boost-ev',
+    ];
+    const [r,...secondaryResults]=await Promise.allSettled([
       fetch('/.netlify/functions/oc-ev').then(x=>x.json()),
-      fetch('/.netlify/functions/oc-boost-ev').then(x=>x.json()),
-      fetch('/.netlify/functions/oc-pricedup-horse-ev').then(x=>x.json()),
-      fetch('/.netlify/functions/oc-pricedup-acca-ev').then(x=>x.json()),
-      fetch('/.netlify/functions/oc-paddypower-horse-ev').then(x=>x.json()),
-      fetch('/.netlify/functions/oc-starsports-acca-ev').then(x=>x.json()),
-      fetch('/.netlify/functions/oc-dragonbet-acca-ev').then(x=>x.json()),
-      fetch('/.netlify/functions/oc-planetsportbet-acca-ev').then(x=>x.json()),
-      fetch('/.netlify/functions/oc-planetsportbet-horse-ev').then(x=>x.json()),
-      fetch('/.netlify/functions/oc-williamhill-horse-ev').then(x=>x.json()),
+      ...SECONDARY_EV_FEEDS.map(fn=>fetch(`/.netlify/functions/${fn}`).then(x=>x.json())),
     ]);
     const d=(r.status==='fulfilled')?r.value:{ok:false};
-    const dBoost=(rBoost.status==='fulfilled'&&rBoost.value&&rBoost.value.ok)?rBoost.value:null;
-    const dHorse=(rHorse.status==='fulfilled'&&rHorse.value&&rHorse.value.ok)?rHorse.value:null;
-    const dAcca=(rAcca.status==='fulfilled'&&rAcca.value&&rAcca.value.ok)?rAcca.value:null;
-    const dPPHorse=(rPPHorse.status==='fulfilled'&&rPPHorse.value&&rPPHorse.value.ok)?rPPHorse.value:null;
-    const dSSAcca=(rSSAcca.status==='fulfilled'&&rSSAcca.value&&rSSAcca.value.ok)?rSSAcca.value:null;
-    const dDBAcca=(rDBAcca.status==='fulfilled'&&rDBAcca.value&&rDBAcca.value.ok)?rDBAcca.value:null;
-    const dPSBAcca=(rPSBAcca.status==='fulfilled'&&rPSBAcca.value&&rPSBAcca.value.ok)?rPSBAcca.value:null;
-    const dPSBHorse=(rPSBHorse.status==='fulfilled'&&rPSBHorse.value&&rPSBHorse.value.ok)?rPSBHorse.value:null;
-    const dWHHorse=(rWHHorse.status==='fulfilled'&&rWHHorse.value&&rWHHorse.value.ok)?rWHHorse.value:null;
     ocEvBets=(d.ok&&Array.isArray(d.bets))?d.bets:[];
-    if(dBoost&&Array.isArray(dBoost.bets))ocEvBets=ocEvBets.concat(dBoost.bets);
-    if(dHorse&&Array.isArray(dHorse.bets))ocEvBets=ocEvBets.concat(dHorse.bets);
-    if(dAcca&&Array.isArray(dAcca.bets))ocEvBets=ocEvBets.concat(dAcca.bets);
-    if(dPPHorse&&Array.isArray(dPPHorse.bets))ocEvBets=ocEvBets.concat(dPPHorse.bets);
-    if(dSSAcca&&Array.isArray(dSSAcca.bets))ocEvBets=ocEvBets.concat(dSSAcca.bets);
-    if(dDBAcca&&Array.isArray(dDBAcca.bets))ocEvBets=ocEvBets.concat(dDBAcca.bets);
-    if(dPSBAcca&&Array.isArray(dPSBAcca.bets))ocEvBets=ocEvBets.concat(dPSBAcca.bets);
-    if(dPSBHorse&&Array.isArray(dPSBHorse.bets))ocEvBets=ocEvBets.concat(dPSBHorse.bets);
-    if(dWHHorse&&Array.isArray(dWHHorse.bets))ocEvBets=ocEvBets.concat(dWHHorse.bets);
+    secondaryResults.forEach(res=>{
+      const dd=(res.status==='fulfilled'&&res.value&&res.value.ok)?res.value:null;
+      if(dd&&Array.isArray(dd.bets))ocEvBets=ocEvBets.concat(dd.bets);
+    });
     ocEvLastUpdated=d.updated||ocEvLastUpdated;
     const countEl=document.getElementById('oc-ev-smeta-count');
     const refEl=document.getElementById('oc-ev-smeta-refreshed');

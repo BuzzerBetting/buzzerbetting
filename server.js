@@ -296,6 +296,31 @@ app.get('/api/williamhill-horse-ev', (req, res) => {
   }
 });
 
+// GET /api/pricedup-football-boost-ev, /api/starsports-football-boost-ev,
+// /api/planetsportbet-football-boost-ev, /api/dragonbet-football-boost-ev — each bookmaker's
+// individual-match football boosts that aren't a plain win-acca/horse-double (Win To Nil,
+// Win & BTTS, Correct Score, HT/FT, Over 2.5, BTTS, AGS/FGS) — see
+// oc-scraper/oc/football_boost_markets.py for the shared parsing/pricing engine every one of
+// the four *_football_boost_scan.py scripts uses. Merged into the "Normal +EV" table client-side.
+const FOOTBALL_BOOST_EV_ROUTES = {
+  '/api/pricedup-football-boost-ev': 'pricedup_football_boost_ev_bets.json',
+  '/api/starsports-football-boost-ev': 'starsports_football_boost_ev_bets.json',
+  '/api/planetsportbet-football-boost-ev': 'planetsportbet_football_boost_ev_bets.json',
+  '/api/dragonbet-football-boost-ev': 'dragonbet_football_boost_ev_bets.json',
+};
+for (const [route, filename] of Object.entries(FOOTBALL_BOOST_EV_ROUTES)) {
+  const filePath = require('path').join(__dirname, 'oc-scraper', 'data', filename);
+  app.get(route, (req, res) => {
+    if (!fs.existsSync(filePath)) return res.json({ ok: true, updated: null, bets: [] });
+    try {
+      const payload = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      res.json({ ok: true, updated: payload.updated || null, bets: payload.bets || [] });
+    } catch (e) {
+      res.json({ ok: false, error: `Failed reading ${filename}: ` + e.message });
+    }
+  });
+}
+
 // GET /api/bet-alert-errors — the Bet Alerts "Errors" tab: market-integrity flags (a
 // bookmaker's market still open past when it should have suspended), not value bets. First
 // fed by paddypower_horse_ev_scan.py (Paddy Power's "Racing Specials" doubles occasionally
