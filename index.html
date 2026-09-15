@@ -2467,7 +2467,7 @@ input::placeholder{color:var(--text3)}
     </div>
     <div id="cev-status"></div>
     <div id="cev-results" style="display:none;margin-top:10px">
-      <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:940px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">AGS/SOT fair</th><th class="r">BFEX traded</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="cev-tbody"></tbody></table></div></div>
+      <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:940px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">AGS/SOT fair</th><th class="r">BFEX traded</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th class="r"></th></tr></thead><tbody id="cev-tbody"></tbody></table></div></div>
     </div>
     <div id="calc-ev-stats-panel" style="display:none;margin-top:14px"></div>
     <div class="note"><i class="ti ti-info-circle"></i> Markets with no direct Betfair equivalent — Header and Outside-the-Box goal (Oddschecker, auto-detected, no more manual market IDs) and Left Foot/Right Foot/6 Yard Box (William Hill) — all vs a BFEX-AGS-derived fair, sorted by EV%. Direct BFEX comparisons (AGS/FGS/Cards/SOT) live on the <a href="javascript:void(0)" onclick="baTab('oc-ev')">Normal +EV</a> tab instead. Header/OTB goal rows show every +EV bookmaker (up to the top 3 price tiers, tied prices on one line) under Bookie — the Odds column stays the single best price.</div>
@@ -14241,13 +14241,14 @@ function renderEVResults(bets) {
   // no EV. Keep them in the table but never feed them to the daily-post / "seen" pipeline.
   if (typeof baOnEdgeRendered === 'function') baOnEdgeRendered('calc-ev', bets.filter(b => !b.noCalc).map(b => ({ match: b.match, market: b.market, selection: b.player, bk: ocBookieName(b.bookie), odds: parseFloat(b.ocOdds) || null, ev: b.bestEv })));
 
+  cevRenderedBets = bets;
   if (!bets.length) {
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:32px;font-size:13px">No +EV bets found</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:32px;font-size:13px">No +EV bets found</td></tr>`;
     resultsEl.style.display = '';
     return;
   }
 
-  for (const bet of bets) {
+  bets.forEach((bet, betIdx) => {
     const ev = bet.bestEv;
     const evCol = bet.noCalc ? 'var(--text3)' : (ev >= 20 ? 'var(--green)' : ev >= 10 ? 'var(--amber)' : 'var(--blue)');
     const evBg  = bet.noCalc ? 'var(--surface2)' : (ev >= 20 ? 'var(--green-bg)' : ev >= 10 ? 'var(--amber-bg)' : 'var(--blue-bg)');
@@ -14284,11 +14285,47 @@ function renderEVResults(bets) {
       <td class="r tn" style="font-weight:500">${fairLabel}</td>
       <td class="r" style="font-size:12px;color:var(--text2);line-height:1.5">${bookieLinesHtml(bet)}</td>
       <td class="r tn" style="font-weight:600;color:var(--green)">${bet.ocOdds}</td>
-      <td class="r"><span class="badge" style="background:${evBg};color:${evCol}">${evLabel}</span></td>`;
+      <td class="r"><span class="badge" style="background:${evBg};color:${evCol}">${evLabel}</span></td>
+      <td class="r"><button onclick="logCalcEvBetAsGoalSotMethods(${betIdx})" title="Log this bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1;white-space:nowrap"><i class="ti ti-plus"></i> Log</button></td>`;
     tbody.appendChild(tr);
-  }
+  });
 
   resultsEl.style.display = '';
+}
+
+// "Log bet" on a Calculated +EV row — jumps straight to Ledger > Bets > Buzzer > Goal SOT
+// Methods (the bet type built specifically to receive these — see its BET_TYPE_CONFIG
+// comment: "the bets actually taken off the Calculated +EV page, so the columns mirror that
+// page's row"), opens the Add-bet form, and pre-fills every field the alert already knows:
+// Bookie, Match, Market, Selection, AGS/SOT fair, Fair odds and Back odds. Account ID and
+// Stake are deliberately left blank — those are the user's own decision, not something the
+// scan can know. Fair odds stays a normal editable input (bef-fair-odds), same as every other
+// paired-odds bet type, so overwriting it if the price has since moved is just editing a field
+// like any other, not a separate "override" mechanism.
+function logCalcEvBetAsGoalSotMethods(betIdx) {
+  const bet = cevRenderedBets[betIdx];
+  if (!bet) return;
+
+  showSec('bets-combined');
+  document.getElementById('bets-user-select').value = 'buzzer';
+  onBetsUserChange();
+  document.getElementById('bets-type-select').value = 'Goal SOT Methods';
+  onBetsTypeChange();
+  toggleBetsAddForm();
+
+  const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = (v == null ? '' : v); };
+  setVal('bef-Book', ocBookieName(bet.bookie));
+  setVal('bef-Match', bet.match);
+  setVal('bef-Market', bet.market);
+  setVal('bef-Player', bet.player);
+  setVal('bef-AGS_SOT_Fair', bet.baseFair);
+  setVal('bef-fair-odds', bet.bestFair);
+  const oddsInput = document.querySelector('#bet-entry-legs .leg-odds');
+  if (oddsInput) oddsInput.value = bet.ocOdds ?? '';
+
+  if (typeof recalcBetEntryEV === 'function') recalcBetEntryEV();
+  if (typeof updateBetEntryTotal === 'function') updateBetEntryTotal();
+  setTimeout(() => { document.getElementById('bef-Book')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 50);
 }
 
 let bbMatchOdds=null,bfexMatchOdds=null,lineupMarketType=null,lineupMethodKey=null;
@@ -14984,6 +15021,7 @@ let BA_ACTIVE = (function(){ try { return localStorage.getItem('bb_betalert_tab'
 let BA_POLL = null;
 let BA_COUNTS = {};              // edge key -> current available count (post-filter)
 let cevLastBets = [];            // unfiltered Calculated +EV list, for re-filtering without re-scan
+let cevRenderedBets = [];        // the actual filtered+sorted rows on screen right now — "Log bet" indexes into this, not cevLastBets, so the button always logs the row the user is actually looking at
 
 function baEdge(key){ return BA_EDGES.find(e => e.key === key); }
 function baLabel(key){ const e = baEdge(key); return e ? e.label : key; }
