@@ -9046,7 +9046,7 @@ function renderOddscheckerEV(){
     const sourceLabel=b.source==='combo'?'OC/BB':(b.source==='bfex'?'BFEX':(b.source||''));
     const fairCell=sourceLabel?`${b.fair.toFixed(2)} <span style="color:var(--text3);font-size:11px">(${sourceLabel})</span>`:b.fair.toFixed(2);
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${boostIcon}${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:${fairColor};font-weight:500">${fairCell}</td><td class="r tn" style="color:var(--text2)">${lastTraded}</td><td class="r tn" style="color:var(--text2)">${matched}</td><td class="r" style="color:var(--text2);font-size:12px">${ocBookieName(b.bk)}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td><td class="r"><button onclick="copyOddscheckerLine(${i},this)" title="Copy line" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td>`;
+    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${boostIcon}${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:${fairColor};font-weight:500">${fairCell}</td><td class="r tn" style="color:var(--text2)">${lastTraded}</td><td class="r tn" style="color:var(--text2)">${matched}</td><td class="r" style="color:var(--text2);font-size:12px;line-height:1.5">${ocBookieLinesHtml(b)}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td><td class="r"><button onclick="copyOddscheckerLine(${i},this)" title="Copy line" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td>`;
     sb.appendChild(tr);
   });
   if(!shown.length){
@@ -14172,23 +14172,32 @@ function remapToAllowedBook(bet) {
 // price — "who's up at 29, who's next at 26" — rather than a flat list of bookmaker names.
 // Bets with no ladder (William Hill/boost markets, genuinely single-bookmaker) or no fair to
 // compare against just fall back to the single best-book name, unchanged from before.
-function bookieLinesHtml(bet) {
-  const fair = bet.bestFair;
-  if (!bet.allOdds || !fair) return escapeHtml(ocBookieName(bet.bookie));
+// Shared by bookieLinesHtml (Calculated +EV) and ocBookieLinesHtml (Normal +EV) — same
+// bookmaker-field-name difference between the two tables' bet shapes (bestFair/bookie vs
+// fair/bk) is all that separated them; the price-tier grouping itself is identical.
+function bookieLinesHtmlGeneric(fair, bookie, allOdds) {
+  if (!allOdds || !fair) return escapeHtml(ocBookieName(bookie));
   const byPrice = new Map();
-  for (const [code, price] of Object.entries(bet.allOdds)) {
+  for (const [code, price] of Object.entries(allOdds)) {
     if (typeof price !== 'number' || price <= fair) continue; // +EV only
     if (typeof baBookEnabled === 'function' && !baBookEnabled(code)) continue;
     const key = price.toFixed(2);
     if (!byPrice.has(key)) byPrice.set(key, []);
     byPrice.get(key).push(ocBookieShort(code));
   }
-  if (!byPrice.size) return escapeHtml(ocBookieName(bet.bookie));
+  if (!byPrice.size) return escapeHtml(ocBookieName(bookie));
   const tiers = [...byPrice.entries()].sort((a, b) => Number(b[0]) - Number(a[0])).slice(0, 3);
   return tiers.map(([price, codes]) =>
     `<div>${escapeHtml(codes.sort().join(', '))} - ${price}</div>`
   ).join('');
 }
+function bookieLinesHtml(bet) { return bookieLinesHtmlGeneric(bet.bestFair, bet.bookie, bet.allOdds); }
+// Normal +EV's own bet shape (b.fair/b.bk) — used when a boost qualifies from more than one
+// bookmaker the same night (oc_boosts_scraper.py's ev_engine.merge_duplicate_bookmaker_rows
+// merges those into one row with a combined `allOdds` ladder instead of one row per
+// bookmaker); falls back to the plain single bookmaker name for every ordinary row, same as
+// bookieLinesHtml above.
+function ocBookieLinesHtml(b) { return bookieLinesHtmlGeneric(b.fair, b.bk, b.allOdds); }
 function renderEVResults(bets) {
   const resultsEl = document.getElementById('cev-results');
   const tbody = document.getElementById('cev-tbody');
