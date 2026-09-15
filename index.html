@@ -8983,7 +8983,7 @@ async function loadOddscheckerEV(){
     // renderOddscheckerEV's boostIcon), boost rows tagged boost:true (oc_boosts_scraper.py)
     // for the red "B" icon, horse-double rows just carry mkt:'Horse Double' like any other
     // market. Neither feed failing should blank the regular scan, so both are best-effort.
-    const [r,rBoost,rHorse,rAcca,rPPHorse,rSSAcca,rDBAcca,rPSBAcca,rPSBHorse]=await Promise.allSettled([
+    const [r,rBoost,rHorse,rAcca,rPPHorse,rSSAcca,rDBAcca,rPSBAcca,rPSBHorse,rWHHorse]=await Promise.allSettled([
       fetch('/.netlify/functions/oc-ev').then(x=>x.json()),
       fetch('/.netlify/functions/oc-boost-ev').then(x=>x.json()),
       fetch('/.netlify/functions/oc-pricedup-horse-ev').then(x=>x.json()),
@@ -8993,6 +8993,7 @@ async function loadOddscheckerEV(){
       fetch('/.netlify/functions/oc-dragonbet-acca-ev').then(x=>x.json()),
       fetch('/.netlify/functions/oc-planetsportbet-acca-ev').then(x=>x.json()),
       fetch('/.netlify/functions/oc-planetsportbet-horse-ev').then(x=>x.json()),
+      fetch('/.netlify/functions/oc-williamhill-horse-ev').then(x=>x.json()),
     ]);
     const d=(r.status==='fulfilled')?r.value:{ok:false};
     const dBoost=(rBoost.status==='fulfilled'&&rBoost.value&&rBoost.value.ok)?rBoost.value:null;
@@ -9003,6 +9004,7 @@ async function loadOddscheckerEV(){
     const dDBAcca=(rDBAcca.status==='fulfilled'&&rDBAcca.value&&rDBAcca.value.ok)?rDBAcca.value:null;
     const dPSBAcca=(rPSBAcca.status==='fulfilled'&&rPSBAcca.value&&rPSBAcca.value.ok)?rPSBAcca.value:null;
     const dPSBHorse=(rPSBHorse.status==='fulfilled'&&rPSBHorse.value&&rPSBHorse.value.ok)?rPSBHorse.value:null;
+    const dWHHorse=(rWHHorse.status==='fulfilled'&&rWHHorse.value&&rWHHorse.value.ok)?rWHHorse.value:null;
     ocEvBets=(d.ok&&Array.isArray(d.bets))?d.bets:[];
     if(dBoost&&Array.isArray(dBoost.bets))ocEvBets=ocEvBets.concat(dBoost.bets);
     if(dHorse&&Array.isArray(dHorse.bets))ocEvBets=ocEvBets.concat(dHorse.bets);
@@ -9012,6 +9014,7 @@ async function loadOddscheckerEV(){
     if(dDBAcca&&Array.isArray(dDBAcca.bets))ocEvBets=ocEvBets.concat(dDBAcca.bets);
     if(dPSBAcca&&Array.isArray(dPSBAcca.bets))ocEvBets=ocEvBets.concat(dPSBAcca.bets);
     if(dPSBHorse&&Array.isArray(dPSBHorse.bets))ocEvBets=ocEvBets.concat(dPSBHorse.bets);
+    if(dWHHorse&&Array.isArray(dWHHorse.bets))ocEvBets=ocEvBets.concat(dWHHorse.bets);
     ocEvLastUpdated=d.updated||ocEvLastUpdated;
     const countEl=document.getElementById('oc-ev-smeta-count');
     const refEl=document.getElementById('oc-ev-smeta-refreshed');

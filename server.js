@@ -280,6 +280,22 @@ app.get('/api/planetsportbet-horse-ev', (req, res) => {
   }
 });
 
+// GET /api/williamhill-horse-ev — William Hill "Both To Win" horse racing double +EV bets,
+// written by oc-scraper's williamhill_horse_ev_scan.py: each leg's own BFEX WIN-market fair
+// odds multiplied together, compared against William Hill's own boosted price (pulled
+// directly from WH's public search API — no Tampermonkey scraper needed for this one). Merged
+// into the same "Normal +EV" table client-side.
+const WILLIAMHILL_HORSE_EV_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'williamhill_horse_ev_bets.json');
+app.get('/api/williamhill-horse-ev', (req, res) => {
+  if (!fs.existsSync(WILLIAMHILL_HORSE_EV_PATH)) return res.json({ ok: true, updated: null, bets: [] });
+  try {
+    const payload = JSON.parse(fs.readFileSync(WILLIAMHILL_HORSE_EV_PATH, 'utf8'));
+    res.json({ ok: true, updated: payload.updated || null, bets: payload.bets || [] });
+  } catch (e) {
+    res.json({ ok: false, error: 'Failed reading williamhill_horse_ev_bets.json: ' + e.message });
+  }
+});
+
 // GET /api/bet-alert-errors — the Bet Alerts "Errors" tab: market-integrity flags (a
 // bookmaker's market still open past when it should have suspended), not value bets. First
 // fed by paddypower_horse_ev_scan.py (Paddy Power's "Racing Specials" doubles occasionally
