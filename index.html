@@ -8983,23 +8983,26 @@ async function loadOddscheckerEV(){
     // renderOddscheckerEV's boostIcon), boost rows tagged boost:true (oc_boosts_scraper.py)
     // for the red "B" icon, horse-double rows just carry mkt:'Horse Double' like any other
     // market. Neither feed failing should blank the regular scan, so both are best-effort.
-    const [r,rBoost,rHorse,rAcca,rPPHorse]=await Promise.allSettled([
+    const [r,rBoost,rHorse,rAcca,rPPHorse,rSSAcca]=await Promise.allSettled([
       fetch('/.netlify/functions/oc-ev').then(x=>x.json()),
       fetch('/.netlify/functions/oc-boost-ev').then(x=>x.json()),
       fetch('/.netlify/functions/oc-pricedup-horse-ev').then(x=>x.json()),
       fetch('/.netlify/functions/oc-pricedup-acca-ev').then(x=>x.json()),
       fetch('/.netlify/functions/oc-paddypower-horse-ev').then(x=>x.json()),
+      fetch('/.netlify/functions/oc-starsports-acca-ev').then(x=>x.json()),
     ]);
     const d=(r.status==='fulfilled')?r.value:{ok:false};
     const dBoost=(rBoost.status==='fulfilled'&&rBoost.value&&rBoost.value.ok)?rBoost.value:null;
     const dHorse=(rHorse.status==='fulfilled'&&rHorse.value&&rHorse.value.ok)?rHorse.value:null;
     const dAcca=(rAcca.status==='fulfilled'&&rAcca.value&&rAcca.value.ok)?rAcca.value:null;
     const dPPHorse=(rPPHorse.status==='fulfilled'&&rPPHorse.value&&rPPHorse.value.ok)?rPPHorse.value:null;
+    const dSSAcca=(rSSAcca.status==='fulfilled'&&rSSAcca.value&&rSSAcca.value.ok)?rSSAcca.value:null;
     ocEvBets=(d.ok&&Array.isArray(d.bets))?d.bets:[];
     if(dBoost&&Array.isArray(dBoost.bets))ocEvBets=ocEvBets.concat(dBoost.bets);
     if(dHorse&&Array.isArray(dHorse.bets))ocEvBets=ocEvBets.concat(dHorse.bets);
     if(dAcca&&Array.isArray(dAcca.bets))ocEvBets=ocEvBets.concat(dAcca.bets);
     if(dPPHorse&&Array.isArray(dPPHorse.bets))ocEvBets=ocEvBets.concat(dPPHorse.bets);
+    if(dSSAcca&&Array.isArray(dSSAcca.bets))ocEvBets=ocEvBets.concat(dSSAcca.bets);
     ocEvLastUpdated=d.updated||ocEvLastUpdated;
     const countEl=document.getElementById('oc-ev-smeta-count');
     const refEl=document.getElementById('oc-ev-smeta-refreshed');

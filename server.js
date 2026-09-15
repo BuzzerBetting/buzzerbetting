@@ -224,6 +224,21 @@ app.get('/api/paddypower-horse-ev', (req, res) => {
   }
 });
 
+// GET /api/starsports-acca-ev — StarSports simple win-acca football +EV bets, written by
+// oc-scraper's starsports_acca_ev_scan.py: same principle as /api/pricedup-acca-ev above,
+// each team's own BFEX MATCH_ODDS fair odds multiplied together, compared against StarSports'
+// own boosted price. Merged into the same "Normal +EV" table client-side.
+const STARSPORTS_ACCA_EV_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'starsports_acca_ev_bets.json');
+app.get('/api/starsports-acca-ev', (req, res) => {
+  if (!fs.existsSync(STARSPORTS_ACCA_EV_PATH)) return res.json({ ok: true, updated: null, bets: [] });
+  try {
+    const payload = JSON.parse(fs.readFileSync(STARSPORTS_ACCA_EV_PATH, 'utf8'));
+    res.json({ ok: true, updated: payload.updated || null, bets: payload.bets || [] });
+  } catch (e) {
+    res.json({ ok: false, error: 'Failed reading starsports_acca_ev_bets.json: ' + e.message });
+  }
+});
+
 // GET /api/bet-alert-errors — the Bet Alerts "Errors" tab: market-integrity flags (a
 // bookmaker's market still open past when it should have suspended), not value bets. First
 // fed by paddypower_horse_ev_scan.py (Paddy Power's "Racing Specials" doubles occasionally

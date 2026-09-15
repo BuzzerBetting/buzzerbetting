@@ -4188,4 +4188,61 @@ router.post('/pricedup-boosts/ingest', (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// ================== STARSPORTS BOOSTS (raw scraped odds) ==================
+// Fed by its own Tampermonkey userscript (oc-scraper/starsports-userscript.js) — StarSports'
+// "Star Boosts" page (starsports.bet/sport-special/StarBoosts) runs the exact same underlying
+// platform as PricedUp (confirmed live 2026-09-15, see the ledger-db.js table comment), so this
+// is a near-verbatim port of the PRICEDUP BOOSTS block above. One page covers Football, Cricket
+// and Golf together (no per-sport scrape needed). No fair-odds calc consumes this yet beyond
+// the win-acca scan — purely a raw-odds store otherwise.
+
+// GET /api/ledger/starsports-boosts (no filter — one page's worth of rows, not per-match)
+router.get('/starsports-boosts', (req, res) => {
+  try {
+    const rows = db.prepare(`SELECT * FROM starsports_boosts ORDER BY sport, group_title, selection`).all();
+    res.json({ ok: true, rows });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/starsports-boosts/ingest
+//   body: { rows: [{sport?, groupTitle, selection, oddsFrac, odds}, ...] }
+// Same upsert-then-delete-stale shape as pricedup-boosts/ingest — a re-scrape refreshes every
+// row it found, and anything not touched this run (odds_frac/odds unchanged since scraped_at
+// still older than `now`) gets deleted, since the userscript re-scrapes the whole page every
+// cycle rather than incrementally.
+router.post('/starsports-boosts/ingest', (req, res) => {
+  try {
+    const b = req.body || {};
+    const incoming = Array.isArray(b.rows) ? b.rows : [];
+    const now = new Date().toISOString();
+    const ins = db.prepare(`
+      INSERT INTO starsports_boosts (sport, group_title, selection, odds_frac, odds, scraped_at)
+      VALUES (@sport, @group_title, @selection, @odds_frac, @odds, @now)
+      ON CONFLICT(group_title, selection) DO UPDATE SET
+        sport = excluded.sport, odds_frac = excluded.odds_frac, odds = excluded.odds, scraped_at = excluded.scraped_at
+    `);
+    let upserted = 0;
+    let removed = 0;
+    const tx = db.transaction(() => {
+      for (const r of incoming) {
+        if (!r || !r.groupTitle || !r.selection) continue;
+        ins.run({
+          sport: r.sport || null,
+          group_title: String(r.groupTitle),
+          selection: String(r.selection),
+          odds_frac: r.oddsFrac || null,
+          odds: r.odds != null ? Number(r.odds) : null,
+          now,
+        });
+        upserted++;
+      }
+      if (upserted > 0) {
+        removed = db.prepare(`DELETE FROM starsports_boosts WHERE scraped_at != ?`).run(now).changes;
+      }
+    });
+    tx();
+    res.json({ ok: true, upserted, removed });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 module.exports = router;

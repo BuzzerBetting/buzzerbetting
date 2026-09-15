@@ -576,4 +576,25 @@ CREATE TABLE IF NOT EXISTS pricedup_boosts (
 );
 `);
 
+// Same shape/reasoning as pricedup_boosts above — StarSports' "Star Boosts" page
+// (starsports.bet/sport-special/StarBoosts) turned out to run the exact same underlying
+// platform as PricedUp (confirmed live 2026-09-15: identical emotion CSS class names —
+// SelectionsGroupLiItem/SelectionsGroupName/SelectionItemStyle/CollapseWrapper — down to the
+// same DOM nesting), so it gets its own Tampermonkey userscript
+// (oc-scraper/starsports-userscript.js, a near-verbatim port of pricedup-userscript.js) and
+// its own raw-odds table rather than trying to merge into pricedup_boosts. group_title is
+// the boost group's own heading as StarSports shows it (e.g. "Tuesday's League Cup Boosts
+// (All In 90 Minutes)"); unlike PricedUp, football/cricket/golf all share this one page.
+db.exec(`
+CREATE TABLE IF NOT EXISTS starsports_boosts (
+  sport        TEXT,                 -- 'Football' | 'Cricket' | 'Golf' | 'Horse Racing' | NULL if not resolved
+  group_title  TEXT NOT NULL,
+  selection    TEXT NOT NULL,        -- e.g. 'Arsenal, Liverpool & Brentford - All To Win (Was 9/5)'
+  odds_frac    TEXT,
+  odds         REAL,
+  scraped_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (group_title, selection)
+);
+`);
+
 module.exports = db;
