@@ -9001,7 +9001,21 @@ function syncBaSortToggle(key){
 }
 function baTimeSortKey(raw){
   const m=/(\d{1,2}):(\d{2})/.exec(raw||'');
-  return m?(Number(m[1])*60+Number(m[2])):Infinity;
+  if(!m)return Infinity;
+  let mins=Number(m[1])*60+Number(m[2]);
+  // None of these bet rows carry an actual date — every feed here (oc_scraper_service.py's
+  // today's/tomorrow's match list, betfair-horses.js's 12h race window, etc.) can span into
+  // tomorrow, so a bare "H:MM" is ambiguous which calendar day it's for. Confirmed live
+  // 2026-09-15: a tomorrow-09:00 boost sorted above a today-20:00 bet under "Start time"
+  // because 9:00 < 20:00 as plain minutes-of-day. Fix: a kickoff earlier in the clock than
+  // right now almost always means tomorrow, not that it already happened (an already-kicked-
+  // off match isn't normally still sitting here as a pending +EV pick) — push it a day ahead
+  // so today's later fixtures sort first. The 60-minute buffer avoids flipping a match that
+  // simply started within the last hour and is still showing as in-play/open.
+  const now=new Date();
+  const nowMins=now.getHours()*60+now.getMinutes();
+  if(mins<nowMins-60)mins+=1440;
+  return mins;
 }
 
 // The line copyOddscheckerLine() puts on the clipboard — kept in one place so the button and
