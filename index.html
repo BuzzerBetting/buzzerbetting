@@ -2436,7 +2436,13 @@ input::placeholder{color:var(--text3)}
 
   <!-- panel: Oddschecker +EV -->
   <div id="view-oddschecker" class="ba-panel" style="display:none">
-    <div class="smeta"><span class="pulse"></span><strong id="oc-ev-smeta-count" style="color:var(--green);font-weight:500">Loading…</strong>&nbsp;· <span id="oc-ev-smeta-refreshed"></span></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <div class="smeta"><span class="pulse"></span><strong id="oc-ev-smeta-count" style="color:var(--green);font-weight:500">Loading…</strong>&nbsp;· <span id="oc-ev-smeta-refreshed"></span></div>
+      <div data-sort-group="oc-ev" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden">
+        <button onclick="setBaSort('oc-ev','ev')" data-sort="ev" style="background:none;border:none;padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Best EV%</button>
+        <button onclick="setBaSort('oc-ev','time')" data-sort="time" style="background:none;border:none;border-left:0.5px solid var(--border);padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Start time</button>
+      </div>
+    </div>
     <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--text3);margin-bottom:10px">
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block"></span>BFex fair — high confidence (£500+ matched, tight spread)</span>
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--amber);display:inline-block"></span>Usable but thinner BFEX data</span>
@@ -2449,9 +2455,15 @@ input::placeholder{color:var(--text3)}
   <div id="view-calculated" class="ba-panel" style="display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
       <div class="smeta" id="cev-smeta" style="display:none"><span class="pulse"></span><strong id="cev-smeta-count" style="color:var(--green);font-weight:500"></strong></div>
-      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;font-size:12.5px;color:var(--text2);margin-left:auto">
-        <input type="checkbox" id="calc-ev-stats-toggle" onchange="setCalcEvStatsToggle(this.checked)"> Bet stats
-      </label>
+      <div style="display:flex;align-items:center;gap:14px;margin-left:auto">
+        <div data-sort-group="calc-ev" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden">
+          <button onclick="setBaSort('calc-ev','ev')" data-sort="ev" style="background:none;border:none;padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Best EV%</button>
+          <button onclick="setBaSort('calc-ev','time')" data-sort="time" style="background:none;border:none;border-left:0.5px solid var(--border);padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Start time</button>
+        </div>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;font-size:12.5px;color:var(--text2)">
+          <input type="checkbox" id="calc-ev-stats-toggle" onchange="setCalcEvStatsToggle(this.checked)"> Bet stats
+        </label>
+      </div>
     </div>
     <div id="cev-status"></div>
     <div id="cev-results" style="display:none;margin-top:10px">
@@ -2543,6 +2555,10 @@ input::placeholder{color:var(--text3)}
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
       <div class="smeta" style="margin:0"><span class="pulse"></span><strong id="ba-watch-count" style="color:var(--green);font-weight:500">—</strong></div>
       <div style="display:flex;gap:8px">
+        <div data-sort-group="watch" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden">
+          <button onclick="setBaSort('watch','ev')" data-sort="ev" style="background:none;border:none;padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Best EV%</button>
+          <button onclick="setBaSort('watch','time')" data-sort="time" style="background:none;border:none;border-left:0.5px solid var(--border);padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Start time</button>
+        </div>
         <button onclick="openBaWatchRemovedModal()" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-trash"></i> Removed bets<span id="ba-watch-removed-badge" style="display:none;margin-left:2px;background:var(--red);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:600"></span></button>
         <button onclick="baRefreshActive(this)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
       </div>
@@ -8928,6 +8944,36 @@ const OC_EV_MARKET_BADGE={
   'Win Acca':'background:var(--amber-bg);color:var(--amber)'
 };
 
+// ── Shared "Best EV% / Start time" sort toggle — Normal +EV ('oc-ev'), Calculated +EV
+// ('calc-ev') and Ones to Watch ('watch') tabs each get one of these (same segmented-pill
+// pattern/styling as Today's Matches' matches-sort-toggle). Persisted per tab in localStorage
+// so the choice survives a reload; 'ev' is the default since that's what these tabs already
+// claimed to be sorted by (their own note text) even though nothing actually enforced it
+// before this. Time mode reads the first "H:MM" found in the row's own time field — good
+// enough for the horse-double rows ("14:21 & 15:21", sorts on the earlier leg) and the win-acca
+// rows (t:'', no time at all — those sort last, in either mode's tie-break, via Infinity).
+function getBaSort(key){ try{ return localStorage.getItem('bb_sort_'+key)||'ev'; }catch(e){ return 'ev'; } }
+function setBaSort(key,mode){
+  try{ localStorage.setItem('bb_sort_'+key,mode); }catch(e){}
+  syncBaSortToggle(key);
+  if(key==='oc-ev') renderOddscheckerEV();
+  else if(key==='calc-ev'){ if(cevLastBets.length) renderEVResults(cevLastBets); }
+  else if(key==='watch') renderBaWatch();
+}
+function syncBaSortToggle(key){
+  const cur=getBaSort(key);
+  document.querySelectorAll(`[data-sort-group="${key}"] button`).forEach(b=>{
+    const on=b.dataset.sort===cur;
+    b.style.background=on?'var(--brand)':'none';
+    b.style.color=on?'#fff':'var(--text2)';
+    b.style.fontWeight=on?'600':'400';
+  });
+}
+function baTimeSortKey(raw){
+  const m=/(\d{1,2}):(\d{2})/.exec(raw||'');
+  return m?(Number(m[1])*60+Number(m[2])):Infinity;
+}
+
 // The line copyOddscheckerLine() puts on the clipboard — kept in one place so the button and
 // any future "copy all" both build it the same way.
 function oddscheckerLineText(b){
@@ -8947,10 +8993,13 @@ async function copyOddscheckerLine(i,btn){
 function renderOddscheckerEV(){
   const sb=document.getElementById('scanner-body');
   sb.innerHTML='';
+  syncBaSortToggle('oc-ev');
   // Bet Alerts bookmaker filter — keep the original index so the copy button still points at
   // the right ocEvBets row. baBookEnabled() is defined in the Bet Alerts block and returns
   // true for everything until the filter has loaded.
   const shown=ocEvBets.map((b,i)=>({b,i})).filter(({b})=>(typeof baBookEnabled!=='function')||baBookEnabled(b.bk));
+  const ocSortMode=getBaSort('oc-ev');
+  shown.sort((x,y)=>ocSortMode==='time'?(baTimeSortKey(x.b.t)-baTimeSortKey(y.b.t)):(y.b.ev-x.b.ev));
   const countEl=document.getElementById('oc-ev-smeta-count');
   if(countEl)countEl.textContent=`${shown.length} value bet${shown.length===1?'':'s'} found`;
   if(typeof baOnEdgeRendered==='function')baOnEdgeRendered('oc-ev',shown.map(({b})=>({match:b.match,market:b.mkt,selection:b.sel,bk:ocBookieName(b.bk),odds:b.odds,ev:b.ev})));
@@ -14126,11 +14175,16 @@ function renderEVResults(bets) {
   const resultsEl = document.getElementById('cev-results');
   const tbody = document.getElementById('cev-tbody');
   tbody.innerHTML = '';
+  syncBaSortToggle('calc-ev');
 
   // Bet Alerts bookmaker filter + daily-post reporting. cevLastBets keeps the *unfiltered*
   // list so re-applying a more permissive filter can recover hidden rows without a re-scan.
   cevLastBets = bets;
   if (typeof baBookEnabled === 'function') bets = bets.map(remapToAllowedBook).filter(Boolean);
+  const cevSortMode = getBaSort('calc-ev');
+  bets = bets.slice().sort((x, y) => cevSortMode === 'time'
+    ? (baTimeSortKey(x.t) - baTimeSortKey(y.t))
+    : ((y.bestEv ?? -Infinity) - (x.bestEv ?? -Infinity)));
   const cevCountEl = document.getElementById('cev-smeta-count');
   if (cevCountEl) cevCountEl.textContent = `${bets.length} bet${bets.length === 1 ? '' : 's'} found`;
   // noCalc rows (e.g. 6 Yard Box) are display-only — WH price with no fair-odds model, so
@@ -15104,7 +15158,12 @@ function renderBaWatch(){
   const body = document.getElementById('ba-watch-body');
   const countEl = document.getElementById('ba-watch-count');
   if (!body) return;
+  syncBaSortToggle('watch');
   const rows = BA_WATCH_ROWS.filter(r => baBookEnabled(r.bookie));
+  const watchSortMode = getBaSort('watch');
+  rows.sort((x, y) => watchSortMode === 'time'
+    ? (baTimeSortKey(x.kickoff) - baTimeSortKey(y.kickoff))
+    : ((y.ev ?? -Infinity) - (x.ev ?? -Infinity)));
   if (countEl) countEl.textContent = `${rows.length} early value bet${rows.length === 1 ? '' : 's'}`;
   if (!rows.length) {
     body.innerHTML = `<tr><td colspan="12" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">Nothing on the watchlist right now — the pre-lineup scan runs each pipeline cycle.</td></tr>`;
