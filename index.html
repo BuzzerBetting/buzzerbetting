@@ -2520,18 +2520,36 @@ input::placeholder{color:var(--text3)}
 
   <!-- panel: F1 EW -->
   <div id="ba-panel-f1-ew" class="ba-panel" style="display:none">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+      <div data-sort-group="f1-ew" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden">
+        <button onclick="setBaSort('f1-ew','ev')" data-sort="ev" style="background:none;border:none;padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Best EV%</button>
+        <button onclick="setBaSort('f1-ew','time')" data-sort="time" style="background:none;border:none;border-left:0.5px solid var(--border);padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Start time</button>
+      </div>
+    </div>
     <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:700px"><thead><tr><th>Time</th><th>Race</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="ba-f1-ew-body"></tbody></table></div></div>
     <div class="note"><i class="ti ti-info-circle"></i> F1 Each-Way value vs place terms. Feed not connected yet — this tab lights up automatically once the scraper starts publishing.</div>
   </div>
 
   <!-- panel: Arbs -->
   <div id="ba-panel-arbs" class="ba-panel" style="display:none">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+      <div data-sort-group="arbs" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden">
+        <button onclick="setBaSort('arbs','ev')" data-sort="ev" style="background:none;border:none;padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Best EV%</button>
+        <button onclick="setBaSort('arbs','time')" data-sort="time" style="background:none;border:none;border-left:0.5px solid var(--border);padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Start time</button>
+      </div>
+    </div>
     <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:700px"><thead><tr><th>Time</th><th>Event</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">Profit%</th></tr></thead><tbody id="ba-arbs-body"></tbody></table></div></div>
     <div class="note"><i class="ti ti-info-circle"></i> Cross-bookmaker arbitrage. Feed not connected yet — this tab lights up automatically once the scraper starts publishing.</div>
   </div>
 
   <!-- panel: DNFs -->
   <div id="ba-panel-dnf" class="ba-panel" style="display:none">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+      <div data-sort-group="dnf" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden">
+        <button onclick="setBaSort('dnf','ev')" data-sort="ev" style="background:none;border:none;padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Best EV%</button>
+        <button onclick="setBaSort('dnf','time')" data-sort="time" style="background:none;border:none;border-left:0.5px solid var(--border);padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Start time</button>
+      </div>
+    </div>
     <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:700px"><thead><tr><th>Time</th><th>Event</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="ba-dnf-body"></tbody></table></div></div>
     <div class="note"><i class="ti ti-info-circle"></i> Did-Not-Finish / retirement value. Feed not connected yet — this tab lights up automatically once the scraper starts publishing.</div>
   </div>
@@ -8959,6 +8977,7 @@ function setBaSort(key,mode){
   if(key==='oc-ev') renderOddscheckerEV();
   else if(key==='calc-ev'){ if(cevLastBets.length) renderEVResults(cevLastBets); }
   else if(key==='watch') renderBaWatch();
+  else if(key==='f1-ew'||key==='arbs'||key==='dnf') renderBaStubFeed(key);
 }
 function syncBaSortToggle(key){
   const cur=getBaSort(key);
@@ -15519,6 +15538,7 @@ async function loadBaCorners(){
 
 const BA_STUB_ENDPOINT = { 'f1-ew': 'bet-alerts-f1ew', 'arbs': 'bet-alerts-arbs', 'dnf': 'bet-alerts-dnf' };
 const BA_STUB_BODY = { 'f1-ew': 'ba-f1-ew-body', 'arbs': 'ba-arbs-body', 'dnf': 'ba-dnf-body' };
+let BA_STUB_BETS = {};  // key -> last-fetched (unfiltered) bets, so the sort toggle can re-render without a re-fetch
 async function loadBaStubFeed(key){
   let bets = [];
   try {
@@ -15526,7 +15546,19 @@ async function loadBaStubFeed(key){
     const d = await r.json();
     if (d && d.ok && Array.isArray(d.bets)) bets = d.bets;
   } catch(e) {}
+  BA_STUB_BETS[key] = bets;
+  renderBaStubFeed(key);
+}
+function renderBaStubFeed(key){
+  syncBaSortToggle(key);
+  const bets = BA_STUB_BETS[key] || [];
   const shown = bets.filter(b => baBookEnabled(b.bk));
+  // Arbs ranks by profit_pct, not ev — everything else here uses the usual ev field.
+  const valueOf = b => key === 'arbs' ? b.profit_pct : b.ev;
+  const sortMode = getBaSort(key);
+  shown.sort((x, y) => sortMode === 'time'
+    ? (baTimeSortKey(x.t) - baTimeSortKey(y.t))
+    : ((valueOf(y) ?? -Infinity) - (valueOf(x) ?? -Infinity)));
   const body = document.getElementById(BA_STUB_BODY[key]);
   if (body) {
     body.innerHTML = shown.length
