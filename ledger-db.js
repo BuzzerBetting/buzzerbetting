@@ -531,6 +531,11 @@ try { db.exec(`ALTER TABLE ones_to_watch ADD COLUMN base_fair REAL`); } catch (e
 try { db.exec(`ALTER TABLE ones_to_watch ADD COLUMN bfex_lpm REAL`); } catch (e) { /* already exists */ }
 try { db.exec(`ALTER TABLE ones_to_watch ADD COLUMN bfex_matched REAL`); } catch (e) { /* already exists */ }
 
+// Companion calendar date for `kickoff` ("HH:MM" only) — a bare time can't tell a tonight
+// 20:00 match apart from a tomorrow 20:00 one for the Bet Alerts "Start time" sort (confirmed
+// live 2026-09-15: Milan v Benfica tomorrow and Arsenal v Ipswich tonight both read "20:00").
+try { db.exec(`ALTER TABLE ones_to_watch ADD COLUMN kickoff_date TEXT`); } catch (e) { /* already exists */ }
+
 // BoyleSports player-prop odds (Shots Inside/Outside Box, SOT Right/Left/Header/Inside/Outside
 // Box, Goals Right/Left/Header/Inside(incl 6yd)/Outside) — scraped by a Tampermonkey userscript
 // run from the user's own real Chrome (server-side fetching is Cloudflare-Turnstile-blocked;

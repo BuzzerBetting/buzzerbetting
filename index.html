@@ -8999,19 +8999,28 @@ function syncBaSortToggle(key){
     b.style.fontWeight=on?'600':'400';
   });
 }
-function baTimeSortKey(raw){
+// timeField/dateField default to 't'/'d' (Normal +EV, Calculated +EV, the stub feeds);
+// Ones to Watch uses 'kickoff'/'kickoffDate' instead — pass those explicitly there.
+function baTimeSortKey(bet,timeField,dateField){
+  const raw=bet&&bet[timeField||'t'];
   const m=/(\d{1,2}):(\d{2})/.exec(raw||'');
   if(!m)return Infinity;
   let mins=Number(m[1])*60+Number(m[2]);
-  // None of these bet rows carry an actual date — every feed here (oc_scraper_service.py's
-  // today's/tomorrow's match list, betfair-horses.js's 12h race window, etc.) can span into
-  // tomorrow, so a bare "H:MM" is ambiguous which calendar day it's for. Confirmed live
-  // 2026-09-15: a tomorrow-09:00 boost sorted above a today-20:00 bet under "Start time"
-  // because 9:00 < 20:00 as plain minutes-of-day. Fix: a kickoff earlier in the clock than
-  // right now almost always means tomorrow, not that it already happened (an already-kicked-
-  // off match isn't normally still sitting here as a pending +EV pick) — push it a day ahead
-  // so today's later fixtures sort first. The 60-minute buffer avoids flipping a match that
-  // simply started within the last hour and is still showing as in-play/open.
+  // Prefer a real calendar date when the feed has one (added 2026-09-15 to
+  // oc_scraper_service.py/oc_boosts_scraper.py/football_boost_markets.py/the acca scans,
+  // after a bare "H:MM" turned out not to be enough on its own — confirmed live: Milan v
+  // Benfica (tomorrow, 20:00) and Arsenal v Ipswich (tonight, 20:00) read identically and
+  // sorted as ties, in whatever order the feeds happened to concatenate them, not by real
+  // kickoff order. Days-since-epoch*1440+minutes gives true chronological order with no
+  // ambiguity at all once a date is present.
+  const dateStr=bet&&bet[dateField||'d'];
+  if(dateStr){
+    const d=new Date(dateStr+'T00:00:00');
+    if(!isNaN(d.getTime()))return Math.floor(d.getTime()/86400000)*1440+mins;
+  }
+  // No date on this feed yet (e.g. betfair-horses.js's 12h race window bets) — fall back to
+  // the same "earlier in the clock than right now almost always means tomorrow" heuristic as
+  // before, with the same 60-minute buffer so a match that just kicked off doesn't get bumped.
   const now=new Date();
   const nowMins=now.getHours()*60+now.getMinutes();
   if(mins<nowMins-60)mins+=1440;
@@ -9043,7 +9052,7 @@ function renderOddscheckerEV(){
   // true for everything until the filter has loaded.
   const shown=ocEvBets.map((b,i)=>({b,i})).filter(({b})=>(typeof baBookEnabled!=='function')||baBookEnabled(b.bk));
   const ocSortMode=getBaSort('oc-ev');
-  shown.sort((x,y)=>ocSortMode==='time'?(baTimeSortKey(x.b.t)-baTimeSortKey(y.b.t)):(y.b.ev-x.b.ev));
+  shown.sort((x,y)=>ocSortMode==='time'?(baTimeSortKey(x.b)-baTimeSortKey(y.b)):(y.b.ev-x.b.ev));
   const countEl=document.getElementById('oc-ev-smeta-count');
   if(countEl)countEl.textContent=`${shown.length} value bet${shown.length===1?'':'s'} found`;
   if(typeof baOnEdgeRendered==='function')baOnEdgeRendered('oc-ev',shown.map(({b})=>({match:b.match,market:b.mkt,selection:b.sel,bk:ocBookieName(b.bk),odds:b.odds,ev:b.ev})));
@@ -14224,7 +14233,7 @@ function renderEVResults(bets) {
   if (typeof baBookEnabled === 'function') bets = bets.map(remapToAllowedBook).filter(Boolean);
   const cevSortMode = getBaSort('calc-ev');
   bets = bets.slice().sort((x, y) => cevSortMode === 'time'
-    ? (baTimeSortKey(x.t) - baTimeSortKey(y.t))
+    ? (baTimeSortKey(x) - baTimeSortKey(y))
     : ((y.bestEv ?? -Infinity) - (x.bestEv ?? -Infinity)));
   const cevCountEl = document.getElementById('cev-smeta-count');
   if (cevCountEl) cevCountEl.textContent = `${bets.length} bet${bets.length === 1 ? '' : 's'} found`;
@@ -15203,7 +15212,7 @@ function renderBaWatch(){
   const rows = BA_WATCH_ROWS.filter(r => baBookEnabled(r.bookie));
   const watchSortMode = getBaSort('watch');
   rows.sort((x, y) => watchSortMode === 'time'
-    ? (baTimeSortKey(x.kickoff) - baTimeSortKey(y.kickoff))
+    ? (baTimeSortKey(x,'kickoff','kickoffDate') - baTimeSortKey(y,'kickoff','kickoffDate'))
     : ((y.ev ?? -Infinity) - (x.ev ?? -Infinity)));
   if (countEl) countEl.textContent = `${rows.length} early value bet${rows.length === 1 ? '' : 's'}`;
   if (!rows.length) {
@@ -15579,7 +15588,7 @@ function renderBaStubFeed(key){
   const valueOf = b => key === 'arbs' ? b.profit_pct : b.ev;
   const sortMode = getBaSort(key);
   shown.sort((x, y) => sortMode === 'time'
-    ? (baTimeSortKey(x.t) - baTimeSortKey(y.t))
+    ? (baTimeSortKey(x) - baTimeSortKey(y))
     : ((valueOf(y) ?? -Infinity) - (valueOf(x) ?? -Infinity)));
   const body = document.getElementById(BA_STUB_BODY[key]);
   if (body) {
