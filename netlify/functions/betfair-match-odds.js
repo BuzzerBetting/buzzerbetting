@@ -212,6 +212,7 @@ async function findTeamWin(team, appKey, session) {
 
   return {
     eventName: match.event.name,
+    startTime: match.event.openDate,  // UTC ISO — caller converts to local (see bfex_fair.to_local_hhmm)
     marketId,
     runner: {
       totalMatched: runnerBook?.totalMatched ?? 0,
@@ -345,8 +346,8 @@ async function runAction(action, params, appKey, session) {
     }
 
     const result = await findEventMarketRunner(event.id, event.name, marketNameTest, runnerTest, appKey, session);
-    if (result.error) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, ...result }) };
-    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, ...result }) };
+    if (result.error) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, startTime: event.openDate, ...result }) };
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, startTime: event.openDate, ...result }) };
   }
 
   return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: `unknown action: ${action}` }) };

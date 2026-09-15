@@ -237,7 +237,7 @@ exports.handler = async (event) => {
 
     return {
       statusCode: 200, headers: CORS,
-      body: JSON.stringify({ ok: true, eventId, markets })
+      body: JSON.stringify({ ok: true, eventId, startTime: match.event.openDate, markets })
     };
 
   } catch (err) {
