@@ -239,6 +239,47 @@ app.get('/api/starsports-acca-ev', (req, res) => {
   }
 });
 
+// GET /api/dragonbet-acca-ev, /api/planetsportbet-acca-ev — same principle as
+// /api/starsports-acca-ev above, for DragonBet's DragonBoosts and PlanetSportBet's Rocket
+// Boosts win-accas respectively. Merged into the same "Normal +EV" table client-side.
+const DRAGONBET_ACCA_EV_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'dragonbet_acca_ev_bets.json');
+app.get('/api/dragonbet-acca-ev', (req, res) => {
+  if (!fs.existsSync(DRAGONBET_ACCA_EV_PATH)) return res.json({ ok: true, updated: null, bets: [] });
+  try {
+    const payload = JSON.parse(fs.readFileSync(DRAGONBET_ACCA_EV_PATH, 'utf8'));
+    res.json({ ok: true, updated: payload.updated || null, bets: payload.bets || [] });
+  } catch (e) {
+    res.json({ ok: false, error: 'Failed reading dragonbet_acca_ev_bets.json: ' + e.message });
+  }
+});
+
+const PLANETSPORTBET_ACCA_EV_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'planetsportbet_acca_ev_bets.json');
+app.get('/api/planetsportbet-acca-ev', (req, res) => {
+  if (!fs.existsSync(PLANETSPORTBET_ACCA_EV_PATH)) return res.json({ ok: true, updated: null, bets: [] });
+  try {
+    const payload = JSON.parse(fs.readFileSync(PLANETSPORTBET_ACCA_EV_PATH, 'utf8'));
+    res.json({ ok: true, updated: payload.updated || null, bets: payload.bets || [] });
+  } catch (e) {
+    res.json({ ok: false, error: 'Failed reading planetsportbet_acca_ev_bets.json: ' + e.message });
+  }
+});
+
+// GET /api/planetsportbet-horse-ev — PlanetSportBet jockey "Enhanced Double" horse racing +EV
+// bets, written by oc-scraper's planetsportbet_horse_ev_scan.py: each leg's own BFEX WIN-market
+// fair odds multiplied together, compared against PlanetSportBet's own boosted price — resolved
+// by (horse name, local time) across every today's race since these rows don't name a track.
+// Merged into the same "Normal +EV" table client-side.
+const PLANETSPORTBET_HORSE_EV_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'planetsportbet_horse_ev_bets.json');
+app.get('/api/planetsportbet-horse-ev', (req, res) => {
+  if (!fs.existsSync(PLANETSPORTBET_HORSE_EV_PATH)) return res.json({ ok: true, updated: null, bets: [] });
+  try {
+    const payload = JSON.parse(fs.readFileSync(PLANETSPORTBET_HORSE_EV_PATH, 'utf8'));
+    res.json({ ok: true, updated: payload.updated || null, bets: payload.bets || [] });
+  } catch (e) {
+    res.json({ ok: false, error: 'Failed reading planetsportbet_horse_ev_bets.json: ' + e.message });
+  }
+});
+
 // GET /api/bet-alert-errors — the Bet Alerts "Errors" tab: market-integrity flags (a
 // bookmaker's market still open past when it should have suspended), not value bets. First
 // fed by paddypower_horse_ev_scan.py (Paddy Power's "Racing Specials" doubles occasionally

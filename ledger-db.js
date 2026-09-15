@@ -597,4 +597,36 @@ CREATE TABLE IF NOT EXISTS starsports_boosts (
 );
 `);
 
+// Same shape/reasoning as starsports_boosts above — DragonBet's "DragonBoosts" page
+// (dragonbet.co.uk/sport-special/DragonBoosts) and PlanetSportBet's "Rocket Boosts" page
+// (planetsportbet.com/sport-special/RocketBoosts) both confirmed live 2026-09-15 to run the
+// same underlying platform too (identical SelectionsGroupLiItem/window.$appState). Two
+// separate tables (not merged into starsports_boosts) for the same "keep each bookmaker's
+// raw feed independently inspectable" reasoning as every other *_boosts table here.
+// PlanetSportBet's page additionally carries horse-racing jockey "Enhanced Doubles" (e.g.
+// "Jason Hart Double: Blake's Monarch (13:53) & Startling (16:23) Both To Win") — unlike
+// PricedUp's, these don't name a track anywhere in the group title or selection text, which
+// is why planetsportbet_horse_ev_scan.py has to resolve each leg by (horse name, local time)
+// across every today's race rather than by track+time.
+db.exec(`
+CREATE TABLE IF NOT EXISTS dragonbet_boosts (
+  sport        TEXT,
+  group_title  TEXT NOT NULL,
+  selection    TEXT NOT NULL,
+  odds_frac    TEXT,
+  odds         REAL,
+  scraped_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (group_title, selection)
+);
+CREATE TABLE IF NOT EXISTS planetsportbet_boosts (
+  sport        TEXT,
+  group_title  TEXT NOT NULL,
+  selection    TEXT NOT NULL,
+  odds_frac    TEXT,
+  odds         REAL,
+  scraped_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (group_title, selection)
+);
+`);
+
 module.exports = db;

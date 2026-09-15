@@ -4245,4 +4245,94 @@ router.post('/starsports-boosts/ingest', (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// ================== DRAGONBET / PLANETSPORTBET BOOSTS (raw scraped odds) ==================
+// Both confirmed live 2026-09-15 to run the exact same underlying platform as PricedUp/
+// StarSports (see ledger-db.js table comment) — same upsert-then-delete-stale ingest shape,
+// fed by their own Tampermonkey userscripts (oc-scraper/dragonbet-userscript.js,
+// oc-scraper/planetsportbet-userscript.js).
+
+router.get('/dragonbet-boosts', (req, res) => {
+  try {
+    const rows = db.prepare(`SELECT * FROM dragonbet_boosts ORDER BY sport, group_title, selection`).all();
+    res.json({ ok: true, rows });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+router.post('/dragonbet-boosts/ingest', (req, res) => {
+  try {
+    const b = req.body || {};
+    const incoming = Array.isArray(b.rows) ? b.rows : [];
+    const now = new Date().toISOString();
+    const ins = db.prepare(`
+      INSERT INTO dragonbet_boosts (sport, group_title, selection, odds_frac, odds, scraped_at)
+      VALUES (@sport, @group_title, @selection, @odds_frac, @odds, @now)
+      ON CONFLICT(group_title, selection) DO UPDATE SET
+        sport = excluded.sport, odds_frac = excluded.odds_frac, odds = excluded.odds, scraped_at = excluded.scraped_at
+    `);
+    let upserted = 0;
+    let removed = 0;
+    const tx = db.transaction(() => {
+      for (const r of incoming) {
+        if (!r || !r.groupTitle || !r.selection) continue;
+        ins.run({
+          sport: r.sport || null,
+          group_title: String(r.groupTitle),
+          selection: String(r.selection),
+          odds_frac: r.oddsFrac || null,
+          odds: r.odds != null ? Number(r.odds) : null,
+          now,
+        });
+        upserted++;
+      }
+      if (upserted > 0) {
+        removed = db.prepare(`DELETE FROM dragonbet_boosts WHERE scraped_at != ?`).run(now).changes;
+      }
+    });
+    tx();
+    res.json({ ok: true, upserted, removed });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+router.get('/planetsportbet-boosts', (req, res) => {
+  try {
+    const rows = db.prepare(`SELECT * FROM planetsportbet_boosts ORDER BY sport, group_title, selection`).all();
+    res.json({ ok: true, rows });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+router.post('/planetsportbet-boosts/ingest', (req, res) => {
+  try {
+    const b = req.body || {};
+    const incoming = Array.isArray(b.rows) ? b.rows : [];
+    const now = new Date().toISOString();
+    const ins = db.prepare(`
+      INSERT INTO planetsportbet_boosts (sport, group_title, selection, odds_frac, odds, scraped_at)
+      VALUES (@sport, @group_title, @selection, @odds_frac, @odds, @now)
+      ON CONFLICT(group_title, selection) DO UPDATE SET
+        sport = excluded.sport, odds_frac = excluded.odds_frac, odds = excluded.odds, scraped_at = excluded.scraped_at
+    `);
+    let upserted = 0;
+    let removed = 0;
+    const tx = db.transaction(() => {
+      for (const r of incoming) {
+        if (!r || !r.groupTitle || !r.selection) continue;
+        ins.run({
+          sport: r.sport || null,
+          group_title: String(r.groupTitle),
+          selection: String(r.selection),
+          odds_frac: r.oddsFrac || null,
+          odds: r.odds != null ? Number(r.odds) : null,
+          now,
+        });
+        upserted++;
+      }
+      if (upserted > 0) {
+        removed = db.prepare(`DELETE FROM planetsportbet_boosts WHERE scraped_at != ?`).run(now).changes;
+      }
+    });
+    tx();
+    res.json({ ok: true, upserted, removed });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 module.exports = router;
