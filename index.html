@@ -2496,6 +2496,7 @@ input::placeholder{color:var(--text3)}
               <th class="r">DDHH Fair</th>
               <th class="r">EV%</th>
               <th class="r">Kelly Stake</th>
+              <th class="r"></th>
             </tr>
           </thead>
           <tbody id="ddhh-tbody"></tbody>
@@ -2526,7 +2527,7 @@ input::placeholder{color:var(--text3)}
         <button onclick="setBaSort('f1-ew','time')" data-sort="time" style="background:none;border:none;border-left:0.5px solid var(--border);padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Start time</button>
       </div>
     </div>
-    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:700px"><thead><tr><th>Time</th><th>Race</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="ba-f1-ew-body"></tbody></table></div></div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:700px"><thead><tr><th>Time</th><th>Race</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th class="r"></th></tr></thead><tbody id="ba-f1-ew-body"></tbody></table></div></div>
     <div class="note"><i class="ti ti-info-circle"></i> F1 Each-Way value vs place terms. Feed not connected yet — this tab lights up automatically once the scraper starts publishing.</div>
   </div>
 
@@ -2538,7 +2539,7 @@ input::placeholder{color:var(--text3)}
         <button onclick="setBaSort('arbs','time')" data-sort="time" style="background:none;border:none;border-left:0.5px solid var(--border);padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Start time</button>
       </div>
     </div>
-    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:700px"><thead><tr><th>Time</th><th>Event</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">Profit%</th></tr></thead><tbody id="ba-arbs-body"></tbody></table></div></div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:700px"><thead><tr><th>Time</th><th>Event</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">Profit%</th><th class="r"></th></tr></thead><tbody id="ba-arbs-body"></tbody></table></div></div>
     <div class="note"><i class="ti ti-info-circle"></i> Cross-bookmaker arbitrage. Feed not connected yet — this tab lights up automatically once the scraper starts publishing.</div>
   </div>
 
@@ -2550,7 +2551,7 @@ input::placeholder{color:var(--text3)}
         <button onclick="setBaSort('dnf','time')" data-sort="time" style="background:none;border:none;border-left:0.5px solid var(--border);padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Start time</button>
       </div>
     </div>
-    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:700px"><thead><tr><th>Time</th><th>Event</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th></tr></thead><tbody id="ba-dnf-body"></tbody></table></div></div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:700px"><thead><tr><th>Time</th><th>Event</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th class="r"></th></tr></thead><tbody id="ba-dnf-body"></tbody></table></div></div>
     <div class="note"><i class="ti ti-info-circle"></i> Did-Not-Finish / retirement value. Feed not connected yet — this tab lights up automatically once the scraper starts publishing.</div>
   </div>
 
@@ -9027,20 +9028,24 @@ function baTimeSortKey(bet,timeField,dateField){
   return mins;
 }
 
-// The line copyOddscheckerLine() puts on the clipboard — kept in one place so the button and
-// any future "copy all" both build it the same way.
-function oddscheckerLineText(b){
-  return `${b.t} ${b.match} — ${b.mkt}: ${b.sel} @ ${b.odds.toFixed(2)} (${ocBookieName(b.bk)}) — fair ${b.fair.toFixed(2)} — +${b.ev.toFixed(1)}% EV`;
+// Shared 8-line clipboard format for every Bet Alerts tab's copy-bet button — one field per
+// line with its heading, so a pasted bet always lands in the same shape wherever it's posted.
+function baCopyBetText(time,event,market,bet,backOdds,fairOdds,evPct,bookie){
+  return `Time: ${time}\nEvent: ${event}\nMarket: ${market}\nBet: ${bet}\nBack Odds: ${backOdds}\nFair Odds: ${fairOdds}\nEV %: ${evPct}\nBookie: ${bookie}`;
 }
-async function copyOddscheckerLine(i,btn){
-  const b=ocEvBets[i]; if(!b)return;
+async function baCopyBet(text,btn){
   try{
-    await navigator.clipboard.writeText(oddscheckerLineText(b));
+    await navigator.clipboard.writeText(text);
     const orig=btn.innerHTML;
     btn.innerHTML='<i class="ti ti-check" style="color:var(--green)"></i>';
     btn.disabled=true;
     setTimeout(()=>{ btn.innerHTML=orig; btn.disabled=false; },1200);
   }catch(e){ /* clipboard API blocked (e.g. non-HTTPS) — button just does nothing */ }
+}
+function copyOddscheckerLine(i,btn){
+  const b=ocEvBets[i]; if(!b)return;
+  const text=baCopyBetText(b.t,b.match,b.mkt,b.sel,b.odds.toFixed(2),b.fair.toFixed(2),`+${b.ev.toFixed(2)}%`,ocBookieName(b.bk));
+  baCopyBet(text,btn);
 }
 
 function renderOddscheckerEV(){
@@ -9069,7 +9074,7 @@ function renderOddscheckerEV(){
     const sourceLabel=b.source==='combo'?'OC/BB':(b.source==='bfex'?'BFEX':(b.source||''));
     const fairCell=sourceLabel?`${b.fair.toFixed(2)} <span style="color:var(--text3);font-size:11px">(${sourceLabel})</span>`:b.fair.toFixed(2);
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${boostIcon}${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:${fairColor};font-weight:500">${fairCell}</td><td class="r tn" style="color:var(--text2)">${lastTraded}</td><td class="r tn" style="color:var(--text2)">${matched}</td><td class="r" style="color:var(--text2);font-size:12px;line-height:1.5">${ocBookieLinesHtml(b)}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td><td class="r"><button onclick="copyOddscheckerLine(${i},this)" title="Copy line" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td>`;
+    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${boostIcon}${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:${fairColor};font-weight:500">${fairCell}</td><td class="r tn" style="color:var(--text2)">${lastTraded}</td><td class="r tn" style="color:var(--text2)">${matched}</td><td class="r" style="color:var(--text2);font-size:12px;line-height:1.5">${ocBookieLinesHtml(b)}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td><td class="r"><button onclick="copyOddscheckerLine(${i},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td>`;
     sb.appendChild(tr);
   });
   if(!shown.length){
@@ -14257,6 +14262,7 @@ function renderEVResults(bets) {
     const baseFairLabel = bet.baseFair ? bet.baseFair.toFixed(2) : '—';
     const rowStyle = bet.noCalc ? '' : (bet.isConfident ? '' : 'background:var(--amber-bg)');
 
+    const evCopyLabel = bet.noCalc ? '—' : `+${ev.toFixed(2)}%`;
     const boostIcon = bet.boost ? '<span class="boost-icon" title="Oddschecker Price Boost" style="margin-right:6px;vertical-align:middle">B</span>' : '';
 
     // Which source actually produced the AGS/SOT fair (fair_resolver.py's priority chain —
@@ -14286,7 +14292,7 @@ function renderEVResults(bets) {
       <td class="r" style="font-size:12px;color:var(--text2);line-height:1.5">${bookieLinesHtml(bet)}</td>
       <td class="r tn" style="font-weight:600;color:var(--green)">${bet.ocOdds}</td>
       <td class="r"><span class="badge" style="background:${evBg};color:${evCol}">${evLabel}</span></td>
-      <td class="r"><button onclick="logCalcEvBetAsGoalSotMethods(${betIdx})" title="Log this bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1;white-space:nowrap"><i class="ti ti-plus"></i> Log</button></td>`;
+      <td class="r" style="white-space:nowrap"><button onclick="logCalcEvBetAsGoalSotMethods(${betIdx})" title="Log this bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-plus"></i> Log</button> <button onclick="copyCalcEvBet(${betIdx},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td>`;
     tbody.appendChild(tr);
   });
 
@@ -14326,6 +14332,15 @@ function logCalcEvBetAsGoalSotMethods(betIdx) {
   if (typeof recalcBetEntryEV === 'function') recalcBetEntryEV();
   if (typeof updateBetEntryTotal === 'function') updateBetEntryTotal();
   setTimeout(() => { document.getElementById('bef-Book')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 50);
+}
+
+function copyCalcEvBet(betIdx, btn) {
+  const bet = cevRenderedBets[betIdx];
+  if (!bet) return;
+  const fair = bet.bestFair != null ? bet.bestFair.toFixed(2) : '—';
+  const ev = (typeof bet.bestEv === 'number') ? `+${bet.bestEv.toFixed(2)}%` : '—';
+  const text = baCopyBetText(bet.t ?? '', bet.match ?? '', bet.market ?? '', bet.player ?? '', bet.ocOdds ?? '—', fair, ev, ocBookieName(bet.bookie));
+  baCopyBet(text, btn);
 }
 
 let bbMatchOdds=null,bfexMatchOdds=null,lineupMarketType=null,lineupMethodKey=null;
@@ -14836,7 +14851,8 @@ async function scanDDHH(match, btn) {
     }
 
     results.sort((a, b) => b.ratio - a.ratio);
-    renderDDHH(match.event, results);
+    const kickoff = match.startTime ? new Date(match.startTime).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+    renderDDHH(match.event, results, kickoff);
 
   } catch (err) {
     alert(`Scan failed: ${err.message}`);
@@ -14955,11 +14971,17 @@ function fuzzyMatchDDHH(a, b) {
   return shorter.filter(w => w.length > 2).every(w => longer.includes(w));
 }
 
-function renderDDHH(matchName, results) {
+let ddhhRenderedResults = []; // last-rendered rows, for copyDdhhBet's index lookup
+let ddhhRenderedMatch = '';
+let ddhhRenderedKickoff = '';
+function renderDDHH(matchName, results, kickoff) {
   const tbody = document.getElementById('ddhh-tbody');
   const resultsEl = document.getElementById('ddhh-results');
   document.getElementById('ddhh-results-title').textContent = `${matchName} — DDHH`;
   tbody.innerHTML = '';
+  ddhhRenderedResults = results;
+  ddhhRenderedMatch = matchName;
+  ddhhRenderedKickoff = kickoff || '';
 
   // Bet Alerts: record the value picks (>=100% ratio) from this scan against the DDHH edge's
   // daily unique count. DDHH is scanned per match rather than as one live list, so this fires
@@ -14971,13 +14993,13 @@ function renderDDHH(matchName, results) {
   }
 
   if (!results.length) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:32px">No players above 70% ratio — try again after team news and BFEX liquidity builds</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:32px">No players above 70% ratio — try again after team news and BFEX liquidity builds</td></tr>`;
     resultsEl.style.display = '';
     resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
     return;
   }
 
-  for (const r of results) {
+  results.forEach((r, i) => {
     const evCol = r.ratio >= 105 ? 'var(--green)' : r.ratio >= 100 ? 'var(--amber)' : 'var(--red)';
     const evBg  = r.ratio >= 105 ? 'var(--green-bg)' : r.ratio >= 100 ? 'var(--amber-bg)' : 'var(--red-bg)';
     const tr = document.createElement('tr');
@@ -14988,12 +15010,20 @@ function renderDDHH(matchName, results) {
       <td class="r tn" style="color:var(--green);font-weight:600">${r.betfredFGS.toFixed(2)}</td>
       <td class="r tn">${r.ddhhFair.toFixed(2)}</td>
       <td class="r"><span class="badge" style="background:${evBg};color:${evCol};font-weight:700">${r.ratio.toFixed(1)}%</span></td>
-      <td class="r tn">${r.stake ? '£' + r.stake.toFixed(2) : '—'}</td>`;
+      <td class="r tn">${r.stake ? '£' + r.stake.toFixed(2) : '—'}</td>
+      <td class="r"><button onclick="copyDdhhBet(${i},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td>`;
     tbody.appendChild(tr);
-  }
+  });
 
   resultsEl.style.display = '';
   resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function copyDdhhBet(i,btn){
+  const r = ddhhRenderedResults[i];
+  if (!r) return;
+  const ev = `+${(r.ratio - 100).toFixed(2)}%`;
+  const text = baCopyBetText(ddhhRenderedKickoff, ddhhRenderedMatch, 'DDHH', r.name, r.betfredFGS.toFixed(2), r.ddhhFair.toFixed(2), ev, 'Betfred');
+  baCopyBet(text, btn);
 }
 
 // ── BET ALERTS ─────────────────────────────────────────────────────────────
@@ -15284,9 +15314,19 @@ function renderBaWatch(){
       <td class="r" style="white-space:nowrap">
         <button title="${ticked ? 'Marked valid' : 'Mark valid'}" onclick="baWatchTick(${r.id})" ${ticked ? 'disabled' : ''} style="background:none;border:.5px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer;color:${ticked ? 'var(--green)' : 'var(--text2)'};line-height:1"><i class="ti ti-check"></i></button>
         <button title="Remove" onclick="baWatchDelete(${r.id})" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer;color:var(--red);line-height:1;margin-left:4px"><i class="ti ti-x"></i></button>
+        <button title="Copy bet" onclick="copyBaWatchBet(${r.id},this)" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer;color:var(--text2);line-height:1;margin-left:4px"><i class="ti ti-copy"></i></button>
       </td>
     </tr>`;
   }).join('');
+}
+function copyBaWatchBet(id,btn){
+  const r = BA_WATCH_ROWS.find(x => x.id === id);
+  if (!r) return;
+  const fair = r.fair != null ? Number(r.fair).toFixed(2) : '—';
+  const ev = (typeof r.ev === 'number') ? `${r.ev >= 0 ? '+' : ''}${r.ev.toFixed(2)}%` : '—';
+  const odds = r.odds != null ? Number(r.odds).toFixed(2) : '—';
+  const text = baCopyBetText(r.kickoff ?? '', r.match ?? '', r.market ?? '', r.selection ?? '', odds, fair, ev, ocBookieName(r.bookie) || r.bookie || '');
+  baCopyBet(text, btn);
 }
 async function baWatchTick(id){
   try {
@@ -15608,6 +15648,7 @@ async function loadBaCorners(){
 const BA_STUB_ENDPOINT = { 'f1-ew': 'bet-alerts-f1ew', 'arbs': 'bet-alerts-arbs', 'dnf': 'bet-alerts-dnf' };
 const BA_STUB_BODY = { 'f1-ew': 'ba-f1-ew-body', 'arbs': 'ba-arbs-body', 'dnf': 'ba-dnf-body' };
 let BA_STUB_BETS = {};  // key -> last-fetched (unfiltered) bets, so the sort toggle can re-render without a re-fetch
+let BA_STUB_SHOWN = {}; // key -> currently-rendered (filtered+sorted) bets, so the copy button indexes the row actually on screen
 async function loadBaStubFeed(key){
   let bets = [];
   try {
@@ -15628,19 +15669,31 @@ function renderBaStubFeed(key){
   shown.sort((x, y) => sortMode === 'time'
     ? (baTimeSortKey(x) - baTimeSortKey(y))
     : ((valueOf(y) ?? -Infinity) - (valueOf(x) ?? -Infinity)));
+  BA_STUB_SHOWN[key] = shown;
   const body = document.getElementById(BA_STUB_BODY[key]);
   if (body) {
     body.innerHTML = shown.length
-      ? shown.map(b => {
+      ? shown.map((b,i) => {
           const val = key === 'arbs'
             ? (b.profit_pct != null ? `${Number(b.profit_pct).toFixed(2)}%` : '—')
             : (b.ev != null ? `+${Number(b.ev).toFixed(1)}%` : '—');
-          return `<tr><td style="color:var(--text2)">${b.t ?? ''}</td><td style="font-weight:500">${b.match ?? ''}</td><td style="color:var(--text2);font-size:12px">${b.mkt ?? ''}</td><td>${b.sel ?? ''}</td><td class="r tn">${b.fair != null ? Number(b.fair).toFixed(2) : '—'}</td><td class="r" style="color:var(--text2);font-size:12px">${b.bk ?? ''}</td><td class="r tn" style="font-weight:500">${b.odds != null ? Number(b.odds).toFixed(2) : '—'}</td><td class="r">${val}</td></tr>`;
+          return `<tr><td style="color:var(--text2)">${b.t ?? ''}</td><td style="font-weight:500">${b.match ?? ''}</td><td style="color:var(--text2);font-size:12px">${b.mkt ?? ''}</td><td>${b.sel ?? ''}</td><td class="r tn">${b.fair != null ? Number(b.fair).toFixed(2) : '—'}</td><td class="r" style="color:var(--text2);font-size:12px">${b.bk ?? ''}</td><td class="r tn" style="font-weight:500">${b.odds != null ? Number(b.odds).toFixed(2) : '—'}</td><td class="r">${val}</td><td class="r"><button onclick="copyBaStubBet('${key}',${i},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td></tr>`;
         }).join('')
-      : `<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">Feed not connected yet — nothing to show.</td></tr>`;
+      : `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">Feed not connected yet — nothing to show.</td></tr>`;
   }
   baSetCount(key, shown.length);
   baReportSeen(key, shown.map(b => ({ match: b.match, market: b.mkt, selection: b.sel, bk: b.bk, odds: b.odds, ev: b.ev })));
+}
+function copyBaStubBet(key,i,btn){
+  const b = (BA_STUB_SHOWN[key] || [])[i];
+  if (!b) return;
+  const fair = b.fair != null ? Number(b.fair).toFixed(2) : '—';
+  const odds = b.odds != null ? Number(b.odds).toFixed(2) : '—';
+  const val = key === 'arbs'
+    ? (b.profit_pct != null ? `${Number(b.profit_pct).toFixed(2)}%` : '—')
+    : ((typeof b.ev === 'number') ? `+${b.ev.toFixed(2)}%` : '—');
+  const text = baCopyBetText(b.t ?? '', b.match ?? '', b.mkt ?? '', b.sel ?? '', odds, fair, val, ocBookieName(b.bk) || b.bk || '');
+  baCopyBet(text, btn);
 }
 
 // ---- bet post stats ----
