@@ -4140,11 +4140,32 @@ router.post('/boylesports-props/ingest', (req, res) => {
 // see the script itself) rather than looping continuously. No fair-odds calc consumes this
 // yet — purely a raw-odds store for whenever that gets built.
 
+// Guards every xxx-boosts GET below against a Tampermonkey tab that's silently stopped
+// scraping (closed, laptop asleep, browser crashed, etc). The 2026-09-14 ingest fix (see the
+// ingest handlers' own comments) only self-heals a removed boost when a NEW scrape actually
+// comes in — if scraping stops entirely, no new ingest ever arrives to trigger that delete, so
+// the last snapshot just sits there forever, growing staler, and every acca/boost EV scan keeps
+// treating it as live. Confirmed live 2026-09-16: starsports_boosts/dragonbet_boosts/
+// planetsportbet_boosts/pricedup_boosts were respectively 4h/3h/7h/26h+ stale (all rows share
+// one scraped_at per table — a full-batch replace each successful ingest, so its age IS the
+// whole table's age) while several EFL Cup/Europa League legs from those stale boosts had
+// already kicked off and were still being scanned/posted with nonsense EV off BFEX's now-in-play
+// price. `maxAgeMin` is roughly 2x each userscript's own RELOAD_INTERVAL_MIN, so one merely-late
+// reload doesn't false-trigger this, but a tab that's actually stopped does.
+function freshBoostRows(table, maxAgeMin) {
+  const row = db.prepare(`SELECT MAX(scraped_at) AS latest FROM ${table}`).get();
+  if (!row || !row.latest) return { rows: [], stale: false, scrapedAt: null };
+  const ageMin = (Date.now() - new Date(row.latest).getTime()) / 60000;
+  if (ageMin > maxAgeMin) return { rows: [], stale: true, scrapedAt: row.latest, ageMin: Math.round(ageMin) };
+  const rows = db.prepare(`SELECT * FROM ${table} ORDER BY sport, group_title, selection`).all();
+  return { rows, stale: false, scrapedAt: row.latest, ageMin: Math.round(ageMin) };
+}
+
 // GET /api/ledger/pricedup-boosts (no filter — this is one page's worth of rows, not per-match)
 router.get('/pricedup-boosts', (req, res) => {
   try {
-    const rows = db.prepare(`SELECT * FROM pricedup_boosts ORDER BY sport, group_title, selection`).all();
-    res.json({ ok: true, rows });
+    const { rows, stale, ageMin } = freshBoostRows('pricedup_boosts', 30); // userscript reloads every 15min
+    res.json({ ok: true, rows, stale, staleMinutes: stale ? ageMin : undefined });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
@@ -4209,8 +4230,8 @@ router.post('/pricedup-boosts/ingest', (req, res) => {
 // GET /api/ledger/starsports-boosts (no filter — one page's worth of rows, not per-match)
 router.get('/starsports-boosts', (req, res) => {
   try {
-    const rows = db.prepare(`SELECT * FROM starsports_boosts ORDER BY sport, group_title, selection`).all();
-    res.json({ ok: true, rows });
+    const { rows, stale, ageMin } = freshBoostRows('starsports_boosts', 60); // userscript reloads every 30min
+    res.json({ ok: true, rows, stale, staleMinutes: stale ? ageMin : undefined });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
@@ -4263,8 +4284,8 @@ router.post('/starsports-boosts/ingest', (req, res) => {
 
 router.get('/dragonbet-boosts', (req, res) => {
   try {
-    const rows = db.prepare(`SELECT * FROM dragonbet_boosts ORDER BY sport, group_title, selection`).all();
-    res.json({ ok: true, rows });
+    const { rows, stale, ageMin } = freshBoostRows('dragonbet_boosts', 60); // userscript reloads every 30min
+    res.json({ ok: true, rows, stale, staleMinutes: stale ? ageMin : undefined });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
@@ -4305,8 +4326,8 @@ router.post('/dragonbet-boosts/ingest', (req, res) => {
 
 router.get('/planetsportbet-boosts', (req, res) => {
   try {
-    const rows = db.prepare(`SELECT * FROM planetsportbet_boosts ORDER BY sport, group_title, selection`).all();
-    res.json({ ok: true, rows });
+    const { rows, stale, ageMin } = freshBoostRows('planetsportbet_boosts', 60); // userscript reloads every 30min
+    res.json({ ok: true, rows, stale, staleMinutes: stale ? ageMin : undefined });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
