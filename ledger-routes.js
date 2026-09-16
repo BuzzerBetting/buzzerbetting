@@ -126,6 +126,13 @@ router.use((req, res, next) => {
 //     page (2026-09-14 — Calculator role given access to Bet Alerts alongside Calculations;
 //     none of these touch live betting/financial ledger data either, same reasoning as
 //     everything else already allowed here).
+//   - /bet365-sot, /parse-bet365-sot: Bet365 Headed-SOT/OTB-SOT screenshot paste on Today's
+//     Matches (2026-09-16 — Calculator role given access to this alongside the rest of
+//     Calculations; feeds Ones to Watch's SoT-method fair odds, not live betting/financial
+//     ledger data). index.html's b365SotCanEdit() was opened up to 'calculator' the same
+//     day but this middleware still 403'd every request underneath it until now — confirmed
+//     live, a calculator-role user got "This account has no access to the Ledger" pasting a
+//     screenshot despite the button now being visible to them.
 router.use((req, res, next) => {
   if ((req.userRole === 'calculator' || req.userRole === 'freeze')
       && !req.path.startsWith('/fotmob-leagues')
@@ -138,7 +145,9 @@ router.use((req, res, next) => {
       && !req.path.startsWith('/bet-alert-books')
       && !req.path.startsWith('/bet-alert-seen')
       && !req.path.startsWith('/bet-alert-stats')
-      && !req.path.startsWith('/ones-to-watch')) {
+      && !req.path.startsWith('/ones-to-watch')
+      && !req.path.startsWith('/bet365-sot')
+      && !req.path.startsWith('/parse-bet365-sot')) {
     return res.status(403).json({ ok: false, error: 'This account has no access to the Ledger.' });
   }
   next();
