@@ -168,6 +168,20 @@ exports.handler = async (event) => {
   try {
     const session = await getCachedSessionToken(appKey);
 
+    // 2026-09-17 fix: the 2026-09-12 fix above only fixed the SEARCH query (alias tried
+    // first), not the MATCH/FILTER step below — which still ran fuzzyTeamMatch against the
+    // raw, un-aliased `home`/`away` ("Manchester United"), and "Manchester" can't fuzzy-match
+    // "Man Utd" on its own (not a substring, no shared words). So the exact failure this file's
+    // own 2026-09-12 comment describes was still happening: Betfair correctly returns "Man Utd
+    // v Brighton" for the aliased query, and this filter throws it straight back out, leaving
+    // `match` null for every aliased club and silently starving FairResolver of BFEX data for
+    // the whole fixture — forcing every player in it onto the weaker OC/BB combo even when
+    // BFEX had full liquidity. Confirmed live 2026-09-16 via the identical bug in
+    // betfair-match-odds.js (see that file's own history). Resolve the alias once and match
+    // against that, same fix applied there.
+    const homeM = TEAM_SEARCH_ALIASES[home.toLowerCase().trim()] || home;
+    const awayM = TEAM_SEARCH_ALIASES[away.toLowerCase().trim()] || away;
+
     let events = [];
     let match = null;
     for (const q of searchQueries(home)) {
@@ -179,8 +193,8 @@ exports.handler = async (event) => {
         if (/\(w\)/i.test(name)) return false; // exclude women's fixtures — same club names, wrong market
         const parts = name.split(' v ');
         if (parts.length !== 2) return false;
-        return (fuzzyTeamMatch(home, parts[0]) && fuzzyTeamMatch(away, parts[1])) ||
-               (fuzzyTeamMatch(away, parts[0]) && fuzzyTeamMatch(home, parts[1]));
+        return (fuzzyTeamMatch(homeM, parts[0]) && fuzzyTeamMatch(awayM, parts[1])) ||
+               (fuzzyTeamMatch(awayM, parts[0]) && fuzzyTeamMatch(homeM, parts[1]));
       });
       if (match) break;
     }
