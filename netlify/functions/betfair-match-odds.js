@@ -166,6 +166,17 @@ function searchQueries(name) {
 }
 
 async function findTeamWin(team, appKey, session) {
+  // Alias-resolved form (e.g. "Manchester United" -> "Man Utd") — used for every fuzzy-match
+  // check below, not just the search query. Betfair's own event/runner names use the
+  // abbreviation, and fuzzyTeamMatch can't bridge "Manchester" -> "Man" on its own (not a
+  // substring, edit-distance is way over 1, and the word-overlap check needs an exact word
+  // match, not a partial one) — confirmed live 2026-09-16: searchQueries(team) tries the alias
+  // first and Betfair happily returns "Man Utd v Brighton", but the hits filter and runnerMeta
+  // lookup below were still fuzzy-matching against the raw, un-aliased `team` ("Manchester
+  // United"), so the correctly-found event got filtered straight back out and every acca/boost
+  // referencing "Manchester United" by its full name failed with "event not found" even though
+  // the alias table already had the answer.
+  const teamM = TEAM_SEARCH_ALIASES[team.toLowerCase().trim()] || team;
   // Searching by ONE team name (no opponent — PricedUp's acca text never gives one) means a
   // common club can turn up several of its own fixtures at once (today's match plus a later
   // gameweek, etc.) — confirmed live 2026-09-14 "AS Roma" alone matched both "Torino v Roma"
@@ -184,7 +195,7 @@ async function findTeamWin(team, appKey, session) {
       if (/\bU1[6-9]\b|\bU2[0-3]\b|\byouth\b|\breserves?\b/i.test(name)) return false;
       const parts = name.split(' v ');
       if (parts.length !== 2) return false;
-      return fuzzyTeamMatch(team, parts[0]) || fuzzyTeamMatch(team, parts[1]);
+      return fuzzyTeamMatch(teamM, parts[0]) || fuzzyTeamMatch(teamM, parts[1]);
     });
     if (hits.length) { candidates = hits; break; }
   }
@@ -201,7 +212,7 @@ async function findTeamWin(team, appKey, session) {
   if (!catalogue?.length) return { error: 'no MATCH_ODDS market found', eventName: match.event.name };
 
   const marketId = catalogue[0].marketId;
-  const runnerMeta = catalogue[0].runners.find(r => fuzzyTeamMatch(team, r.runnerName));
+  const runnerMeta = catalogue[0].runners.find(r => fuzzyTeamMatch(teamM, r.runnerName));
   if (!runnerMeta) return { error: `runner not found for team: ${team}`, eventName: match.event.name, runners: catalogue[0].runners.map(r => r.runnerName) };
 
   const books = await bfCall('listMarketBook', {
@@ -229,6 +240,10 @@ async function findTeamWin(team, appKey, session) {
 // far less obviously than it does for a plain MATCH_ODDS lookup. Same soonest-kickoff tie-break
 // as findTeamWin, searched off the home team's name (matches betfair.js's own approach).
 async function findEventByHomeAway(home, away, appKey, session) {
+  // Same alias-resolved-form fix as findTeamWin above — matching must use the abbreviation
+  // Betfair actually names its events with, not just search for it.
+  const homeM = TEAM_SEARCH_ALIASES[home.toLowerCase().trim()] || home;
+  const awayM = TEAM_SEARCH_ALIASES[away.toLowerCase().trim()] || away;
   let candidates = [];
   for (const q of searchQueries(home)) {
     const events = await bfCall('listEvents', { filter: { eventTypeIds: [FOOTBALL_EVENT_TYPE_ID], textQuery: q } }, appKey, session);
@@ -238,8 +253,8 @@ async function findEventByHomeAway(home, away, appKey, session) {
       if (/\bU1[6-9]\b|\bU2[0-3]\b|\byouth\b|\breserves?\b/i.test(name)) return false;
       const parts = name.split(' v ');
       if (parts.length !== 2) return false;
-      return (fuzzyTeamMatch(home, parts[0]) && fuzzyTeamMatch(away, parts[1])) ||
-             (fuzzyTeamMatch(away, parts[0]) && fuzzyTeamMatch(home, parts[1]));
+      return (fuzzyTeamMatch(homeM, parts[0]) && fuzzyTeamMatch(awayM, parts[1])) ||
+             (fuzzyTeamMatch(awayM, parts[0]) && fuzzyTeamMatch(homeM, parts[1]));
     });
     if (candidates.length) break;
   }
