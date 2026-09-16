@@ -165,6 +165,30 @@ function searchQueries(name) {
   return [...new Set([alias, name, prefixStripped, firstWord, lastWord].filter(Boolean))];
 }
 
+// A candidate event is only usable as a PRE-MATCH win-acca/boost leg if it hasn't kicked off
+// yet and isn't implausibly far away (these scans are always for tonight's/tomorrow's card,
+// never a fixture days out). Without this, findTeamWin/findEventByHomeAway happily returned
+// whichever candidate sorted "soonest" even when that meant an ALREADY-IN-PLAY match — confirmed
+// live 2026-09-16: Everton/Man Utd/Aston Villa/Sunderland/Leverkusen all had already kicked off
+// (up to 46 min earlier) by the time a later scan cycle re-priced their win-acca/win-to-nil
+// legs off BFEX's now-IN-PLAY price (e.g. Man Utd's pre-match ~1.70 had collapsed to 1.16 once
+// they were already winning), producing nonsense EV (+139%, +44%, +24%) against a bookmaker
+// price that was only ever meant to be compared pre-match. Separately, Celta Vigo's real
+// tonight fixture wasn't found by search at all (likely not listed as an in-play event the same
+// way), and with no future bound the code fell back to Celta Vigo's NEXT domestic match three
+// days later — an unrelated, un-boosted price used as if it were tonight's. Both failure modes
+// are the same root cause: no plausibility bound on which candidate counts as "the match". A
+// leg that fails this now just goes unresolved, same as any other unresolvable leg — the
+// existing "drop the whole acca rather than guess" rule (see every acca scan's own docstring)
+// already handles it correctly from there; a missed alert is far better than a false one.
+const MAX_FUTURE_KICKOFF_MS = 48 * 60 * 60 * 1000; // 48h — comfortably covers same-night/next-day fixtures, excludes a match days out
+function isPlausiblePrematchKickoff(openDateIso) {
+  const t = new Date(openDateIso).getTime();
+  if (!Number.isFinite(t)) return false;
+  const delta = t - Date.now();
+  return delta > 0 && delta <= MAX_FUTURE_KICKOFF_MS;
+}
+
 async function findTeamWin(team, appKey, session) {
   // Alias-resolved form (e.g. "Manchester United" -> "Man Utd") — used for every fuzzy-match
   // check below, not just the search query. Betfair's own event/runner names use the
@@ -193,6 +217,7 @@ async function findTeamWin(team, appKey, session) {
       // confirmed live 2026-09-14 "Como" alone matched "Roma U20 v Como U20" ahead of the
       // real "Como v Parma" senior match.
       if (/\bU1[6-9]\b|\bU2[0-3]\b|\byouth\b|\breserves?\b/i.test(name)) return false;
+      if (!isPlausiblePrematchKickoff(e.event?.openDate)) return false; // already kicked off, or implausibly far out
       const parts = name.split(' v ');
       if (parts.length !== 2) return false;
       return fuzzyTeamMatch(teamM, parts[0]) || fuzzyTeamMatch(teamM, parts[1]);
@@ -251,6 +276,7 @@ async function findEventByHomeAway(home, away, appKey, session) {
       const name = e.event?.name || '';
       if (/\(w\)/i.test(name)) return false;
       if (/\bU1[6-9]\b|\bU2[0-3]\b|\byouth\b|\breserves?\b/i.test(name)) return false;
+      if (!isPlausiblePrematchKickoff(e.event?.openDate)) return false; // already kicked off, or implausibly far out
       const parts = name.split(' v ');
       if (parts.length !== 2) return false;
       return (fuzzyTeamMatch(homeM, parts[0]) && fuzzyTeamMatch(awayM, parts[1])) ||
