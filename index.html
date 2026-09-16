@@ -3021,7 +3021,7 @@ input::placeholder{color:var(--text3)}
 // ── DATA ──
 const monthly=[['Mar-23',702.54],['Apr-23',710.43],['May-23',1739.72],['Jun-23',1023.58],['Jul-23',1220.85],['Aug-23',725.03],['Sep-23',1950.56],['Oct-23',2461.47],['Nov-23',712.58],['Dec-23',1295.21],['Jan-24',1877.81],['Feb-24',3643.18],['Mar-24',12815.17],['Apr-24',10181.92],['May-24',5402.41],['Jun-24',4127.19],['Jul-24',2498.64],['Aug-24',4212.55],['Sep-24',9249.03],['Oct-24',7709.85],['Nov-24',6813.29],['Dec-24',7266.93],['Jan-25',3059.91],['Feb-25',6153.66],['Mar-25',6053.66],['Apr-25',1877.62],['May-25',2680.38],['Jun-25',5706.43],['Jul-25',1639.16],['Aug-25',44099.17],['Sep-25',12037.66],['Oct-25',4764.44],['Nov-25',11264.44],['Dec-25',18841.19],['Jan-26',6436.35],['Feb-26',3477.65],['Mar-26',10366.91],['Apr-26',11284.31],['May-26',5940.42],['Jun-26',19099.43]];
 const avgP=monthly.reduce((s,m)=>s+m[1],0)/monthly.length;
-const bets=[{t:'14:30',match:'Arsenal vs Chelsea',mkt:'AGS',sel:'Saka',fair:3.45,bk:'Bet365',odds:4.00,ev:15.9,stake:50},{t:'14:30',match:'Arsenal vs Chelsea',mkt:'Header',sel:'Gabriel',fair:12.20,bk:'Betway',odds:15.00,ev:22.9,stake:30},{t:'16:00',match:'Man City vs Liverpool',mkt:'AGS',sel:'Haaland',fair:1.85,bk:'William Hill',odds:2.10,ev:13.5,stake:80},{t:'16:00',match:'Man City vs Liverpool',mkt:'First scorer',sel:'Salah',fair:8.40,bk:'Paddy Power',odds:10.00,ev:19.0,stake:40},{t:'16:00',match:'Man City vs Liverpool',mkt:'Header',sel:'Dias',fair:22.50,bk:'Unibet',odds:29.00,ev:28.9,stake:20},{t:'20:00',match:'Spurs vs Everton',mkt:'AGS',sel:'Son',fair:2.95,bk:'Betfair SB',odds:3.50,ev:18.6,stake:60}];
+const bets=[{t:'14:30',match:'Arsenal vs Chelsea',mkt:'AGS',sel:'Saka',fair:3.45,bk:'Bet365',odds:4.00,ev:15.9,stake:50},{t:'14:30',match:'Arsenal vs Chelsea',mkt:'Header',sel:'Gabriel',fair:12.20,bk:'BetWay',odds:15.00,ev:22.9,stake:30},{t:'16:00',match:'Man City vs Liverpool',mkt:'AGS',sel:'Haaland',fair:1.85,bk:'William Hill',odds:2.10,ev:13.5,stake:80},{t:'16:00',match:'Man City vs Liverpool',mkt:'First scorer',sel:'Salah',fair:8.40,bk:'Paddy Power',odds:10.00,ev:19.0,stake:40},{t:'16:00',match:'Man City vs Liverpool',mkt:'Header',sel:'Dias',fair:22.50,bk:'Unibet',odds:29.00,ev:28.9,stake:20},{t:'20:00',match:'Spurs vs Everton',mkt:'AGS',sel:'Son',fair:2.95,bk:'Betfair SB',odds:3.50,ev:18.6,stake:60}];
 
 // ── THEME ──
 // The data-theme attribute itself is already applied by the inline script in <head>,
@@ -4260,7 +4260,7 @@ const BOOKIE_ALIASES = {
 const OC_BOOKIE_NAMES = {
   B3:'Bet365', SK:'Sky Bet', WH:'William Hill', LD:'Ladbrokes', CE:'Coral', PP:'Paddy Power',
   BY:'BoyleSports', VC:'BetVictor', UN:'Unibet', FR:'Betfred', FB:'Betfred', EE:'888sport',
-  WA:'Betway', KN:'BetMGM', QN:'QuinnBet', OE:'10bet', S6:'Star Sports', PUP:'PricedUp',
+  WA:'BetWay', KN:'BetMGM', QN:'QuinnBet', OE:'10bet', S6:'Star Sports', PUP:'PricedUp',
   G5:'BetGoodwin', AKB:'AK Bets', BAH:'BetAhoy', BTT:'BetTom', IVB:'IvyBet', SI:'Sporting Index',
   SX:'Spreadex', BF:'Betfair', MA:'Matchbook', DZ:'DAZN Bet', KW:'Kwiff', NB:'NetBet',
   '32':'32Red', MK:'Midnite', FS:'FansBet', TF:'TheFA', RM:'MrQ', GB:'Grosvenor',
@@ -5077,7 +5077,7 @@ const PROFILES_LIST = [
 ];
 
 const BOOKIES_LIST = [
-  'PricedUp','StarSportsBet','Bet StGeorge','Bet365','SkyBet','PaddyPower','Betfair','Betfred','SportingBet','PlanetSportBet','DragonBet','BestOdds','NRGBet','Betway','888Sport','HotStreak','Midnite','NetBet','32Red','DaznBet','Fitzdares','Matchbook','Kwiff','MrQ','Lottoland','HighBet','ArrowBet','FairPlay','247Bet','DreamVegas','WilliamHill',
+  'PricedUp','StarSportsBet','Bet StGeorge','Bet365','SkyBet','PaddyPower','Betfair','Betfred','SportingBet','PlanetSportBet','DragonBet','BestOdds','NRGBet','BetWay','888Sport','HotStreak','Midnite','NetBet','32Red','DaznBet','Fitzdares','Matchbook','Kwiff','MrQ','Lottoland','HighBet','ArrowBet','FairPlay','247Bet','DreamVegas','WilliamHill',
 ];
 
 const STATUS_CONFIG = {
