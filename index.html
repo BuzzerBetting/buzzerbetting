@@ -4294,6 +4294,15 @@ function normalizeBookieInput(raw) {
   const known = [...new Set(LEDGER_ACCOUNTS.map(a => a.bookie))];
   const exact = known.find(b => b.toLowerCase() === cleaned);
   if (exact) return exact;
+  // Punctuation/whitespace-insensitive exact match before the loose substring fuzzy match below —
+  // catches "William Hill" (OC_BOOKIE_NAMES' display form, e.g. from "Log bet") against the
+  // ledger's own "WilliamHill" account tag, which the substring check below can't: neither
+  // string contains the other once there's a space in one and not the other. Confirmed live
+  // 2026-09-16 — Log bet on a WH row left "No live accounts for that bookie" in the dropdown.
+  const strip = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const strippedCleaned = strip(cleaned);
+  const strippedExact = known.find(b => strip(b) === strippedCleaned);
+  if (strippedExact) return strippedExact;
   const fuzzy = known.find(b => b.toLowerCase().includes(cleaned) || cleaned.includes(b.toLowerCase()));
   return fuzzy || null;
 }
@@ -9015,17 +9024,28 @@ function baTimeSortKey(bet,timeField,dateField){
   // kickoff order. Days-since-epoch*1440+minutes gives true chronological order with no
   // ambiguity at all once a date is present.
   const dateStr=bet&&bet[dateField||'d'];
+  let dayNum=null;
   if(dateStr){
     const d=new Date(dateStr+'T00:00:00');
-    if(!isNaN(d.getTime()))return Math.floor(d.getTime()/86400000)*1440+mins;
+    if(!isNaN(d.getTime()))dayNum=Math.floor(d.getTime()/86400000);
   }
-  // No date on this feed yet (e.g. betfair-horses.js's 12h race window bets) — fall back to
-  // the same "earlier in the clock than right now almost always means tomorrow" heuristic as
-  // before, with the same 60-minute buffer so a match that just kicked off doesn't get bumped.
-  const now=new Date();
-  const nowMins=now.getHours()*60+now.getMinutes();
-  if(mins<nowMins-60)mins+=1440;
-  return mins;
+  // No usable date on this row (e.g. betfair-horses.js's 12h race window bets, or a row a feed
+  // dropped the date on — confirmed live 2026-09-16: Ones to Watch's "Milan v Benfica" and
+  // "Sunderland v AZ Alkmaar" both came through with kickoffDate:null while every other row that
+  // same night had a real date) — assume today, bumped to tomorrow only when the clock time is
+  // already well in the past, same "earlier than now almost always means tomorrow" heuristic as
+  // before. Bug fixed 2026-09-16: this used to return a bare 0-1439 minutes value with no day
+  // component at all, which put every dateless row's sort key orders of magnitude below any
+  // dated row's days-since-epoch*1440+minutes value — a dateless 20:00 kickoff then sorted
+  // ahead of every dated 18:00 kickoff regardless of actual time, not just tied with same-clock
+  // rows. Scaling the fallback by day too keeps it correctly ordered against dated rows instead.
+  if(dayNum==null){
+    const now=new Date();
+    dayNum=Math.floor(now.getTime()/86400000);
+    const nowMins=now.getHours()*60+now.getMinutes();
+    if(mins<nowMins-60)dayNum+=1;
+  }
+  return dayNum*1440+mins;
 }
 
 // Shared 8-line clipboard format for every Bet Alerts tab's copy-bet button — one field per
@@ -14303,9 +14323,10 @@ function renderEVResults(bets) {
 // Methods (the bet type built specifically to receive these — see its BET_TYPE_CONFIG
 // comment: "the bets actually taken off the Calculated +EV page, so the columns mirror that
 // page's row"), opens the Add-bet form, and pre-fills every field the alert already knows:
-// Bookie, Match, Market, Selection, AGS/SOT fair, Fair odds and Back odds. Account ID and
-// Stake are deliberately left blank — those are the user's own decision, not something the
-// scan can know. Fair odds stays a normal editable input (bef-fair-odds), same as every other
+// Bookie, Match, Market, Selection and Fair odds. Account ID and Stake are deliberately left
+// blank — those are the user's own decision, not something the scan can know. AGS/SOT fair is
+// deliberately NOT pre-filled (2026-09-16, user-specified — not something worth recording per
+// bet). Fair odds stays a normal editable input (bef-fair-odds), same as every other
 // paired-odds bet type, so overwriting it if the price has since moved is just editing a field
 // like any other, not a separate "override" mechanism.
 function logCalcEvBetAsGoalSotMethods(betIdx) {
@@ -14324,7 +14345,6 @@ function logCalcEvBetAsGoalSotMethods(betIdx) {
   setVal('bef-Match', bet.match);
   setVal('bef-Market', bet.market);
   setVal('bef-Player', bet.player);
-  setVal('bef-AGS_SOT_Fair', bet.baseFair);
   setVal('bef-fair-odds', bet.bestFair);
   const oddsInput = document.querySelector('#bet-entry-legs .leg-odds');
   if (oddsInput) oddsInput.value = bet.ocOdds ?? '';
