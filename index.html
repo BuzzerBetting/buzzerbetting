@@ -14428,7 +14428,14 @@ async function fetchBfexOdds(home, away){
     bfexMatchOdds=Object.values(byName).map(e=>{
       const ags=deriveBfexFair(e.agsRunner);
       const sot=deriveBfexFair(e.sotRunner);
-      return {name:e.name, ags:ags.fair, agsConf:ags.confidence, sot:sot.fair, sotConf:sot.confidence};
+      // Raw best-back price too, kept alongside the derived fair regardless of confidence —
+      // getMixedPlayerOdds floors a BB fallback fair against this (see its own comment) since
+      // an unmatched/thin BFEX market's own live back price is still real, executable evidence
+      // even when deriveBfexFair itself discards it as too thin to trust as the primary source.
+      return {
+        name:e.name, ags:ags.fair, agsConf:ags.confidence, sot:sot.fair, sotConf:sot.confidence,
+        agsBack:e.agsRunner?.back?.[0]?.price ?? null, sotBack:e.sotRunner?.back?.[0]?.price ?? null,
+      };
     });
   }catch(e){}
 }
@@ -14475,13 +14482,22 @@ function getBfexPlayerOdds(playerName){ return findPlayerInOddsList(playerName, 
 function getMixedPlayerOdds(playerName){
   const bfex=getBfexPlayerOdds(playerName);
   const bb=getBBPlayerOdds(playerName);
-  const pick=(bfexVal,bfexConf,bbVal)=>{
-    if(bfexVal!=null&&(bfexConf==='green'||bfexConf==='yellow'))return{val:bfexVal,conf:bfexConf};
-    if(bbVal!=null)return{val:bbVal,conf:'red'};
-    return{val:null,conf:null};
+  const pick=(bfexVal,bfexConf,bbVal,bfexBack)=>{
+    let val,conf;
+    if(bfexVal!=null&&(bfexConf==='green'||bfexConf==='yellow')){val=bfexVal;conf=bfexConf;}
+    else if(bbVal!=null){val=bbVal;conf='red';}
+    else return{val:null,conf:null};
+    // A live BFEX back price is real, executable evidence of value regardless of which source
+    // won or whether BFEX cleared deriveBfexFair's liquidity/spread bar to be trusted as the
+    // primary source — no fair estimate should ever sit below a price that's actually there to
+    // back on the exchange right now (2026-09-16, user-reported: Koke's AGS fair came out below
+    // BFEX's own available back price, since nothing had traded yet to make BFEX confident
+    // enough to be used directly). Floors up only, never down.
+    if(bfexBack&&bfexBack>val)val=bfexBack;
+    return{val,conf};
   };
-  const ags=pick(bfex?.ags,bfex?.agsConf,bb?.ags);
-  const sot=pick(bfex?.sot,bfex?.sotConf,bb?.sot);
+  const ags=pick(bfex?.ags,bfex?.agsConf,bb?.ags,bfex?.agsBack);
+  const sot=pick(bfex?.sot,bfex?.sotConf,bb?.sot,bfex?.sotBack);
   if(ags.val==null&&sot.val==null)return null;
   return{ags:ags.val,agsConf:ags.conf,sot:sot.val,sotConf:sot.conf};
 }
