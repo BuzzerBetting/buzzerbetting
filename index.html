@@ -12359,13 +12359,15 @@ async function loadMatchBoosts(){
   }catch(e){ /* icon just won't show this pass — next poll tick retries */ }
 }
 
-// ── Bet365 SoT-method odds (staff/admin paste from Today's Matches). Oddschecker carries the
-// header/OTB *goal* markets already; the SoT-method ones (headed SOT, SOT outside the box)
-// are Bet365-only and hand-entered per match. MATCH_B365_SOT drives the "365" tick on the row;
-// the modal below files screenshots via /parse-bet365-sot -> /bet365-sot-odds and then kicks a
-// Ones-to-Watch rescan for that match.
+// ── Bet365 SoT-method odds (staff/admin/calculator paste from Today's Matches). Oddschecker
+// carries the header/OTB *goal* markets already; the SoT-method ones (headed SOT, SOT outside
+// the box) are Bet365-only and hand-entered per match. MATCH_B365_SOT drives the "365" tick on
+// the row; the modal below files screenshots via /parse-bet365-sot -> /bet365-sot-odds and then
+// kicks a Ones-to-Watch rescan for that match. Opened up to 'calculator' 2026-09-16 (previously
+// staff/admin only) — no server-side role check exists on the /bet365-sot-* routes either way
+// (see ledger-routes.js), this was purely a client-side UI gate.
 let MATCH_B365_SOT = {};     // match_id (string) -> { OTB_SOT:bool, HEADER_SOT:bool }
-function b365SotCanEdit(){ return CURRENT_USER_ROLE === 'admin' || CURRENT_USER_ROLE === 'staff'; }
+function b365SotCanEdit(){ return CURRENT_USER_ROLE === 'admin' || CURRENT_USER_ROLE === 'staff' || CURRENT_USER_ROLE === 'calculator'; }
 async function loadMatchB365Sot(){
   if (!b365SotCanEdit()) return;
   try{

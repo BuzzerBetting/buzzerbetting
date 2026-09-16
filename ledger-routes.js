@@ -3801,8 +3801,8 @@ router.get('/bet365-sot-status', (req, res) => {
 
 // POST /api/ledger/bet365-sot-odds  body: { matchId, market, players:[{player, odds}] }
 // Replace-upsert for that match+market: every existing row for (matchId, market) is cleared
-// and the supplied players inserted. An empty players array clears the market. Any logged-in
-// role (staff file these) — the calculator/freeze block above already keeps those roles out.
+// and the supplied players inserted. An empty players array clears the market. No server-side
+// role check — index.html's b365SotCanEdit() (staff/admin/calculator) is the only gate.
 router.post('/bet365-sot-odds', (req, res) => {
   try {
     const { matchId, market } = req.body || {};
