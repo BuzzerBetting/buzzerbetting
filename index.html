@@ -2590,6 +2590,20 @@ input::placeholder{color:var(--text3)}
     <div class="note"><i class="ti ti-info-circle"></i> Today's fixtures the Oddschecker scraper couldn't find a match page for — usually a team-name mismatch (e.g. Oddschecker abbreviating "Man City"). Every match here gets zero AGS/FGS/Cards/SOT/Header/OTB coverage all night; fix by adding the missing alias to oc_scraper_service.py's _TEAM_ALIASES.</div>
   </div>
 
+  <!-- panel: Outliers (2026-09-17, user-requested) — a single bookmaker's price that's >=50%
+       above the next-best price in its own AGS/FGS/Cards/SOT/Assist/Header/OTB ladder,
+       deliberately model-free (no BFEX/OC-devig/blend involved at all — see
+       scripts/oc_outliers_scan.py's own docstring for why), gated on at least 5 distinct
+       bookmakers quoting the selection. Informational, not an alert — no sound. -->
+  <div id="ba-panel-outliers" class="ba-panel" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      <div class="smeta" style="margin:0"><span class="pulse"></span><strong id="ba-outliers-count" style="color:var(--amber);font-weight:500">—</strong></div>
+      <button onclick="baRefreshActive(this)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+    </div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:820px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Top price</th><th class="r">Next best</th><th class="r">% above</th><th class="r">Books</th><th>Detected</th></tr></thead><tbody id="ba-outliers-body"></tbody></table></div></div>
+    <div class="note"><i class="ti ti-info-circle"></i> A bookmaker's own price that's at least 50% above the next-best price in the same market's ladder, with 5+ bookmakers quoting it — a raw ladder disagreement, not a fair-odds judgement. Often a stale/miskeyed price rather than real value; worth a manual check before backing it.</div>
+  </div>
+
   <!-- panel: Ones to Watch -->
   <div id="ba-panel-watch" class="ba-panel" style="display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
@@ -15340,6 +15354,7 @@ const BA_EDGES = [
   { key: 'dnf',     label: 'DNFs',            panel: 'ba-panel-dnf',      priced: true  },
   { key: 'errors',  label: 'Errors',          panel: 'ba-panel-errors',   priced: true  },
   { key: 'unmatched', label: 'OC Coverage',   panel: 'ba-panel-unmatched', priced: false },
+  { key: 'outliers', label: 'Outliers',       panel: 'ba-panel-outliers', priced: false },
 ];
 let BA_BOOKS = null;             // { canonicalBookie: bool } — null until first load (= all on)
 let BA_ACTIVE = (function(){ try { return localStorage.getItem('bb_betalert_tab') || 'oc-ev'; } catch(e) { return 'oc-ev'; } })();
@@ -15549,6 +15564,8 @@ function loadBaEdge(key, isPoll){
     loadBaErrors();
   } else if (key === 'unmatched') {
     loadBaUnmatched();
+  } else if (key === 'outliers') {
+    loadBaOutliers();
   } else {
     loadBaStubFeed(key);
   }
@@ -15871,6 +15888,49 @@ function renderBaUnmatched(){
   body.innerHTML = rows.map(r => `<tr style="background:var(--amber-bg)">
     <td style="font-size:12px;color:var(--text2);white-space:nowrap">${escapeHtml(r.kickoff || '')}</td>
     <td style="font-weight:500">${escapeHtml(r.match || '')}</td>
+    <td style="font-size:11.5px;color:var(--text3);white-space:nowrap">${fmtDetected(r.detectedAt)}</td>
+  </tr>`).join('');
+}
+
+// Outliers tab (2026-09-17, user-requested) — purely informational (no alert sound), same
+// on-demand-only loading as OC Coverage above. See oc_outliers_scan.py's own docstring: this
+// is a raw ladder-disagreement check, deliberately unrelated to any fair-odds model.
+let BA_OUTLIERS_ROWS = [];
+async function loadBaOutliers(){
+  let rows = [];
+  try {
+    const r = await fetch('/.netlify/functions/oc-outliers');
+    const d = await r.json();
+    if (d && d.ok && Array.isArray(d.rows)) rows = d.rows;
+  } catch(e) {}
+  BA_OUTLIERS_ROWS = rows;
+  baSetCount('outliers', rows.length);
+  renderBaOutliers();
+}
+function renderBaOutliers(){
+  const body = document.getElementById('ba-outliers-body');
+  const countEl = document.getElementById('ba-outliers-count');
+  if (!body) return;
+  const rows = BA_OUTLIERS_ROWS.slice().sort((x, y) => (y.pctAboveNext ?? 0) - (x.pctAboveNext ?? 0));
+  if (countEl) countEl.textContent = `${rows.length} outlier${rows.length === 1 ? '' : 's'}`;
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">No ladder outliers right now.</td></tr>`;
+    return;
+  }
+  const fmtDetected = iso => {
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+    catch(e) { return iso; }
+  };
+  body.innerHTML = rows.map(r => `<tr style="background:var(--amber-bg)">
+    <td style="font-size:12px;color:var(--text2);white-space:nowrap">${escapeHtml(r.kickoff || '')}</td>
+    <td style="font-size:12.5px">${escapeHtml(r.match || '')}</td>
+    <td style="font-size:12px;color:var(--text2)">${escapeHtml(r.market || '')}</td>
+    <td style="font-weight:500">${escapeHtml(r.selection || '')}</td>
+    <td class="r tn" style="font-weight:600;color:var(--green)">${r.topPrice != null ? Number(r.topPrice).toFixed(2) : '—'} <span style="color:var(--text3);font-size:11px">(${escapeHtml(ocBookieShort(r.topBook))})</span></td>
+    <td class="r tn" style="color:var(--text2)">${r.nextPrice != null ? Number(r.nextPrice).toFixed(2) : '—'} <span style="color:var(--text3);font-size:11px">(${escapeHtml(ocBookieShort(r.nextBook))})</span></td>
+    <td class="r"><span class="badge" style="background:var(--amber-bg);color:var(--amber)">+${r.pctAboveNext != null ? Number(r.pctAboveNext).toFixed(0) : '—'}%</span></td>
+    <td class="r tn" style="color:var(--text2)">${r.bookCount ?? '—'}</td>
     <td style="font-size:11.5px;color:var(--text3);white-space:nowrap">${fmtDetected(r.detectedAt)}</td>
   </tr>`).join('');
 }
