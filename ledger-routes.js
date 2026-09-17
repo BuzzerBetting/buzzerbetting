@@ -200,6 +200,78 @@ router.post('/strategy-prefs', (req, res) => {
   res.json({ ok: true });
 });
 
+// ================== OC LEARNED TEAM ALIASES (Bet Alerts "OC Coverage" tab) ==================
+// 2026-09-17, user-requested: "What if the user has an input box that they can paste the URL
+// for oddschecker for that game. You can then follow the URL, learn the team names and the
+// matching, and record it for future for those teams. After a few weeks in theory we
+// shouldnt have any matching problems." Oddschecker's own match-slug URL
+// (.../man-city-v-norwich) already carries its exact team-name spelling for that fixture, so
+// there's no need to fetch/render the page at all — just parse the slug straight out of the
+// URL and diff it against our own home/away names for that row (same normalization
+// oc_scraper_service._normalize_team_name applies: lowercase, hyphens -> spaces, diacritics
+// stripped). Any side that differs gets written into oc-scraper/data/oc_learned_aliases.json
+// (plain oc_name -> canonical_name JSON), which oc_scraper_service.py loads fresh at the top
+// of every pipeline cycle (a brand-new `python` process each time, see run_pipeline.sh) and
+// merges into its existing hardcoded _TEAM_ALIASES table — so once learned, EVERY future
+// fixture involving that team resolves, not just the one match the URL was pasted for.
+const OC_DATA_DIR = path.join(__dirname, 'oc-scraper', 'data');
+const OC_LEARNED_ALIASES_PATH = path.join(OC_DATA_DIR, 'oc_learned_aliases.json');
+
+function stripDiacritics(s) {
+  return String(s || '').normalize('NFKD').replace(/[̀-ͯ]/g, '');
+}
+function normalizeAliasTeamName(s) {
+  return stripDiacritics(s).toLowerCase().replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
+}
+// Scans every path segment for one that looks like "team-a-v-team-b" (Oddschecker's own
+// match-slug convention) rather than assuming it's the last segment — a pasted URL can carry
+// a trailing market slug too (.../man-city-v-norwich/first-goalscorer).
+function extractOcSlugTeams(urlStr) {
+  let u;
+  try { u = new URL(String(urlStr || '').trim()); } catch (e) { return null; }
+  if (!/(^|\.)oddschecker\.com$/i.test(u.hostname)) return null;
+  const segments = u.pathname.split('/').filter(Boolean);
+  for (const seg of segments) {
+    const m = seg.match(/^([a-z0-9-]+)-v-([a-z0-9-]+)$/i);
+    if (m) return { ocHome: normalizeAliasTeamName(m[1]), ocAway: normalizeAliasTeamName(m[2]) };
+  }
+  return null;
+}
+
+// POST /api/ledger/oc-learn-alias  body: { match: "Manchester City v Norwich City", url: "https://www.oddschecker.com/football/.../man-city-v-norwich" }
+router.post('/oc-learn-alias', (req, res) => {
+  const match = String((req.body && req.body.match) || '');
+  const url = (req.body && req.body.url) || '';
+  const parts = match.split(' v ');
+  if (parts.length !== 2) return res.status(400).json({ ok: false, error: 'Malformed match name.' });
+  const [ourHomeRaw, ourAwayRaw] = parts;
+
+  const slugTeams = extractOcSlugTeams(url);
+  if (!slugTeams) {
+    return res.status(400).json({ ok: false, error: "That doesn't look like a valid Oddschecker match URL (expected something like oddschecker.com/.../team-a-v-team-b)." });
+  }
+
+  const ourHome = normalizeAliasTeamName(ourHomeRaw);
+  const ourAway = normalizeAliasTeamName(ourAwayRaw);
+  const learned = {};
+  if (slugTeams.ocHome && slugTeams.ocHome !== ourHome) learned[slugTeams.ocHome] = ourHome;
+  if (slugTeams.ocAway && slugTeams.ocAway !== ourAway) learned[slugTeams.ocAway] = ourAway;
+
+  if (!Object.keys(learned).length) {
+    return res.json({ ok: true, learned: {}, note: 'Those names already matched exactly — nothing new to learn.' });
+  }
+
+  let existing = {};
+  try { existing = JSON.parse(fs.readFileSync(OC_LEARNED_ALIASES_PATH, 'utf8')) || {}; } catch (e) { existing = {}; }
+  Object.assign(existing, learned);
+  fs.mkdirSync(OC_DATA_DIR, { recursive: true });
+  const tmpPath = OC_LEARNED_ALIASES_PATH + '.tmp';
+  fs.writeFileSync(tmpPath, JSON.stringify(existing, null, 2));
+  fs.renameSync(tmpPath, OC_LEARNED_ALIASES_PATH);
+
+  res.json({ ok: true, learned });
+});
+
 // ================== FREEZE-ELIGIBLE LIST (VA-pasted Acca Freeze coupon) ==================
 // Single shared row (id=1), not per-user — see freeze_eligible_list in ledger-db.js and
 // freeze-eligible-parser.js. Whoever's logged in (freeze role included) can paste an update;
