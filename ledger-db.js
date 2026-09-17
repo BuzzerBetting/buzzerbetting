@@ -536,6 +536,18 @@ try { db.exec(`ALTER TABLE ones_to_watch ADD COLUMN bfex_matched REAL`); } catch
 // live 2026-09-15: Milan v Benfica tomorrow and Arsenal v Ipswich tonight both read "20:00").
 try { db.exec(`ALTER TABLE ones_to_watch ADD COLUMN kickoff_date TEXT`); } catch (e) { /* already exists */ }
 
+// The same row's fair odds recomputed under each of the OTHER two candidate sources
+// (fair_resolver.py's FairResolver.fair() now exposes all three side by side — BFEX-only,
+// the plain OC/BB blend, and the OC-ladder-case tiered safety margin on top of that blend —
+// instead of only ever returning whichever one the priority chain picked). `fair`/`base_fair`
+// above stay the OFFICIAL (BFEX-priority, unmargined) source that decides posting/tracking;
+// these three let the Bet Alerts "Fairs source" dropdown switch the DISPLAYED fair/EV for
+// Ones to Watch and Calculated +EV without a re-scan (2026-09-17). NULL wherever that row's
+// market never had a usable value for that particular source (e.g. no BFEX liquidity).
+try { db.exec(`ALTER TABLE ones_to_watch ADD COLUMN bfex_fair REAL`); } catch (e) { /* already exists */ }
+try { db.exec(`ALTER TABLE ones_to_watch ADD COLUMN oc_bb_blend_fair REAL`); } catch (e) { /* already exists */ }
+try { db.exec(`ALTER TABLE ones_to_watch ADD COLUMN oc_safety_margin_fair REAL`); } catch (e) { /* already exists */ }
+
 // BoyleSports player-prop odds (Shots Inside/Outside Box, SOT Right/Left/Header/Inside/Outside
 // Box, Goals Right/Left/Header/Inside(incl 6yd)/Outside) — scraped by a Tampermonkey userscript
 // run from the user's own real Chrome (server-side fetching is Cloudflare-Turnstile-blocked;

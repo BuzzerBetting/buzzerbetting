@@ -2456,6 +2456,11 @@ input::placeholder{color:var(--text3)}
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
       <div class="smeta" id="cev-smeta" style="display:none"><span class="pulse"></span><strong id="cev-smeta-count" style="color:var(--green);font-weight:500"></strong></div>
       <div style="display:flex;align-items:center;gap:14px;margin-left:auto">
+        <select class="fairs-source-select" onchange="onFairsSourceChange(this.value)" title="Which fair-odds source prices every row below — BFEX-only, the OC/BB blend, or that blend with the tiered safety margin on top. Posting/tracking always uses BFEX-priority regardless." style="background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:7px 10px;font-size:12.5px;font-family:inherit;cursor:pointer">
+          <option value="bfex">Fairs: BFEX</option>
+          <option value="margin">Fairs: OC Safety Margin</option>
+          <option value="blend">Fairs: OC/BB Blend</option>
+        </select>
         <div data-sort-group="calc-ev" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden">
           <button onclick="setBaSort('calc-ev','ev')" data-sort="ev" style="background:none;border:none;padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Best EV%</button>
           <button onclick="setBaSort('calc-ev','time')" data-sort="time" style="background:none;border:none;border-left:0.5px solid var(--border);padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Start time</button>
@@ -2574,6 +2579,11 @@ input::placeholder{color:var(--text3)}
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
       <div class="smeta" style="margin:0"><span class="pulse"></span><strong id="ba-watch-count" style="color:var(--green);font-weight:500">—</strong></div>
       <div style="display:flex;gap:8px">
+        <select class="fairs-source-select" onchange="onFairsSourceChange(this.value)" title="Which fair-odds source prices every row below — BFEX-only, the OC/BB blend, or that blend with the tiered safety margin on top. Posting/tracking always uses BFEX-priority regardless." style="background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:7px 10px;font-size:12.5px;font-family:inherit;cursor:pointer">
+          <option value="bfex">Fairs: BFEX</option>
+          <option value="margin">Fairs: OC Safety Margin</option>
+          <option value="blend">Fairs: OC/BB Blend</option>
+        </select>
         <div data-sort-group="watch" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden">
           <button onclick="setBaSort('watch','ev')" data-sort="ev" style="background:none;border:none;padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Best EV%</button>
           <button onclick="setBaSort('watch','time')" data-sort="time" style="background:none;border:none;border-left:0.5px solid var(--border);padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Start time</button>
@@ -14030,6 +14040,11 @@ async function scanAllCalcEV(statusEl, opts) {
       bestEv: b.ev, isConfident: b.conf === 'green', noCalc: false,
       boost: isBoost || !!b.boost, xg: b.xg, allOdds: b.allOdds,
       source: b.source, bfexMatched: b.matched,
+      // This bet's own fair recomputed under each candidate source (fair_resolver.py's
+      // FairResolver now exposes all three) — lets the Fairs source dropdown switch the
+      // displayed fair/EV without a re-scan. bestFair/bestEv above stay the OFFICIAL
+      // (BFEX-priority) values until the dropdown overrides them — see applyFairsSource().
+      bfexFair: b.bfexFair, ocBbBlendFair: b.ocBbBlendFair, ocSafetyMarginFair: b.ocSafetyMarginFair,
     }));
   };
   try { pushCalcFeed(rCalc, false); } catch(e) { console.warn('oc-calc-ev fetch failed:', e.message); }
@@ -14248,15 +14263,62 @@ function bookieLinesHtml(bet) { return bookieLinesHtmlGeneric(bet.bestFair, bet.
 // bookmaker); falls back to the plain single bookmaker name for every ordinary row, same as
 // bookieLinesHtml above.
 function ocBookieLinesHtml(b) { return bookieLinesHtmlGeneric(b.fair, b.bk, b.allOdds); }
+// Fairs source dropdown (Ones to Watch + Calculated +EV, 2026-09-17): fair_resolver.py's
+// FairResolver now exposes 3 candidate fairs side by side on every bet/row (bfexFair /
+// ocBbBlendFair / ocSafetyMarginFair) instead of only ever returning whichever one the
+// BFEX-priority chain picked. This lets staff pick a single consistent source to price the
+// WHOLE displayed table from, purely client-side over data already fetched — no re-scan.
+// Server-side posting/tracking is untouched by this: that still always uses the official
+// BFEX-priority chain, and the scan scripts still write `fair`/`ev` as that official value
+// regardless of what's selected here.
+// One shared value across both pages (not per-page) — "the selected one" the user asked for.
+function getFairsSource() {
+  try { return localStorage.getItem('bb_fairs_source') || 'blend'; } catch (e) { return 'blend'; }
+}
+function syncFairsSourceSelects() {
+  const v = getFairsSource();
+  document.querySelectorAll('.fairs-source-select').forEach(el => { el.value = v; });
+}
+function onFairsSourceChange(v) {
+  try { localStorage.setItem('bb_fairs_source', v); } catch (e) {}
+  syncFairsSourceSelects();
+  if (cevLastBets && cevLastBets.length) renderEVResults(cevLastBets);
+  if (typeof BA_WATCH_ROWS !== 'undefined' && BA_WATCH_ROWS.length) renderBaWatch();
+}
+function fairsSourceFairValue(obj, source) {
+  if (source === 'bfex') return obj.bfexFair;
+  if (source === 'margin') return obj.ocSafetyMarginFair;
+  return obj.ocBbBlendFair; // 'blend' — also the fallback for an unrecognised value
+}
+// Recomputes fair/EV for each bet off the currently-selected source, leaving everything else
+// (baseFair/source/conf — the ORIGINAL official BFEX-priority base price this was derived
+// from, kept as context regardless of which display source is picked) untouched. A row whose
+// selected source has no usable value (e.g. no BFEX liquidity at all) falls back to the same
+// "No calc" display the app already uses for markets with no fair-odds model — never hides
+// the row outright, since the bet is still real, just not priceable under that source.
+function applyFairsSource(list, source) {
+  return list.map(bet => {
+    if (bet.noCalc) return bet; // e.g. 6 Yard Box — never had a fair-odds model in the first place
+    const f = fairsSourceFairValue(bet, source);
+    if (f == null || !isFinite(f)) return Object.assign({}, bet, { bestFair: null, bestEv: null, noCalc: true });
+    const price = parseFloat(bet.ocOdds ?? bet.odds);
+    const ev = (isFinite(price) && price > 0) ? (price / f - 1) * 100 : null;
+    return Object.assign({}, bet, { bestFair: f, bestEv: ev, noCalc: ev == null });
+  });
+}
+
 function renderEVResults(bets) {
   const resultsEl = document.getElementById('cev-results');
   const tbody = document.getElementById('cev-tbody');
   tbody.innerHTML = '';
   syncBaSortToggle('calc-ev');
+  syncFairsSourceSelects();
 
-  // Bet Alerts bookmaker filter + daily-post reporting. cevLastBets keeps the *unfiltered*
-  // list so re-applying a more permissive filter can recover hidden rows without a re-scan.
+  // Bet Alerts bookmaker filter + daily-post reporting. cevLastBets keeps the *unfiltered,
+  // official-source* list so re-applying a more permissive filter, or switching the fairs
+  // source dropdown, can recover/recompute rows without a re-scan.
   cevLastBets = bets;
+  bets = applyFairsSource(bets, getFairsSource());
   if (typeof baBookEnabled === 'function') bets = bets.map(remapToAllowedBook).filter(Boolean);
   const cevSortMode = getBaSort('calc-ev');
   bets = bets.slice().sort((x, y) => cevSortMode === 'time'
@@ -15310,17 +15372,32 @@ async function loadBaWatch(){
   baReportSeen('watch', shown.map(r => ({ match: r.match, market: r.market, selection: r.selection, bk: r.bookie, odds: r.odds, ev: r.ev })));
   refreshBaWatchRemovedBadge();
 }
+// Same idea as applyFairsSource() for Calculated +EV, just against Ones to Watch's own row
+// shape (`fair`/`ev`/`odds`, not `bestFair`/`bestEv`/`ocOdds`) — see that function's docstring.
+function applyFairsSourceWatch(rows, source) {
+  return rows.map(r => {
+    const f = fairsSourceFairValue(r, source);
+    if (f == null || !isFinite(f)) return Object.assign({}, r, { fair: null, ev: null });
+    const price = parseFloat(r.odds);
+    const ev = (isFinite(price) && price > 0) ? (price / f - 1) * 100 : null;
+    return Object.assign({}, r, { fair: f, ev });
+  });
+}
+let BA_WATCH_RENDERED_ROWS = [];
 function renderBaWatch(){
   const body = document.getElementById('ba-watch-body');
   const countEl = document.getElementById('ba-watch-count');
   if (!body) return;
   syncBaSortToggle('watch');
-  const rows = BA_WATCH_ROWS.filter(r => baBookEnabled(r.bookie));
+  syncFairsSourceSelects();
+  let rows = BA_WATCH_ROWS.filter(r => baBookEnabled(r.bookie));
+  rows = applyFairsSourceWatch(rows, getFairsSource());
   const watchSortMode = getBaSort('watch');
   rows.sort((x, y) => watchSortMode === 'time'
     ? (baTimeSortKey(x,'kickoff','kickoffDate') - baTimeSortKey(y,'kickoff','kickoffDate'))
     : ((y.ev ?? -Infinity) - (x.ev ?? -Infinity)));
   if (countEl) countEl.textContent = `${rows.length} early value bet${rows.length === 1 ? '' : 's'}`;
+  BA_WATCH_RENDERED_ROWS = rows; // post-fairs-source-transform — copyBaWatchBet reads from here
   if (!rows.length) {
     body.innerHTML = `<tr><td colspan="12" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">Nothing on the watchlist right now — the pre-lineup scan runs each pipeline cycle.</td></tr>`;
     return;
@@ -15358,7 +15435,7 @@ function renderBaWatch(){
   }).join('');
 }
 function copyBaWatchBet(id,btn){
-  const r = BA_WATCH_ROWS.find(x => x.id === id);
+  const r = BA_WATCH_RENDERED_ROWS.find(x => x.id === id) || BA_WATCH_ROWS.find(x => x.id === id);
   if (!r) return;
   const fair = r.fair != null ? Number(r.fair).toFixed(2) : '—';
   const ev = (typeof r.ev === 'number') ? `${r.ev >= 0 ? '+' : ''}${r.ev.toFixed(2)}%` : '—';
