@@ -337,6 +337,23 @@ app.get('/api/bet-alert-errors', (req, res) => {
   }
 });
 
+// GET /api/oc-unmatched-matches — the Bet Alerts "OC Coverage" tab (2026-09-17,
+// user-requested): today's fixtures oc_scraper_service._resolve_oc_url couldn't find an
+// Oddschecker page for. Every one of these gets zero AGS/FGS/Cards/SOT/Header/OTB coverage
+// for the whole night, and previously the only trace was a WARNING log line nobody watched —
+// see oc_cache.store_oc_unmatched_matches's own docstring for the Man City v Norwich case
+// that prompted this. Same read-shape as /api/bet-alert-errors above.
+const OC_UNMATCHED_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'oc_unmatched_matches.json');
+app.get('/api/oc-unmatched-matches', (req, res) => {
+  if (!fs.existsSync(OC_UNMATCHED_PATH)) return res.json({ ok: true, updated: null, rows: [] });
+  try {
+    const payload = JSON.parse(fs.readFileSync(OC_UNMATCHED_PATH, 'utf8'));
+    res.json({ ok: true, updated: payload.updated || null, rows: payload.bets || [] });
+  } catch (e) {
+    res.json({ ok: false, error: 'Failed reading oc_unmatched_matches.json: ' + e.message });
+  }
+});
+
 // GET /api/oc-f1-ew, /api/oc-arbs, /api/oc-dnf — the new Bet Alerts edges (F1 Each-Way,
 // Arbs, DNFs). Same "just read whatever the scraper last wrote" contract as /api/oc-ev and
 // /api/oc-calc-ev above; the oc-scraper side that writes these JSON files doesn't exist yet,

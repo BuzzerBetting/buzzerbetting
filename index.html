@@ -2574,6 +2574,22 @@ input::placeholder{color:var(--text3)}
     <div class="note"><i class="ti ti-info-circle"></i> A bookmaker's own market that's still open — and still taking bets — more than a minute after its first leg's race has already gone off. This is a bookmaker-side bug signal, not a value signal: a bet lands here whether or not it was +EV. Sounds an alert the moment a new one appears, on any page.</div>
   </div>
 
+  <!-- panel: OC Coverage (2026-09-17, user-requested — "make me a list ... rather than just
+       ignoring it"). Today's fixtures oc_scraper_service._resolve_oc_url couldn't find an
+       Oddschecker page for this cycle — every one gets zero AGS/FGS/Cards/SOT/Header/OTB
+       coverage on Normal +EV / Calculated +EV for the whole night, and previously the only
+       trace was a WARNING log line nobody watched (found the Man City v Norwich case, see
+       oc_scraper_service._TEAM_ALIASES, only by manually chasing a specific missing bet).
+       Informational, not an alert — no sound, unlike Errors above. -->
+  <div id="ba-panel-unmatched" class="ba-panel" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      <div class="smeta" style="margin:0"><span class="pulse"></span><strong id="ba-unmatched-count" style="color:var(--amber);font-weight:500">—</strong></div>
+      <button onclick="baRefreshActive(this)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+    </div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:500px"><thead><tr><th>Kickoff</th><th>Match</th><th>Last checked</th></tr></thead><tbody id="ba-unmatched-body"></tbody></table></div></div>
+    <div class="note"><i class="ti ti-info-circle"></i> Today's fixtures the Oddschecker scraper couldn't find a match page for — usually a team-name mismatch (e.g. Oddschecker abbreviating "Man City"). Every match here gets zero AGS/FGS/Cards/SOT/Header/OTB coverage all night; fix by adding the missing alias to oc_scraper_service.py's _TEAM_ALIASES.</div>
+  </div>
+
   <!-- panel: Ones to Watch -->
   <div id="ba-panel-watch" class="ba-panel" style="display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
@@ -15205,6 +15221,7 @@ const BA_EDGES = [
   { key: 'arbs',    label: 'Arbs',            panel: 'ba-panel-arbs',     priced: true  },
   { key: 'dnf',     label: 'DNFs',            panel: 'ba-panel-dnf',      priced: true  },
   { key: 'errors',  label: 'Errors',          panel: 'ba-panel-errors',   priced: true  },
+  { key: 'unmatched', label: 'OC Coverage',   panel: 'ba-panel-unmatched', priced: false },
 ];
 let BA_BOOKS = null;             // { canonicalBookie: bool } — null until first load (= all on)
 let BA_ACTIVE = (function(){ try { return localStorage.getItem('bb_betalert_tab') || 'oc-ev'; } catch(e) { return 'oc-ev'; } })();
@@ -15412,6 +15429,8 @@ function loadBaEdge(key, isPoll){
     loadBaWatch();
   } else if (key === 'errors') {
     loadBaErrors();
+  } else if (key === 'unmatched') {
+    loadBaUnmatched();
   } else {
     loadBaStubFeed(key);
   }
@@ -15693,6 +15712,45 @@ function startBaErrorsPolling(){
   pollBaErrors();
   if (BA_ERRORS_POLL) clearInterval(BA_ERRORS_POLL);
   BA_ERRORS_POLL = setInterval(pollBaErrors, 60000);
+}
+
+// OC Coverage tab (2026-09-17) — purely informational (no alert sound, unlike Errors above):
+// today's fixtures the Oddschecker scraper couldn't find a match page for, so they got zero
+// AGS/FGS/Cards/SOT/Header/OTB coverage this cycle. Only loaded while the tab is open, same
+// as every other non-globally-polled edge (loadBaEdge's default branch) — not worth polling
+// from every page the way Errors is, since nothing here needs an immediate sound alert.
+let BA_UNMATCHED_ROWS = [];
+async function loadBaUnmatched(){
+  let rows = [];
+  try {
+    const r = await fetch('/.netlify/functions/oc-unmatched-matches');
+    const d = await r.json();
+    if (d && d.ok && Array.isArray(d.rows)) rows = d.rows;
+  } catch(e) {}
+  BA_UNMATCHED_ROWS = rows;
+  baSetCount('unmatched', rows.length);
+  renderBaUnmatched();
+}
+function renderBaUnmatched(){
+  const body = document.getElementById('ba-unmatched-body');
+  const countEl = document.getElementById('ba-unmatched-count');
+  if (!body) return;
+  const rows = BA_UNMATCHED_ROWS;
+  if (countEl) countEl.textContent = `${rows.length} unmatched fixture${rows.length === 1 ? '' : 's'}`;
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">Every fixture today matched up with Oddschecker.</td></tr>`;
+    return;
+  }
+  const fmtDetected = iso => {
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+    catch(e) { return iso; }
+  };
+  body.innerHTML = rows.map(r => `<tr style="background:var(--amber-bg)">
+    <td style="font-size:12px;color:var(--text2);white-space:nowrap">${escapeHtml(r.kickoff || '')}</td>
+    <td style="font-weight:500">${escapeHtml(r.match || '')}</td>
+    <td style="font-size:11.5px;color:var(--text3);white-space:nowrap">${fmtDetected(r.detectedAt)}</td>
+  </tr>`).join('');
 }
 
 // Called by renderOddscheckerEV / renderEVResults once they've built their (filtered) list.
