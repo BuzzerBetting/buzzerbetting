@@ -9113,25 +9113,37 @@ function renderOddscheckerEV(){
   }
 }
 
-// Every bookmaker's horse-double scan (pricedup/williamhill/paddypower/
-// planetsportbet_horse_ev_scan.py) independently resolves its own two legs against the same
-// BFEX race markets and prices the SAME real double whenever more than one bookmaker boosts
-// it the same day (2026-09-17, user-reported: the identical double posted twice, "6.0 on
-// willhill and 5.5 pricedup"). Each scan's raw `sel` text is in its OWN bookmaker's format
-// (different wording/leg order per site), so string-matching (mkt,sel) the way
-// merge_duplicate_bookmaker_rows already does server-side for boosts can't catch this — but
-// every horse-double scan now also stamps `legKey`, a sorted pair of the two legs' resolved
-// BFEX marketIds, which IS identical across bookmakers for the same real race pairing.
-// Collapse on that: keep the highest-EV bookmaker as the row shown, fold the rest into an
-// odds ladder (bookmaker name -> price) the same bookieLinesHtmlGeneric/ocBookieLinesHtml
-// already renders for merged boost rows, so every bookmaker still offering +EV on it surfaces.
+// Cross-feed duplicate merge for the Normal +EV table (2026-09-17). Every independent
+// single-bookmaker scan here (horse-double scans, PricedUp/StarSports/PlanetSportBet/
+// DragonBet's own football-boost scans, the main Oddschecker scan) can end up pricing the
+// SAME real bet the same night whenever more than one bookmaker happens to offer it, and
+// index.html's loadOddscheckerEV just concatenates every feed with no dedup at all — user-
+// reported twice in one session: a horse double posted as separate WH/PricedUp rows, then
+// "Jorgen Larsen FGS is on there twice, one at paddy at 4.5, and then LOWER DOWN at better ev
+// is 5.0 on pricedup". Horse doubles merge on `legKey` (a sorted pair of BFEX marketIds — the
+// raw `sel` text differs in wording per bookmaker's own format, so string-matching it can't
+// catch those). Everything else merges on plain (mkt,sel) — same convention
+// ev_engine.merge_duplicate_bookmaker_rows already uses server-side for boost rows, and safe
+// to reuse client-side now that football_boost_markets.py's AGS/FGS parsers emit the bare
+// player name as `sel` too (2026-09-17 fix — they used to emit the raw boost text, e.g.
+// "Jorgen Larsen To Score First", which never matched the main scan's bare "Jorgen Larsen").
+// Deliberately NOT keyed on `match` — PricedUp's own boost feeds carry their raw group_title
+// ("Crystal Palace v Lech Poznan Price Boosts") as `match`, not the canonical match name the
+// main scan uses, so requiring an exact match string would silently defeat this merge the
+// same way the sel-text mismatch did; (mkt,sel) alone is what the server-side precedent
+// already trusts as specific enough for one night's card.
+// Keeps the highest-EV bookmaker as the row shown, folds the rest into an odds ladder
+// (bookmaker name -> price) the same bookieLinesHtmlGeneric/ocBookieLinesHtml already renders
+// for merged boost rows, so every bookmaker still offering +EV on it surfaces.
 function mergeHorseDoubleDuplicates(bets){
   const groups=new Map();
   const out=[];
   for(const b of bets){
-    if(b.mkt!=='Horse Double'||!b.legKey){ out.push(b); continue; }
-    if(!groups.has(b.legKey))groups.set(b.legKey,[]);
-    groups.get(b.legKey).push(b);
+    const key = (b.mkt==='Horse Double' && b.legKey) ? ('leg:'+b.legKey)
+      : (b.sel ? ('sel:'+b.mkt+'|'+b.sel) : null);
+    if(!key){ out.push(b); continue; }
+    if(!groups.has(key))groups.set(key,[]);
+    groups.get(key).push(b);
   }
   groups.forEach(group=>{
     if(group.length===1){ out.push(group[0]); return; }
