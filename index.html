@@ -15908,11 +15908,6 @@ async function loadBaOutliers(){
     if (d && d.ok && Array.isArray(d.rows)) rows = d.rows;
   } catch(e) {}
   BA_OUTLIERS_ROWS = rows;
-  // The tab-bar's red count badge tracks CONFIRMED-lineup outliers only (2026-09-17,
-  // user-requested) — these are the immediately actionable ones (the player's definitely
-  // playing); a pre-lineup outlier could still evaporate on a squad change, so it shouldn't
-  // inflate the urgent-looking badge the same way.
-  baSetCount('outliers', rows.filter(r => r.lineupConfirmed).length);
   renderBaOutliers();
 }
 // Confirmed/pre-lineup sub-tab (2026-09-17, user-requested) — defaults to Confirmed every
@@ -15923,8 +15918,13 @@ function setOutliersSubtab(v){ BA_OUTLIERS_SUBTAB = v; renderBaOutliers(); }
 function renderBaOutliersSubtabs(){
   const el = document.getElementById('ba-outliers-subtabs');
   if (!el) return;
-  const confirmedN = BA_OUTLIERS_ROWS.filter(r => r.lineupConfirmed).length;
-  const preN = BA_OUTLIERS_ROWS.length - confirmedN;
+  // Same market filter the main list/count applies below (2026-09-17, user-reported —
+  // sub-tab badges were counting every market regardless of the tickboxes, so they didn't
+  // match the "N outliers" count once a market got unticked). Both now agree always.
+  const marketFilter = getOutliersMarketFilter();
+  const visible = BA_OUTLIERS_ROWS.filter(r => marketFilter.has(r.market));
+  const confirmedN = visible.filter(r => r.lineupConfirmed).length;
+  const preN = visible.length - confirmedN;
   const tabs = [
     { key: 'confirmed', label: 'Lineups Confirmed', n: confirmedN },
     { key: 'prelineup', label: 'Pre-lineup', n: preN },
@@ -15967,10 +15967,16 @@ function renderBaOutliers(){
   renderBaOutliersMarketCheckboxes();
   const marketFilter = getOutliersMarketFilter();
   const wantConfirmed = BA_OUTLIERS_SUBTAB === 'confirmed';
-  const rows = BA_OUTLIERS_ROWS
+  const visibleAnySubtab = BA_OUTLIERS_ROWS.filter(r => marketFilter.has(r.market));
+  const rows = visibleAnySubtab
     .filter(r => !!r.lineupConfirmed === wantConfirmed)
-    .filter(r => marketFilter.has(r.market))
     .sort((x, y) => (y.pctAboveNext ?? 0) - (x.pctAboveNext ?? 0));
+  // Tab-bar red badge (2026-09-17, user-reported — this used to be set once on load and
+  // never respected the market filter, so it could disagree with both the sub-tab counts and
+  // this panel's own "N outliers" line the moment a market got unticked). Recomputed on every
+  // render now, off the SAME market-filtered set as everything else here, so all three always
+  // agree. Confirmed-lineup only — see baSetCount's original comment for why.
+  baSetCount('outliers', visibleAnySubtab.filter(r => r.lineupConfirmed).length);
   if (countEl) countEl.textContent = `${rows.length} outlier${rows.length === 1 ? '' : 's'}`;
   if (!rows.length) {
     const subLabel = wantConfirmed ? 'lineups-confirmed' : 'pre-lineup';
