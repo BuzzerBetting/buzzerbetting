@@ -9113,6 +9113,35 @@ function renderOddscheckerEV(){
   }
 }
 
+// Every bookmaker's horse-double scan (pricedup/williamhill/paddypower/
+// planetsportbet_horse_ev_scan.py) independently resolves its own two legs against the same
+// BFEX race markets and prices the SAME real double whenever more than one bookmaker boosts
+// it the same day (2026-09-17, user-reported: the identical double posted twice, "6.0 on
+// willhill and 5.5 pricedup"). Each scan's raw `sel` text is in its OWN bookmaker's format
+// (different wording/leg order per site), so string-matching (mkt,sel) the way
+// merge_duplicate_bookmaker_rows already does server-side for boosts can't catch this — but
+// every horse-double scan now also stamps `legKey`, a sorted pair of the two legs' resolved
+// BFEX marketIds, which IS identical across bookmakers for the same real race pairing.
+// Collapse on that: keep the highest-EV bookmaker as the row shown, fold the rest into an
+// odds ladder (bookmaker name -> price) the same bookieLinesHtmlGeneric/ocBookieLinesHtml
+// already renders for merged boost rows, so every bookmaker still offering +EV on it surfaces.
+function mergeHorseDoubleDuplicates(bets){
+  const groups=new Map();
+  const out=[];
+  for(const b of bets){
+    if(b.mkt!=='Horse Double'||!b.legKey){ out.push(b); continue; }
+    if(!groups.has(b.legKey))groups.set(b.legKey,[]);
+    groups.get(b.legKey).push(b);
+  }
+  groups.forEach(group=>{
+    if(group.length===1){ out.push(group[0]); return; }
+    const best=group.slice().sort((x,y)=>(y.ev??-Infinity)-(x.ev??-Infinity))[0];
+    const allOdds=Object.assign({},best.allOdds||{});
+    for(const b of group) if(b.bk&&typeof b.odds==='number') allOdds[b.bk]=b.odds;
+    out.push(Object.assign({},best,{allOdds}));
+  });
+  return out;
+}
 async function loadOddscheckerEV(){
   try{
     // Regular OC scan + Oddschecker Price Boosts +EV + PricedUp horse-racing Enhanced-Double
@@ -9140,6 +9169,7 @@ async function loadOddscheckerEV(){
       const dd=(res.status==='fulfilled'&&res.value&&res.value.ok)?res.value:null;
       if(dd&&Array.isArray(dd.bets))ocEvBets=ocEvBets.concat(dd.bets);
     });
+    ocEvBets=mergeHorseDoubleDuplicates(ocEvBets);
     ocEvLastUpdated=d.updated||ocEvLastUpdated;
     const countEl=document.getElementById('oc-ev-smeta-count');
     const refEl=document.getElementById('oc-ev-smeta-refreshed');
