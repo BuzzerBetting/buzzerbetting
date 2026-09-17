@@ -2594,12 +2594,15 @@ input::placeholder{color:var(--text3)}
        above the next-best price in its own AGS/FGS/Cards/SOT/Assist/Header/OTB ladder,
        deliberately model-free (no BFEX/OC-devig/blend involved at all — see
        scripts/oc_outliers_scan.py's own docstring for why), gated on at least 5 distinct
-       bookmakers quoting the selection. Informational, not an alert — no sound. -->
+       bookmakers quoting the selection. Split into Lineups Confirmed / Pre-lineup sub-tabs
+       (Confirmed shown by default — the tab-bar's red count badge tracks Confirmed only, the
+       immediately actionable ones). Informational, not an alert — no sound. -->
   <div id="ba-panel-outliers" class="ba-panel" style="display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
       <div class="smeta" style="margin:0"><span class="pulse"></span><strong id="ba-outliers-count" style="color:var(--amber);font-weight:500">—</strong></div>
       <button onclick="baRefreshActive(this)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
     </div>
+    <div id="ba-outliers-subtabs" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;width:fit-content;margin-bottom:10px"></div>
     <div id="ba-outliers-markets" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-bottom:10px;font-size:12.5px;color:var(--text2)"></div>
     <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:820px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Top price</th><th class="r">Next best</th><th class="r">% above</th><th class="r">Books</th><th>Detected</th></tr></thead><tbody id="ba-outliers-body"></tbody></table></div></div>
     <div class="note"><i class="ti ti-info-circle"></i> A bookmaker's own price that's at least 50% above the next-best price in the same market's ladder, with 5+ bookmakers quoting it — a raw ladder disagreement, not a fair-odds judgement. Often a stale/miskeyed price rather than real value; worth a manual check before backing it.</div>
@@ -15905,8 +15908,31 @@ async function loadBaOutliers(){
     if (d && d.ok && Array.isArray(d.rows)) rows = d.rows;
   } catch(e) {}
   BA_OUTLIERS_ROWS = rows;
-  baSetCount('outliers', rows.length);
+  // The tab-bar's red count badge tracks CONFIRMED-lineup outliers only (2026-09-17,
+  // user-requested) — these are the immediately actionable ones (the player's definitely
+  // playing); a pre-lineup outlier could still evaporate on a squad change, so it shouldn't
+  // inflate the urgent-looking badge the same way.
+  baSetCount('outliers', rows.filter(r => r.lineupConfirmed).length);
   renderBaOutliers();
+}
+// Confirmed/pre-lineup sub-tab (2026-09-17, user-requested) — defaults to Confirmed every
+// time the tab is opened ("shown automatically"), not persisted like the market filter, since
+// the confirmed view is the one meant to be the obvious landing state.
+let BA_OUTLIERS_SUBTAB = 'confirmed';
+function setOutliersSubtab(v){ BA_OUTLIERS_SUBTAB = v; renderBaOutliers(); }
+function renderBaOutliersSubtabs(){
+  const el = document.getElementById('ba-outliers-subtabs');
+  if (!el) return;
+  const confirmedN = BA_OUTLIERS_ROWS.filter(r => r.lineupConfirmed).length;
+  const preN = BA_OUTLIERS_ROWS.length - confirmedN;
+  const tabs = [
+    { key: 'confirmed', label: 'Lineups Confirmed', n: confirmedN },
+    { key: 'prelineup', label: 'Pre-lineup', n: preN },
+  ];
+  el.innerHTML = tabs.map(t => {
+    const active = BA_OUTLIERS_SUBTAB === t.key;
+    return `<button onclick="setOutliersSubtab('${t.key}')" style="background:${active ? 'var(--brand)' : 'none'};border:none;padding:7px 14px;font-size:12.5px;font-weight:${active ? '600' : '400'};color:${active ? '#fff' : 'var(--text2)'};cursor:pointer;font-family:inherit;white-space:nowrap">${escapeHtml(t.label)} (${t.n})</button>`;
+  }).join('');
 }
 // Market tickboxes (2026-09-17, user-requested) — matches oc_outliers_scan.py's own
 // MARKET_LABELS values exactly. Persisted so the filter sticks across visits; defaults to
@@ -15937,14 +15963,20 @@ function renderBaOutliers(){
   const body = document.getElementById('ba-outliers-body');
   const countEl = document.getElementById('ba-outliers-count');
   if (!body) return;
+  renderBaOutliersSubtabs();
   renderBaOutliersMarketCheckboxes();
   const marketFilter = getOutliersMarketFilter();
+  const wantConfirmed = BA_OUTLIERS_SUBTAB === 'confirmed';
   const rows = BA_OUTLIERS_ROWS
+    .filter(r => !!r.lineupConfirmed === wantConfirmed)
     .filter(r => marketFilter.has(r.market))
     .sort((x, y) => (y.pctAboveNext ?? 0) - (x.pctAboveNext ?? 0));
   if (countEl) countEl.textContent = `${rows.length} outlier${rows.length === 1 ? '' : 's'}`;
   if (!rows.length) {
-    const msg = BA_OUTLIERS_ROWS.length ? 'No outliers in the selected markets right now.' : 'No ladder outliers right now.';
+    const subLabel = wantConfirmed ? 'lineups-confirmed' : 'pre-lineup';
+    const msg = BA_OUTLIERS_ROWS.some(r => !!r.lineupConfirmed === wantConfirmed)
+      ? `No ${subLabel} outliers in the selected markets right now.`
+      : `No ${subLabel} outliers right now.`;
     body.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">${msg}</td></tr>`;
     return;
   }
