@@ -548,6 +548,16 @@ try { db.exec(`ALTER TABLE ones_to_watch ADD COLUMN bfex_fair REAL`); } catch (e
 try { db.exec(`ALTER TABLE ones_to_watch ADD COLUMN oc_bb_blend_fair REAL`); } catch (e) { /* already exists */ }
 try { db.exec(`ALTER TABLE ones_to_watch ADD COLUMN oc_safety_margin_fair REAL`); } catch (e) { /* already exists */ }
 
+// Same idea, but for the BASE market (AGS/SOT-1+) that `base_fair`/`source` above are derived
+// from, not the row's own final market — the Bet Alerts table's "Source Fair" column shows
+// base_fair (tagged with `source`), separately from the main "Fair" column above. Without
+// these, switching the Fairs source dropdown moved the main Fair column but left Source Fair
+// pinned to the official value always (2026-09-17, user-reported — "why is the source fair not
+// changing when I select safety margin instead of oc/bb blend").
+try { db.exec(`ALTER TABLE ones_to_watch ADD COLUMN base_bfex_fair REAL`); } catch (e) { /* already exists */ }
+try { db.exec(`ALTER TABLE ones_to_watch ADD COLUMN base_oc_bb_blend_fair REAL`); } catch (e) { /* already exists */ }
+try { db.exec(`ALTER TABLE ones_to_watch ADD COLUMN base_oc_safety_margin_fair REAL`); } catch (e) { /* already exists */ }
+
 // BoyleSports player-prop odds (Shots Inside/Outside Box, SOT Right/Left/Header/Inside/Outside
 // Box, Goals Right/Left/Header/Inside(incl 6yd)/Outside) — scraped by a Tampermonkey userscript
 // run from the user's own real Chrome (server-side fetching is Cloudflare-Turnstile-blocked;

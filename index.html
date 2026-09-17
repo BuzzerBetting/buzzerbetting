@@ -14045,6 +14045,10 @@ async function scanAllCalcEV(statusEl, opts) {
       // displayed fair/EV without a re-scan. bestFair/bestEv above stay the OFFICIAL
       // (BFEX-priority) values until the dropdown overrides them — see applyFairsSource().
       bfexFair: b.bfexFair, ocBbBlendFair: b.ocBbBlendFair, ocSafetyMarginFair: b.ocSafetyMarginFair,
+      // The BASE (AGS/SOT-1+) market's OWN 3-way split (2026-09-17) — lets the Source Fair
+      // column (baseFair, shown separately from the main Fair column) switch with the
+      // dropdown too, instead of always sitting on the official BFEX-priority base value.
+      baseBfexFair: b.baseBfexFair, baseOcBbBlendFair: b.baseOcBbBlendFair, baseOcSafetyMarginFair: b.baseOcSafetyMarginFair,
     }));
   };
   try { pushCalcFeed(rCalc, false); } catch(e) { console.warn('oc-calc-ev fetch failed:', e.message); }
@@ -14290,12 +14294,25 @@ function fairsSourceFairValue(obj, source) {
   if (source === 'margin') return obj.ocSafetyMarginFair;
   return obj.ocBbBlendFair; // 'blend' — also the fallback for an unrecognised value
 }
-// Recomputes fair/EV for each bet off the currently-selected source, leaving everything else
-// (baseFair/source/conf — the ORIGINAL official BFEX-priority base price this was derived
-// from, kept as context regardless of which display source is picked) untouched. A row whose
-// selected source has no usable value (e.g. no BFEX liquidity at all) falls back to the same
-// "No calc" display the app already uses for markets with no fair-odds model — never hides
-// the row outright, since the bet is still real, just not priceable under that source.
+// Same idea, against the BASE (AGS/SOT-1+) market's own 3-way split rather than the derived
+// market's — see baseBfexFair/baseOcBbBlendFair/baseOcSafetyMarginFair (ev_engine.py /
+// ones_to_watch_scan.py, 2026-09-17). Drives the "Source Fair" column specifically.
+function baseFairsSourceValue(obj, source) {
+  if (source === 'bfex') return obj.baseBfexFair;
+  if (source === 'margin') return obj.baseOcSafetyMarginFair;
+  return obj.baseOcBbBlendFair;
+}
+const FAIRS_SOURCE_LABEL = { bfex: 'BFEX', margin: 'OC Margin', blend: 'OC/BB' };
+// Recomputes fair/EV for each bet off the currently-selected source, AND the Source Fair
+// column's own baseFair (2026-09-17 — previously that stayed pinned to the original official
+// BFEX-priority base price no matter what was selected, which looked like the dropdown wasn't
+// doing anything when a user was actually watching that column rather than the main Fair one).
+// `source`/`conf` are left untouched — those still describe the ORIGINAL official derivation,
+// only used for gating/posting context elsewhere, never rendered as the Source Fair tag
+// anymore (renderEVResults derives that tag from the live dropdown selection instead). A row
+// whose selected source has no usable value (e.g. no BFEX liquidity at all) falls back to the
+// same "No calc" display the app already uses for markets with no fair-odds model — never
+// hides the row outright, since the bet is still real, just not priceable under that source.
 function applyFairsSource(list, source) {
   return list.map(bet => {
     if (bet.noCalc) return bet; // e.g. 6 Yard Box — never had a fair-odds model in the first place
@@ -14303,7 +14320,8 @@ function applyFairsSource(list, source) {
     if (f == null || !isFinite(f)) return Object.assign({}, bet, { bestFair: null, bestEv: null, noCalc: true });
     const price = parseFloat(bet.ocOdds ?? bet.odds);
     const ev = (isFinite(price) && price > 0) ? (price / f - 1) * 100 : null;
-    return Object.assign({}, bet, { bestFair: f, bestEv: ev, noCalc: ev == null });
+    const baseF = baseFairsSourceValue(bet, source);
+    return Object.assign({}, bet, { bestFair: f, bestEv: ev, noCalc: ev == null, baseFair: (baseF != null && isFinite(baseF)) ? baseF : bet.baseFair });
   });
 }
 
@@ -14349,13 +14367,13 @@ function renderEVResults(bets) {
     const evCopyLabel = bet.noCalc ? '—' : `+${ev.toFixed(2)}%`;
     const boostIcon = bet.boost ? '<span class="boost-icon" title="Oddschecker Price Boost" style="margin-right:6px;vertical-align:middle">B</span>' : '';
 
-    // Which source actually produced the AGS/SOT fair (fair_resolver.py's priority chain —
-    // direct BFEX exchange market, else the OC/BB devig+stats blend) — shown bracketed right
-    // next to the AGS/SOT fair value itself (same pattern Normal +EV's fairCell already uses),
-    // and how much has traded on that player's BFEX market regardless of which source won — a
-    // player still sat at £0 needs far more scepticism/attention than one at £950 that just
-    // missed the spread/size bar. See fair_resolver.py's bfexMatched docstring (2026-09-14).
-    const sourceLabel = bet.source === 'combo' ? 'OC/BB' : (bet.source === 'bfex' ? 'BFEX' : '');
+    // Which source is CURRENTLY driving the AGS/SOT base fair shown here — shown bracketed
+    // right next to the value itself (same pattern Normal +EV's fairCell already uses). This
+    // used to always show the original official priority-chain pick (bet.source) regardless of
+    // the Fairs source dropdown, which is why switching it looked like a no-op if you were
+    // watching this column rather than the main Fair one (2026-09-17, user-reported). Now it
+    // tracks the live dropdown selection, same as the baseFair value itself does.
+    const sourceLabel = baseFairLabel !== '—' ? (FAIRS_SOURCE_LABEL[getFairsSource()] || FAIRS_SOURCE_LABEL.blend) : '';
     const baseFairCell = sourceLabel
       ? `${baseFairLabel} <span style="color:var(--text3);font-size:11px">(${sourceLabel})</span>`
       : baseFairLabel;
@@ -15373,14 +15391,16 @@ async function loadBaWatch(){
   refreshBaWatchRemovedBadge();
 }
 // Same idea as applyFairsSource() for Calculated +EV, just against Ones to Watch's own row
-// shape (`fair`/`ev`/`odds`, not `bestFair`/`bestEv`/`ocOdds`) — see that function's docstring.
+// shape (`fair`/`ev`/`odds`, not `bestFair`/`bestEv`/`ocOdds`) — see that function's docstring,
+// including recomputing `baseFair` (the Source Fair column) off the same selected source.
 function applyFairsSourceWatch(rows, source) {
   return rows.map(r => {
     const f = fairsSourceFairValue(r, source);
     if (f == null || !isFinite(f)) return Object.assign({}, r, { fair: null, ev: null });
     const price = parseFloat(r.odds);
     const ev = (isFinite(price) && price > 0) ? (price / f - 1) * 100 : null;
-    return Object.assign({}, r, { fair: f, ev });
+    const baseF = baseFairsSourceValue(r, source);
+    return Object.assign({}, r, { fair: f, ev, baseFair: (baseF != null && isFinite(baseF)) ? baseF : r.baseFair });
   });
 }
 let BA_WATCH_RENDERED_ROWS = [];

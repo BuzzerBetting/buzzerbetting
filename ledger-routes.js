@@ -3931,7 +3931,7 @@ const OTW_TRIGGER_DIR = path.join(__dirname, 'oc-scraper', 'data', 'otw_triggers
 router.get('/ones-to-watch', (req, res) => {
   try {
     const rows = db.prepare(
-      `SELECT id, match_id AS matchId, match, kickoff, kickoff_date AS kickoffDate, market, selection, fair, base_fair AS baseFair, conf, bookie, odds, ev, source, bfex_lpm AS bfexLpm, bfex_matched AS bfexMatched, bfex_fair AS bfexFair, oc_bb_blend_fair AS ocBbBlendFair, oc_safety_margin_fair AS ocSafetyMarginFair, state
+      `SELECT id, match_id AS matchId, match, kickoff, kickoff_date AS kickoffDate, market, selection, fair, base_fair AS baseFair, conf, bookie, odds, ev, source, bfex_lpm AS bfexLpm, bfex_matched AS bfexMatched, bfex_fair AS bfexFair, oc_bb_blend_fair AS ocBbBlendFair, oc_safety_margin_fair AS ocSafetyMarginFair, base_bfex_fair AS baseBfexFair, base_oc_bb_blend_fair AS baseOcBbBlendFair, base_oc_safety_margin_fair AS baseOcSafetyMarginFair, state
          FROM ones_to_watch
         WHERE state != 'removed'
         ORDER BY (state = 'ticked') DESC, ev DESC`
@@ -3947,7 +3947,7 @@ router.get('/ones-to-watch', (req, res) => {
 router.get('/ones-to-watch/removed', (req, res) => {
   try {
     const rows = db.prepare(
-      `SELECT id, match_id AS matchId, match, kickoff, kickoff_date AS kickoffDate, market, selection, fair, base_fair AS baseFair, conf, bookie, odds, ev, source, bfex_lpm AS bfexLpm, bfex_matched AS bfexMatched, bfex_fair AS bfexFair, oc_bb_blend_fair AS ocBbBlendFair, oc_safety_margin_fair AS ocSafetyMarginFair, state, updated_at AS removedAt
+      `SELECT id, match_id AS matchId, match, kickoff, kickoff_date AS kickoffDate, market, selection, fair, base_fair AS baseFair, conf, bookie, odds, ev, source, bfex_lpm AS bfexLpm, bfex_matched AS bfexMatched, bfex_fair AS bfexFair, oc_bb_blend_fair AS ocBbBlendFair, oc_safety_margin_fair AS ocSafetyMarginFair, base_bfex_fair AS baseBfexFair, base_oc_bb_blend_fair AS baseOcBbBlendFair, base_oc_safety_margin_fair AS baseOcSafetyMarginFair, state, updated_at AS removedAt
          FROM ones_to_watch
         WHERE state = 'removed'
         ORDER BY updated_at DESC`
@@ -3976,8 +3976,8 @@ router.post('/ones-to-watch/ingest', (req, res) => {
     const tx = db.transaction(() => {
       db.prepare(`DELETE FROM ones_to_watch WHERE match_id = ? AND state = 'pending'`).run(mid);
       const ins = db.prepare(
-        `INSERT INTO ones_to_watch (match_id, match, kickoff, kickoff_date, market, selection, fair, base_fair, conf, bookie, odds, ev, source, bfex_lpm, bfex_matched, bfex_fair, oc_bb_blend_fair, oc_safety_margin_fair, state, created_at, updated_at)
-         VALUES (@match_id, @match, @kickoff, @kickoff_date, @market, @selection, @fair, @base_fair, @conf, @bookie, @odds, @ev, @source, @bfex_lpm, @bfex_matched, @bfex_fair, @oc_bb_blend_fair, @oc_safety_margin_fair, 'pending', @now, @now)
+        `INSERT INTO ones_to_watch (match_id, match, kickoff, kickoff_date, market, selection, fair, base_fair, conf, bookie, odds, ev, source, bfex_lpm, bfex_matched, bfex_fair, oc_bb_blend_fair, oc_safety_margin_fair, base_bfex_fair, base_oc_bb_blend_fair, base_oc_safety_margin_fair, state, created_at, updated_at)
+         VALUES (@match_id, @match, @kickoff, @kickoff_date, @market, @selection, @fair, @base_fair, @conf, @bookie, @odds, @ev, @source, @bfex_lpm, @bfex_matched, @bfex_fair, @oc_bb_blend_fair, @oc_safety_margin_fair, @base_bfex_fair, @base_oc_bb_blend_fair, @base_oc_safety_margin_fair, 'pending', @now, @now)
          ON CONFLICT(match_id, market, selection) DO NOTHING`   // a ticked row already holds this key — keep it
       );
       for (const r of incoming) {
@@ -4001,6 +4001,9 @@ router.post('/ones-to-watch/ingest', (req, res) => {
           bfex_fair: r.bfexFair != null ? Number(r.bfexFair) : null,
           oc_bb_blend_fair: r.ocBbBlendFair != null ? Number(r.ocBbBlendFair) : null,
           oc_safety_margin_fair: r.ocSafetyMarginFair != null ? Number(r.ocSafetyMarginFair) : null,
+          base_bfex_fair: r.baseBfexFair != null ? Number(r.baseBfexFair) : null,
+          base_oc_bb_blend_fair: r.baseOcBbBlendFair != null ? Number(r.baseOcBbBlendFair) : null,
+          base_oc_safety_margin_fair: r.baseOcSafetyMarginFair != null ? Number(r.baseOcSafetyMarginFair) : null,
           now,
         });
       }
