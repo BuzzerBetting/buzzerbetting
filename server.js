@@ -264,6 +264,22 @@ app.get('/api/planetsportbet-acca-ev', (req, res) => {
   }
 });
 
+// GET /api/williamhill-acca-ev — William Hill's own simple win-accas, written by oc-scraper's
+// williamhill_acca_ev_scan.py: same principle as /api/starsports-acca-ev above, each team's own
+// BFEX MATCH_ODDS fair odds multiplied together, compared against William Hill's own boosted
+// price. Unlike the other acca feeds this one needs no Tampermonkey userscript — pulled
+// straight from WH's own public search API. Merged into the same "Normal +EV" table client-side.
+const WILLIAMHILL_ACCA_EV_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'williamhill_acca_ev_bets.json');
+app.get('/api/williamhill-acca-ev', (req, res) => {
+  if (!fs.existsSync(WILLIAMHILL_ACCA_EV_PATH)) return res.json({ ok: true, updated: null, bets: [] });
+  try {
+    const payload = JSON.parse(fs.readFileSync(WILLIAMHILL_ACCA_EV_PATH, 'utf8'));
+    res.json({ ok: true, updated: payload.updated || null, bets: payload.bets || [] });
+  } catch (e) {
+    res.json({ ok: false, error: 'Failed reading williamhill_acca_ev_bets.json: ' + e.message });
+  }
+});
+
 // GET /api/planetsportbet-horse-ev — PlanetSportBet jockey "Enhanced Double" horse racing +EV
 // bets, written by oc-scraper's planetsportbet_horse_ev_scan.py: each leg's own BFEX WIN-market
 // fair odds multiplied together, compared against PlanetSportBet's own boosted price — resolved
