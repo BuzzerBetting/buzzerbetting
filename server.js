@@ -280,6 +280,22 @@ app.get('/api/williamhill-acca-ev', (req, res) => {
   }
 });
 
+// GET /api/williamhill-tennis-acca-ev — William Hill's own tennis win-accas, written by
+// oc-scraper's williamhill_tennis_acca_ev_scan.py: same principle as /api/williamhill-acca-ev
+// above, each player's own BFEX MATCH_ODDS fair odds (Betfair's Tennis event type, via
+// action=player-win) multiplied together, compared against William Hill's own boosted price.
+// Merged into the same "Normal +EV" table client-side.
+const WILLIAMHILL_TENNIS_ACCA_EV_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'williamhill_tennis_acca_ev_bets.json');
+app.get('/api/williamhill-tennis-acca-ev', (req, res) => {
+  if (!fs.existsSync(WILLIAMHILL_TENNIS_ACCA_EV_PATH)) return res.json({ ok: true, updated: null, bets: [] });
+  try {
+    const payload = JSON.parse(fs.readFileSync(WILLIAMHILL_TENNIS_ACCA_EV_PATH, 'utf8'));
+    res.json({ ok: true, updated: payload.updated || null, bets: payload.bets || [] });
+  } catch (e) {
+    res.json({ ok: false, error: 'Failed reading williamhill_tennis_acca_ev_bets.json: ' + e.message });
+  }
+});
+
 // GET /api/planetsportbet-horse-ev — PlanetSportBet jockey "Enhanced Double" horse racing +EV
 // bets, written by oc-scraper's planetsportbet_horse_ev_scan.py: each leg's own BFEX WIN-market
 // fair odds multiplied together, compared against PlanetSportBet's own boosted price — resolved

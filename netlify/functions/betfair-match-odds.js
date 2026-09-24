@@ -14,6 +14,12 @@
 //   actual fair odds from that (bfex_fair.derive_bfex_fair) is left to the Python caller,
 //   same split as betfair-dogs.js/betfair-horses.js.
 //
+// action=player-win&team=<name>: 2026-09-24, near-verbatim port of team-win for Tennis
+//   win-accas (williamhill_tennis_acca_ev_scan.py) — same single-name search against Betfair's
+//   Tennis event type (id 2) instead of Football's (id 1), same MATCH_ODDS market (a 2-runner
+//   market for tennis, no draw), doubles pairings excluded. Same {ok, eventName, startTime,
+//   marketId, runner} shape as team-win.
+//
 // Six more actions added 2026-09-15 for oc-scraper's football_boost_scan.py — the "other"
 // per-match boosts (Win To Nil, HT/FT, Correct Score, Over 2.5, BTTS, Win & BTTS) that PricedUp/
 // StarSports/PlanetSportBet/DragonBet run alongside the plain win-accas, confirmed live to all
@@ -44,6 +50,7 @@ const CORS = {
 };
 const BFEX_BASE = 'https://api.betfair.com/exchange/betting/rest/v1.0';
 const FOOTBALL_EVENT_TYPE_ID = '1';
+const TENNIS_EVENT_TYPE_ID = '2';
 
 const CERT = fs.readFileSync('/root/client-2048.crt');
 const KEY  = fs.readFileSync('/root/client-2048.key');
@@ -259,6 +266,63 @@ async function findTeamWin(team, appKey, session) {
   };
 }
 
+// action=player-win&team=<name>: near-verbatim port of findTeamWin above for Tennis win-accas
+// (2026-09-24, williamhill_tennis_acca_ev_scan.py) — same single-name search + soonest-kickoff
+// tie-break, same MATCH_ODDS market (Betfair uses that market type/name for tennis too, just a
+// 2-runner market with no draw), same fuzzyTeamMatch/norm (already accent-insensitive and
+// tolerant of Betfair's "Surname Initial." naming vs a bookmaker's full "Firstname Surname",
+// since single-letter tokens get filtered out of the word-overlap check already). Doubles
+// pairings ("Djokovic N./Nadal R. v ...") are excluded — a boosted acca leg only ever names one
+// player, and a "/" in either side means it's a pairing, not the singles match intended.
+async function findPlayerWin(player, appKey, session) {
+  let candidates = [], events = [];
+  for (const q of searchQueries(player)) {
+    events = await bfCall('listEvents', { filter: { eventTypeIds: [TENNIS_EVENT_TYPE_ID], textQuery: q } }, appKey, session);
+    const hits = (events || []).filter(e => {
+      const name = e.event?.name || '';
+      if (name.includes('/')) return false; // doubles pairing, not a singles match
+      if (!isPlausiblePrematchKickoff(e.event?.openDate)) return false;
+      const parts = name.split(' v ');
+      if (parts.length !== 2) return false;
+      return fuzzyTeamMatch(player, parts[0]) || fuzzyTeamMatch(player, parts[1]);
+    });
+    if (hits.length) { candidates = hits; break; }
+  }
+  if (!candidates.length) return { error: `event not found for player: ${player}`, available: (events || []).slice(0, 10).map(e => e.event?.name) };
+  candidates.sort((a, b) => new Date(a.event.openDate) - new Date(b.event.openDate));
+  const match = candidates[0];
+
+  const eventId = match.event.id;
+  const catalogue = await bfCall('listMarketCatalogue', {
+    filter: { eventIds: [eventId], marketTypeCodes: ['MATCH_ODDS'] },
+    marketProjection: ['RUNNER_DESCRIPTION'],
+    maxResults: 5,
+  }, appKey, session);
+  if (!catalogue?.length) return { error: 'no MATCH_ODDS market found', eventName: match.event.name };
+
+  const marketId = catalogue[0].marketId;
+  const runnerMeta = catalogue[0].runners.find(r => fuzzyTeamMatch(player, r.runnerName));
+  if (!runnerMeta) return { error: `runner not found for player: ${player}`, eventName: match.event.name, runners: catalogue[0].runners.map(r => r.runnerName) };
+
+  const books = await bfCall('listMarketBook', {
+    marketIds: [marketId],
+    priceProjection: { priceData: ['EX_BEST_OFFERS', 'EX_TRADED'] },
+  }, appKey, session);
+  const runnerBook = (books[0]?.runners || []).find(r => r.selectionId === runnerMeta.selectionId);
+
+  return {
+    eventName: match.event.name,
+    startTime: match.event.openDate,
+    marketId,
+    runner: {
+      totalMatched: runnerBook?.totalMatched ?? 0,
+      lastPriceTraded: runnerBook?.lastPriceTraded ?? null,
+      back: (runnerBook?.ex?.availableToBack ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
+      lay: (runnerBook?.ex?.availableToLay ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
+    },
+  };
+}
+
 // Finds the ONE fixture matching both team names — precise, unlike findTeamWin's single-name
 // search, because the six actions below need to pick a specific MARKET out by name (e.g. "Win
 // to Nil", "Correct Score") on top of the runner, so a loosely-matched wrong fixture would fail
@@ -339,6 +403,13 @@ async function runAction(action, params, appKey, session) {
   if (action === 'team-win') {
     if (!params.team) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team required' }) };
     const result = await findTeamWin(params.team, appKey, session);
+    if (result.error) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, ...result }) };
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, ...result }) };
+  }
+
+  if (action === 'player-win') {
+    if (!params.team) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team required' }) };
+    const result = await findPlayerWin(params.team, appKey, session);
     if (result.error) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, ...result }) };
     return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, ...result }) };
   }
