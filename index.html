@@ -15624,6 +15624,16 @@ function renderBaWatch(){
   let rows = BA_WATCH_ROWS.filter(r => baBookEnabled(r.bookie));
   rows = applyFairsSourceWatch(rows, getFairsSource());
   rows = applyWatchBaseOverrides(rows); // manual Source Fair edits win over the dropdown source
+  // 2026-09-24, user-reported: switching the fairs-source dropdown recomputes fair/ev off a
+  // different source than the one ones_to_watch_scan.py gated on at scan time (OTW_THRESHOLD_PCT
+  // there), so a row that only cleared +3% under the server's official blend could show negative
+  // once re-priced off e.g. BFEX-only. Ones to Watch's whole point is a pre-filtered "only real
+  // early value" feed — unlike Calculated +EV's broader review table, which deliberately never
+  // hides a row (see applyFairsSource's own docstring) — so re-apply that same bar here. A
+  // manually-overridden row is exempt: that's the user's own deliberate what-if entry, always
+  // shown regardless of the result.
+  const OTW_THRESHOLD_PCT_CLIENT = 3.0; // must match oc-scraper/scripts/ones_to_watch_scan.py
+  rows = rows.filter(r => r.baseFairOverridden || (typeof r.ev === 'number' && isFinite(r.ev) && r.ev >= OTW_THRESHOLD_PCT_CLIENT));
   const watchSortMode = getBaSort('watch');
   rows.sort((x, y) => watchSortMode === 'time'
     ? (baTimeSortKey(x,'kickoff','kickoffDate') - baTimeSortKey(y,'kickoff','kickoffDate'))
