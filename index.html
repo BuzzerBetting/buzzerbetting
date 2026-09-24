@@ -2379,7 +2379,7 @@ input::placeholder{color:var(--text3)}
   <div id="monthly-status" style="display:none"><div class="card"><div class="ph" style="padding:32px 24px"><div id="monthly-status-ico" class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t" id="monthly-status-title">Loading...</div><div class="ph-d" id="monthly-status-msg"></div></div></div></div>
   <div id="monthly-content" style="display:none">
     <div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px" id="monthly-kpis"></div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:16px">10,000 simulations · EV-based win probability per bet · bets with no usable Odds/EV/Stake are excluded · pure EV simulation, ignores actual results</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:16px">10,000 simulations · EV-based win probability per bet · the bands below only simulate bets with a usable Odds/EV/Stake (Casino, Corners, Back &amp; Lay etc. don't have these, so they're skipped) — the P/L figure above is real, everyone included · pure EV simulation, ignores actual results</div>
     <div class="card" style="max-width:520px;margin:0 auto 20px">
       <div class="card-h" style="font-size:15px;font-weight:700;text-align:center">All Bets Placed</div>
       <div style="padding:16px"><table style="width:100%;border-collapse:collapse" id="monthly-static-table"><tbody id="monthly-static-body"></tbody></table></div>
@@ -10450,6 +10450,12 @@ async function initMonthly() {
     const d = await ledgerApi('bets?dateRange=month&limit=5000');
     if (!d.ok) { showMonthlyStatus('ti-alert-triangle','Could not load bets', d.error||'Unknown error'); return; }
     const rawBets = d.bets || [];
+    // True settled P/L across every bet this month, same method as the Monthly Profit page
+    // (index.html initMonthlyProfit) — used for the KPI below, kept separate from `usable`
+    // so the real-money number can't drift from reality just because a sheet (Casino,
+    // Corners, Back & Lay, ...) doesn't populate a plain Odds/EV field.
+    const allSettledPL = rawBets.filter(b => b.result !== 'open').reduce((s,b) => s+(b.pl||0), 0);
+
     const usable = [];
     rawBets.forEach(b => {
       const odds = typeof b.fields.Odds === 'number' ? b.fields.Odds : null;
@@ -10468,17 +10474,21 @@ async function initMonthly() {
 
     const settled = usable.filter(b => b.result !== 'open');
     const open = usable.filter(b => b.result === 'open');
-    const settledPL = settled.reduce((s,b) => s+b.pl, 0);
+    const usableSettledPL = settled.reduce((s,b) => s+b.pl, 0);
+    const excludedPL = allSettledPL - usableSettledPL;
     const totalEV = usable.reduce((s,b) => s+b.ev, 0);
     const totalStake = usable.reduce((s,b) => s+b.stake, 0);
     const evCol = totalEV>=0?'var(--green)':'var(--red)';
-    const plCol = settledPL>=0?'var(--green)':'var(--red)';
+    const plCol = allSettledPL>=0?'var(--green)':'var(--red)';
+    const excludedNote = Math.abs(excludedPL) >= 0.01
+      ? `incl. ${excludedPL>=0?'+':'-'}£${Math.abs(excludedPL).toFixed(2)} from sheets not simulated below`
+      : 'all settled bets are simulated below';
 
     document.getElementById('monthly-kpis').innerHTML = `
       <div class="kpi"><div class="kpi-l">Bets simulated</div><div class="kpi-v">${usable.length}</div><div class="kpi-s">${settled.length} settled · ${open.length} open</div></div>
       <div class="kpi"><div class="kpi-l">Total staked</div><div class="kpi-v">£${totalStake.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
       <div class="kpi"><div class="kpi-l">Total EV</div><div class="kpi-v" style="color:${evCol}">${totalEV>=0?'+':''}£${Math.abs(totalEV).toFixed(2)}</div></div>
-      <div class="kpi"><div class="kpi-l">Settled P/L so far</div><div class="kpi-v" style="color:${plCol}">${settledPL>=0?'+':''}£${Math.abs(settledPL).toFixed(2)}</div></div>`;
+      <div class="kpi"><div class="kpi-l">Settled P/L so far</div><div class="kpi-v" style="color:${plCol}">${allSettledPL>=0?'+':''}£${Math.abs(allSettledPL).toFixed(2)}</div><div class="kpi-s">${excludedNote}</div></div>`;
 
     renderMonthlyTable('monthly-static-body', monteCarloProfitBands(usable, 0, MONTHLY_BANDS));
 
