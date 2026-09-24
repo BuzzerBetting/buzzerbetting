@@ -41,6 +41,7 @@ app.all('/api/fixtures', wrap(require('./netlify/functions/fixtures').handler));
 app.all('/api/lineups', wrap(require('./netlify/functions/lineups').handler));
 app.all('/api/oddschecker', wrap(require('./netlify/functions/oddschecker').handler));
 app.all('/api/player-stats', wrap(require('./netlify/functions/player-stats').handler));
+app.all('/api/fotmob-player-search', wrap(require('./netlify/functions/fotmob-player-search').handler));
 // skybet-accafreeze-lib.js (repo root, NOT netlify/functions) — must run from this UK-based box,
 // not Netlify's US function IP; see that file's header comment for why.
 app.all('/api/skybet-accafreeze', wrap(require('./skybet-accafreeze-lib').handler));

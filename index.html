@@ -2669,6 +2669,11 @@ input::placeholder{color:var(--text3)}
         <div><div class="cat-title">Header model</div><div class="cat-desc">AGS fair odds × headed shot % from Fotmob</div></div>
         <i class="ti ti-arrow-right cat-arr"></i>
       </div>
+      <div class="cat" onclick="showCalc('playerfinder')">
+        <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-user-search"></i></div>
+        <div><div class="cat-title">Player finder</div><div class="cat-desc">Search Fotmob for any player, then price Header/OTB/SOT/LF/RF off a manual source fair</div></div>
+        <i class="ti ti-arrow-right cat-arr"></i>
+      </div>
       <div class="cat" onclick="showCalc('lay')">
         <div class="cat-ico" style="background:var(--surface2);color:var(--text2)"><i class="ti ti-arrows-exchange"></i></div>
         <div><div class="cat-title">Lay bet calculator</div><div class="cat-desc">Exchange lay matching and green book</div></div>
@@ -2953,6 +2958,48 @@ input::placeholder{color:var(--text3)}
               <div id="hdr-ev-out" style="display:none;padding:9px 16px;border-radius:var(--radius);font-size:16px;font-weight:500;font-variant-numeric:tabular-nums;border:0.5px solid;min-width:100px;text-align:center"></div>
             </div>
           </div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- PLAYER FINDER -->
+  <div id="calc-playerfinder" class="calc-view">
+    <button class="back" onclick="backToCalcHub()"><i class="ti ti-arrow-left"></i> Calculators</button>
+    <div class="sec-title">Player finder</div>
+    <div class="card"><div style="padding:20px">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Search Fotmob for any player — no lineup needed — then price Header/OTB Goal, Headed/OTB SOT and Left/Right Foot Goal off a manually-entered source fair. Same model as the automated Calculated +EV scan (gsm_fair.py), just fed a source fair you type in instead of one derived from Oddschecker/BFEX.</p>
+
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+        <input id="pf-search" type="text" placeholder="Surname or full name, e.g. hojlund (accents not needed)" oninput="pfOnSearchInput()" style="flex:1;min-width:220px;padding:10px 12px;border:0.5px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:14px;background:var(--surface);color:var(--text)">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);cursor:pointer;white-space:nowrap"><input type="checkbox" id="pf-intl" onchange="if(PF_SELECTED)pfLoadStats()"> International stats</label>
+      </div>
+      <div id="pf-search-status" style="font-size:12.5px;color:var(--text3);display:none;margin-bottom:10px"></div>
+      <div id="pf-results" style="display:none;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:16px"></div>
+
+      <div id="pf-selected" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding:12px 14px;background:var(--surface2);border-radius:var(--radius)">
+          <div><div style="font-weight:600" id="pf-sel-name"></div><div style="font-size:12px;color:var(--text3)" id="pf-sel-team"></div></div>
+          <button onclick="pfClearSelection()" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:6px 12px;font-size:12.5px;cursor:pointer;color:var(--text2);font-family:inherit">Change player</button>
+        </div>
+
+        <div id="pf-stats-status" style="font-size:12.5px;color:var(--text3);margin-bottom:10px"></div>
+        <div id="pf-stats-card" style="display:none">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:10px" id="pf-tf-note"></div>
+          <div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:18px" id="pf-stats-kpis"></div>
+
+          <div class="igrid" style="margin-bottom:6px">
+            <div><label class="lbl" for="pf-ags">AGS fair odds (BFex)</label><input id="pf-ags" type="number" placeholder="e.g. 3.20" step="0.01" oninput="pfRecalc()"></div>
+            <div><label class="lbl" for="pf-sot">SOT 1+ fair odds (BFex)</label><input id="pf-sot" type="number" placeholder="e.g. 1.85" step="0.01" oninput="pfRecalc()"></div>
+            <div style="display:flex;align-items:flex-end;padding-bottom:9px"><label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text2);cursor:pointer"><input type="checkbox" id="pf-pen" onchange="pfRecalc()"> Confirmed penalty taker</label></div>
+          </div>
+
+          <table style="width:100%;border-collapse:collapse;margin-top:14px" id="pf-result-table">
+            <thead><tr style="text-align:left;color:var(--text3);font-size:11px;text-transform:uppercase">
+              <th style="padding:6px 8px">Market</th><th class="r" style="padding:6px 8px">Fair odds</th><th class="r" style="padding:6px 8px;width:110px">Bookie odds</th><th class="r" style="padding:6px 8px">EV</th>
+            </tr></thead>
+            <tbody id="pf-result-body"></tbody>
+          </table>
         </div>
       </div>
     </div></div>
@@ -9711,6 +9758,187 @@ function calcHdrEV(){
   el.style.background=pos?'var(--green-bg)':'var(--red-bg)';
   el.style.color=pos?'var(--green)':'var(--red)';
   el.style.borderColor=pos?'var(--green-bd)':'var(--red-bd)';
+}
+
+// ── PLAYER FINDER ── (2026-09-24, user-requested) — search Fotmob for any player without
+// needing them to already be in a match's fetched lineup, then price Header/OTB Goal,
+// Headed/OTB SOT and Left/Right Foot Goal off a manually-typed source fair using the exact
+// same formulas as oc-scraper/oc/gsm_fair.py (ported below, not re-derived) — the automated
+// Calculated +EV/Ones to Watch scans feed those formulas an OC/BFEX-derived source fair off a
+// confirmed/predicted lineup; this tool feeds them whatever the user types, for a match that
+// doesn't have lineup data yet. Fotmob's own search-suggest API already normalizes accents on
+// the query side (confirmed live: unaccented "hojlund"/"mbappe"/"gundogan" all found the
+// correctly-accented player), so no client-side fuzzy-matching layer was needed for that part.
+let PF_SEARCH_TIMER=null, PF_SELECTED=null, PF_TF=null, PF_LAST_SEARCH_RESULTS=[];
+function pfOnSearchInput(){
+  clearTimeout(PF_SEARCH_TIMER);
+  const q=document.getElementById('pf-search').value.trim();
+  const resultsEl=document.getElementById('pf-results'), statusEl=document.getElementById('pf-search-status');
+  if(q.length<2){resultsEl.style.display='none';statusEl.style.display='none';return;}
+  statusEl.style.display='block';statusEl.textContent='Searching…';resultsEl.style.display='none';
+  PF_SEARCH_TIMER=setTimeout(()=>pfRunSearch(q),300);
+}
+async function pfRunSearch(q){
+  const statusEl=document.getElementById('pf-search-status'), resultsEl=document.getElementById('pf-results');
+  try{
+    const res=await fetch('/.netlify/functions/fotmob-player-search?term='+encodeURIComponent(q));
+    const d=await res.json();
+    if(!d.ok||!Array.isArray(d.results)||!d.results.length){
+      statusEl.style.display='block';statusEl.textContent=d.ok?'No players found.':(d.error||'Search failed.');
+      resultsEl.style.display='none';return;
+    }
+    statusEl.style.display='none';resultsEl.style.display='block';
+    PF_LAST_SEARCH_RESULTS=d.results;
+    // Indexed onclick, not the player's own name inlined into the attribute — a name with an
+    // apostrophe (N'Golo Kanté etc.) would break a naive inline onclick string.
+    resultsEl.innerHTML=d.results.map((p,i)=>`<div onclick="pfSelectPlayerByIndex(${i})" style="padding:10px 14px;cursor:pointer;border-bottom:0.5px solid var(--border);display:flex;justify-content:space-between;align-items:center" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      <span style="font-weight:500">${escapeHtml(p.name)}</span><span style="font-size:12px;color:var(--text3)">${escapeHtml(p.teamName||'')}</span>
+    </div>`).join('');
+  }catch(e){
+    statusEl.style.display='block';statusEl.textContent='Search failed — network error.';resultsEl.style.display='none';
+  }
+}
+function pfClearSelection(){
+  PF_SELECTED=null;PF_TF=null;
+  document.getElementById('pf-selected').style.display='none';
+  document.getElementById('pf-search').value='';
+  document.getElementById('pf-results').style.display='none';
+  document.getElementById('pf-search-status').style.display='none';
+  document.getElementById('pf-search').focus();
+}
+function pfSelectPlayerByIndex(i){
+  const p=PF_LAST_SEARCH_RESULTS[i];
+  if(!p)return;
+  PF_SELECTED=p;
+  document.getElementById('pf-results').style.display='none';
+  document.getElementById('pf-search-status').style.display='none';
+  document.getElementById('pf-selected').style.display='block';
+  document.getElementById('pf-sel-name').textContent=p.name;
+  document.getElementById('pf-sel-team').textContent=p.teamName||'';
+  document.getElementById('pf-stats-card').style.display='none';
+  pfLoadStats();
+}
+async function pfLoadStats(){
+  if(!PF_SELECTED)return;
+  const statusEl=document.getElementById('pf-stats-status'), cardEl=document.getElementById('pf-stats-card');
+  statusEl.style.display='block';statusEl.textContent='Loading Fotmob stats…';cardEl.style.display='none';
+  const matchType=document.getElementById('pf-intl').checked?'international':'club';
+  try{
+    const res=await fetch('/.netlify/functions/player-stats?playerId='+PF_SELECTED.id+'&matchType='+matchType);
+    const d=await res.json();
+    if(!d.ok){statusEl.style.display='block';statusEl.textContent=d.error||'No shot data found for this player.';return;}
+    // Timeframe picked once off 'shots' (the broadest count) for display purposes — each
+    // individual market's own calc function below still applies its own count-specific gate
+    // (headers/otbShots/sot), so a market can still come back blank even once a timeframe is
+    // shown here, same as the automated scan.
+    const tf=pfPickSplitTimeframe(d.timeframes,'shots');
+    PF_TF=tf;
+    statusEl.style.display='none';cardEl.style.display='block';
+    const noteEl=document.getElementById('pf-tf-note');
+    noteEl.textContent=tf.key
+      ? `Using ${tf.key==='lastSeason'?'last season':'last 2 seasons'} (${tf.stats.matches} matches, ${tf.stats.shots} shots) — Fotmob, ${matchType} scope.`
+      : 'No reliable shot-split timeframe for this player (thin sample even after 2 seasons) — markets below may come back blank.';
+    const s=tf.stats||{};
+    document.getElementById('pf-stats-kpis').innerHTML=`
+      <div class="kpi"><div class="kpi-l">Matches</div><div class="kpi-v">${s.matches??'—'}</div></div>
+      <div class="kpi"><div class="kpi-l">Shots / xG</div><div class="kpi-v">${s.shots??'—'} / ${s.xG??'—'}</div></div>
+      <div class="kpi"><div class="kpi-l">SOT</div><div class="kpi-v">${s.sot??'—'}</div></div>
+      <div class="kpi"><div class="kpi-l">Headers</div><div class="kpi-v">${s.headers??'—'} (${s.headedSot??0} SOT)</div></div>
+      <div class="kpi"><div class="kpi-l">Outside box</div><div class="kpi-v">${s.otbShots??'—'} (${s.otbSot??0} SOT)</div></div>
+      <div class="kpi"><div class="kpi-l">Left foot xG</div><div class="kpi-v">${s.leftFootXG??'—'}</div></div>
+      <div class="kpi"><div class="kpi-l">Right foot xG</div><div class="kpi-v">${s.rightFootXG??'—'}</div></div>
+      <div class="kpi"><div class="kpi-l">Pen / FK xG</div><div class="kpi-v">${s.penaltyXG??0} / ${s.freeKickXG??0}</div></div>`;
+    pfRecalc();
+  }catch(e){
+    statusEl.style.display='block';statusEl.textContent='Network error loading stats.';
+  }
+}
+// Port of oc-scraper/oc/gsm_fair.py's pick_split_timeframe — same policy, see that file's
+// docstring for the full rationale (never currentSeason alone; lastSeason preferred; a full
+// season with a thin sample is real signal, not a reason to dig into last2Seasons).
+const PF_MIN_SPLIT_SHOTS=5, PF_MIN_MATCHES_FOR_FULL_SEASON=15;
+function pfPickSplitTimeframe(timeframes,countKey){
+  const last=(timeframes&&timeframes.lastSeason)||{};
+  if((last[countKey]||0)>=PF_MIN_SPLIT_SHOTS)return{key:'lastSeason',stats:last};
+  if((last.matches||0)>=PF_MIN_MATCHES_FOR_FULL_SEASON)return{key:null,stats:null};
+  const last2=(timeframes&&timeframes.last2Seasons)||{};
+  if((last2[countKey]||0)>=PF_MIN_SPLIT_SHOTS)return{key:'last2Seasons',stats:last2};
+  return{key:null,stats:null};
+}
+// Ports of gsm_fair.py's calc_header_otb_fair / calc_headed_otb_sot_fair / calc_foot_goal_fair
+// — identical formulas (rate = -ln(1-1/fair), minus a fixed 0.125 penalty adjustment for a
+// confirmed taker, scaled by the relevant shot-type's xG/count share, converted back via
+// 1/(1-e^-rate)) — see that file for the full derivation/rationale on each.
+function pfRateFromFair(fair){if(!(fair>1))return null;const p=1/fair;return p<1?-Math.log(1-p):null;}
+function pfFairFromRate(rate){if(rate==null||!(rate>0))return null;const v=1/(1-Math.exp(-rate));return(isFinite(v)&&v>1)?v:null;}
+function pfCalcHeaderOtbFair(stats,agsFair,pen){
+  if(!stats||!agsFair||agsFair<=1)return{header:null,otb:null};
+  const gameXg=pfRateFromFair(agsFair)-(pen?0.125:0);
+  if(gameXg<=0)return{header:null,otb:null};
+  const rawXg=stats.xG||0,penXg=stats.penaltyXG||0,fkXg=stats.freeKickXG||0,headedXg=stats.headedXG||0,otbXg=stats.otbXG||0;
+  let header=null;const g29=rawXg-penXg-fkXg;
+  if(g29>0&&headedXg>0)header=pfFairFromRate(Math.max(0,gameXg*(headedXg/g29)));
+  let otb=null;const m29=rawXg-penXg;
+  if(m29>0&&otbXg>0)otb=pfFairFromRate(Math.max(0,gameXg*(otbXg/m29)));
+  return{header,otb};
+}
+function pfCalcHeadedOtbSotFair(stats,sot1Fair,pen){
+  if(!stats||!sot1Fair||sot1Fair<=1)return{headed:null,otb:null};
+  const sot=stats.sot||0;
+  if(sot<6)return{headed:null,otb:null}; // MIN_SOT
+  const lamSot=pfRateFromFair(sot1Fair)-(pen?0.125:0);
+  if(lamSot<=0)return{headed:null,otb:null};
+  const headedSot=stats.headedSot||0,otbSot=stats.otbSot||0;
+  let headed=null;if(headedSot>0)headed=pfFairFromRate(Math.max(0,lamSot*(headedSot/sot)));
+  let otb=null;if(otbSot>0)otb=pfFairFromRate(Math.max(0,lamSot*(otbSot/sot)));
+  return{headed,otb};
+}
+function pfCalcFootGoalFair(stats,agsFair){
+  if(!stats||!agsFair||agsFair<=1)return{lf:null,rf:null};
+  const gameXg=pfRateFromFair(agsFair);
+  const rawXg=stats.xG||0;
+  if(rawXg<=0)return{lf:null,rf:null};
+  const lfXg=stats.leftFootXG||0,rfXg=stats.rightFootXG||0;
+  let lf=null;if(lfXg>0)lf=pfFairFromRate(Math.max(0,gameXg*(lfXg/rawXg)));
+  let rf=null;if(rfXg>0)rf=pfFairFromRate(Math.max(0,gameXg*(rfXg/rawXg)));
+  return{lf,rf};
+}
+const PF_BOOKIE_ODDS={}; // per-market manual bookie-odds entries, keyed by market label, survive recalcs
+let PF_LAST_RESULTS={};
+function pfRecalc(){
+  const body=document.getElementById('pf-result-body');
+  if(!PF_TF||!PF_TF.stats){body.innerHTML='';return;}
+  const ags=parseFloat(document.getElementById('pf-ags').value);
+  const sot1=parseFloat(document.getElementById('pf-sot').value);
+  const pen=document.getElementById('pf-pen').checked;
+  const stats=PF_TF.stats;
+  const hdrOtb=pfCalcHeaderOtbFair(stats,isFinite(ags)&&ags>1?ags:null,pen);
+  const sotSplit=pfCalcHeadedOtbSotFair(stats,isFinite(sot1)&&sot1>1?sot1:null,pen);
+  const foot=pfCalcFootGoalFair(stats,isFinite(ags)&&ags>1?ags:null);
+  PF_LAST_RESULTS={
+    'Header Goal':hdrOtb.header,'OTB Goal':hdrOtb.otb,
+    'Headed SOT':sotSplit.headed,'OTB SOT':sotSplit.otb,
+    'Left Foot Goal':foot.lf,'Right Foot Goal':foot.rf,
+  };
+  body.innerHTML=Object.keys(PF_LAST_RESULTS).map(m=>`<tr id="pf-row-${m.replace(/\s+/g,'')}"></tr>`).join('');
+  Object.keys(PF_LAST_RESULTS).forEach(pfRenderResultRow);
+}
+function pfSetBookieOdds(market,value){
+  const v=parseFloat(value);
+  if(isFinite(v)&&v>1)PF_BOOKIE_ODDS[market]=v;else delete PF_BOOKIE_ODDS[market];
+  pfRenderResultRow(market);
+}
+function pfRenderResultRow(market){
+  const row=document.getElementById('pf-row-'+market.replace(/\s+/g,''));
+  if(!row)return;
+  const fair=PF_LAST_RESULTS[market], bookie=PF_BOOKIE_ODDS[market];
+  const ev=(fair&&bookie)?(bookie/fair-1)*100:null;
+  const evCol=ev==null?'var(--text3)':ev>=0?'var(--green)':'var(--red)';
+  row.innerHTML=`
+    <td style="padding:7px 8px;font-weight:500">${market}</td>
+    <td class="r tn" style="padding:7px 8px">${fair!=null?fair.toFixed(2):'—'}</td>
+    <td class="r" style="padding:7px 8px"><input type="number" step="0.01" min="1.01" value="${bookie!=null?bookie:''}" oninput="pfSetBookieOdds('${market}',this.value)" style="width:80px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:5px;padding:4px 6px;font-size:12.5px;font-family:inherit;text-align:right"></td>
+    <td class="r" style="padding:7px 8px;font-weight:600;color:${evCol}">${ev!=null?(ev>=0?'+':'')+ev.toFixed(1)+'%':'—'}</td>`;
 }
 
 // ── 5. LAY CALCULATOR ──
