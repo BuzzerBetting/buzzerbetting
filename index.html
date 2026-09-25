@@ -9060,6 +9060,7 @@ const OC_EV_MARKET_BADGE={
   'Cards':'background:var(--purple-bg);color:var(--purple)',
   'SOT':'background:var(--red-bg);color:var(--red)',
   'Horse Double':'background:var(--amber-bg);color:var(--amber)',
+  'Horse Win':'background:var(--amber-bg);color:var(--amber)', // PricedUp single-horse boosts (pricedup_horse_ev_scan.py)
   'Win Acca':'background:var(--amber-bg);color:var(--amber)',
   // Individual-match football boosts (Win To Nil, Win & BTTS, Correct Score, HT/FT, Over 2.5,
   // BTTS, Draw) — see oc/football_boost_markets.py. Same amber "boost" bucket as Horse
@@ -9220,7 +9221,7 @@ function mergeHorseDoubleDuplicates(bets){
   const groups=new Map();
   const out=[];
   for(const b of bets){
-    const key = (b.mkt==='Horse Double' && b.legKey) ? ('leg:'+b.legKey)
+    const key = ((b.mkt==='Horse Double'||b.mkt==='Horse Win') && b.legKey) ? ('leg:'+b.mkt+'|'+b.legKey)
       : (b.sel ? ('sel:'+b.mkt+'|'+b.sel) : null);
     if(!key){ out.push(b); continue; }
     if(!groups.has(key))groups.set(key,[]);
