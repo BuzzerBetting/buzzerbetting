@@ -14763,6 +14763,14 @@ function renderEVResults(bets) {
   cevLastBets = bets;
   bets = applyFairsSource(bets, getFairsSource());
   bets = applyCalcEvBaseOverrides(bets); // manual Source Fair edits win over the dropdown source
+  // 2026-09-25, user-reported (Dan Ballard Headed SOT: +19% off the official OC/BB fair 5.04,
+  // but 6.0 vs 6.1 = -EV once the dropdown re-priced it off OC Margin): same fix Ones to Watch
+  // already got — re-apply ev_engine.py's own EV_THRESHOLD_PCT after the client-side recompute,
+  // so a row that stops clearing the bar under the selected source drops out. noCalc rows
+  // (display-only, e.g. 6 Yard Box / no value under this source) and manual base-fair
+  // overrides (the user's own what-if entry) stay shown.
+  const CALC_EV_THRESHOLD_PCT_CLIENT = 5.0; // must match oc-scraper/oc/ev_engine.py
+  bets = bets.filter(b => b.noCalc || b.baseFairOverridden || (typeof b.bestEv === 'number' && isFinite(b.bestEv) && b.bestEv >= CALC_EV_THRESHOLD_PCT_CLIENT));
   if (typeof baBookEnabled === 'function') bets = bets.map(remapToAllowedBook).filter(Boolean);
   const cevSortMode = getBaSort('calc-ev');
   bets = bets.slice().sort((x, y) => cevSortMode === 'time'
