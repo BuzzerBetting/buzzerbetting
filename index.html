@@ -9186,7 +9186,7 @@ function renderOddscheckerEV(){
     const sourceLabel=b.source==='combo'?'OC/BB':(b.source==='bfex'?'BFEX':(b.source||''));
     const fairCell=sourceLabel?`${b.fair.toFixed(2)} <span style="color:var(--text3);font-size:11px">(${sourceLabel})</span>`:b.fair.toFixed(2);
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${boostIcon}${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:${fairColor};font-weight:500">${fairCell}</td><td class="r tn" style="color:var(--text2)">${lastTraded}</td><td class="r tn" style="color:var(--text2)">${matched}</td><td class="r" style="color:var(--text2);font-size:12px;line-height:1.5">${ocBookieLinesHtml(b)}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td><td class="r"><button onclick="copyOddscheckerLine(${i},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td>`;
+    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${boostIcon}${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:${fairColor};font-weight:500">${fairCell}</td><td class="r tn" style="color:var(--text2)">${lastTraded}</td><td class="r tn" style="color:var(--text2)">${matched}</td><td class="r" style="color:var(--text2);font-size:12px;line-height:1.5">${ocBookieLinesHtml(b)}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td><td class="r" style="white-space:nowrap">${betLinkBtn(b.url,b.bk)}<button onclick="copyOddscheckerLine(${i},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td>`;
     sb.appendChild(tr);
   });
   if(!shown.length){
@@ -14355,7 +14355,7 @@ async function scanAllCalcEV(statusEl, opts) {
       ocOdds: typeof b.odds === 'number' ? b.odds.toFixed(2) : b.odds,
       bestEv: b.ev, isConfident: b.conf === 'green', noCalc: false,
       boost: isBoost || !!b.boost, xg: b.xg, allOdds: b.allOdds,
-      source: b.source, bfexMatched: b.matched,
+      source: b.source, bfexMatched: b.matched, url: b.url,
       // This bet's own fair recomputed under each candidate source (fair_resolver.py's
       // FairResolver now exposes all three) — lets the Fairs source dropdown switch the
       // displayed fair/EV without a re-scan. bestFair/bestEv above stay the OFFICIAL
@@ -14548,7 +14548,32 @@ function remapToAllowedBook(bet) {
   if (bestPrice == null) return null;
   const fair = bet.bestFair;
   const ev = fair ? ((bestPrice / fair - 1) * 100) : bet.bestEv;
-  return { ...bet, bookie: bestCode, ocOdds: bestPrice.toFixed(2), bestEv: ev };
+  // A bookmaker-specific link (e.g. Paddy Power's fixture page) no longer fits once the bet
+  // moves to a different book — only an Oddschecker page (every book listed) still does.
+  const url = (bet.url && /oddschecker\.com/i.test(bet.url)) ? bet.url : null;
+  return { ...bet, bookie: bestCode, ocOdds: bestPrice.toFixed(2), bestEv: ev, url };
+}
+
+// ---- Bet-page links (2026-09-26, user-requested) ----
+// A bet's own `url` (set server-side: Oddschecker match/market page, Paddy Power fixture page)
+// wins; otherwise the boost-only bookmakers fall back to their boosts page, which is where every
+// one of their boosts lives (their scrapers read exactly that page).
+const BOOST_PAGE_BY_BK = {
+  'PricedUp': 'https://pricedup.bet/sport-special/pricedup-pushes',
+  'Star Sports': 'https://starsports.bet/sport-special/StarBoosts',
+  'Planet Sport Bet': 'https://planetsportbet.com/sport-special/RocketBoosts',
+  'DragonBet': 'https://dragonbet.co.uk/sport-special/DragonBoosts',
+};
+function betLinkUrl(url, bookie) {
+  if (url && /^https:\/\//i.test(url)) return url;
+  return BOOST_PAGE_BY_BK[bookie] || null;
+}
+// Small external-link button (same style as the copy buttons), or '' when there's no link.
+function betLinkBtn(url, bookie) {
+  const href = betLinkUrl(url, bookie);
+  if (!href) return '';
+  const where = /oddschecker\.com/i.test(href) ? 'Oddschecker' : (ocBookieName(bookie) || 'bookmaker');
+  return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" title="Open on ${escapeHtml(where)}" style="display:inline-block;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text2);line-height:1;margin-right:4px;text-decoration:none"><i class="ti ti-external-link"></i></a>`;
 }
 
 // Groups a bet's whole odds ladder (allOdds — Header/OTB rows only) into +EV price tiers:
@@ -14836,7 +14861,7 @@ function renderEVResults(bets) {
       <td class="r" style="font-size:12px;color:var(--text2);line-height:1.5">${bookieLinesHtml(bet)}</td>
       <td class="r tn" style="font-weight:600;color:var(--green)">${bet.ocOdds}</td>
       <td class="r"><span class="badge" style="background:${evBg};color:${evCol}">${evLabel}</span></td>
-      <td class="r" style="white-space:nowrap"><button onclick="logCalcEvBetAsGoalSotMethods(${betIdx})" title="Log this bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-plus"></i> Log</button> <button onclick="copyCalcEvBet(${betIdx},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td>`;
+      <td class="r" style="white-space:nowrap">${betLinkBtn(bet.url,bet.bookie)}<button onclick="logCalcEvBetAsGoalSotMethods(${betIdx})" title="Log this bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-plus"></i> Log</button> <button onclick="copyCalcEvBet(${betIdx},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td>`;
     tbody.appendChild(tr);
   });
 
@@ -16299,7 +16324,7 @@ function renderBaOutliers(){
     <td class="r tn" style="color:var(--text2)">${r.nextPrice != null ? Number(r.nextPrice).toFixed(2) : '—'} <span style="color:var(--text3);font-size:11px">(${escapeHtml(ocBookieShort(r.nextBook))})</span>${r.nextFresh === false ? ' <i class="ti ti-clock-exclamation" title="This price has not moved in a while — worth checking it is still current" style="color:var(--amber)"></i>' : ''}</td>
     <td class="r"><span class="badge" style="background:var(--amber-bg);color:var(--amber)">+${r.pctAboveNext != null ? Number(r.pctAboveNext).toFixed(0) : '—'}%</span></td>
     <td class="r tn" style="color:var(--text2)">${r.bookCount ?? '—'}</td>
-    <td style="font-size:11.5px;color:var(--text3);white-space:nowrap">${fmtDetected(r.detectedAt)}</td>
+    <td style="font-size:11.5px;color:var(--text3);white-space:nowrap">${betLinkBtn(r.url, r.topBook)}${fmtDetected(r.detectedAt)}</td>
   </tr>`).join('');
 }
 
@@ -16462,7 +16487,7 @@ function renderBaStubFeed(key){
           const val = key === 'arbs'
             ? (b.profit_pct != null ? `${Number(b.profit_pct).toFixed(2)}%` : '—')
             : (b.ev != null ? `+${Number(b.ev).toFixed(1)}%` : '—');
-          return `<tr><td style="color:var(--text2)">${b.t ?? ''}</td><td style="font-weight:500">${b.match ?? ''}</td><td style="color:var(--text2);font-size:12px">${b.mkt ?? ''}</td><td>${b.sel ?? ''}</td><td class="r tn">${b.fair != null ? Number(b.fair).toFixed(2) : '—'}</td><td class="r" style="color:var(--text2);font-size:12px">${b.bk ?? ''}</td><td class="r tn" style="font-weight:500">${b.odds != null ? Number(b.odds).toFixed(2) : '—'}</td><td class="r">${val}</td><td class="r"><button onclick="copyBaStubBet('${key}',${i},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td></tr>`;
+          return `<tr><td style="color:var(--text2)">${b.t ?? ''}</td><td style="font-weight:500">${b.match ?? ''}</td><td style="color:var(--text2);font-size:12px">${b.mkt ?? ''}</td><td>${b.sel ?? ''}</td><td class="r tn">${b.fair != null ? Number(b.fair).toFixed(2) : '—'}</td><td class="r" style="color:var(--text2);font-size:12px">${b.bk ?? ''}</td><td class="r tn" style="font-weight:500">${b.odds != null ? Number(b.odds).toFixed(2) : '—'}</td><td class="r">${val}</td><td class="r" style="white-space:nowrap">${betLinkBtn(b.url,b.bk)}<button onclick="copyBaStubBet('${key}',${i},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td></tr>`;
         }).join('')
       : `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No value bets right now.</td></tr>`;
   }
