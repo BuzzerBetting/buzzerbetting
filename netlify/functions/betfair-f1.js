@@ -139,6 +139,7 @@ function classifyMarket(name) {
 // F1's naturally lower volume rather than reusing football's exact thresholds.
 const MIN_SIZE = 10;       // £ — below this a two-sided quote is too thin to average
 const SOLO_MIN_SIZE = 50;  // £ — a ONE-sided price needs more size before standing alone as fair
+const BACK_MIN_SIZE = 2;   // £ — for the raw `back` field only (inverse "No" pricing), see buildF1
 const MAX_SPREAD_PCT = 0.5; // wider tolerance than football's 15% — F1 props are inherently thinner
 function fairPrice(b, bSize, l, lSize) {
   const hasBack = b > 1 && bSize >= MIN_SIZE;
@@ -216,8 +217,18 @@ async function buildF1(appKey, session) {
       const l = (layLevel && layLevel.price) || 0;
       const lSize = (layLevel && layLevel.size) || 0;
       const fair = fairPrice(b, bSize, l, lSize);
-      if (!fair) continue;
-      out[k].push({ name: nameById[r.selectionId] || String(r.selectionId), fair });
+      // Lower bar than MIN_SIZE: a best back sitting at the TOP of the book can't be an
+      // over-generous stray (it'd be matched instantly), and a stale low one only makes the
+      // inverse "No" fair more conservative. E.g. Leclerc Top 6 back 1.28 had just £7 on it.
+      const backOk = b > 1 && bSize >= BACK_MIN_SIZE;
+      // Kept when only the back price is usable (fair:null) — the inverse "No" pricing needs
+      // just that (e.g. Leclerc Top 6 back 1.28 with a too-wide spread for a midpoint).
+      // Consumers reading `fair` already skip a null one.
+      if (!fair && !backOk) continue;
+      // `back` (2026-09-26, user-requested): the best back price on its own, when it has real
+      // size — the inverse "No" side of Podium/Top 6/Points/Classified is priced off this (the
+      // user trusts the exchange back price most there), not the back/lay midpoint `fair`.
+      out[k].push({ name: nameById[r.selectionId] || String(r.selectionId), fair, back: backOk ? b : null });
     }
   }
   return { ok: true, race: { name: race.name, startTime: race.startTime }, markets: out };
