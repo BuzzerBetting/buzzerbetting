@@ -233,6 +233,9 @@ input::placeholder{color:var(--text3)}
     <div class="brand-name">Buzzer<em>Betting</em></div>
   </div>
   <div class="hdr-right">
+    <button id="pf-global-btn" onclick="openPlayerFinderModal()" title="Player finder" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.55);font-size:18px;padding:4px;display:flex;align-items:center;line-height:1">
+      <i class="ti ti-user-search"></i>
+    </button>
     <div id="notif-wrap" style="position:relative;display:flex;align-items:center">
       <button id="notif-bell" onclick="toggleNotifPanel(event)" title="Notifications" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.55);font-size:18px;padding:4px;display:flex;align-items:center;position:relative;line-height:1">
         <i class="ti ti-bell"></i>
@@ -264,6 +267,17 @@ input::placeholder{color:var(--text3)}
     <div class="live-dot"></div><span id="hdr-date"></span>
   </div>
 </header>
+
+<!-- Global Player Finder pop-up (2026-09-26, user-requested: reachable from any screen). The
+     Calculators-hub #calc-playerfinder view is MOVED in here while open and back on close, so
+     there's one copy of the tool and its state (search, selected player, source fair) carries
+     over either way. -->
+<div id="pf-modal" onclick="if(event.target===this)closePlayerFinderModal()" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.45);overflow-y:auto;padding:24px 16px">
+  <div style="max-width:900px;margin:0 auto;background:var(--bg,var(--surface));border:0.5px solid var(--border);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,0.3);padding:16px;position:relative">
+    <button onclick="closePlayerFinderModal()" title="Close" style="position:absolute;top:10px;right:10px;background:none;border:none;cursor:pointer;color:var(--text2);font-size:20px;line-height:1;padding:4px;z-index:1"><i class="ti ti-x"></i></button>
+    <div id="pf-modal-body"></div>
+  </div>
+</div>
 
 <div class="page">
 
@@ -9771,6 +9785,32 @@ function calcHdrEV(){
 // the query side (confirmed live: unaccented "hojlund"/"mbappe"/"gundogan" all found the
 // correctly-accented player), so no client-side fuzzy-matching layer was needed for that part.
 let PF_SEARCH_TIMER=null, PF_SELECTED=null, PF_TF=null, PF_LAST_SEARCH_RESULTS=[];
+// Global header button -> the same tool in a pop-up (see #pf-modal). The view node is moved,
+// not copied, and restored to exactly where it came from on close.
+let PF_HOME_PARENT=null, PF_HOME_NEXT=null, PF_HOME_DISPLAY='';
+function openPlayerFinderModal(){
+  const view=document.getElementById('calc-playerfinder'), modal=document.getElementById('pf-modal');
+  if(!view||!modal||modal.style.display==='block')return;
+  PF_HOME_PARENT=view.parentNode; PF_HOME_NEXT=view.nextSibling; PF_HOME_DISPLAY=view.style.display;
+  document.getElementById('pf-modal-body').appendChild(view);
+  view.style.display='block';
+  const back=view.querySelector('button.back'); if(back)back.style.display='none';
+  modal.style.display='block';
+  document.body.style.overflow='hidden';
+  const s=document.getElementById('pf-search'); if(s)setTimeout(()=>s.focus(),50);
+}
+function closePlayerFinderModal(){
+  const view=document.getElementById('calc-playerfinder'), modal=document.getElementById('pf-modal');
+  if(!modal||modal.style.display!=='block')return;
+  if(view&&PF_HOME_PARENT){
+    PF_HOME_PARENT.insertBefore(view,PF_HOME_NEXT);
+    view.style.display=PF_HOME_DISPLAY;
+    const back=view.querySelector('button.back'); if(back)back.style.display='';
+  }
+  modal.style.display='none';
+  document.body.style.overflow='';
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closePlayerFinderModal();});
 function pfOnSearchInput(){
   clearTimeout(PF_SEARCH_TIMER);
   const q=document.getElementById('pf-search').value.trim();
@@ -15777,8 +15817,11 @@ function baUpdateMenuTag(){
   if (!el) return;
   // Corners run into the dozens vs a handful of value bets — show them separately so the
   // value count isn't swamped. "value" = every edge except Corners.
+  // OC Coverage ('unmatched') is a list of fixtures Oddschecker couldn't be matched to, not
+  // bets at all — excluded too (2026-09-26, user-reported: "23 value" was 20 of those).
+  const NOT_VALUE = new Set(['corners', 'unmatched']);
   const corners = BA_COUNTS['corners'] || 0;
-  const value = BA_EDGES.reduce((s, e) => s + (e.key === 'corners' ? 0 : (BA_COUNTS[e.key] || 0)), 0);
+  const value = BA_EDGES.reduce((s, e) => s + (NOT_VALUE.has(e.key) ? 0 : (BA_COUNTS[e.key] || 0)), 0);
   el.textContent = (value || corners) ? `${value} value · ${corners} corner` : '—';
 }
 function baTab(key){ activateBaTab(key); }
