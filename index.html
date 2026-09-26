@@ -15818,8 +15818,10 @@ function baUpdateMenuTag(){
   // Corners run into the dozens vs a handful of value bets — show them separately so the
   // value count isn't swamped. "value" = every edge except Corners.
   // OC Coverage ('unmatched') is a list of fixtures Oddschecker couldn't be matched to, not
-  // bets at all — excluded too (2026-09-26, user-reported: "23 value" was 20 of those).
-  const NOT_VALUE = new Set(['corners', 'unmatched']);
+  // bets at all — excluded too (2026-09-26, user-reported: "23 value" was 20 of those). Errors
+  // and Outliers are flagged prices (market-integrity / model-free "one book way above the
+  // rest"), not bets priced against a fair, so they're left out as well.
+  const NOT_VALUE = new Set(['corners', 'unmatched', 'errors', 'outliers']);
   const corners = BA_COUNTS['corners'] || 0;
   const value = BA_EDGES.reduce((s, e) => s + (NOT_VALUE.has(e.key) ? 0 : (BA_COUNTS[e.key] || 0)), 0);
   el.textContent = (value || corners) ? `${value} value · ${corners} corner` : '—';
