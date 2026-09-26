@@ -274,17 +274,38 @@ async function findTeamWin(team, appKey, session) {
 // since single-letter tokens get filtered out of the word-overlap check already). Doubles
 // pairings ("Djokovic N./Nadal R. v ...") are excluded — a boosted acca leg only ever names one
 // player, and a "/" in either side means it's a pairing, not the singles match intended.
+// 2026-09-26, user-reported: a WH doubles leg "Casper Ruud / Alexander Zverev" fuzzy-matched
+// Zverev's SINGLES match (Zverev v De Minaur, £516 traded) and priced the double off the wrong
+// market — the real doubles market ("Ruud C / Zverev A v Bublik A / Nakashima B") had £0
+// traded. A "/" query is now a doubles pair: it only matches a doubles event/runner where BOTH
+// surnames sit on the same side (Betfair names pairs "Surname I / Surname I").
+// Real (2+ letter) lowercase words — drops Betfair's single-letter initials ("Ruud C" -> ruud).
+const pairWords = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  .replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(w => w.length > 1);
+// "Casper Ruud / Alexander Zverev" -> ['ruud', 'zverev'] (last real word of each partner)
+function doublesSurnames(s) {
+  return String(s || '').split('/').map(p => pairWords(p).pop()).filter(Boolean);
+}
+function doublesSideMatch(query, side) {
+  const want = doublesSurnames(query);
+  const have = pairWords(side);
+  return side.includes('/') && want.length === 2 && want.every(w => have.includes(w));
+}
+
 async function findPlayerWin(player, appKey, session) {
+  const isDoubles = String(player || '').includes('/');
+  const sideMatches = (side) => isDoubles ? doublesSideMatch(player, side) : fuzzyTeamMatch(player, side);
+  const queries = isDoubles ? doublesSurnames(player) : searchQueries(player);
   let candidates = [], events = [];
-  for (const q of searchQueries(player)) {
+  for (const q of queries) {
     events = await bfCall('listEvents', { filter: { eventTypeIds: [TENNIS_EVENT_TYPE_ID], textQuery: q } }, appKey, session);
     const hits = (events || []).filter(e => {
       const name = e.event?.name || '';
-      if (name.includes('/')) return false; // doubles pairing, not a singles match
+      if (name.includes('/') !== isDoubles) return false; // singles query <-> singles event only, doubles <-> doubles
       if (!isPlausiblePrematchKickoff(e.event?.openDate)) return false;
       const parts = name.split(' v ');
       if (parts.length !== 2) return false;
-      return fuzzyTeamMatch(player, parts[0]) || fuzzyTeamMatch(player, parts[1]);
+      return sideMatches(parts[0]) || sideMatches(parts[1]);
     });
     if (hits.length) { candidates = hits; break; }
   }
@@ -301,7 +322,7 @@ async function findPlayerWin(player, appKey, session) {
   if (!catalogue?.length) return { error: 'no MATCH_ODDS market found', eventName: match.event.name };
 
   const marketId = catalogue[0].marketId;
-  const runnerMeta = catalogue[0].runners.find(r => fuzzyTeamMatch(player, r.runnerName));
+  const runnerMeta = catalogue[0].runners.find(r => sideMatches(r.runnerName));
   if (!runnerMeta) return { error: `runner not found for player: ${player}`, eventName: match.event.name, runners: catalogue[0].runners.map(r => r.runnerName) };
 
   const books = await bfCall('listMarketBook', {

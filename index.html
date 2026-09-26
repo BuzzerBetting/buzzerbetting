@@ -2533,7 +2533,7 @@ input::placeholder{color:var(--text3)}
       </div>
     </div>
     <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:700px"><thead><tr><th>Time</th><th>Race</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th class="r"></th></tr></thead><tbody id="ba-f1-ew-body"></tbody></table></div></div>
-    <div class="note"><i class="ti ti-info-circle"></i> F1 Each-Way value vs place terms. Feed not connected yet — this tab lights up automatically once the scraper starts publishing.</div>
+    <div class="note"><i class="ti ti-info-circle"></i> F1 Each-Way value vs place terms. Refreshes automatically from the F1 scanner before each race.</div>
   </div>
 
   <!-- panel: Arbs -->
@@ -2545,7 +2545,7 @@ input::placeholder{color:var(--text3)}
       </div>
     </div>
     <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:700px"><thead><tr><th>Time</th><th>Event</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">Profit%</th><th class="r"></th></tr></thead><tbody id="ba-arbs-body"></tbody></table></div></div>
-    <div class="note"><i class="ti ti-info-circle"></i> Cross-bookmaker arbitrage. Feed not connected yet — this tab lights up automatically once the scraper starts publishing.</div>
+    <div class="note"><i class="ti ti-info-circle"></i> Cross-bookmaker arbitrage. Refreshes automatically from the F1 scanner before each race.</div>
   </div>
 
   <!-- panel: DNFs -->
@@ -2557,7 +2557,7 @@ input::placeholder{color:var(--text3)}
       </div>
     </div>
     <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:700px"><thead><tr><th>Time</th><th>Event</th><th>Market</th><th>Selection</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th class="r"></th></tr></thead><tbody id="ba-dnf-body"></tbody></table></div></div>
-    <div class="note"><i class="ti ti-info-circle"></i> Did-Not-Finish / retirement value. Feed not connected yet — this tab lights up automatically once the scraper starts publishing.</div>
+    <div class="note"><i class="ti ti-info-circle"></i> Did-Not-Finish / retirement value. Refreshes automatically from the F1 scanner before each race.</div>
   </div>
 
   <!-- panel: Errors (2026-09-14 — market-integrity flags, not value bets: a bookmaker's own
@@ -16464,7 +16464,7 @@ function renderBaStubFeed(key){
             : (b.ev != null ? `+${Number(b.ev).toFixed(1)}%` : '—');
           return `<tr><td style="color:var(--text2)">${b.t ?? ''}</td><td style="font-weight:500">${b.match ?? ''}</td><td style="color:var(--text2);font-size:12px">${b.mkt ?? ''}</td><td>${b.sel ?? ''}</td><td class="r tn">${b.fair != null ? Number(b.fair).toFixed(2) : '—'}</td><td class="r" style="color:var(--text2);font-size:12px">${b.bk ?? ''}</td><td class="r tn" style="font-weight:500">${b.odds != null ? Number(b.odds).toFixed(2) : '—'}</td><td class="r">${val}</td><td class="r"><button onclick="copyBaStubBet('${key}',${i},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td></tr>`;
         }).join('')
-      : `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">Feed not connected yet — nothing to show.</td></tr>`;
+      : `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No value bets right now.</td></tr>`;
   }
   baSetCount(key, shown.length);
   baReportSeen(key, shown.map(b => ({ match: b.match, market: b.mkt, selection: b.sel, bk: b.bk, odds: b.odds, ev: b.ev })));
