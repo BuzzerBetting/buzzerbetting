@@ -16364,7 +16364,7 @@ function renderBaOutliers(){
     <td style="font-size:12px;color:var(--text2);white-space:nowrap">${escapeHtml(r.kickoff || '')}</td>
     <td style="font-size:12.5px">${escapeHtml(r.match || '')}</td>
     <td style="font-size:12px;color:var(--text2)">${escapeHtml(r.market || '')}</td>
-    <td style="font-weight:500">${escapeHtml(r.selection || '')}</td>
+    <td style="font-weight:500">${escapeHtml(r.selection || '')}${r.playerStats ? `<div style="font-weight:400;font-size:11.5px;color:var(--text3);margin-top:2px" title="FotMob, current + previous two seasons, all competitions">${escapeHtml(r.playerStats)}</div>` : ''}</td>
     <td class="r tn" style="font-weight:600;color:var(--green)">${r.topPrice != null ? Number(r.topPrice).toFixed(2) : '—'} <span style="color:var(--text3);font-size:11px">(${escapeHtml(ocBookieShort(r.topBook))})</span>${r.topFresh === false ? ' <i class="ti ti-clock-exclamation" title="This price has not moved in a while — worth checking it is still current" style="color:var(--amber)"></i>' : ''}</td>
     <td class="r tn" style="color:var(--text2)">${r.nextPrice != null ? Number(r.nextPrice).toFixed(2) : '—'} <span style="color:var(--text3);font-size:11px">(${escapeHtml(ocBookieShort(r.nextBook))})</span>${r.nextFresh === false ? ' <i class="ti ti-clock-exclamation" title="This price has not moved in a while — worth checking it is still current" style="color:var(--amber)"></i>' : ''}</td>
     <td class="r"><span class="badge" style="background:var(--amber-bg);color:var(--amber)">+${r.pctAboveNext != null ? Number(r.pctAboveNext).toFixed(0) : '—'}%</span></td>

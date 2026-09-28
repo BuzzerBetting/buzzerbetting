@@ -19,8 +19,9 @@ for (let s = 0; s <= 3; s++) {
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
 
-  const { playerId, matchType } = event.queryStringParameters || {};
+  const { playerId, matchType, mode } = event.queryStringParameters || {};
   if (!playerId) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'playerId required' }) };
+  if (mode === 'career') return careerTotals(playerId);
 
   const isInternational = matchType === 'international';
 
@@ -102,6 +103,43 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: err.message }) };
   }
 };
+
+// mode=career (2026-09-28, for the Outliers tab's per-player context): plain season totals —
+// matches, minutes, goals, assists, shots, SOT, yellow/red cards — summed across EVERY
+// competition slot for the current season plus the two before it (seasons 0-2). Read straight
+// off each playerStats response's topStatCard/statsSection values, not rebuilt from the
+// shotmap, since cards/assists/minutes aren't in the shotmap at all.
+const CAREER_SEASONS = [0, 1, 2];
+const CAREER_STAT_KEYS = {
+  matches_uppercase: 'matches', minutes_played: 'minutes', goals: 'goals', assists: 'assists',
+  shots: 'shots', ShotsOnTarget: 'sot', yellow_cards: 'yellows', red_cards: 'reds',
+};
+async function careerTotals(playerId) {
+  const ids = SEASON_IDS.filter(id => CAREER_SEASONS.includes(parseInt(id.split('-')[0])));
+  const results = await Promise.allSettled(ids.map(async (seasonId) => {
+    const url = `https://www.fotmob.com/api/data/playerStats?playerId=${playerId}&seasonId=${seasonId}&isFirstSeason=false`;
+    const res = await fetch(url, { headers: FOTMOB_HEADERS });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const vals = {};
+    const items = [...(data?.topStatCard?.items || []),
+      ...((data?.statsSection?.items || []).flatMap(g => g.items || []))];
+    for (const it of items) {
+      const key = CAREER_STAT_KEYS[it.localizedTitleId];
+      if (key && vals[key] == null) vals[key] = parseFloat(it.statValue) || 0;
+    }
+    return vals.matches ? vals : null;
+  }));
+  const totals = { matches: 0, minutes: 0, goals: 0, assists: 0, shots: 0, sot: 0, yellows: 0, reds: 0 };
+  let competitions = 0;
+  for (const r of results) {
+    if (r.status !== 'fulfilled' || !r.value) continue;
+    competitions++;
+    for (const k of Object.keys(totals)) totals[k] += r.value[k] || 0;
+  }
+  if (!competitions) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'No season stats found for this player' }) };
+  return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, playerId, seasons: CAREER_SEASONS.length, competitions, totals }) };
+}
 
 function calcStats(shots, matchesPlayed) {
   if (!shots || !shots.length) return null;
