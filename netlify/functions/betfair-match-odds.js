@@ -33,6 +33,7 @@
 //   action=btts&home=<H>&away=<A>                       — "Both teams to Score?", runner "Yes"
 //   action=correct-score&home=<H>&away=<A>&homeScore=<N>&awayScore=<M>
 //                                                         — "Correct Score", runner "<N> - <M>"
+//   action=half-time&home=<H>&away=<A>&team=<T>          — "Half Time", runner <T> (T leads at HT; 2026-09-29)
 //   action=ht-ft&home=<H>&away=<A>&ht=<team-or-Draw>&ft=<team-or-Draw>
 //                                                         — "Half Time/Full Time", runner "<ht>/<ft>"
 //   action=win-and-btts&home=<H>&away=<A>&team=<T>       — "Match Odds and Both teams to Score",
@@ -452,7 +453,7 @@ async function runAction(action, params, appKey, session) {
     return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, ...result }) };
   }
 
-  const BOOST_ACTIONS = ['win-to-nil', 'draw', 'over25', 'btts', 'correct-score', 'ht-ft', 'win-and-btts'];
+  const BOOST_ACTIONS = ['win-to-nil', 'draw', 'over25', 'btts', 'correct-score', 'ht-ft', 'win-and-btts', 'half-time'];
   if (BOOST_ACTIONS.includes(action)) {
     const { home, away, team, homeScore, awayScore, ht, ft } = params;
     if (!home || !away) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'home and away required' }) };
@@ -486,6 +487,10 @@ async function runAction(action, params, appKey, session) {
         const sides = splitSlashRunner(n);
         return !!sides && matchesTeamOrDraw(ht, sides[0]) && matchesTeamOrDraw(ft, sides[1]);
       };
+    } else if (action === 'half-time') {
+      if (!team) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team required' }) };
+      marketNameTest = n => n.trim().toLowerCase() === 'half time';
+      runnerTest = n => !/draw/i.test(n) && fuzzyTeamMatch(team, n);
     } else if (action === 'win-and-btts') {
       if (!team) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team required' }) };
       marketNameTest = n => n.trim().toLowerCase() === 'match odds and both teams to score';
