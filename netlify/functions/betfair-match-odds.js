@@ -507,7 +507,7 @@ async function runAction(action, params, appKey, session) {
     return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, ...result }) };
   }
 
-  const BOOST_ACTIONS = ['win-to-nil', 'draw', 'over25', 'btts', 'correct-score', 'ht-ft', 'win-and-btts', 'half-time', 'goals-line'];
+  const BOOST_ACTIONS = ['win-to-nil', 'draw', 'over25', 'btts', 'correct-score', 'ht-ft', 'win-and-btts', 'half-time', 'goals-line', 'team-goals-line'];
   if (BOOST_ACTIONS.includes(action)) {
     const { home, away, team, homeScore, awayScore, ht, ft, line, side } = params;
     if (!home || !away) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'home and away required' }) };
@@ -551,6 +551,20 @@ async function runAction(action, params, appKey, session) {
         ? n => n.trim().toLowerCase() === `first half goals ${line}`
         : n => n.trim().toLowerCase() === `over/under ${line} goals`;
       runnerTest = n => n.trim().toLowerCase().startsWith(String(side).toLowerCase());
+    } else if (action === 'team-goals-line') {
+      // "<Team> Over/Under 0.5 Goals" — a team-to-score price (2026-09-29, for "All To Score"
+      // boosts naming a team without its opponent). Betfair only lists these on some fixtures.
+      if (!team) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team required' }) };
+      const tl = /^\d+\.5$/.test(String(line || '')) ? String(line) : '0.5';
+      const sd = /^under$/i.test(String(side || '')) ? 'under' : 'over';
+      const suffix = `over/under ${tl} goals`;
+      marketNameTest = n => {
+        const low = n.trim().toLowerCase();
+        if (!low.endsWith(suffix)) return false;
+        const prefix = n.trim().slice(0, n.trim().length - suffix.length).trim();
+        return !!prefix && fuzzyTeamMatch(team, prefix);
+      };
+      runnerTest = n => n.trim().toLowerCase().startsWith(sd);
     } else if (action === 'half-time') {
       if (!team) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team required' }) };
       marketNameTest = n => n.trim().toLowerCase() === 'half time';
