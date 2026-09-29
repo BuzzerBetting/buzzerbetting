@@ -684,4 +684,16 @@ CREATE TABLE IF NOT EXISTS planetsportbet_boosts (
 );
 `);
 
+// Bet Alerts sound alerts (2026-09-29): EV% at the moment a bet was ticked as placed, so a
+// re-appearing placed bet only re-alerts once it's steamed 10+ points past it.
+try { db.exec(`ALTER TABLE bet_alert_placed ADD COLUMN ev REAL`); } catch (e) { /* already exists */ }
+// Per-user Bet Alerts sound on/off per tab — { edgeKey: bool }, missing key = on.
+db.exec(`
+CREATE TABLE IF NOT EXISTS user_bet_alert_sound (
+  username   TEXT PRIMARY KEY,
+  prefs      TEXT NOT NULL,
+  updated_at TEXT
+);
+`);
+
 module.exports = db;

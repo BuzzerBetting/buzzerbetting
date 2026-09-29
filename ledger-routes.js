@@ -146,6 +146,7 @@ router.use((req, res, next) => {
       && !req.path.startsWith('/bet-alert-seen')
       && !req.path.startsWith('/bet-alert-stats')
       && !req.path.startsWith('/bet-alert-placed')
+      && !req.path.startsWith('/bet-alert-sound')
       && !req.path.startsWith('/oc-coverage-ignored')
       && !req.path.startsWith('/ones-to-watch')
       && !req.path.startsWith('/bet365-sot')
@@ -3774,7 +3775,7 @@ router.post('/bet-alert-seen', (req, res) => {
 const BET_PLACED_LOOKBACK = '-3 days';
 function placedRows(username) {
   return db.prepare(
-    `SELECT bet_key, edge, match, market, selection, bookie, odds, placed_at
+    `SELECT bet_key, edge, match, market, selection, bookie, odds, ev, placed_at
        FROM bet_alert_placed WHERE username = ? AND placed_at >= datetime('now', ?)`
   ).all(username, BET_PLACED_LOOKBACK);
 }
@@ -3794,7 +3795,7 @@ router.get('/bet-alert-placed', (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
-// POST /api/ledger/bet-alert-placed — body: { placed, edge, match, market, selection, bookie, odds }
+// POST /api/ledger/bet-alert-placed — body: { placed, edge, match, market, selection, bookie, odds, ev }
 // placed:true upserts the current user's tick (re-ticking refreshes odds/bookie/time), false removes it.
 router.post('/bet-alert-placed', (req, res) => {
   try {
@@ -3806,17 +3807,38 @@ router.post('/bet-alert-placed', (req, res) => {
       db.prepare(`DELETE FROM bet_alert_placed WHERE username = ? AND bet_key = ?`).run(req.username, key);
     } else {
       const odds = parseFloat(b.odds);
+      const ev = parseFloat(b.ev);
       db.prepare(
-        `INSERT INTO bet_alert_placed (username, bet_key, edge, match, market, selection, bookie, odds)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO bet_alert_placed (username, bet_key, edge, match, market, selection, bookie, odds, ev)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(username, bet_key) DO UPDATE SET edge = excluded.edge, match = excluded.match,
            market = excluded.market, selection = excluded.selection, bookie = excluded.bookie,
-           odds = excluded.odds, placed_at = datetime('now')`
+           odds = excluded.odds, ev = excluded.ev, placed_at = datetime('now')`
       ).run(req.username, key, b.edge || null, b.match || '', b.market || '', b.selection || '',
-            b.bookie || null, isFinite(odds) ? odds : null);
+            b.bookie || null, isFinite(odds) ? odds : null, isFinite(ev) ? ev : null);
     }
     res.json({ ok: true, key });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// ---- sound alert toggles (per user, per tab) ----
+// GET /api/ledger/bet-alert-sound → { ok, prefs: { edgeKey: bool } } (missing key = on)
+router.get('/bet-alert-sound', (req, res) => {
+  if (!req.username) return res.status(400).json({ ok: false, error: 'no session' });
+  const row = db.prepare(`SELECT prefs FROM user_bet_alert_sound WHERE username = ?`).get(req.username);
+  let prefs = {};
+  if (row) { try { prefs = JSON.parse(row.prefs) || {}; } catch (e) { prefs = {}; } }
+  res.json({ ok: true, prefs });
+});
+// POST /api/ledger/bet-alert-sound  body: { prefs: {...} }
+router.post('/bet-alert-sound', (req, res) => {
+  if (!req.username) return res.status(400).json({ ok: false, error: 'no session' });
+  const prefs = (req.body && typeof req.body.prefs === 'object' && req.body.prefs) || {};
+  db.prepare(
+    `INSERT INTO user_bet_alert_sound (username, prefs, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(username) DO UPDATE SET prefs = excluded.prefs, updated_at = excluded.updated_at`
+  ).run(req.username, JSON.stringify(prefs), new Date().toISOString());
+  res.json({ ok: true });
 });
 
 // ---- OC Coverage ignores (shared, 12h) ----

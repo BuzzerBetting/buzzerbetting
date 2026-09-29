@@ -3747,6 +3747,7 @@ function applyRoleRestrictions() {
   if (!noLedger) startCalcEVBackground(); // Calculated +EV rescans in the background (every 5 min, 3 min within 15 min of a kickoff)
   if (!isFreeze) startNotifPolling(); // header notification bell — every role except Freeze (which is locked to one tool)
   if (!isFreeze) startBaErrorsPolling(); // Bet Alerts "Errors" sound alert — global, not tied to that tab being open, same reasoning as the notif bell
+  if (!isFreeze) startBaSoundPolling(); // Bet Alerts per-tab sound alerts — background-polls every tab with sound on
   if (isFreeze) {
     // Lock the view to Freeze immediately (no flash of Home / other sections) and hide the
     // header notification bell (it has no meaning for this role).
@@ -9187,7 +9188,7 @@ function copyOddscheckerLine(i,btn){
 // own rows going green because of them.
 const BA_WATCH_USER='Rafael';
 function baShowWatchCol(){ return CURRENT_USERNAME==='Jordan'; }
-let BA_PLACED={mine:new Map(),watch:new Map(),sig:''};
+let BA_PLACED={mine:new Map(),watch:new Map(),sig:'',loaded:false};
 // Must match ledger-routes.js betAlertNorm/betAlertKey.
 function baPlacedNorm(s){
   return String(s==null?'':s).normalize('NFD').replace(/[\u0300-\u036f]/g,'')
@@ -9196,15 +9197,16 @@ function baPlacedNorm(s){
 function baPlacedKey(match,market,selection){ return [baPlacedNorm(match),baPlacedNorm(market),baPlacedNorm(selection)].join(' | '); }
 // The bet a row stands for, by edge + index into that table's own row array.
 function baPlacedBet(edge,idx){
-  if(edge==='oc-ev'){ const b=ocEvBets[idx]; return b&&{match:b.match,market:b.mkt,selection:b.sel,bookie:ocBookieName(b.bk),odds:b.odds}; }
-  if(edge==='calc-ev'){ const b=cevRenderedBets[idx]; return b&&{match:b.match,market:b.market,selection:b.player,bookie:ocBookieName(b.bookie),odds:parseFloat(b.ocOdds)||null}; }
-  if(edge==='outliers'){ const r=BA_OUTLIERS_RENDERED[idx]; return r&&{match:r.match,market:r.market,selection:r.selection,bookie:ocBookieName(r.topBook)||r.topBook,odds:r.topPrice}; }
+  if(edge==='oc-ev'){ const b=ocEvBets[idx]; return b&&{match:b.match,market:b.mkt,selection:b.sel,bookie:ocBookieName(b.bk),odds:b.odds,ev:b.ev}; }
+  if(edge==='calc-ev'){ const b=cevRenderedBets[idx]; return b&&{match:b.match,market:b.market,selection:b.player,bookie:ocBookieName(b.bookie),odds:parseFloat(b.ocOdds)||null,ev:(typeof b.bestEv==='number'?b.bestEv:null)}; }
+  // Outliers has no fair/EV — "% above next best" stands in for it.
+  if(edge==='outliers'){ const r=BA_OUTLIERS_RENDERED[idx]; return r&&{match:r.match,market:r.market,selection:r.selection,bookie:ocBookieName(r.topBook)||r.topBook,odds:r.topPrice,ev:r.pctAboveNext}; }
   return null;
 }
 function baPlacedLabel(p){
   if(!p)return '';
   const when=p.placed_at?new Date(p.placed_at.replace(' ','T')+'Z').toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'';
-  return `Placed${p.odds!=null?' at '+Number(p.odds).toFixed(2):''}${p.bookie?' ('+p.bookie+')':''}${when?', '+when:''}`;
+  return `Placed${p.odds!=null?' at '+Number(p.odds).toFixed(2):''}${p.bookie?' ('+p.bookie+')':''}${p.ev!=null?', +'+Number(p.ev).toFixed(1)+'%':''}${when?', '+when:''}`;
 }
 // Row decoration for a (match,market,selection): placed flag, tick button, "Rafael placed?" cell.
 function baPlacedRow(match,market,selection){
@@ -9230,7 +9232,7 @@ async function baLoadPlaced(){
     const watch=new Map(((d.also&&d.also[BA_WATCH_USER])||[]).map(p=>[p.bet_key,p]));
     const sig=JSON.stringify([[...mine.keys()].sort(),[...watch.keys()].sort()]);
     const changed=sig!==BA_PLACED.sig;
-    BA_PLACED={mine,watch,sig};
+    BA_PLACED={mine,watch,sig,loaded:true};
     if(changed)baRerenderPlacedTables();
   }catch(e){}
 }
@@ -9242,7 +9244,7 @@ async function baTogglePlaced(edge,idx,btn){
   if(btn)btn.disabled=true;
   // Optimistic — flip it locally straight away, roll back if the save fails.
   if(wasPlaced)BA_PLACED.mine.delete(key);
-  else BA_PLACED.mine.set(key,{bet_key:key,bookie:bet.bookie,odds:bet.odds,placed_at:new Date().toISOString().slice(0,19).replace('T',' ')});
+  else BA_PLACED.mine.set(key,{bet_key:key,bookie:bet.bookie,odds:bet.odds,ev:bet.ev,placed_at:new Date().toISOString().slice(0,19).replace('T',' ')});
   BA_PLACED.sig='';
   baRerenderPlacedTables();
   try{
@@ -13990,7 +13992,9 @@ async function getConfirmedNotStartedFixtures() {
 async function runCalcEVScan(opts) {
   opts = opts || {};
   if (cevScanning) return;
-  if (opts.silent && document.hidden) return; // don't burn scrapes while the tab isn't visible
+  // don't burn scrapes while the tab isn't visible — unless Calculated +EV sound alerts are on,
+  // since the point of those is to hear about a bet while you're off on a bookie's site
+  if (opts.silent && document.hidden && !(typeof baSoundOn === 'function' && baSoundOn('calc-ev'))) return;
   cevScanning = true;
   const statusEl = document.getElementById('cev-status');
   try {
@@ -15887,7 +15891,9 @@ function renderBaTabs(){
     const active = e.key === BA_ACTIVE;
     const n = BA_COUNTS[e.key];
     const b = document.createElement('button');
-    b.innerHTML = `${escapeHtml(e.label)}${n != null ? ` <span style="color:var(--red);font-weight:700">(${n})</span>` : ''}`;
+    const on = baSoundOn(e.key);
+    b.innerHTML = `${escapeHtml(e.label)}${n != null ? ` <span style="color:var(--red);font-weight:700">(${n})</span>` : ''}`
+      + ` <i class="ti ${on ? 'ti-bell-ringing' : 'ti-bell-off'}" onclick="event.stopPropagation();baToggleSound('${e.key}')" title="${on ? 'Sound alerts on for this tab — click to mute' : 'Sound alerts muted for this tab — click to turn on'}" style="font-size:13px;margin-left:3px;color:${on ? 'var(--green)' : 'var(--text3)'};opacity:${on ? 1 : .6}"></i>`;
     b.onclick = () => baTab(e.key);
     b.style.cssText = `padding:8px 12px;border:none;border-bottom:2px solid ${active ? 'var(--brand)' : 'transparent'};background:none;color:${active ? 'var(--text)' : 'var(--text3)'};font-weight:${active ? '600' : '400'};font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap`;
     wrap.appendChild(b);
@@ -16229,9 +16235,10 @@ async function pollBaErrors(){
   const fresh = rows.filter(r => !seen.has(baErrorRowKey(r)));
   if (fresh.length) {
     unlockTodoAudio(); // no-op if already unlocked; harmless if audio's still locked (silent)
-    playErrorAlertSound();
+    const soundOn = baSoundOn('errors');
+    if (soundOn) playErrorAlertSound();
     fresh.forEach(r => {
-      showToast(`⚠ ${escapeHtml(r.selection || 'Market')} — still open past its first leg`, { color: 'var(--red)', bg: 'var(--red-bg)', duration: 9000 });
+      if (soundOn) showToast(`⚠ ${escapeHtml(r.selection || 'Market')} — still open past its first leg`, { color: 'var(--red)', bg: 'var(--red-bg)', duration: 9000 });
       seen.add(baErrorRowKey(r));
     });
     baErrorsSaveSeen(seen);
@@ -16273,6 +16280,128 @@ function startBaErrorsPolling(){
   BA_ERRORS_POLL = setInterval(pollBaErrors, 60000);
 }
 
+// ---- Bet Alerts sound alerts (2026-09-29, user-requested) ----
+// Every tab can ping when a new bet shows up, toggled per tab per user (the bell on each tab;
+// saved server-side in user_bet_alert_sound, missing = on). Its own sound, distinct from the
+// To Do beep and the Errors buzz. Rules, per bet (normalised match|market|selection, same key
+// as the placed ticks):
+//   - not placed: alert when it first appears, or reappears after 15+ min off the feed —
+//     so a bet flickering around the threshold doesn't ping every poll;
+//   - placed by me: stay quiet unless its EV% is 10+ points above the EV it was placed at
+//     (or above the last time it re-alerted) — it's steamed in and wants more stake.
+// Seen state lives in localStorage per user; the first check of each tab in a browser just
+// seeds it silently so opening the site doesn't fire off everything already listed.
+const BA_SOUND_REAPPEAR_MS = 15 * 60 * 1000;
+const BA_SOUND_STEAM_PTS = 10;
+let BA_SOUND_PREFS = {};
+let BA_SOUND_POLL = null;
+function baSoundOn(key){ return BA_SOUND_PREFS[key] !== false; }
+async function baLoadSoundPrefs(){
+  try { const d = await ledgerApi('bet-alert-sound'); if (d && d.ok) BA_SOUND_PREFS = d.prefs || {}; } catch(e) {}
+  renderBaTabs();
+}
+async function baToggleSound(key){
+  unlockTodoAudio(); // this click is a user gesture — good moment to make sure audio's unlocked
+  BA_SOUND_PREFS = Object.assign({}, BA_SOUND_PREFS, { [key]: !baSoundOn(key) });
+  renderBaTabs();
+  try {
+    await ledgerApi('bet-alert-sound', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prefs: BA_SOUND_PREFS }) });
+  } catch(e) { showToast('Could not save the sound setting — try again.'); }
+}
+function baSoundStoreKey(){ return 'bb_ba_sound_seen_' + (CURRENT_USERNAME || ''); }
+function baSoundLoadSeen(){
+  try { return JSON.parse(localStorage.getItem(baSoundStoreKey()) || '{}') || {}; } catch(e) { return {}; }
+}
+function baSoundSaveSeen(s){ try { localStorage.setItem(baSoundStoreKey(), JSON.stringify(s)); } catch(e) {} }
+// Rising three-note chime — the To Do alert is two sine beeps, Errors is a low square buzz.
+function playBetAlertSound(){
+  if (!TODO_AUDIO_CTX) return;
+  try { if (TODO_AUDIO_CTX.state === 'suspended') TODO_AUDIO_CTX.resume(); } catch(e) {}
+  const now = TODO_AUDIO_CTX.currentTime;
+  [[0, 659.25], [0.11, 783.99], [0.22, 1318.5]].forEach(([offset, freq]) => {
+    const osc = TODO_AUDIO_CTX.createOscillator();
+    const gain = TODO_AUDIO_CTX.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, now + offset);
+    gain.gain.exponentialRampToValueAtTime(0.3, now + offset + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + (offset > 0.2 ? 0.45 : 0.14));
+    osc.connect(gain).connect(TODO_AUDIO_CTX.destination);
+    osc.start(now + offset);
+    osc.stop(now + offset + 0.5);
+  });
+}
+// bets: [{ match, market, selection, bk?, odds?, ev? }] — whatever the tab currently shows.
+function baSoundCheck(key, bets){
+  if (key === 'errors') return;       // Errors keeps its own sound/seen logic (pollBaErrors)
+  if (!BA_PLACED.loaded) return;       // wait for placed ticks, or a placed bet could ping on load
+  const all = baSoundLoadSeen();
+  const firstRun = !all[key];
+  const seen = all[key] || {};
+  const now = Date.now();
+  const alerts = [];
+  for (const b of (bets || [])) {
+    if (!b || (!b.match && !b.selection)) continue;
+    const k = baPlacedKey(b.match, b.market, b.selection);
+    const prev = seen[k];
+    const ev = (typeof b.ev === 'number' && isFinite(b.ev)) ? b.ev : null;
+    const placed = BA_PLACED.mine.get(k);
+    let alert = null;
+    if (placed) {
+      const base = Math.max(placed.ev != null ? Number(placed.ev) : -Infinity, (prev && prev.a != null) ? prev.a : -Infinity);
+      if (ev != null && isFinite(base) && ev >= base + BA_SOUND_STEAM_PTS) alert = 'steam';
+    } else if (!prev || now - prev.t > BA_SOUND_REAPPEAR_MS) {
+      alert = 'new';
+    }
+    seen[k] = { t: now, a: alert === 'steam' ? ev : (prev ? prev.a : undefined) };
+    if (alert && !firstRun) alerts.push({ b, kind: alert, placed });
+  }
+  // prune anything not seen for a day
+  for (const k of Object.keys(seen)) if (now - seen[k].t > 86400000) delete seen[k];
+  all[key] = seen;
+  baSoundSaveSeen(all);
+  if (!alerts.length || !baSoundOn(key)) return;
+  playBetAlertSound();
+  const label = baLabel(key);
+  alerts.slice(0, 3).forEach(({ b, kind, placed }) => {
+    const price = b.odds != null && isFinite(Number(b.odds)) ? ` @ ${Number(b.odds).toFixed(2)}` : '';
+    const evTxt = typeof b.ev === 'number' ? ` (+${b.ev.toFixed(1)}%)` : '';
+    const msg = kind === 'steam'
+      ? `${label}: ${b.selection} steamed to +${b.ev.toFixed(1)}% — placed at +${Number(placed.ev).toFixed(1)}%${price}`
+      : `${label}: ${b.selection || b.match}${b.market ? ' — ' + b.market : ''}${price}${evTxt}`;
+    showToast(msg, kind === 'steam' ? { color: 'var(--green)', bg: 'var(--green-bg)', duration: 12000 } : { duration: 9000 });
+  });
+  if (alerts.length > 3) showToast(`${label}: +${alerts.length - 3} more`, { duration: 9000 });
+}
+// Background: re-load every sound-on tab once a minute from any page, so alerts don't depend
+// on that tab being open. Skipped: the tab Bet Alerts is already polling, Errors (own
+// poller), Calculated +EV (own background rescan, startCalcEVBackground) and DDHH (loads on
+// open only — no cheap refresh).
+const BA_SOUND_BG_SKIP = new Set(['errors', 'calc-ev', 'ddhh']);
+async function pollBaSounds(){
+  if (!BA_PLACED.loaded) await baLoadPlaced();
+  else baLoadPlaced();
+  const baVisible = (() => { const v = document.getElementById('view-bet-alerts'); return v && v.style.display !== 'none'; })();
+  for (const e of BA_EDGES) {
+    if (BA_SOUND_BG_SKIP.has(e.key) || !baSoundOn(e.key)) continue;
+    if (baVisible && e.key === BA_ACTIVE) continue;
+    try { loadBaEdge(e.key, true); } catch(err) {}
+  }
+}
+async function startBaSoundPolling(){
+  unlockTodoAudio();
+  await baLoadSoundPrefs();
+  if (BA_SOUND_POLL) clearInterval(BA_SOUND_POLL);
+  pollBaSounds();
+  BA_SOUND_POLL = setInterval(pollBaSounds, 60000);
+}
+// Browsers start an AudioContext created without a click (e.g. a restored session) as
+// suspended — resume it on the first click anywhere.
+document.addEventListener('click', () => {
+  unlockTodoAudio();
+  try { if (TODO_AUDIO_CTX && TODO_AUDIO_CTX.state === 'suspended') TODO_AUDIO_CTX.resume(); } catch(e) {}
+}, { capture: true });
+
 // OC Coverage tab (2026-09-17) — purely informational (no alert sound, unlike Errors above):
 // today's fixtures the Oddschecker scraper couldn't find a match page for, so they got zero
 // AGS/FGS/Cards/SOT/Header/OTB coverage this cycle. Only loaded while the tab is open, same
@@ -16295,6 +16424,7 @@ async function loadBaUnmatched(){
   BA_UNMATCHED_ROWS = rows.filter(r => !BA_UNMATCHED_IGNORED.has(baPlacedNorm(r.match)));
   baSetCount('unmatched', BA_UNMATCHED_ROWS.length);
   renderBaUnmatched();
+  baSoundCheck('unmatched', BA_UNMATCHED_ROWS.map(r => ({ match: r.match, market: 'OC Coverage', selection: r.kickoff || '' })));
 }
 async function ignoreOcUnmatched(idx){
   const row = BA_UNMATCHED_ROWS[idx];
@@ -16386,6 +16516,9 @@ async function loadBaOutliers(){
   } catch(e) {}
   BA_OUTLIERS_ROWS = rows;
   renderBaOutliers();
+  const mf = getOutliersMarketFilter();
+  baSoundCheck('outliers', rows.filter(r => r.lineupConfirmed && mf.has(r.market))
+    .map(r => ({ match: r.match, market: r.market, selection: r.selection, bk: r.topBook, odds: r.topPrice, ev: r.pctAboveNext })));
 }
 // Confirmed/pre-lineup sub-tab (2026-09-17, user-requested) — defaults to Confirmed every
 // time the tab is opened ("shown automatically"), not persisted like the market filter, since
@@ -16490,6 +16623,7 @@ function baOnEdgeRendered(key, bets){
 }
 
 async function baReportSeen(key, bets){
+  baSoundCheck(key, bets);
   try {
     const d = await ledgerApi('bet-alert-seen', { method: 'POST', body: JSON.stringify({ edge: key, bets: bets || [] }) });
     if (d && d.ok) {
