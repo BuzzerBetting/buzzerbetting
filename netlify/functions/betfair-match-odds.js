@@ -34,7 +34,8 @@
 //   action=correct-score&home=<H>&away=<A>&homeScore=<N>&awayScore=<M>
 //                                                         — "Correct Score", runner "<N> - <M>"
 //   action=half-time&home=<H>&away=<A>&team=<T>          — "Half Time", runner <T> (T leads at HT; 2026-09-29)
-//   action=goals-line&home=<H>&away=<A>&line=3.5&side=over — "Over/Under 3.5 Goals", runner "Over 3.5 Goals" (2026-09-29)
+//   action=goals-line&home=<H>&away=<A>&line=3.5&side=over[&half=1] — "Over/Under 3.5 Goals" (or "First Half Goals 3.5"), runner "Over 3.5 Goals" (2026-09-29)
+//   action=darts-market&team=<player>&market=<Most 180s|Total 180s>&runner=<player|Tie|Over|Under>[&line=5.5] — darts specials (2026-09-29)
 //   action=ht-ft&home=<H>&away=<A>&ht=<team-or-Draw>&ft=<team-or-Draw>
 //                                                         — "Half Time/Full Time", runner "<ht>/<ft>"
 //   action=win-and-btts&home=<H>&away=<A>&team=<T>       — "Match Odds and Both teams to Score",
@@ -437,6 +438,50 @@ function matchesTeamOrDraw(expected, actual) {
   return expected.toLowerCase().trim() === 'draw' ? /^draw$/i.test(actual) : fuzzyTeamMatch(expected, actual);
 }
 
+// Darts specials (Fairplay boosts, 2026-09-29): find the player's match on the Darts event type
+// (same search as findPlayerWin), then a market by exact name — "Most 180s" (runners: each player
+// + "Tie") or "Total 180s" (runners "Over"/"Under", one pair per line, told apart by handicap).
+async function findDartsMarketRunner(player, marketName, runnerName, line, appKey, session) {
+  let candidates = [];
+  for (const q of searchQueries(player)) {
+    const events = await bfCall('listEvents', { filter: { eventTypeIds: [PLAYER_SPORT_EVENT_TYPE.darts], textQuery: q } }, appKey, session);
+    candidates = (events || []).filter(e => {
+      const parts = (e.event?.name || '').split(' v ');
+      return parts.length === 2 && isPlausiblePrematchKickoff(e.event?.openDate) && (fuzzyTeamMatch(player, parts[0]) || fuzzyTeamMatch(player, parts[1]));
+    });
+    if (candidates.length) break;
+  }
+  if (!candidates.length) return { error: `darts event not found for player: ${player}` };
+  candidates.sort((a, b) => new Date(a.event.openDate) - new Date(b.event.openDate));
+  const ev = candidates[0].event;
+
+  const catalogue = await bfCall('listMarketCatalogue', {
+    filter: { eventIds: [ev.id] }, marketProjection: ['RUNNER_DESCRIPTION'], maxResults: 100,
+  }, appKey, session);
+  const market = (catalogue || []).find(m => (m.marketName || '').trim().toLowerCase() === String(marketName).trim().toLowerCase());
+  if (!market) return { error: `market not found: ${marketName}`, eventName: ev.name, available: (catalogue || []).map(m => m.marketName) };
+  const wantLine = line != null && line !== '' ? Number(line) : null;
+  const isSide = /^(over|under)$/i.test(String(runnerName));
+  const runnerMeta = (market.runners || []).find(r => {
+    const nameOk = isSide ? r.runnerName.trim().toLowerCase() === String(runnerName).toLowerCase()
+      : (/^tie$/i.test(runnerName) ? /^tie$/i.test(r.runnerName.trim()) : fuzzyTeamMatch(runnerName, r.runnerName));
+    return nameOk && (wantLine == null || Number(r.handicap) === wantLine);
+  });
+  if (!runnerMeta) return { error: `runner not found: ${runnerName}${wantLine != null ? ' ' + wantLine : ''}`, eventName: ev.name, marketName: market.marketName };
+
+  const books = await bfCall('listMarketBook', { marketIds: [market.marketId], priceProjection: { priceData: ['EX_BEST_OFFERS', 'EX_TRADED'] } }, appKey, session);
+  const rb = (books[0]?.runners || []).find(r => r.selectionId === runnerMeta.selectionId && Number(r.handicap || 0) === Number(runnerMeta.handicap || 0));
+  return {
+    eventName: ev.name, startTime: ev.openDate, marketName: market.marketName, marketId: market.marketId,
+    runner: {
+      totalMatched: rb?.totalMatched ?? 0,
+      lastPriceTraded: rb?.lastPriceTraded ?? null,
+      back: (rb?.ex?.availableToBack ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
+      lay: (rb?.ex?.availableToLay ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
+    },
+  };
+}
+
 async function runAction(action, params, appKey, session) {
   if (action === 'team-win') {
     if (!params.team) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team required' }) };
@@ -450,6 +495,14 @@ async function runAction(action, params, appKey, session) {
     const eventTypeId = PLAYER_SPORT_EVENT_TYPE[String(params.sport || 'tennis').toLowerCase()];
     if (!eventTypeId) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'unknown sport' }) };
     const result = await findPlayerWin(params.team, appKey, session, { eventTypeId, score: params.score });
+    if (result.error) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, ...result }) };
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, ...result }) };
+  }
+
+  if (action === 'darts-market') {
+    const { team, market, runner, line } = params;
+    if (!team || !market || !runner) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team, market and runner required' }) };
+    const result = await findDartsMarketRunner(team, market, runner, line, appKey, session);
     if (result.error) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, ...result }) };
     return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, ...result }) };
   }
@@ -493,7 +546,10 @@ async function runAction(action, params, appKey, session) {
       if (!/^\d+\.5$/.test(String(line || '')) || !/^(over|under)$/i.test(String(side || ''))) {
         return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'line (e.g. 3.5) and side (over|under) required' }) };
       }
-      marketNameTest = n => n.trim().toLowerCase() === `over/under ${line} goals`;
+      // half=1 -> Betfair's "First Half Goals <line>" market instead of the full-match one.
+      marketNameTest = String(params.half) === '1'
+        ? n => n.trim().toLowerCase() === `first half goals ${line}`
+        : n => n.trim().toLowerCase() === `over/under ${line} goals`;
       runnerTest = n => n.trim().toLowerCase().startsWith(String(side).toLowerCase());
     } else if (action === 'half-time') {
       if (!team) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team required' }) };
