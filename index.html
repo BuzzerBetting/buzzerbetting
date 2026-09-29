@@ -16279,16 +16279,34 @@ function startBaErrorsPolling(){
 // as every other non-globally-polled edge (loadBaEdge's default branch) — not worth polling
 // from every page the way Errors is, since nothing here needs an immediate sound alert.
 let BA_UNMATCHED_ROWS = [];
+// Fixtures hidden with the Ignore button (2026-09-29, user-requested — e.g. an MLS game that
+// simply isn't on Oddschecker). Shared server-side, lapses after 12h (ledger-routes.js).
+let BA_UNMATCHED_IGNORED = new Set();
 async function loadBaUnmatched(){
   let rows = [];
-  try {
-    const r = await fetch('/.netlify/functions/oc-unmatched-matches');
-    const d = await r.json();
-    if (d && d.ok && Array.isArray(d.rows)) rows = d.rows;
-  } catch(e) {}
-  BA_UNMATCHED_ROWS = rows;
-  baSetCount('unmatched', rows.length);
+  const [feed, ign] = await Promise.allSettled([
+    fetch('/.netlify/functions/oc-unmatched-matches').then(r => r.json()),
+    ledgerApi('oc-coverage-ignored'),
+  ]);
+  const d = feed.status === 'fulfilled' ? feed.value : null;
+  if (d && d.ok && Array.isArray(d.rows)) rows = d.rows;
+  const di = ign.status === 'fulfilled' ? ign.value : null;
+  if (di && di.ok && Array.isArray(di.keys)) BA_UNMATCHED_IGNORED = new Set(di.keys);
+  BA_UNMATCHED_ROWS = rows.filter(r => !BA_UNMATCHED_IGNORED.has(baPlacedNorm(r.match)));
+  baSetCount('unmatched', BA_UNMATCHED_ROWS.length);
   renderBaUnmatched();
+}
+async function ignoreOcUnmatched(idx){
+  const row = BA_UNMATCHED_ROWS[idx];
+  if (!row) return;
+  try {
+    const d = await ledgerApi('oc-coverage-ignored', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ match: row.match }) });
+    if (!d || !d.ok) throw new Error((d && d.error) || 'failed');
+    BA_UNMATCHED_IGNORED.add(d.key);
+    BA_UNMATCHED_ROWS = BA_UNMATCHED_ROWS.filter(r => r !== row);
+    baSetCount('unmatched', BA_UNMATCHED_ROWS.length);
+    renderBaUnmatched();
+  } catch (e) { showToast('Could not ignore that fixture — try again.'); }
 }
 function renderBaUnmatched(){
   const body = document.getElementById('ba-unmatched-body');
@@ -16314,6 +16332,7 @@ function renderBaUnmatched(){
       <div style="display:flex;gap:6px">
         <input id="oc-learn-url-${idx}" type="text" placeholder="https://www.oddschecker.com/football/.../team-a-v-team-b" style="flex:1;min-width:220px;font-size:12px;padding:6px 8px;border-radius:var(--radius);border:.5px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit">
         <button onclick="learnOcAlias(${idx})" style="background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">Learn</button>
+        <button onclick="ignoreOcUnmatched(${idx})" title="Not on Oddschecker — hide this fixture for 12 hours" style="background:var(--surface);color:var(--text3);border:.5px solid var(--border);border-radius:var(--radius);padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap"><i class="ti ti-eye-off"></i> Ignore</button>
       </div>
     </td>
   </tr>`).join('');

@@ -390,6 +390,16 @@ CREATE TABLE IF NOT EXISTS bet_alert_placed (
 );
 CREATE INDEX IF NOT EXISTS idx_bet_alert_placed_at ON bet_alert_placed(placed_at);
 
+-- OC Coverage "Ignore" (2026-09-29, user-requested) — a fixture that genuinely isn't on
+-- Oddschecker (e.g. an MLS game) can be hidden from the OC Coverage tab. Shared across users;
+-- the hide lapses after 12h (see /oc-coverage-ignored) so it can reappear if still unmatched.
+CREATE TABLE IF NOT EXISTS oc_coverage_ignored (
+  match_key  TEXT PRIMARY KEY,   -- betAlertNorm(match)
+  match      TEXT,
+  ignored_by TEXT,
+  ignored_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- ================== DISCORD CORNER-BET AUTO-ENTRY ==================
 -- Single-row config for the Discord bot (discord-corners-bot.js) that reads Betfred corner
 -- bet-builder screenshots posted to a channel and books them as 'Corners' bets. The bot

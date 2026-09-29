@@ -146,6 +146,7 @@ router.use((req, res, next) => {
       && !req.path.startsWith('/bet-alert-seen')
       && !req.path.startsWith('/bet-alert-stats')
       && !req.path.startsWith('/bet-alert-placed')
+      && !req.path.startsWith('/oc-coverage-ignored')
       && !req.path.startsWith('/ones-to-watch')
       && !req.path.startsWith('/bet365-sot')
       && !req.path.startsWith('/parse-bet365-sot')) {
@@ -3814,6 +3815,35 @@ router.post('/bet-alert-placed', (req, res) => {
       ).run(req.username, key, b.edge || null, b.match || '', b.market || '', b.selection || '',
             b.bookie || null, isFinite(odds) ? odds : null);
     }
+    res.json({ ok: true, key });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// ---- OC Coverage ignores (shared, 12h) ----
+const OC_COVERAGE_IGNORE_WINDOW = '-12 hours';
+
+// GET /api/ledger/oc-coverage-ignored → { ok, keys:[normalised match], rows:[...] }
+router.get('/oc-coverage-ignored', (req, res) => {
+  try {
+    const rows = db.prepare(
+      `SELECT match_key, match, ignored_by, ignored_at FROM oc_coverage_ignored
+        WHERE ignored_at >= datetime('now', ?)`
+    ).all(OC_COVERAGE_IGNORE_WINDOW);
+    res.json({ ok: true, keys: rows.map(r => r.match_key), rows });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/oc-coverage-ignored — body: { match } — (re)starts the 12h hide.
+router.post('/oc-coverage-ignored', (req, res) => {
+  try {
+    const match = String((req.body && req.body.match) || '').trim();
+    if (!match) return res.status(400).json({ ok: false, error: 'match required' });
+    const key = betAlertNorm(match);
+    db.prepare(
+      `INSERT INTO oc_coverage_ignored (match_key, match, ignored_by) VALUES (?, ?, ?)
+       ON CONFLICT(match_key) DO UPDATE SET match = excluded.match, ignored_by = excluded.ignored_by,
+         ignored_at = datetime('now')`
+    ).run(key, match, req.username || null);
     res.json({ ok: true, key });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
