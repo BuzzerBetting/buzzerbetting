@@ -144,7 +144,7 @@ input::placeholder{color:var(--text3)}
 .ledger-grid td.profile-cell,.ledger-grid th.profile-th{position:sticky;left:0;z-index:3;background:var(--surface);font-weight:600;padding:8px 12px;color:var(--text)}
 .ledger-grid th.profile-th{z-index:4;background:var(--surface2)}
 /* Bet Alerts "placed" ticks — see baLoadPlaced(). Row goes green for the user who ticked it;
-   the "Rafael placed?" column only shows on Jordan's login (body.ba-show-watch). */
+   the "<name> placed?" column only shows for a login in BA_WATCH_MAP (body.ba-show-watch). */
 .ba-watch-col{display:none}
 body.ba-show-watch .ba-watch-col{display:table-cell;text-align:center}
 tr.ba-placed > td{background:var(--green-bg) !important}
@@ -2466,7 +2466,7 @@ tr.ba-placed > td{background:var(--green-bg) !important}
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block"></span>BFex fair — high confidence (£500+ matched, tight spread)</span>
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--amber);display:inline-block"></span>Usable but thinner BFEX data</span>
     </div>
-    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Fair odds</th><th class="r">Last traded</th><th class="r">Total traded</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th class="ba-watch-col">Rafael placed?</th><th></th></tr></thead><tbody id="scanner-body"></tbody></table></div></div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Fair odds</th><th class="r">Last traded</th><th class="r">Total traded</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th class="ba-watch-col">Placed?</th><th></th></tr></thead><tbody id="scanner-body"></tbody></table></div></div>
     <div class="note"><i class="ti ti-info-circle"></i> Auto-refreshes every 60s. Scanning starts once a match's lineup is confirmed and runs every 10 minutes until kickoff, tightening to every 3 minutes in the last 15 minutes before kickoff — First Goalscorer, Anytime Goalscorer, Player Shown a Card and Player Shots on Target markets, sorted by EV%. These all compare Oddschecker directly against the matching BFEX market. Header and Outside-the-Box goal need their own fair-odds calculation instead (no direct BFEX market for either) — see the <a href="javascript:void(0)" onclick="baTab('calc-ev')">Calculated +EV</a> tab.</div>
   </div>
 
@@ -2491,7 +2491,7 @@ tr.ba-placed > td{background:var(--green-bg) !important}
     </div>
     <div id="cev-status"></div>
     <div id="cev-results" style="display:none;margin-top:10px">
-      <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:940px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">AGS/SOT fair</th><th class="r">BFEX traded</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th class="ba-watch-col">Rafael placed?</th><th class="r"></th></tr></thead><tbody id="cev-tbody"></tbody></table></div></div>
+      <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:940px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">AGS/SOT fair</th><th class="r">BFEX traded</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th class="ba-watch-col">Placed?</th><th class="r"></th></tr></thead><tbody id="cev-tbody"></tbody></table></div></div>
     </div>
     <div id="calc-ev-stats-panel" style="display:none;margin-top:14px"></div>
     <div class="note"><i class="ti ti-info-circle"></i> Markets with no direct Betfair equivalent — Header and Outside-the-Box goal (Oddschecker, auto-detected, no more manual market IDs) and Left Foot/Right Foot/6 Yard Box (William Hill) — all vs a BFEX-AGS-derived fair, sorted by EV%. Direct BFEX comparisons (AGS/FGS/Cards/SOT) live on the <a href="javascript:void(0)" onclick="baTab('oc-ev')">Normal +EV</a> tab instead. Header/OTB goal rows show every +EV bookmaker (up to the top 3 price tiers, tied prices on one line) under Bookie — the Odds column stays the single best price.</div>
@@ -2623,7 +2623,7 @@ tr.ba-placed > td{background:var(--green-bg) !important}
     </div>
     <div id="ba-outliers-subtabs" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;width:fit-content;margin-bottom:10px"></div>
     <div id="ba-outliers-markets" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-bottom:10px;font-size:12.5px;color:var(--text2)"></div>
-    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:820px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Top price</th><th class="r">Next best</th><th class="r">% above</th><th class="r">Books</th><th class="ba-watch-col">Rafael placed?</th><th>Detected</th></tr></thead><tbody id="ba-outliers-body"></tbody></table></div></div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:820px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Top price</th><th class="r">Next best</th><th class="r">% above</th><th class="r">Books</th><th class="ba-watch-col">Placed?</th><th>Detected</th></tr></thead><tbody id="ba-outliers-body"></tbody></table></div></div>
     <div class="note"><i class="ti ti-info-circle"></i> A bookmaker GROUP's own price that's at least 50% above the next-best group in the same market's ladder, with 5+ independent bookie groups quoting it (same-platform books like Star Sports/PricedUp/AKBets count as one) — a raw ladder disagreement, not a fair-odds judgement. A <i class="ti ti-clock-exclamation" style="color:var(--amber)"></i> icon means that specific price hasn't moved in a while (could just mean nothing's changed, or could mean it's not really live) — worth a manual check before backing it either way.</div>
   </div>
 
@@ -9184,10 +9184,12 @@ function copyOddscheckerLine(i,btn){
 // Each user ticks the bets they've placed; their own placed rows go green. Stored server-side
 // per user (bet_alert_placed) keyed on normalised match|market|selection — the same key as
 // bet_alert_posts — so a bet stays ticked if its price/bookie moves or it drops off and comes
-// back. Jordan's login also gets a "Rafael placed?" column showing Rafael's ticks, without his
-// own rows going green because of them.
-const BA_WATCH_USER='Rafael';
-function baShowWatchCol(){ return CURRENT_USERNAME==='Jordan'; }
+// back. Some logins also get a "<name> placed?" column showing one other user's ticks, without
+// their own rows going green because of them. Enforced server-side (ledger-routes.js
+// BET_PLACED_WATCH) — keep the two in sync.
+const BA_WATCH_MAP={Jordan:'Rafael',Dezpic:'Russ',Kieran:'Chester'};
+function baWatchUser(){ return BA_WATCH_MAP[CURRENT_USERNAME]||null; }
+function baShowWatchCol(){ return !!baWatchUser(); }
 let BA_PLACED={mine:new Map(),watch:new Map(),sig:'',loaded:false};
 // Must match ledger-routes.js betAlertNorm/betAlertKey.
 function baPlacedNorm(s){
@@ -9208,14 +9210,14 @@ function baPlacedLabel(p){
   const when=p.placed_at?new Date(p.placed_at.replace(' ','T')+'Z').toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'';
   return `Placed${p.odds!=null?' at '+Number(p.odds).toFixed(2):''}${p.bookie?' ('+p.bookie+')':''}${p.ev!=null?', +'+Number(p.ev).toFixed(1)+'%':''}${when?', '+when:''}`;
 }
-// Row decoration for a (match,market,selection): placed flag, tick button, "Rafael placed?" cell.
+// Row decoration for a (match,market,selection): placed flag, tick button, "<name> placed?" cell.
 function baPlacedRow(match,market,selection){
   const key=baPlacedKey(match,market,selection);
   const mine=BA_PLACED.mine.get(key), theirs=BA_PLACED.watch.get(key);
   return {
     placed:!!mine,
     btn:(edge,idx)=>`<button onclick="baTogglePlaced('${edge}',${idx},this)" title="${mine?escapeHtml(baPlacedLabel(mine))+' — click to untick':'Mark as placed'}" style="background:${mine?'var(--green)':'none'};border:.5px solid ${mine?'var(--green)':'var(--border)'};border-radius:6px;padding:4px 8px;cursor:pointer;color:${mine?'#fff':'var(--text2)'};line-height:1;margin-left:4px"><i class="ti ti-check"></i></button>`,
-    watchTd:`<td class="ba-watch-col">${theirs?`<i class="ti ti-circle-check" title="${escapeHtml(BA_WATCH_USER+': '+baPlacedLabel(theirs))}" style="color:var(--green);font-size:17px"></i>`:''}</td>`,
+    watchTd:`<td class="ba-watch-col">${theirs?`<i class="ti ti-circle-check" title="${escapeHtml(baWatchUser()+': '+baPlacedLabel(theirs))}" style="color:var(--green);font-size:17px"></i>`:''}</td>`,
   };
 }
 function baRerenderPlacedTables(){
@@ -9224,12 +9226,14 @@ function baRerenderPlacedTables(){
   if(typeof renderBaOutliers==='function')renderBaOutliers();
 }
 async function baLoadPlaced(){
-  document.body.classList.toggle('ba-show-watch',baShowWatchCol());
+  const watchUser=baWatchUser();
+  document.body.classList.toggle('ba-show-watch',!!watchUser);
+  if(watchUser)document.querySelectorAll('th.ba-watch-col').forEach(th=>{ th.textContent=watchUser+' placed?'; });
   try{
-    const d=await ledgerApi('bet-alert-placed'+(baShowWatchCol()?'?also='+encodeURIComponent(BA_WATCH_USER):''));
+    const d=await ledgerApi('bet-alert-placed');
     if(!d||!d.ok)return;
     const mine=new Map((d.mine||[]).map(p=>[p.bet_key,p]));
-    const watch=new Map(((d.also&&d.also[BA_WATCH_USER])||[]).map(p=>[p.bet_key,p]));
+    const watch=new Map(((watchUser&&d.also&&d.also[watchUser])||[]).map(p=>[p.bet_key,p]));
     const sig=JSON.stringify([[...mine.keys()].sort(),[...watch.keys()].sort()]);
     const changed=sig!==BA_PLACED.sig;
     BA_PLACED={mine,watch,sig,loaded:true};

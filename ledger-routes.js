@@ -3780,18 +3780,19 @@ function placedRows(username) {
   ).all(username, BET_PLACED_LOOKBACK);
 }
 
-// GET /api/ledger/bet-alert-placed[?also=Rafael] → { ok, mine:[...], also:{ Rafael:[...] } }
-// `also` (reading someone else's ticks) is admin-only — e.g. Jordan checking what Rafael placed.
+// Who can see whose ticks — the "<name> placed?" column. Keep in sync with index.html
+// BA_WATCH_MAP (the frontend only uses it to label the column; this is what's enforced).
+const BET_PLACED_WATCH = { Jordan: 'Rafael', Dezpic: 'Russ', Kieran: 'Chester' };
+
+// GET /api/ledger/bet-alert-placed → { ok, mine:[...], also:{ <watched user>:[...] } }
+// `also` is only filled for a user listed in BET_PLACED_WATCH, and only with their pair.
 router.get('/bet-alert-placed', (req, res) => {
   try {
     if (!req.username) return res.status(400).json({ ok: false, error: 'no session' });
     const also = {};
-    if (req.userRole === 'admin' && req.query.also) {
-      for (const u of String(req.query.also).split(',').map(x => x.trim()).filter(Boolean)) {
-        if (u !== req.username) also[u] = placedRows(u);
-      }
-    }
-    res.json({ ok: true, mine: placedRows(req.username), also });
+    const watched = BET_PLACED_WATCH[req.username];
+    if (watched) also[watched] = placedRows(watched);
+    res.json({ ok: true, mine: placedRows(req.username), watching: watched || null, also });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
