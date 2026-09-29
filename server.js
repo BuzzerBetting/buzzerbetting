@@ -314,6 +314,25 @@ app.get('/api/williamhill-tennis-acca-ev', (req, res) => {
 // fair odds multiplied together, compared against PlanetSportBet's own boosted price — resolved
 // by (horse name, local time) across every today's race since these rows don't name a track.
 // Merged into the same "Normal +EV" table client-side.
+// GET /api/bestodds-acca-ev, /api/bestodds-horse-ev (2026-09-29) — BestOdds' win-accas and
+// boosted horse doubles, written by oc-scraper's bestodds_acca_ev_scan.py /
+// bestodds_horse_ev_scan.py (clones of the StarSports / PlanetSportBet scans).
+for (const [route, filename] of Object.entries({
+  '/api/bestodds-acca-ev': 'bestodds_acca_ev_bets.json',
+  '/api/bestodds-horse-ev': 'bestodds_horse_ev_bets.json',
+})) {
+  const filePath = require('path').join(__dirname, 'oc-scraper', 'data', filename);
+  app.get(route, (req, res) => {
+    if (!fs.existsSync(filePath)) return res.json({ ok: true, updated: null, bets: [] });
+    try {
+      const payload = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      res.json({ ok: true, updated: payload.updated || null, bets: payload.bets || [] });
+    } catch (e) {
+      res.json({ ok: false, error: `Failed reading ${filename}: ` + e.message });
+    }
+  });
+}
+
 const PLANETSPORTBET_HORSE_EV_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'planetsportbet_horse_ev_bets.json');
 app.get('/api/planetsportbet-horse-ev', (req, res) => {
   if (!fs.existsSync(PLANETSPORTBET_HORSE_EV_PATH)) return res.json({ ok: true, updated: null, bets: [] });
@@ -352,6 +371,7 @@ const FOOTBALL_BOOST_EV_ROUTES = {
   '/api/starsports-football-boost-ev': 'starsports_football_boost_ev_bets.json',
   '/api/planetsportbet-football-boost-ev': 'planetsportbet_football_boost_ev_bets.json',
   '/api/dragonbet-football-boost-ev': 'dragonbet_football_boost_ev_bets.json',
+  '/api/bestodds-football-boost-ev': 'bestodds_football_boost_ev_bets.json',
 };
 for (const [route, filename] of Object.entries(FOOTBALL_BOOST_EV_ROUTES)) {
   const filePath = require('path').join(__dirname, 'oc-scraper', 'data', filename);
