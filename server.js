@@ -320,6 +320,8 @@ app.get('/api/williamhill-tennis-acca-ev', (req, res) => {
 for (const [route, filename] of Object.entries({
   '/api/bestodds-acca-ev': 'bestodds_acca_ev_bets.json',
   '/api/bestodds-horse-ev': 'bestodds_horse_ev_bets.json',
+  '/api/properbet-acca-ev': 'properbet_acca_ev_bets.json',
+  '/api/properbet-horse-ev': 'properbet_horse_ev_bets.json',
 })) {
   const filePath = require('path').join(__dirname, 'oc-scraper', 'data', filename);
   app.get(route, (req, res) => {
@@ -372,6 +374,7 @@ const FOOTBALL_BOOST_EV_ROUTES = {
   '/api/planetsportbet-football-boost-ev': 'planetsportbet_football_boost_ev_bets.json',
   '/api/dragonbet-football-boost-ev': 'dragonbet_football_boost_ev_bets.json',
   '/api/bestodds-football-boost-ev': 'bestodds_football_boost_ev_bets.json',
+  '/api/properbet-football-boost-ev': 'properbet_football_boost_ev_bets.json',
 };
 for (const [route, filename] of Object.entries(FOOTBALL_BOOST_EV_ROUTES)) {
   const filePath = require('path').join(__dirname, 'oc-scraper', 'data', filename);

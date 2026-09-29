@@ -666,6 +666,20 @@ CREATE TABLE IF NOT EXISTS bestodds_boosts (
 );
 `);
 
+// ProperBet's "Proper Boosts" page (proper.bet/sport-special/ProperBoosts) — same platform,
+// confirmed live 2026-09-29, fed by oc-scraper/properbet-userscript.js. Same shape.
+db.exec(`
+CREATE TABLE IF NOT EXISTS properbet_boosts (
+  sport        TEXT,
+  group_title  TEXT NOT NULL,
+  selection    TEXT NOT NULL,
+  odds_frac    TEXT,
+  odds         REAL,
+  scraped_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (group_title, selection)
+);
+`);
+
 // Same shape/reasoning as starsports_boosts above — DragonBet's "DragonBoosts" page
 // (dragonbet.co.uk/sport-special/DragonBoosts) and PlanetSportBet's "Rocket Boosts" page
 // (planetsportbet.com/sport-special/RocketBoosts) both confirmed live 2026-09-15 to run the

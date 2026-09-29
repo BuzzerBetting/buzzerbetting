@@ -4510,6 +4510,57 @@ router.post('/bestodds-boosts/ingest', (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// ================== PROPERBET BOOSTS (raw scraped odds) ==================
+// 2026-09-29 — same platform as StarSports; clone of the starsports-boosts routes above, fed by
+// oc-scraper/properbet-userscript.js.
+router.get('/properbet-boosts', (req, res) => {
+  try {
+    const { rows, stale, ageMin } = freshBoostRows('properbet_boosts', 60); // userscript reloads every 30min
+    res.json({ ok: true, rows, stale, staleMinutes: stale ? ageMin : undefined });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/properbet-boosts/ingest
+//   body: { rows: [{sport?, groupTitle, selection, oddsFrac, odds}, ...] }
+// Same upsert-then-delete-stale shape as pricedup-boosts/ingest — a re-scrape refreshes every
+// row it found, and anything not touched this run (odds_frac/odds unchanged since scraped_at
+// still older than `now`) gets deleted, since the userscript re-scrapes the whole page every
+// cycle rather than incrementally.
+router.post('/properbet-boosts/ingest', (req, res) => {
+  try {
+    const b = req.body || {};
+    const incoming = Array.isArray(b.rows) ? b.rows : [];
+    const now = new Date().toISOString();
+    const ins = db.prepare(`
+      INSERT INTO properbet_boosts (sport, group_title, selection, odds_frac, odds, scraped_at)
+      VALUES (@sport, @group_title, @selection, @odds_frac, @odds, @now)
+      ON CONFLICT(group_title, selection) DO UPDATE SET
+        sport = excluded.sport, odds_frac = excluded.odds_frac, odds = excluded.odds, scraped_at = excluded.scraped_at
+    `);
+    let upserted = 0;
+    let removed = 0;
+    const tx = db.transaction(() => {
+      for (const r of incoming) {
+        if (!r || !r.groupTitle || !r.selection) continue;
+        ins.run({
+          sport: r.sport || null,
+          group_title: String(r.groupTitle),
+          selection: String(r.selection),
+          odds_frac: r.oddsFrac || null,
+          odds: r.odds != null ? Number(r.odds) : null,
+          now,
+        });
+        upserted++;
+      }
+      if (upserted > 0) {
+        removed = db.prepare(`DELETE FROM properbet_boosts WHERE scraped_at != ?`).run(now).changes;
+      }
+    });
+    tx();
+    res.json({ ok: true, upserted, removed });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 // ================== DRAGONBET / PLANETSPORTBET BOOSTS (raw scraped odds) ==================
 // Both confirmed live 2026-09-15 to run the exact same underlying platform as PricedUp/
 // StarSports (see ledger-db.js table comment) — same upsert-then-delete-stale ingest shape,

@@ -5188,7 +5188,7 @@ const PROFILES_LIST = [
 ];
 
 const BOOKIES_LIST = [
-  'PricedUp','StarSportsBet','Bet StGeorge','Bet365','SkyBet','PaddyPower','Betfair','Betfred','SportingBet','PlanetSportBet','DragonBet','BestOdds','NRGBet','BetWay','888Sport','HotStreak','Midnite','NetBet','32Red','DaznBet','Fitzdares','Matchbook','Kwiff','MrQ','Lottoland','HighBet','ArrowBet','FairPlay','247Bet','DreamVegas','WilliamHill',
+  'PricedUp','StarSportsBet','Bet StGeorge','Bet365','SkyBet','PaddyPower','Betfair','Betfred','SportingBet','PlanetSportBet','DragonBet','BestOdds','ProperBet','NRGBet','BetWay','888Sport','HotStreak','Midnite','NetBet','32Red','DaznBet','Fitzdares','Matchbook','Kwiff','MrQ','Lottoland','HighBet','ArrowBet','FairPlay','247Bet','DreamVegas','WilliamHill',
 ];
 
 const STATUS_CONFIG = {
@@ -9354,6 +9354,7 @@ async function loadOddscheckerEV(){
       'oc-starsports-acca-ev','oc-dragonbet-acca-ev','oc-planetsportbet-acca-ev',
       'oc-williamhill-acca-ev','oc-williamhill-tennis-acca-ev','oc-darts-boost-ev',
       'oc-bestodds-acca-ev','oc-bestodds-horse-ev','oc-bestodds-football-boost-ev',
+      'oc-properbet-acca-ev','oc-properbet-horse-ev','oc-properbet-football-boost-ev',
       'oc-planetsportbet-horse-ev','oc-williamhill-horse-ev',
       'oc-pricedup-football-boost-ev','oc-starsports-football-boost-ev',
       'oc-planetsportbet-football-boost-ev','oc-dragonbet-football-boost-ev',
@@ -14287,6 +14288,7 @@ const BOOST_PAGE_BY_BK = {
   'Planet Sport Bet': 'https://planetsportbet.com/sport-special/RocketBoosts',
   'DragonBet': 'https://dragonbet.co.uk/sport-special/DragonBoosts',
   'BestOdds': 'https://bet.bestodds.com/sport-special/BestBoosts',
+  'ProperBet': 'https://proper.bet/sport-special/ProperBoosts',
 };
 function betLinkUrl(url, bookie) {
   if (url && /^https:\/\//i.test(url)) return url;
