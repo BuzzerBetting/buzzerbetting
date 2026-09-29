@@ -287,6 +287,18 @@ app.get('/api/williamhill-acca-ev', (req, res) => {
 // action=player-win) multiplied together, compared against William Hill's own boosted price.
 // Merged into the same "Normal +EV" table client-side.
 const WILLIAMHILL_TENNIS_ACCA_EV_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'williamhill_tennis_acca_ev_bets.json');
+// GET /api/darts-boost-ev — darts boosted doubles/trebles from the Tampermonkey-fed books,
+// written by oc-scraper's darts_boost_ev_scan.py. Merged into "Normal +EV" client-side.
+const DARTS_BOOST_EV_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'darts_boost_ev_bets.json');
+app.get('/api/darts-boost-ev', (req, res) => {
+  if (!fs.existsSync(DARTS_BOOST_EV_PATH)) return res.json({ ok: true, updated: null, bets: [] });
+  try {
+    const payload = JSON.parse(fs.readFileSync(DARTS_BOOST_EV_PATH, 'utf8'));
+    res.json({ ok: true, updated: payload.updated || null, bets: payload.bets || [] });
+  } catch (e) {
+    res.json({ ok: false, error: 'Failed reading darts_boost_ev_bets.json: ' + e.message });
+  }
+});
 app.get('/api/williamhill-tennis-acca-ev', (req, res) => {
   if (!fs.existsSync(WILLIAMHILL_TENNIS_ACCA_EV_PATH)) return res.json({ ok: true, updated: null, bets: [] });
   try {

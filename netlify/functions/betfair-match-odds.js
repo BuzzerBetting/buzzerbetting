@@ -14,7 +14,7 @@
 //   actual fair odds from that (bfex_fair.derive_bfex_fair) is left to the Python caller,
 //   same split as betfair-dogs.js/betfair-horses.js.
 //
-// action=player-win&team=<name>: 2026-09-24, near-verbatim port of team-win for Tennis
+// action=player-win&team=<name>[&sport=darts][&score=2-0]: 2026-09-24, near-verbatim port of team-win for Tennis
 //   win-accas (williamhill_tennis_acca_ev_scan.py) — same single-name search against Betfair's
 //   Tennis event type (id 2) instead of Football's (id 1), same MATCH_ODDS market (a 2-runner
 //   market for tennis, no draw), doubles pairings excluded. Same {ok, eventName, startTime,
@@ -51,6 +51,10 @@ const CORS = {
 const BFEX_BASE = 'https://api.betfair.com/exchange/betting/rest/v1.0';
 const FOOTBALL_EVENT_TYPE_ID = '1';
 const TENNIS_EVENT_TYPE_ID = '2';
+// action=player-win&sport=darts (2026-09-29) — darts boosts on PricedUp/StarSports/etc. Same
+// shape as tennis: "Player v Player" events, a 2-runner MATCH_ODDS, plus a CORRECT_SCORE market
+// whose runners are "<Player> 2-0" / "<Player> 2-1" (sets) — see findPlayerWin's `score`.
+const PLAYER_SPORT_EVENT_TYPE = { tennis: TENNIS_EVENT_TYPE_ID, darts: '3503' };
 
 const CERT = fs.readFileSync('/root/client-2048.crt');
 const KEY  = fs.readFileSync('/root/client-2048.key');
@@ -292,13 +296,17 @@ function doublesSideMatch(query, side) {
   return side.includes('/') && want.length === 2 && want.every(w => have.includes(w));
 }
 
-async function findPlayerWin(player, appKey, session) {
+// opts.eventTypeId: Betfair event type (default tennis). opts.score (e.g. "2-0"): price that
+// player's CORRECT_SCORE runner ("James Wade 2-0") instead of their MATCH_ODDS runner.
+async function findPlayerWin(player, appKey, session, opts = {}) {
+  const eventTypeId = opts.eventTypeId || TENNIS_EVENT_TYPE_ID;
+  const score = opts.score ? String(opts.score).replace(/\s+/g, '') : null;
   const isDoubles = String(player || '').includes('/');
   const sideMatches = (side) => isDoubles ? doublesSideMatch(player, side) : fuzzyTeamMatch(player, side);
   const queries = isDoubles ? doublesSurnames(player) : searchQueries(player);
   let candidates = [], events = [];
   for (const q of queries) {
-    events = await bfCall('listEvents', { filter: { eventTypeIds: [TENNIS_EVENT_TYPE_ID], textQuery: q } }, appKey, session);
+    events = await bfCall('listEvents', { filter: { eventTypeIds: [eventTypeId], textQuery: q } }, appKey, session);
     const hits = (events || []).filter(e => {
       const name = e.event?.name || '';
       if (name.includes('/') !== isDoubles) return false; // singles query <-> singles event only, doubles <-> doubles
@@ -314,16 +322,23 @@ async function findPlayerWin(player, appKey, session) {
   const match = candidates[0];
 
   const eventId = match.event.id;
+  const marketType = score ? 'CORRECT_SCORE' : 'MATCH_ODDS';
   const catalogue = await bfCall('listMarketCatalogue', {
-    filter: { eventIds: [eventId], marketTypeCodes: ['MATCH_ODDS'] },
+    filter: { eventIds: [eventId], marketTypeCodes: [marketType] },
     marketProjection: ['RUNNER_DESCRIPTION'],
     maxResults: 5,
   }, appKey, session);
-  if (!catalogue?.length) return { error: 'no MATCH_ODDS market found', eventName: match.event.name };
+  if (!catalogue?.length) return { error: `no ${marketType} market found`, eventName: match.event.name };
 
   const marketId = catalogue[0].marketId;
-  const runnerMeta = catalogue[0].runners.find(r => sideMatches(r.runnerName));
-  if (!runnerMeta) return { error: `runner not found for player: ${player}`, eventName: match.event.name, runners: catalogue[0].runners.map(r => r.runnerName) };
+  // Correct-score runners are "<Player> <score>" — split the score off before name-matching.
+  const runnerMeta = score
+    ? catalogue[0].runners.find(r => {
+        const m = /^(.*\S)\s+(\d+\s*-\s*\d+)$/.exec(r.runnerName || '');
+        return m && m[2].replace(/\s+/g, '') === score && sideMatches(m[1]);
+      })
+    : catalogue[0].runners.find(r => sideMatches(r.runnerName));
+  if (!runnerMeta) return { error: `runner not found for player: ${player}${score ? ' ' + score : ''}`, eventName: match.event.name, runners: catalogue[0].runners.map(r => r.runnerName) };
 
   const books = await bfCall('listMarketBook', {
     marketIds: [marketId],
@@ -430,7 +445,9 @@ async function runAction(action, params, appKey, session) {
 
   if (action === 'player-win') {
     if (!params.team) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team required' }) };
-    const result = await findPlayerWin(params.team, appKey, session);
+    const eventTypeId = PLAYER_SPORT_EVENT_TYPE[String(params.sport || 'tennis').toLowerCase()];
+    if (!eventTypeId) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'unknown sport' }) };
+    const result = await findPlayerWin(params.team, appKey, session, { eventTypeId, score: params.score });
     if (result.error) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, ...result }) };
     return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, ...result }) };
   }
