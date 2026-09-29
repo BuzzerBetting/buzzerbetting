@@ -34,6 +34,7 @@
 //   action=correct-score&home=<H>&away=<A>&homeScore=<N>&awayScore=<M>
 //                                                         — "Correct Score", runner "<N> - <M>"
 //   action=half-time&home=<H>&away=<A>&team=<T>          — "Half Time", runner <T> (T leads at HT; 2026-09-29)
+//   action=goals-line&home=<H>&away=<A>&line=3.5&side=over — "Over/Under 3.5 Goals", runner "Over 3.5 Goals" (2026-09-29)
 //   action=ht-ft&home=<H>&away=<A>&ht=<team-or-Draw>&ft=<team-or-Draw>
 //                                                         — "Half Time/Full Time", runner "<ht>/<ft>"
 //   action=win-and-btts&home=<H>&away=<A>&team=<T>       — "Match Odds and Both teams to Score",
@@ -453,9 +454,9 @@ async function runAction(action, params, appKey, session) {
     return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, ...result }) };
   }
 
-  const BOOST_ACTIONS = ['win-to-nil', 'draw', 'over25', 'btts', 'correct-score', 'ht-ft', 'win-and-btts', 'half-time'];
+  const BOOST_ACTIONS = ['win-to-nil', 'draw', 'over25', 'btts', 'correct-score', 'ht-ft', 'win-and-btts', 'half-time', 'goals-line'];
   if (BOOST_ACTIONS.includes(action)) {
-    const { home, away, team, homeScore, awayScore, ht, ft } = params;
+    const { home, away, team, homeScore, awayScore, ht, ft, line, side } = params;
     if (!home || !away) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'home and away required' }) };
 
     const event = await findEventByHomeAway(home, away, appKey, session);
@@ -487,6 +488,13 @@ async function runAction(action, params, appKey, session) {
         const sides = splitSlashRunner(n);
         return !!sides && matchesTeamOrDraw(ht, sides[0]) && matchesTeamOrDraw(ft, sides[1]);
       };
+    } else if (action === 'goals-line') {
+      // "Over 3.5 Goals" / "Under 1.5 Goals" single-match boosts (2026-09-29) — any N.5 line.
+      if (!/^\d+\.5$/.test(String(line || '')) || !/^(over|under)$/i.test(String(side || ''))) {
+        return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'line (e.g. 3.5) and side (over|under) required' }) };
+      }
+      marketNameTest = n => n.trim().toLowerCase() === `over/under ${line} goals`;
+      runnerTest = n => n.trim().toLowerCase().startsWith(String(side).toLowerCase());
     } else if (action === 'half-time') {
       if (!team) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team required' }) };
       marketNameTest = n => n.trim().toLowerCase() === 'half time';
