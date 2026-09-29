@@ -372,6 +372,24 @@ CREATE TABLE IF NOT EXISTS bet_alert_posts (
 );
 CREATE INDEX IF NOT EXISTS idx_bet_alert_posts_edge_day ON bet_alert_posts(edge, day);
 
+-- Per-user "I've placed this" ticks on Bet Alerts rows (Normal +EV, Calculated +EV, Outliers).
+-- bet_key is the same normalised  match | market | selection  as bet_alert_posts, so a bet
+-- stays ticked when its price or bookie moves, or it drops off the feed and comes back.
+-- odds/bookie record what it was actually placed at.
+CREATE TABLE IF NOT EXISTS bet_alert_placed (
+  username  TEXT NOT NULL,
+  bet_key   TEXT NOT NULL,
+  edge      TEXT,
+  match     TEXT,
+  market    TEXT,
+  selection TEXT,
+  bookie    TEXT,
+  odds      REAL,
+  placed_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (username, bet_key)
+);
+CREATE INDEX IF NOT EXISTS idx_bet_alert_placed_at ON bet_alert_placed(placed_at);
+
 -- ================== DISCORD CORNER-BET AUTO-ENTRY ==================
 -- Single-row config for the Discord bot (discord-corners-bot.js) that reads Betfred corner
 -- bet-builder screenshots posted to a channel and books them as 'Corners' bets. The bot

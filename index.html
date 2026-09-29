@@ -143,6 +143,11 @@ input::placeholder{color:var(--text3)}
 .ledger-grid th{background:var(--surface2);color:var(--text2);font-weight:600;font-size:11.5px;padding:8px 10px;position:sticky;top:0;z-index:2;text-align:left}
 .ledger-grid td.profile-cell,.ledger-grid th.profile-th{position:sticky;left:0;z-index:3;background:var(--surface);font-weight:600;padding:8px 12px;color:var(--text)}
 .ledger-grid th.profile-th{z-index:4;background:var(--surface2)}
+/* Bet Alerts "placed" ticks — see baLoadPlaced(). Row goes green for the user who ticked it;
+   the "Rafael placed?" column only shows on Jordan's login (body.ba-show-watch). */
+.ba-watch-col{display:none}
+body.ba-show-watch .ba-watch-col{display:table-cell;text-align:center}
+tr.ba-placed > td{background:var(--green-bg) !important}
 .ledger-grid td.acct-cell{padding:8px 10px;cursor:pointer;transition:filter .12s;min-width:110px}
 .ledger-grid td.acct-cell:hover{filter:brightness(0.94)}
 .ledger-grid td.bal-cell{padding:8px 10px;min-width:90px;text-align:right;font-weight:600}
@@ -2461,7 +2466,7 @@ input::placeholder{color:var(--text3)}
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block"></span>BFex fair — high confidence (£500+ matched, tight spread)</span>
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--amber);display:inline-block"></span>Usable but thinner BFEX data</span>
     </div>
-    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Fair odds</th><th class="r">Last traded</th><th class="r">Total traded</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th></th></tr></thead><tbody id="scanner-body"></tbody></table></div></div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Fair odds</th><th class="r">Last traded</th><th class="r">Total traded</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th class="ba-watch-col">Rafael placed?</th><th></th></tr></thead><tbody id="scanner-body"></tbody></table></div></div>
     <div class="note"><i class="ti ti-info-circle"></i> Auto-refreshes every 60s. Scanning starts once a match's lineup is confirmed and runs every 10 minutes until kickoff, tightening to every 3 minutes in the last 15 minutes before kickoff — First Goalscorer, Anytime Goalscorer, Player Shown a Card and Player Shots on Target markets, sorted by EV%. These all compare Oddschecker directly against the matching BFEX market. Header and Outside-the-Box goal need their own fair-odds calculation instead (no direct BFEX market for either) — see the <a href="javascript:void(0)" onclick="baTab('calc-ev')">Calculated +EV</a> tab.</div>
   </div>
 
@@ -2486,7 +2491,7 @@ input::placeholder{color:var(--text3)}
     </div>
     <div id="cev-status"></div>
     <div id="cev-results" style="display:none;margin-top:10px">
-      <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:940px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">AGS/SOT fair</th><th class="r">BFEX traded</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th class="r"></th></tr></thead><tbody id="cev-tbody"></tbody></table></div></div>
+      <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:940px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">AGS/SOT fair</th><th class="r">BFEX traded</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th class="ba-watch-col">Rafael placed?</th><th class="r"></th></tr></thead><tbody id="cev-tbody"></tbody></table></div></div>
     </div>
     <div id="calc-ev-stats-panel" style="display:none;margin-top:14px"></div>
     <div class="note"><i class="ti ti-info-circle"></i> Markets with no direct Betfair equivalent — Header and Outside-the-Box goal (Oddschecker, auto-detected, no more manual market IDs) and Left Foot/Right Foot/6 Yard Box (William Hill) — all vs a BFEX-AGS-derived fair, sorted by EV%. Direct BFEX comparisons (AGS/FGS/Cards/SOT) live on the <a href="javascript:void(0)" onclick="baTab('oc-ev')">Normal +EV</a> tab instead. Header/OTB goal rows show every +EV bookmaker (up to the top 3 price tiers, tied prices on one line) under Bookie — the Odds column stays the single best price.</div>
@@ -2618,7 +2623,7 @@ input::placeholder{color:var(--text3)}
     </div>
     <div id="ba-outliers-subtabs" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;width:fit-content;margin-bottom:10px"></div>
     <div id="ba-outliers-markets" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-bottom:10px;font-size:12.5px;color:var(--text2)"></div>
-    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:820px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Top price</th><th class="r">Next best</th><th class="r">% above</th><th class="r">Books</th><th>Detected</th></tr></thead><tbody id="ba-outliers-body"></tbody></table></div></div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:820px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Top price</th><th class="r">Next best</th><th class="r">% above</th><th class="r">Books</th><th class="ba-watch-col">Rafael placed?</th><th>Detected</th></tr></thead><tbody id="ba-outliers-body"></tbody></table></div></div>
     <div class="note"><i class="ti ti-info-circle"></i> A bookmaker GROUP's own price that's at least 50% above the next-best group in the same market's ladder, with 5+ independent bookie groups quoting it (same-platform books like Star Sports/PricedUp/AKBets count as one) — a raw ladder disagreement, not a fair-odds judgement. A <i class="ti ti-clock-exclamation" style="color:var(--amber)"></i> icon means that specific price hasn't moved in a while (could just mean nothing's changed, or could mean it's not really live) — worth a manual check before backing it either way.</div>
   </div>
 
@@ -9174,6 +9179,82 @@ function copyOddscheckerLine(i,btn){
   baCopyBet(text,btn);
 }
 
+// ---- "Placed" ticks on Normal +EV / Calculated +EV / Outliers (2026-09-29, user-requested) ----
+// Each user ticks the bets they've placed; their own placed rows go green. Stored server-side
+// per user (bet_alert_placed) keyed on normalised match|market|selection — the same key as
+// bet_alert_posts — so a bet stays ticked if its price/bookie moves or it drops off and comes
+// back. Jordan's login also gets a "Rafael placed?" column showing Rafael's ticks, without his
+// own rows going green because of them.
+const BA_WATCH_USER='Rafael';
+function baShowWatchCol(){ return CURRENT_USERNAME==='Jordan'; }
+let BA_PLACED={mine:new Map(),watch:new Map(),sig:''};
+// Must match ledger-routes.js betAlertNorm/betAlertKey.
+function baPlacedNorm(s){
+  return String(s==null?'':s).normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+}
+function baPlacedKey(match,market,selection){ return [baPlacedNorm(match),baPlacedNorm(market),baPlacedNorm(selection)].join(' | '); }
+// The bet a row stands for, by edge + index into that table's own row array.
+function baPlacedBet(edge,idx){
+  if(edge==='oc-ev'){ const b=ocEvBets[idx]; return b&&{match:b.match,market:b.mkt,selection:b.sel,bookie:ocBookieName(b.bk),odds:b.odds}; }
+  if(edge==='calc-ev'){ const b=cevRenderedBets[idx]; return b&&{match:b.match,market:b.market,selection:b.player,bookie:ocBookieName(b.bookie),odds:parseFloat(b.ocOdds)||null}; }
+  if(edge==='outliers'){ const r=BA_OUTLIERS_RENDERED[idx]; return r&&{match:r.match,market:r.market,selection:r.selection,bookie:ocBookieName(r.topBook)||r.topBook,odds:r.topPrice}; }
+  return null;
+}
+function baPlacedLabel(p){
+  if(!p)return '';
+  const when=p.placed_at?new Date(p.placed_at.replace(' ','T')+'Z').toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+  return `Placed${p.odds!=null?' at '+Number(p.odds).toFixed(2):''}${p.bookie?' ('+p.bookie+')':''}${when?', '+when:''}`;
+}
+// Row decoration for a (match,market,selection): placed flag, tick button, "Rafael placed?" cell.
+function baPlacedRow(match,market,selection){
+  const key=baPlacedKey(match,market,selection);
+  const mine=BA_PLACED.mine.get(key), theirs=BA_PLACED.watch.get(key);
+  return {
+    placed:!!mine,
+    btn:(edge,idx)=>`<button onclick="baTogglePlaced('${edge}',${idx},this)" title="${mine?escapeHtml(baPlacedLabel(mine))+' — click to untick':'Mark as placed'}" style="background:${mine?'var(--green)':'none'};border:.5px solid ${mine?'var(--green)':'var(--border)'};border-radius:6px;padding:4px 8px;cursor:pointer;color:${mine?'#fff':'var(--text2)'};line-height:1;margin-left:4px"><i class="ti ti-check"></i></button>`,
+    watchTd:`<td class="ba-watch-col">${theirs?`<i class="ti ti-circle-check" title="${escapeHtml(BA_WATCH_USER+': '+baPlacedLabel(theirs))}" style="color:var(--green);font-size:17px"></i>`:''}</td>`,
+  };
+}
+function baRerenderPlacedTables(){
+  renderOddscheckerEV();
+  if(typeof cevLastBets!=='undefined'&&cevLastBets.length)renderEVResults(cevLastBets);
+  if(typeof renderBaOutliers==='function')renderBaOutliers();
+}
+async function baLoadPlaced(){
+  document.body.classList.toggle('ba-show-watch',baShowWatchCol());
+  try{
+    const d=await ledgerApi('bet-alert-placed'+(baShowWatchCol()?'?also='+encodeURIComponent(BA_WATCH_USER):''));
+    if(!d||!d.ok)return;
+    const mine=new Map((d.mine||[]).map(p=>[p.bet_key,p]));
+    const watch=new Map(((d.also&&d.also[BA_WATCH_USER])||[]).map(p=>[p.bet_key,p]));
+    const sig=JSON.stringify([[...mine.keys()].sort(),[...watch.keys()].sort()]);
+    const changed=sig!==BA_PLACED.sig;
+    BA_PLACED={mine,watch,sig};
+    if(changed)baRerenderPlacedTables();
+  }catch(e){}
+}
+async function baTogglePlaced(edge,idx,btn){
+  const bet=baPlacedBet(edge,idx); if(!bet)return;
+  const key=baPlacedKey(bet.match,bet.market,bet.selection);
+  const wasPlaced=BA_PLACED.mine.has(key);
+  const prev=BA_PLACED.mine.get(key);
+  if(btn)btn.disabled=true;
+  // Optimistic — flip it locally straight away, roll back if the save fails.
+  if(wasPlaced)BA_PLACED.mine.delete(key);
+  else BA_PLACED.mine.set(key,{bet_key:key,bookie:bet.bookie,odds:bet.odds,placed_at:new Date().toISOString().slice(0,19).replace('T',' ')});
+  BA_PLACED.sig='';
+  baRerenderPlacedTables();
+  try{
+    const d=await ledgerApi('bet-alert-placed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({placed:!wasPlaced,edge},bet))});
+    if(!d||!d.ok)throw new Error((d&&d.error)||'save failed');
+  }catch(e){
+    if(wasPlaced)BA_PLACED.mine.set(key,prev); else BA_PLACED.mine.delete(key);
+    baRerenderPlacedTables();
+    showToast('Could not save the placed tick — try again.');
+  }
+}
+
 function renderOddscheckerEV(){
   const sb=document.getElementById('scanner-body');
   sb.innerHTML='';
@@ -9199,13 +9280,15 @@ function renderOddscheckerEV(){
     const boostIcon=b.boost?'<span class="boost-icon" title="Oddschecker Price Boost" style="margin-right:6px;vertical-align:middle">B</span>':'';
     const sourceLabel=b.source==='combo'?'OC/BB':(b.source==='bfex'?'BFEX':(b.source||''));
     const fairCell=sourceLabel?`${b.fair.toFixed(2)} <span style="color:var(--text3);font-size:11px">(${sourceLabel})</span>`:b.fair.toFixed(2);
+    const pl=baPlacedRow(b.match,b.mkt,b.sel);
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${boostIcon}${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:${fairColor};font-weight:500">${fairCell}</td><td class="r tn" style="color:var(--text2)">${lastTraded}</td><td class="r tn" style="color:var(--text2)">${matched}</td><td class="r" style="color:var(--text2);font-size:12px;line-height:1.5">${ocBookieLinesHtml(b)}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td><td class="r" style="white-space:nowrap">${betLinkBtn(b.url,b.bk)}<button onclick="copyOddscheckerLine(${i},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td>`;
+    if(pl.placed)tr.className='ba-placed';
+    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${boostIcon}${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:${fairColor};font-weight:500">${fairCell}</td><td class="r tn" style="color:var(--text2)">${lastTraded}</td><td class="r tn" style="color:var(--text2)">${matched}</td><td class="r" style="color:var(--text2);font-size:12px;line-height:1.5">${ocBookieLinesHtml(b)}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td>${pl.watchTd}<td class="r" style="white-space:nowrap">${betLinkBtn(b.url,b.bk)}<button onclick="copyOddscheckerLine(${i},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button>${pl.btn('oc-ev',i)}</td>`;
     sb.appendChild(tr);
   });
   if(!shown.length){
     const filtered=ocEvBets.length?' for the bookmakers currently selected':'';
-    sb.innerHTML=`<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No 5%+ value bets right now${filtered} — either no lineups confirmed yet, or nothing clears the threshold.</td></tr>`;
+    sb.innerHTML=`<tr><td colspan="12" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No 5%+ value bets right now${filtered} — either no lineups confirmed yet, or nothing clears the threshold.</td></tr>`;
   }
 }
 
@@ -14850,7 +14933,7 @@ function renderEVResults(bets) {
 
   cevRenderedBets = bets;
   if (!bets.length) {
-    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:32px;font-size:13px">No +EV bets found</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;color:var(--text3);padding:32px;font-size:13px">No +EV bets found</td></tr>`;
     resultsEl.style.display = '';
     return;
   }
@@ -14888,8 +14971,10 @@ function renderEVResults(bets) {
       ? `£${bet.bfexMatched.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}`
       : '—';
 
+    const pl = baPlacedRow(bet.match, bet.market, bet.player);
     const tr = document.createElement('tr');
     tr.style.cssText = rowStyle;
+    if (pl.placed) tr.className = 'ba-placed';
     tr.innerHTML = `
       <td style="font-size:12px;color:var(--text3);white-space:nowrap">${bet.t ?? ''}</td>
       <td style="font-size:12px;color:var(--text3);white-space:nowrap">${boostIcon}${bet.match ?? ''}</td>
@@ -14901,7 +14986,8 @@ function renderEVResults(bets) {
       <td class="r" style="font-size:12px;color:var(--text2);line-height:1.5">${bookieLinesHtml(bet)}</td>
       <td class="r tn" style="font-weight:600;color:var(--green)">${bet.ocOdds}</td>
       <td class="r"><span class="badge" style="background:${evBg};color:${evCol}">${evLabel}</span></td>
-      <td class="r" style="white-space:nowrap">${betLinkBtn(bet.url,bet.bookie)}<button onclick="logCalcEvBetAsGoalSotMethods(${betIdx})" title="Log this bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-plus"></i> Log</button> <button onclick="copyCalcEvBet(${betIdx},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td>`;
+      ${pl.watchTd}
+      <td class="r" style="white-space:nowrap">${betLinkBtn(bet.url,bet.bookie)}<button onclick="logCalcEvBetAsGoalSotMethods(${betIdx})" title="Log this bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-plus"></i> Log</button> <button onclick="copyCalcEvBet(${betIdx},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button>${pl.btn('calc-ev',betIdx)}</td>`;
     tbody.appendChild(tr);
   });
 
@@ -15838,10 +15924,12 @@ function activateBaTab(key){
   renderBaTabs();
   if (BA_POLL) { clearInterval(BA_POLL); BA_POLL = null; }
   loadBaEdge(key, false);
+  baLoadPlaced();
   BA_POLL = setInterval(() => {
     const v = document.getElementById('view-bet-alerts');
     if (!v || v.style.display === 'none') { stopBetAlerts(); return; }
     loadBaEdge(BA_ACTIVE, true);
+    baLoadPlaced();
   }, 60000);
 }
 function stopBetAlerts(){ if (BA_POLL) { clearInterval(BA_POLL); BA_POLL = null; } }
@@ -16269,6 +16357,7 @@ async function learnOcAlias(idx){
 // on-demand-only loading as OC Coverage above. See oc_outliers_scan.py's own docstring: this
 // is a raw ladder-disagreement check, deliberately unrelated to any fair-odds model.
 let BA_OUTLIERS_ROWS = [];
+let BA_OUTLIERS_RENDERED = []; // rows in on-screen order, for the placed tick's index
 async function loadBaOutliers(){
   let rows = [];
   try {
@@ -16352,7 +16441,7 @@ function renderBaOutliers(){
     const msg = BA_OUTLIERS_ROWS.some(r => !!r.lineupConfirmed === wantConfirmed)
       ? `No ${subLabel} outliers in the selected markets right now.`
       : `No ${subLabel} outliers right now.`;
-    body.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">${msg}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">${msg}</td></tr>`;
     return;
   }
   const fmtDetected = iso => {
@@ -16360,7 +16449,8 @@ function renderBaOutliers(){
     try { return new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); }
     catch(e) { return iso; }
   };
-  body.innerHTML = rows.map(r => `<tr style="background:var(--amber-bg)">
+  BA_OUTLIERS_RENDERED = rows;
+  body.innerHTML = rows.map((r, idx) => { const pl = baPlacedRow(r.match, r.market, r.selection); return `<tr class="${pl.placed ? 'ba-placed' : ''}" style="background:var(--amber-bg)">
     <td style="font-size:12px;color:var(--text2);white-space:nowrap">${escapeHtml(r.kickoff || '')}</td>
     <td style="font-size:12.5px">${escapeHtml(r.match || '')}</td>
     <td style="font-size:12px;color:var(--text2)">${escapeHtml(r.market || '')}</td>
@@ -16369,8 +16459,9 @@ function renderBaOutliers(){
     <td class="r tn" style="color:var(--text2)">${r.nextPrice != null ? Number(r.nextPrice).toFixed(2) : '—'} <span style="color:var(--text3);font-size:11px">(${escapeHtml(ocBookieShort(r.nextBook))})</span>${r.nextFresh === false ? ' <i class="ti ti-clock-exclamation" title="This price has not moved in a while — worth checking it is still current" style="color:var(--amber)"></i>' : ''}</td>
     <td class="r"><span class="badge" style="background:var(--amber-bg);color:var(--amber)">+${r.pctAboveNext != null ? Number(r.pctAboveNext).toFixed(0) : '—'}%</span></td>
     <td class="r tn" style="color:var(--text2)">${r.bookCount ?? '—'}</td>
-    <td style="font-size:11.5px;color:var(--text3);white-space:nowrap">${betLinkBtn(r.url, r.topBook)}${fmtDetected(r.detectedAt)}</td>
-  </tr>`).join('');
+    ${pl.watchTd}
+    <td style="font-size:11.5px;color:var(--text3);white-space:nowrap">${betLinkBtn(r.url, r.topBook)}${fmtDetected(r.detectedAt)}${pl.btn('outliers', idx)}</td>
+  </tr>`; }).join('');
 }
 
 // Called by renderOddscheckerEV / renderEVResults once they've built their (filtered) list.

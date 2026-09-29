@@ -122,7 +122,7 @@ router.use((req, res, next) => {
 //     match-predictions, no financial/ledger data.
 //   - /strategy-prefs: per-user Freeze-builder UI settings, no financial data — every role.
 //   - /freeze-eligible-list: the VA-pasted Acca Freeze coupon (Freeze Builder), no financial data.
-//   - /bet-alert-books, /bet-alert-seen, /bet-alert-stats, /ones-to-watch: the Bet Alerts
+//   - /bet-alert-books, /bet-alert-seen, /bet-alert-stats, /bet-alert-placed, /ones-to-watch: the Bet Alerts
 //     page (2026-09-14 — Calculator role given access to Bet Alerts alongside Calculations;
 //     none of these touch live betting/financial ledger data either, same reasoning as
 //     everything else already allowed here).
@@ -145,6 +145,7 @@ router.use((req, res, next) => {
       && !req.path.startsWith('/bet-alert-books')
       && !req.path.startsWith('/bet-alert-seen')
       && !req.path.startsWith('/bet-alert-stats')
+      && !req.path.startsWith('/bet-alert-placed')
       && !req.path.startsWith('/ones-to-watch')
       && !req.path.startsWith('/bet365-sot')
       && !req.path.startsWith('/parse-bet365-sot')) {
@@ -3763,6 +3764,57 @@ router.post('/bet-alert-seen', (req, res) => {
       `SELECT COUNT(*) AS c FROM bet_alert_posts WHERE edge = ? AND day = ?`
     ).get(edge, day).c;
     res.json({ ok: true, todayUnique });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// ---- "placed" ticks (per user) ----
+// Only the last few days are returned: the key has no date in it, so an old tick on the same
+// player/market/fixture shouldn't turn a later row green.
+const BET_PLACED_LOOKBACK = '-3 days';
+function placedRows(username) {
+  return db.prepare(
+    `SELECT bet_key, edge, match, market, selection, bookie, odds, placed_at
+       FROM bet_alert_placed WHERE username = ? AND placed_at >= datetime('now', ?)`
+  ).all(username, BET_PLACED_LOOKBACK);
+}
+
+// GET /api/ledger/bet-alert-placed[?also=Rafael] → { ok, mine:[...], also:{ Rafael:[...] } }
+// `also` (reading someone else's ticks) is admin-only — e.g. Jordan checking what Rafael placed.
+router.get('/bet-alert-placed', (req, res) => {
+  try {
+    if (!req.username) return res.status(400).json({ ok: false, error: 'no session' });
+    const also = {};
+    if (req.userRole === 'admin' && req.query.also) {
+      for (const u of String(req.query.also).split(',').map(x => x.trim()).filter(Boolean)) {
+        if (u !== req.username) also[u] = placedRows(u);
+      }
+    }
+    res.json({ ok: true, mine: placedRows(req.username), also });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/bet-alert-placed — body: { placed, edge, match, market, selection, bookie, odds }
+// placed:true upserts the current user's tick (re-ticking refreshes odds/bookie/time), false removes it.
+router.post('/bet-alert-placed', (req, res) => {
+  try {
+    if (!req.username) return res.status(400).json({ ok: false, error: 'no session' });
+    const b = req.body || {};
+    if (!b.match && !b.selection) return res.status(400).json({ ok: false, error: 'match or selection required' });
+    const key = betAlertKey(b);
+    if (b.placed === false) {
+      db.prepare(`DELETE FROM bet_alert_placed WHERE username = ? AND bet_key = ?`).run(req.username, key);
+    } else {
+      const odds = parseFloat(b.odds);
+      db.prepare(
+        `INSERT INTO bet_alert_placed (username, bet_key, edge, match, market, selection, bookie, odds)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(username, bet_key) DO UPDATE SET edge = excluded.edge, match = excluded.match,
+           market = excluded.market, selection = excluded.selection, bookie = excluded.bookie,
+           odds = excluded.odds, placed_at = datetime('now')`
+      ).run(req.username, key, b.edge || null, b.match || '', b.market || '', b.selection || '',
+            b.bookie || null, isFinite(odds) ? odds : null);
+    }
+    res.json({ ok: true, key });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
