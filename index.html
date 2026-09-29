@@ -3744,7 +3744,7 @@ function applyRoleRestrictions() {
   const freezeBackBtn = document.getElementById('freeze-back-btn');
   if (freezeBackBtn) freezeBackBtn.style.display = isFreeze ? 'none' : ''; // Freeze role can't leave the Freeze page
   if (!noLedger) startTodoPolling(); // Calculator/Freeze have no Ledger access — polling would just produce repeated 403s
-  if (!noLedger) startCalcEVBackground(); // Calculated +EV rescans in the background (every 5 min, 3 min within 15 min of a kickoff)
+  if (!isFreeze) startCalcEVBackground(); // Calculated +EV re-reads the server feeds every minute (every role with Bet Alerts)
   if (!isFreeze) startNotifPolling(); // header notification bell — every role except Freeze (which is locked to one tool)
   if (!isFreeze) startBaErrorsPolling(); // Bet Alerts "Errors" sound alert — global, not tied to that tab being open, same reasoning as the notif bell
   if (!isFreeze) startBaSoundPolling(); // Bet Alerts per-tab sound alerts — background-polls every tab with sound on
@@ -13956,134 +13956,50 @@ function calcAutoGSM(s,ags,so,sotV,pen){
 
 
 // ── CALCULATED +EV ─────────────────────────────────────────────────────────
-let cevFixtures = [];
-
-// Fetches today's/tomorrow's fixtures, then immediately scans every one of them for
-// Left-Foot/Right-Foot/6-Yard-Box value (the only markets left here — Header/OTB moved to
-// the automated Oddschecker +EV pipeline, see that page's note) and renders straight to a
-// bets table in the same shape as Oddschecker +EV. No manual per-fixture step any more.
-// Calculated +EV runs continuously in the background once logged in (started from
-// applyRoleRestrictions), scanning every 5 min so the tab always has fresh bets rather than
-// only scanning on click. Target: today's fixtures whose lineups are confirmed and that
-// haven't kicked off yet — the only ones a left/right-foot / 6-yard-box fair can be built for.
+// Every Calculated +EV row is built on the DO box now (oc-scraper: oc_calc_ev_bets.json +
+// oc_boost_calc_ev_bets.json). The browser used to run its own per-fixture scan (lineups, BB,
+// BFEX, pen taker and player stats for every squad member — ~40 requests a fixture, repeated
+// in every open browser) whose last remaining output was the display-only 6 Yard Box rows;
+// those moved server-side 2026-09-29 (ev_engine.compute_wh_six_yard_rows). So a "scan" is now
+// just reading the two feeds — cheap enough to refresh every minute for every role, which is
+// also what keeps Calc +EV sound alerts current.
 let CALC_EV_BG_TIMER = null;
 let cevScanning = false;
 let cevLastScanAt = 0;
 
-function calcTodayParam() {
-  const d = new Date();
-  return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-}
 
-async function getConfirmedNotStartedFixtures() {
-  const date = calcTodayParam();
-  let fx = null, pred = null;
-  try { fx = await fetch(`/.netlify/functions/fixtures?date=${date}`).then(r => r.json()); } catch(e) {}
-  try { pred = await ledgerApi('match-predictions?date=' + date); } catch(e) {}
-  const confirmed = new Set();
-  if (pred && pred.ok) (pred.matches || []).forEach(m => {
-    if ((m.home && m.home.lineupConfirmed) || (m.away && m.away.lineupConfirmed)) confirmed.add(String(m.matchId));
-  });
-  const out = [];
-  if (fx && fx.ok) (fx.leagues || []).forEach(lg => (lg.matches || []).forEach(m => {
-    if (m.started || m.finished || matchAbnormal(m)) return;
-    if (!confirmed.has(String(m.id))) return;
-    out.push({ ...m, leagueName: lg.name });
-  }));
-  return out;
-}
 
 async function runCalcEVScan(opts) {
   opts = opts || {};
   if (cevScanning) return;
-  // don't burn scrapes while the tab isn't visible — unless Calculated +EV sound alerts are on,
-  // since the point of those is to hear about a bet while you're off on a bookie's site
-  if (opts.silent && document.hidden && !(typeof baSoundOn === 'function' && baSoundOn('calc-ev'))) return;
   cevScanning = true;
   const statusEl = document.getElementById('cev-status');
   try {
     if (!opts.silent && statusEl) {
       document.getElementById('cev-results').style.display = 'none';
       document.getElementById('cev-smeta').style.display = 'none';
-      statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t">Loading fixtures...</div></div></div>`;
+      statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-loader"></i></div><div class="ph-t">Loading bets...</div></div></div>`;
     }
-    cevFixtures = await getConfirmedNotStartedFixtures();
     await scanAllCalcEV(statusEl, { silent: !!opts.silent });
     cevLastScanAt = Date.now();
   } catch(err) {
-    if (!opts.silent && statusEl) statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-wifi-off"></i></div><div class="ph-t">Failed to load fixtures</div><div class="ph-d">${err.message}</div></div></div>`;
+    if (!opts.silent && statusEl) statusEl.innerHTML = `<div class="card"><div class="ph" style="padding:24px"><div class="ph-ico"><i class="ti ti-wifi-off"></i></div><div class="ph-t">Failed to load bets</div><div class="ph-d">${err.message}</div></div></div>`;
   } finally {
     cevScanning = false;
   }
 }
 
-// Kickoff-aware cadence: rescan every 3 min while any confirmed fixture is within 15 min of
-// kickoff (matches the OC scraper's sprint window), otherwise every 5 min.
-function calcEvNextDelayMs() {
-  const now = Date.now();
-  let soonestMin = Infinity;
-  for (const f of (cevFixtures || [])) {
-    if (!f || !f.utcTime) continue;
-    const mins = (new Date(f.utcTime).getTime() - now) / 60000;
-    if (mins > 0 && mins < soonestMin) soonestMin = mins;
-  }
-  return soonestMin <= 15 ? 3 * 60 * 1000 : 5 * 60 * 1000;
-}
 function startCalcEVBackground() {
-  if (CURRENT_USER_ROLE === 'calculator') return;
   if (CALC_EV_BG_TIMER) clearTimeout(CALC_EV_BG_TIMER);
   const tick = async () => {
     await runCalcEVScan({ silent: true });
-    CALC_EV_BG_TIMER = setTimeout(tick, calcEvNextDelayMs());
+    CALC_EV_BG_TIMER = setTimeout(tick, 60 * 1000);
   };
   tick();
 }
 
 // Thin alias — kept so existing callers / the Bet Alerts Refresh button still work.
 function initCalcEV() { return runCalcEVScan({ silent: false }); }
-function slugifyOC(str) {
-  return (str||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
-}
-function getOCCompSlug(c) {
-  const s=(c||'').toLowerCase().trim();
-  const map={'world cup':'world-cup','premier league':'english/premier-league','championship':'english/championship','champions league':'champions-league','europa league':'europa-league','nations league':'nations-league','euros':'european-championship','euro':'european-championship','la liga':'spanish/la-liga','bundesliga':'german/bundesliga','serie a':'italian/serie-a','ligue 1':'french/ligue-1','mls':'usa/major-league-soccer','scottish premiership':'scottish/premiership'};
-  for(const[k,v]of Object.entries(map))if(s.includes(k))return v;
-  return slugifyOC(c);
-}
-async function fetchWHMarket(home, away, query, marketFilter) {
-  try {
-    const q = encodeURIComponent(query);
-    const url = `https://search.williamhill.com/v2/?locale=en-gb&q=${q}&type=selection`;
-    const r = await fetch(url);
-    const data = await r.json();
-    const hits = data?.data?.hits ?? [];
-    const players = {};
-    for (const hit of hits) {
-      const v = hit.value;
-      if (!v.active) continue;
-      const eventName = (v.event?.name ?? '').toLowerCase();
-      const h = slugifyOC(home).replace(/-/g,' ');
-      const a = slugifyOC(away).replace(/-/g,' ');
-      if (!eventName.includes(h) && !eventName.includes(a)) continue;
-      const marketName = (v.market?.name ?? '').toLowerCase();
-      if (!marketName.includes(marketFilter)) continue;
-      const name = v.name ?? '';
-      if (!name) continue;
-      const num = parseFloat(v.currentPriceNum ?? 0);
-      const den = parseFloat(v.currentPriceDen ?? 1);
-      if (!num || !den) continue;
-      const dec = parseFloat((num / den + 1).toFixed(3));
-      if (dec <= 1) continue;
-      if (!players[name] || dec > players[name].best) {
-        players[name] = { name, odds: { 'WH': dec }, best: dec, bestBook: 'William Hill' };
-      }
-    }
-    return Object.values(players).sort((a, b) => a.best - b.best);
-  } catch(e) {
-    console.warn(`WH ${marketFilter} fetch failed:`, e.message);
-    return [];
-  }
-}
 // Data thresholds for fair odds calculations
 const MIN_XG    = 2.0;   // minimum xG to include in goal methods
 const MIN_SHOTS = 10;    // minimum shots to include in shot methods
@@ -14129,320 +14045,6 @@ function deriveBfexFair(runner) {
   return { fair, confidence };
 }
 
-// Scans one fixture for Left-Foot/Right-Foot/6-Yard-Box value (William Hill vs a BFEX-AGS-
-// derived fair — see calcAutoGSM). Header/OTB goal used to live here too via manually-entered
-// Oddschecker market IDs; that's now automated server-side against Oddschecker directly (see
-// oc-scraper's ev_engine.compute_header_otb_ev_bets) and shows up on the Oddschecker +EV page
-// instead, so this function no longer touches Oddschecker at all.
-async function runScanCore(matchId, home, away, competition) {
-  // Lineups first, on their own — a predicted (not yet confirmed) XI isn't worth scanning at
-  // all, so bail here before spending a round-trip on WH/BFEX/BB for a fixture we're going to
-  // skip anyway. Same "only ever act on a confirmed lineup" rule the server-side Header/OTB
-  // scanner applies (ev_engine.is_lineup_confirmed).
-  const lineupData = await fetch(`/.netlify/functions/lineups?matchId=${matchId}`)
-    .then(r => r.json()).catch(() => ({ ok: false }));
-  if (!lineupData.ok || !lineupData.confirmed) return [];
-
-  // Fetch BB odds, Betfair, and the resolved pen taker (override, else corner-model — see
-  // ledger-routes.js resolvePenTaker) in parallel. penTakerIds feeds calcAutoGSM's `pen` flag
-  // below so SOT-Outside-Box fair odds aren't overstated for a confirmed taker; failure here
-  // is non-fatal (falls back to no adjustment, same as every player before this existed).
-  const [, bfexData, penTakerData] = await Promise.all([
-    fetchBBOdds(matchId, home, away),
-    fetch(`/.netlify/functions/betfair-proxy?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`)
-      .then(r => r.json()).catch(() => ({ ok: false })),
-    ledgerApi('pen-taker?matchId=' + encodeURIComponent(matchId)).catch(() => ({ ok: false }))
-  ]);
-  const penTakerIds = new Set();
-  if (penTakerData && penTakerData.ok) {
-    for (const side of ['home', 'away']) {
-      const pt = penTakerData[side] && penTakerData[side].penTaker;
-      if (pt && pt.id != null) penTakerIds.add(String(pt.id));
-    }
-  }
-
-    // Build Betfair price lookup: normalised player name → full runner data
-    // Build separate BFEX lookups for goal (AGS) and shot markets
-    const bfexAGSByName = {};  // Player To Score only
-    const bfexSOTByName = {};  // Player Shots on Target only
-    if (bfexData && bfexData.ok && bfexData.markets) {
-      for (const [mktName, mkt] of Object.entries(bfexData.markets)) {
-        const name = mktName.toLowerCase();
-        const isShot = name.includes('shot');
-        const isAGS = name.includes('to score') && !name.includes('first') && !name.includes('shot');
-        if (!isShot && !isAGS) continue; // skip FGS and other markets
-        const lookup = isShot ? bfexSOTByName : bfexAGSByName;
-        for (const p of (mkt.players ?? [])) {
-          const key = normName(p.name);
-          if (!lookup[key]) lookup[key] = p;
-        }
-      }
-    }
-    // Combined for BFEX column display (AGS takes priority over SOT for goal markets)
-    const bfexByName = { ...bfexSOTByName, ...bfexAGSByName };
-
-    // Derive fair price and confidence from runner data
-    function deriveBfexFair(runner) {
-      if (!runner) return { fair: null, confidence: 'none' };
-      const totalMatched = runner.totalMatched ?? 0;
-      const lpm = runner.lastPriceTraded ?? null;
-
-      // Red — not enough to conclude
-      if (totalMatched < 50 || !lpm) return { fair: null, confidence: 'red' };
-
-      const bestBack = runner.back?.[0]?.price ?? null;
-      const bestBackSize = runner.back?.[0]?.size ?? 0;
-      const bestLay = runner.lay?.[0]?.price ?? null;
-      const bestLaySize = runner.lay?.[0]?.size ?? 0;
-
-      // Determine fair price
-      let fair = lpm;
-      let usedFallback = true;
-
-      // If back price is higher than LPM with £100+ available, use back price
-      if (bestBack && bestBack > lpm && bestBackSize >= 100) {
-        fair = bestBack;
-        usedFallback = false;
-      }
-      // If clean spread (back and lay within 15% of LPM) with lay liquidity, use midpoint
-      else if (bestBack && bestLay && bestLaySize >= 10) {
-        const spread = (bestLay - bestBack) / lpm;
-        if (spread <= 0.15) { fair = parseFloat(((bestBack + bestLay) / 2).toFixed(2)); usedFallback = false; }
-      }
-
-      // Confidence level
-      const wideSpread = bestBack && bestLay ? (bestLay - bestBack) / lpm > 0.15 : true;
-      let confidence;
-      if (totalMatched >= 500 && !wideSpread && bestLaySize >= 10) {
-        confidence = 'green';
-      } else {
-        confidence = 'yellow';
-      }
-
-      // If neither branch above fired, `fair` is just the raw last-traded price — only
-      // trust it if still inside the current live back/lay range (a stale print the
-      // market has already moved past shouldn't count as fair — confirmed live on a case
-      // where lastPriceTraded sat below the then-current best-back).
-      if (usedFallback && bestBack && bestLay) {
-        const lo = Math.min(bestBack, bestLay), hi = Math.max(bestBack, bestLay);
-        if (fair < lo || fair > hi) confidence = 'red';
-      }
-
-      return { fair, confidence };
-    }
-
-    // SOT Outside Box / Left Foot / Right Foot Goal moved server-side 2026-09-11 (see
-    // ev_engine.compute_wh_ev_bets, merged into oc_calc_ev_bets.json alongside Header/OTB —
-    // same reason those already left the browser: a bet only ever computed client-side depends
-    // on a tab being open/focused/non-calculator-role, so it could go all evening unlogged).
-    // 6 Yard Box has no fair-odds model (display-only, WH price with no EV) and stays here —
-    // there's no automated bet to migrate, just a price to show.
-    const [wh6ydPlayers] = await Promise.all([
-      fetchWHMarket(home, away, 'to score inside the 6 yard box', 'inside the 6 yard box'),
-    ]);
-    const whLookups = {
-      six_yd: {},
-    };
-    for (const p of wh6ydPlayers) whLookups.six_yd[p.name.toLowerCase()] = p;
-
-    const allPlayers = [];
-    for (const team of [lineupData.home, lineupData.away]) {
-      const starters = team.lineup?.starters ?? [];
-      const bench = team.lineup?.bench ?? [];
-      for (const p of [...starters, ...bench]) allPlayers.push({ id: p.id, name: p.name });
-    }
-
-    // Fetch player stats for all players in parallel
-    let fetched = 0;
-    const statsMap = {};
-    await Promise.allSettled(allPlayers.map(async p => {
-      try {
-        const r = await fetch(`/.netlify/functions/player-stats?playerId=${p.id}&matchType=${currentMatchType}`);
-        const d = await r.json();
-        if (d.ok) statsMap[p.id] = d;
-      } catch(e) {}
-      fetched++;
-    }));
-
-    // Calculate EV for each player × market × timeframe. Every remaining market is
-    // William-Hill-sourced (useWH — Betfair/Oddschecker don't offer any of these outright),
-    // unlike the removed header/otb/headed_sot entries which read straight Oddschecker odds.
-    const TIMEFRAMES = [
-      { key: 'currentTeam',   label: 'Curr Team' },
-      { key: 'currentSeason', label: 'This Season' },
-      { key: 'lastSeason',    label: '+Last Season' },
-      { key: 'last2Seasons',  label: '+2 Seasons' },
-    ];
-
-    // SOT Outside Box / Left Foot / Right Foot Goal entries removed 2026-09-11 — computed
-    // server-side now (see ev_engine.compute_wh_ev_bets). 6 Yard Box has no fair-odds model and
-    // stays a display-only client-side lookup, same as always.
-    const MARKET_CONFIG = [
-      { key: 'six_yd',   label: '6 Yard Box',       calcKey: null,         needsAGS: false, isShot: false, useWH: true,  whKey: 'six_yd',  noCalc: true },
-    ];
-
-    function normName(n) {
-      return (n||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-        .toLowerCase().replace(/[^a-z ]/g,' ').replace(/\s+/g,' ').trim();
-    }
-    function fuzzyMatch(a, b) {
-      const na = normName(a), nb = normName(b);
-      if (na === nb) return true;
-      const wa = na.split(' '), wb = nb.split(' ');
-      return wa.filter(w=>w.length>2).every(w=>nb.includes(w)) ||
-             wb.filter(w=>w.length>2).every(w=>na.includes(w));
-    }
-
-    // Returns data quality signal for a timeframe's stats
-    function dataQuality(tfStats, market) {
-      if (!tfStats) return 'none';
-      if (market.needsAGS) {
-        const xg = tfStats.xG || 0;
-        if (xg < MIN_XG) return 'none';
-        return xg >= CONF_XG ? 'high' : 'low';
-      } else {
-        if (market.calcKey === 'headedSOTs' || market.calcKey === 'otbSOTP') {
-          const sot = tfStats.sot || 0;
-          if (sot < MIN_SOT) return 'none';
-          return sot >= CONF_SOT ? 'high' : 'low';
-        } else {
-          const shots = tfStats.shots || 0;
-          if (shots < MIN_SHOTS) return 'none';
-          return shots >= CONF_SHOTS ? 'high' : 'low';
-        }
-      }
-    }
-
-    const evBets = []; // { player, market, ocOdds, bookie, tfs: [{label, fairOdds, ev, quality}], bestEv, isConfident }
-
-    for (const player of allPlayers) {
-      const statsData = statsMap[player.id];
-      if (!statsData) continue;
-      const bbOdds = getBBPlayerOdds(player.name);
-      if (!bbOdds) continue;
-
-      const ags = bbOdds.ags || null;
-      const sotV = bbOdds.sot || null;
-
-      for (const market of MARKET_CONFIG) {
-        // For noCalc markets (6yd box), skip fair odds — just show WH price
-        if (market.noCalc) {
-          const lookup = whLookups[market.whKey] ?? {};
-          const entry = Object.entries(lookup).find(([k]) => fuzzyMatch(k, player.name));
-          if (!entry) continue;
-          const ocPrice = entry[1].best;
-          const bfexEntry = Object.entries(bfexByName).find(([k]) => fuzzyMatch(k, player.name));
-          const bfexRunner = bfexEntry ? bfexEntry[1] : null;
-          const { fair: bfexPrice, confidence: bfexConfidence } = deriveBfexFair(bfexRunner);
-          evBets.push({
-            player: player.name,
-            playerId: player.id,
-            matchId,
-            match: `${home} v ${away}`,
-            market: market.label,
-            bbFair: null,
-            ocOdds: ocPrice.toFixed(2),
-            bookie: 'William Hill',
-            bfexPrice,
-            bfexEv: null,
-            bfexConfidence,
-            bestEv: null,
-            bestFair: null,
-            isConfident: false,
-            noCalc: true,
-          });
-          continue;
-        }
-
-        if (market.needsAGS && !ags) continue;
-
-        // Get William Hill price for this player — every remaining market is WH-sourced.
-        const lookup = whLookups[market.whKey] ?? {};
-        const entry = Object.entries(lookup).find(([k]) => fuzzyMatch(k, player.name));
-        const ocPrice = entry ? entry[1].best : null;
-        const ocBook = entry ? 'William Hill' : null;
-
-        if (!ocPrice) continue;
-
-        // Check minimum threshold against last2Seasons (cumulative data)
-        const cumulativeStats = statsData.timeframes?.['last2Seasons'];
-        const cumulativeQuality = dataQuality(cumulativeStats, market);
-        if (cumulativeQuality === 'none') continue; // not enough data overall — skip
-        const isConfident = cumulativeQuality === 'high';
-
-        // Look up Betfair exchange data for this player — use correct market
-        const bfexLookup = market.isShot ? bfexSOTByName : bfexAGSByName;
-        const bfexEntry = Object.entries(bfexLookup).find(([k]) => fuzzyMatch(k, player.name));
-        const bfexRunner = bfexEntry ? bfexEntry[1] : null;
-        const { fair: bfexPrice, confidence: bfexConfidence } = deriveBfexFair(bfexRunner);
-
-        // Use BFEX as AGS/SOT input to GSM calculations for all timeframes
-        const agsForCalc = (market.needsAGS && bfexPrice) ? bfexPrice : ags;
-        const sotForCalc = (!market.needsAGS && market.isShot && bfexPrice) ? bfexPrice : sotV;
-
-        // Recalculate every timeframe using BFEX input where available, keeping whichever
-        // gives the best (highest) positive EV — same "best of 4 timeframes" rule the
-        // Oddschecker +EV server pipeline applies to Header/OTB.
-        const isPenTaker = penTakerIds.has(String(player.id));
-        let bestEv = null, bestFair = null;
-        for (const tf of TIMEFRAMES) {
-          const tfStats = statsData.timeframes?.[tf.key];
-          const quality = dataQuality(tfStats, market);
-          if (quality === 'none') continue;
-
-          const result = calcAutoGSM(
-            tfStats,
-            market.needsAGS ? agsForCalc : null,
-            null,
-            !market.needsAGS ? sotForCalc : null,
-            isPenTaker
-          );
-
-          let fairOdds = null;
-          if (result) {
-            if (market.isShot) {
-              const arr = result[market.calcKey];
-              fairOdds = Array.isArray(arr) ? arr[0] : null;
-            } else {
-              fairOdds = result[market.calcKey];
-            }
-          }
-          if (!fairOdds || !isFinite(fairOdds) || fairOdds <= 1) continue;
-
-          const ev = ((ocPrice / fairOdds) - 1) * 100;
-          if (ev > 0 && (bestEv === null || ev > bestEv)) { bestEv = ev; bestFair = fairOdds; }
-        }
-
-        if (bestEv === null) continue;
-
-        evBets.push({
-          player: player.name,
-          playerId: player.id,
-          matchId,
-          match: `${home} v ${away}`,
-          market: market.label,
-          ocOdds: ocPrice.toFixed(2),
-          bookie: ocBook,
-          bfexConfidence,
-          bestEv,
-          bestFair,
-          baseFair: market.needsAGS ? agsForCalc : (market.isShot ? sotForCalc : null),
-          isConfident,
-        });
-      }
-    }
-
-    evBets.sort((a, b) => {
-      if (a.noCalc && !b.noCalc) return 1;
-      if (!a.noCalc && b.noCalc) return -1;
-      return (b.bestEv ?? 0) - (a.bestEv ?? 0);
-    });
-
-    // Filter out clearly erroneous results (>500% EV) — previously computed but never
-    // actually applied (this function returned the unfiltered list), so a bad data point
-    // could show as a 1000%+ "value bet"; now it's actually used.
-    return evBets.filter(b => b.noCalc || (b.bestEv ?? 0) <= 500);
-}
 
 // Scans every fixture loaded for today/tomorrow and renders straight to the results table —
 // no manual per-fixture step, called automatically by initCalcEV.
@@ -14453,17 +14055,6 @@ async function scanAllCalcEV(statusEl, opts) {
   if (smetaEl) smetaEl.style.display = '';
 
   const allEvBets = [];
-  for (const fixture of cevFixtures) {
-    if (!opts.silent && smetaCount) smetaCount.textContent = `Scanning ${fixture.home} v ${fixture.away}...`;
-    try {
-      const bets = await runScanCore(fixture.id, fixture.home, fixture.away, fixture.leagueName);
-      const t = fixture.utcTime ? fmtKickoff(fixture.utcTime) : 'TBC';
-      bets.forEach(b => { b.t = t; });
-      allEvBets.push(...bets);
-    } catch(e) {
-      console.warn(`Scan failed for ${fixture.home} v ${fixture.away}:`, e.message);
-    }
-  }
 
   // Also pull in the server-computed Header/OTB bets (BFEX AGS x FotMob shot-share — see
   // oc-scraper's ev_engine.compute_header_otb_ev_bets) alongside the client-side WH-based
@@ -14484,7 +14075,7 @@ async function scanAllCalcEV(statusEl, opts) {
       t: b.t, matchId: b.matchId, match: b.match, market: b.mkt, player: b.sel, playerId: b.selId,
       bestFair: b.fair, baseFair: b.baseFair, bookie: b.bk,
       ocOdds: typeof b.odds === 'number' ? b.odds.toFixed(2) : b.odds,
-      bestEv: b.ev, isConfident: b.conf === 'green', noCalc: false,
+      bestEv: b.ev, isConfident: b.conf === 'green', noCalc: !!b.noCalc, // noCalc: 6 Yard Box display-only rows
       boost: isBoost || !!b.boost, xg: b.xg, allOdds: b.allOdds,
       source: b.source, bfexMatched: b.matched, url: b.url,
       // This bet's own fair recomputed under each candidate source (fair_resolver.py's
