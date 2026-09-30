@@ -378,6 +378,7 @@ const FOOTBALL_BOOST_EV_ROUTES = {
   '/api/properbet-football-boost-ev': 'properbet_football_boost_ev_bets.json',
   '/api/sportingbet-boost-ev': 'sportingbet_boost_ev_bets.json',
   '/api/betway-boost-ev': 'betway_boost_ev_bets.json',
+  '/api/grosvenor-boost-ev': 'grosvenor_boost_ev_bets.json',
 };
 for (const [route, filename] of Object.entries(FOOTBALL_BOOST_EV_ROUTES)) {
   const filePath = require('path').join(__dirname, 'oc-scraper', 'data', filename);
