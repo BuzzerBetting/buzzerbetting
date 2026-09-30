@@ -4561,6 +4561,65 @@ router.post('/properbet-boosts/ingest', (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// ================== SPORTINGBET BOOSTS (raw boost feed) ==================
+// 2026-09-30 — SportingBet 403s the DO box's IP, so oc-scraper/sportingbet-userscript.js reads
+// Entain's cds-api (isPriceBoost=true, per sport) from the user's browser and POSTs the result.
+router.get('/sportingbet-boosts', (req, res) => {
+  try {
+    const { rows, stale, ageMin } = freshBoostRows('sportingbet_boosts', 75); // userscript polls every 30min
+    res.json({ ok: true, rows, stale, staleMinutes: stale ? ageMin : undefined });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/sportingbet-boosts/ingest
+//   body: { rows: [{optionId, fixtureId, sport, competition, fixture, startTime, market, selection, wasOdds, odds}, ...] }
+// Same upsert-then-delete-stale shape as the other *-boosts/ingest routes; the userscript sends
+// every sport's full boost list each cycle (every 30 min).
+router.post('/sportingbet-boosts/ingest', (req, res) => {
+  try {
+    const b = req.body || {};
+    const incoming = Array.isArray(b.rows) ? b.rows : [];
+    const now = new Date().toISOString();
+    const ins = db.prepare(`
+      INSERT INTO sportingbet_boosts (option_id, fixture_id, sport, competition, fixture, start_time, market, selection, was_odds, odds, scraped_at)
+      VALUES (@option_id, @fixture_id, @sport, @competition, @fixture, @start_time, @market, @selection, @was_odds, @odds, @now)
+      ON CONFLICT(option_id) DO UPDATE SET
+        fixture_id = excluded.fixture_id, sport = excluded.sport, competition = excluded.competition, fixture = excluded.fixture,
+        start_time = excluded.start_time, market = excluded.market, selection = excluded.selection,
+        was_odds = excluded.was_odds, odds = excluded.odds, scraped_at = excluded.scraped_at
+    `);
+    let upserted = 0;
+    let removed = 0;
+    const tx = db.transaction(() => {
+      for (const r of incoming) {
+        if (!r || r.optionId == null || !r.fixture || !r.selection) continue;
+        ins.run({
+          option_id: String(r.optionId),
+          fixture_id: r.fixtureId != null ? String(r.fixtureId) : null,
+          sport: r.sport || null,
+          competition: r.competition || null,
+          fixture: String(r.fixture),
+          start_time: r.startTime || null,
+          market: r.market || null,
+          selection: String(r.selection),
+          was_odds: r.wasOdds != null ? Number(r.wasOdds) : null,
+          odds: r.odds != null ? Number(r.odds) : null,
+          now,
+        });
+        upserted++;
+      }
+      // An empty-but-successful scrape (b.complete) means SportingBet genuinely has no boosts up
+      // right now, so clear the table then too — unlike a page scrape, an empty list here isn't
+      // a sign the read failed.
+      if (upserted > 0 || b.complete === true) {
+        removed = db.prepare(`DELETE FROM sportingbet_boosts WHERE scraped_at != ?`).run(now).changes;
+      }
+    });
+    tx();
+    res.json({ ok: true, upserted, removed });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 // ================== DRAGONBET / PLANETSPORTBET BOOSTS (raw scraped odds) ==================
 // Both confirmed live 2026-09-15 to run the exact same underlying platform as PricedUp/
 // StarSports (see ledger-db.js table comment) — same upsert-then-delete-stale ingest shape,

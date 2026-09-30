@@ -680,6 +680,26 @@ CREATE TABLE IF NOT EXISTS properbet_boosts (
 );
 `);
 
+// SportingBet price boosts (2026-09-30), fed by oc-scraper/sportingbet-userscript.js. Unlike the
+// page-scraped books above, the userscript reads Entain's own cds-api JSON (isPriceBoost=true), so
+// each row arrives already structured — fixture, market and selection as separate fields plus the
+// pre-boost price — keyed by SportingBet's own option id.
+db.exec(`
+CREATE TABLE IF NOT EXISTS sportingbet_boosts (
+  option_id    TEXT PRIMARY KEY,
+  fixture_id   TEXT,
+  sport        TEXT,
+  competition  TEXT,
+  fixture      TEXT NOT NULL,
+  start_time   TEXT,
+  market       TEXT,
+  selection    TEXT NOT NULL,
+  was_odds     REAL,
+  odds         REAL,
+  scraped_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`);
+
 // Same shape/reasoning as starsports_boosts above — DragonBet's "DragonBoosts" page
 // (dragonbet.co.uk/sport-special/DragonBoosts) and PlanetSportBet's "Rocket Boosts" page
 // (planetsportbet.com/sport-special/RocketBoosts) both confirmed live 2026-09-15 to run the
