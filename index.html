@@ -9433,7 +9433,7 @@ async function loadOddscheckerEV(){
       'oc-planetsportbet-horse-ev','oc-williamhill-horse-ev',
       'oc-pricedup-football-boost-ev','oc-starsports-football-boost-ev',
       'oc-planetsportbet-football-boost-ev','oc-dragonbet-football-boost-ev',
-      'oc-sportingbet-boost-ev',
+      'oc-sportingbet-boost-ev','oc-betway-boost-ev',
     ];
     const [r,...secondaryResults]=await Promise.allSettled([
       fetch('/.netlify/functions/oc-ev').then(x=>x.json()),
@@ -14367,6 +14367,7 @@ const BOOST_PAGE_BY_BK = {
   'ProperBet': 'https://proper.bet/sport-special/ProperBoosts',
   'Fairplay': 'https://fairplaybet.co.uk/',
   'SportingBet': 'https://www.sportingbet.com/en/sports/football-4',
+  'BetWay': 'https://betway.com/gb/en/sports/cat/betway-boosts',
 };
 function betLinkUrl(url, bookie) {
   if (url && /^https:\/\//i.test(url)) return url;
