@@ -4566,7 +4566,11 @@ router.post('/properbet-boosts/ingest', (req, res) => {
 // Entain's cds-api (isPriceBoost=true, per sport) from the user's browser and POSTs the result.
 router.get('/sportingbet-boosts', (req, res) => {
   try {
-    const { rows, stale, ageMin } = freshBoostRows('sportingbet_boosts', 75); // userscript polls every 30min
+    // Not freshBoostRows(): that helper sorts by group_title, which this structured table doesn't have.
+    const latest = db.prepare(`SELECT MAX(scraped_at) AS latest FROM sportingbet_boosts`).get().latest;
+    const ageMin = latest ? Math.round((Date.now() - new Date(latest).getTime()) / 60000) : null;
+    const stale = ageMin != null && ageMin > 75; // userscript polls every 30min
+    const rows = stale ? [] : db.prepare(`SELECT * FROM sportingbet_boosts ORDER BY sport, start_time, fixture, market`).all();
     res.json({ ok: true, rows, stale, staleMinutes: stale ? ageMin : undefined });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
