@@ -15,3 +15,6 @@ oc-scraper/
 # not tracked in this shared repo. Harvests FotMob set-piece data into corner_model.db and
 # feeds GET /api/ledger/match-predictions (see ledger-routes.js). Cron-refreshed on the box.
 corner-model/
+
+# Local Netlify folder
+.netlify
