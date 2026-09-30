@@ -3546,7 +3546,7 @@ async function loadAccountSummary() {
 // with its originating +EV row later without a translation table. '6 Yard Box' is the one
 // display-only market there (William Hill price, no fair-odds model) — the bet still files,
 // there just won't be a fair to enter alongside it.
-const GSM_BET_MARKETS = ['Header', 'OTB', 'Headed SOT', 'OTB SOT', 'Assist', 'Left Foot Goal', 'Right Foot Goal', '6 Yard Box'];
+const GSM_BET_MARKETS = ['Header', 'OTB', 'Headed SOT', 'OTB SOT', 'Left Foot SOT', 'Right Foot SOT', 'Assist', 'Left Foot Goal', 'Right Foot Goal', '6 Yard Box'];
 
 const BET_TYPE_CONFIG = {
   'Value':            { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Bet Description',label:'Bet description',type:'text'}], oddsMode:'pairedBlended' },
@@ -10101,6 +10101,18 @@ function pfCalcHeadedOtbSotFair(stats,sot1Fair,pen){
   let otb=null;if(otbSot>0)otb=pfFairFromRate(Math.max(0,lamSot*(otbSot/sot)));
   return{headed,otb};
 }
+// Left/right-foot SOT (BetMGM markets) — same split as above but by leftFootSot/rightFootSot, and
+// no penalty adjustment (a penalty is a foot shot), matching gsm_fair.calc_foot_sot_fair.
+function pfCalcFootSotFair(stats,sot1Fair){
+  if(!stats||!sot1Fair||sot1Fair<=1)return{lf:null,rf:null};
+  const sot=stats.sot||0;
+  if(sot<6)return{lf:null,rf:null}; // MIN_SOT
+  const lamSot=pfRateFromFair(sot1Fair);
+  const lfSot=stats.leftFootSot||0,rfSot=stats.rightFootSot||0;
+  let lf=null;if(lfSot>0)lf=pfFairFromRate(Math.max(0,lamSot*(lfSot/sot)));
+  let rf=null;if(rfSot>0)rf=pfFairFromRate(Math.max(0,lamSot*(rfSot/sot)));
+  return{lf,rf};
+}
 function pfCalcFootGoalFair(stats,agsFair){
   if(!stats||!agsFair||agsFair<=1)return{lf:null,rf:null};
   const gameXg=pfRateFromFair(agsFair);
@@ -10123,9 +10135,11 @@ function pfRecalc(){
   const hdrOtb=pfCalcHeaderOtbFair(stats,isFinite(ags)&&ags>1?ags:null,pen);
   const sotSplit=pfCalcHeadedOtbSotFair(stats,isFinite(sot1)&&sot1>1?sot1:null,pen);
   const foot=pfCalcFootGoalFair(stats,isFinite(ags)&&ags>1?ags:null);
+  const footSot=pfCalcFootSotFair(stats,isFinite(sot1)&&sot1>1?sot1:null);
   PF_LAST_RESULTS={
     'Header Goal':hdrOtb.header,'OTB Goal':hdrOtb.otb,
     'Headed SOT':sotSplit.headed,'OTB SOT':sotSplit.otb,
+    'Left Foot SOT':footSot.lf,'Right Foot SOT':footSot.rf,
     'Left Foot Goal':foot.lf,'Right Foot Goal':foot.rf,
   };
   body.innerHTML=Object.keys(PF_LAST_RESULTS).map(m=>`<tr id="pf-row-${m.replace(/\s+/g,'')}"></tr>`).join('');
