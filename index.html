@@ -2619,6 +2619,18 @@ tr.ba-placed > td{background:var(--green-bg) !important}
     <div class="note"><i class="ti ti-info-circle"></i> A bookmaker GROUP's own price that's at least 50% above the next-best group in the same market's ladder, with 5+ independent bookie groups quoting it (same-platform books like Star Sports/PricedUp/AKBets count as one) — a raw ladder disagreement, not a fair-odds judgement. A <i class="ti ti-clock-exclamation" style="color:var(--amber)"></i> icon means that specific price hasn't moved in a while (could just mean nothing's changed, or could mean it's not really live) — worth a manual check before backing it either way.</div>
   </div>
 
+  <!-- Grosvenor (2026-09-30): Grosvenor's own player prices (Kambi API, grosvenor_props.py) that
+       beat every Oddschecker book for the same player/market — for building bet builders off the
+       best prices. Fed by oc_scraper_service.py (grosvenor_best.json), pre-lineup included. -->
+  <div id="ba-panel-grosvenor" class="ba-panel" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      <div class="smeta" style="margin:0"><span class="pulse"></span><strong id="ba-grosvenor-count" style="color:var(--green);font-weight:500">—</strong></div>
+      <button onclick="baRefreshActive(this)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+    </div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Player</th><th class="r">Grosvenor</th><th class="r">Next best</th><th class="r">% above</th><th class="ba-watch-col">Placed?</th><th></th></tr></thead><tbody id="ba-grosvenor-body"></tbody></table></div></div>
+    <div class="note"><i class="ti ti-info-circle"></i> Grosvenor prices (AGS, First Goalscorer, SOT 1+, Header &amp; OTB goal) that are higher than the best price on Oddschecker for the same player, ranked by how far above that next-best price they are. A price comparison only — not priced against a fair. Only matches with a fresh Oddschecker scrape are compared.</div>
+  </div>
+
   <!-- panel: Ones to Watch -->
   <div id="ba-panel-watch" class="ba-panel" style="display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
@@ -9277,6 +9289,8 @@ function baPlacedBet(edge,idx){
   if(edge==='calc-ev'){ const b=cevRenderedBets[idx]; return b&&{match:b.match,market:b.market,selection:b.player,bookie:ocBookieName(b.bookie),odds:parseFloat(b.ocOdds)||null,ev:(typeof b.bestEv==='number'?b.bestEv:null)}; }
   // Outliers has no fair/EV — "% above next best" stands in for it.
   if(edge==='outliers'){ const r=BA_OUTLIERS_RENDERED[idx]; return r&&{match:r.match,market:r.market,selection:r.selection,bookie:ocBookieName(r.topBook)||r.topBook,odds:r.topPrice,ev:r.pctAboveNext}; }
+  // Grosvenor has no fair/EV either — "% above next best" stands in, same as Outliers.
+  if(edge==='grosvenor'){ const r=BA_GROSVENOR_RENDERED[idx]; return r&&{match:r.match,market:r.mkt,selection:r.sel,bookie:'Grosvenor',odds:r.odds,ev:r.pct}; }
   return null;
 }
 function baPlacedLabel(p){
@@ -9298,6 +9312,7 @@ function baRerenderPlacedTables(){
   renderOddscheckerEV();
   if(typeof cevLastBets!=='undefined'&&cevLastBets.length)renderEVResults(cevLastBets);
   if(typeof renderBaOutliers==='function')renderBaOutliers();
+  if(typeof renderBaGrosvenor==='function')renderBaGrosvenor();
 }
 async function baLoadPlaced(){
   const watchUser=baWatchUser();
@@ -15455,6 +15470,7 @@ const BA_EDGES = [
   { key: 'errors',  label: 'Errors',          panel: 'ba-panel-errors',   priced: true  },
   { key: 'unmatched', label: 'OC Coverage',   panel: 'ba-panel-unmatched', priced: false },
   { key: 'outliers', label: 'Outliers',       panel: 'ba-panel-outliers', priced: false },
+  { key: 'grosvenor', label: 'Grosvenor',     panel: 'ba-panel-grosvenor', priced: false },
 ];
 let BA_BOOKS = null;             // { canonicalBookie: bool } — null until first load (= all on)
 let BA_ACTIVE = (function(){ try { return localStorage.getItem('bb_betalert_tab') || 'oc-ev'; } catch(e) { return 'oc-ev'; } })();
@@ -15606,7 +15622,7 @@ function baUpdateMenuTag(){
   // bets at all — excluded too (2026-09-26, user-reported: "23 value" was 20 of those). Errors
   // and Outliers are flagged prices (market-integrity / model-free "one book way above the
   // rest"), not bets priced against a fair, so they're left out as well.
-  const NOT_VALUE = new Set(['corners', 'unmatched', 'errors', 'outliers']);
+  const NOT_VALUE = new Set(['corners', 'unmatched', 'errors', 'outliers', 'grosvenor']);
   const corners = BA_COUNTS['corners'] || 0;
   const value = BA_EDGES.reduce((s, e) => s + (NOT_VALUE.has(e.key) ? 0 : (BA_COUNTS[e.key] || 0)), 0);
   el.textContent = (value || corners) ? `${value} value · ${corners} corner` : '—';
@@ -15675,6 +15691,8 @@ function loadBaEdge(key, isPoll){
     loadBaUnmatched();
   } else if (key === 'outliers') {
     loadBaOutliers();
+  } else if (key === 'grosvenor') {
+    loadBaGrosvenor();
   } else {
     loadBaStubFeed(key);
   }
@@ -16306,6 +16324,46 @@ function renderBaOutliers(){
     <td class="r tn" style="color:var(--text2)">${r.bookCount ?? '—'}</td>
     ${pl.watchTd}
     <td style="font-size:11.5px;color:var(--text3);white-space:nowrap">${betLinkBtn(r.url, r.topBook)}${fmtDetected(r.detectedAt)}${pl.btn('outliers', idx)}</td>
+  </tr>`; }).join('');
+}
+
+// ---- Grosvenor (2026-09-30) ----
+// Grosvenor prices that beat every Oddschecker book for the same player/market, highest % above
+// the next-best price first — see oc_scraper_service.py's _grosvenor_best_rows.
+let BA_GROSVENOR_ROWS = [];
+let BA_GROSVENOR_RENDERED = [];
+async function loadBaGrosvenor(){
+  let rows = [];
+  try {
+    const r = await fetch('/.netlify/functions/oc-grosvenor-best');
+    const d = await r.json();
+    if (d && d.ok && Array.isArray(d.bets)) rows = d.bets;
+  } catch(e) {}
+  BA_GROSVENOR_ROWS = rows;
+  renderBaGrosvenor();
+}
+function renderBaGrosvenor(){
+  const body = document.getElementById('ba-grosvenor-body');
+  const countEl = document.getElementById('ba-grosvenor-count');
+  if (!body) return;
+  const rows = BA_GROSVENOR_ROWS.slice().sort((x, y) => (y.pct ?? 0) - (x.pct ?? 0));
+  BA_GROSVENOR_RENDERED = rows;
+  baSetCount('grosvenor', rows.length);
+  if (countEl) countEl.textContent = `${rows.length} best price${rows.length === 1 ? '' : 's'}`;
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">No Grosvenor prices above the Oddschecker best right now.</td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.map((r, idx) => { const pl = baPlacedRow(r.match, r.mkt, r.sel); return `<tr class="${pl.placed ? 'ba-placed' : ''}">
+    <td style="font-size:12px;color:var(--text2);white-space:nowrap">${escapeHtml(r.t || '')}</td>
+    <td style="font-size:12.5px">${escapeHtml(r.match || '')}</td>
+    <td style="font-size:12px;color:var(--text2)">${escapeHtml(r.mkt || '')}</td>
+    <td style="font-weight:500">${escapeHtml(r.sel || '')}</td>
+    <td class="r tn" style="font-weight:600;color:var(--green)">${r.odds != null ? Number(r.odds).toFixed(2) : '—'}</td>
+    <td class="r tn" style="color:var(--text2)">${r.nextBest != null ? Number(r.nextBest).toFixed(2) : '—'} <span style="color:var(--text3);font-size:11px">(${escapeHtml(ocBookieShort(r.nextBook))})</span></td>
+    <td class="r"><span class="badge" style="background:var(--green-bg);color:var(--green)">+${r.pct != null ? Number(r.pct).toFixed(1) : '—'}%</span></td>
+    ${pl.watchTd}
+    <td style="font-size:11.5px;white-space:nowrap">${betLinkBtn(null, 'Grosvenor')}${pl.btn('grosvenor', idx)}</td>
   </tr>`; }).join('');
 }
 

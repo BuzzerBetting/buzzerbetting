@@ -379,6 +379,9 @@ const FOOTBALL_BOOST_EV_ROUTES = {
   '/api/sportingbet-boost-ev': 'sportingbet_boost_ev_bets.json',
   '/api/betway-boost-ev': 'betway_boost_ev_bets.json',
   '/api/grosvenor-boost-ev': 'grosvenor_boost_ev_bets.json',
+  // Not +EV rows: Grosvenor prices above the Oddschecker best (Bet Alerts "Grosvenor" tab),
+  // written by oc_scraper_service.py — same {ok, updated, bets} file shape, so it rides along here.
+  '/api/grosvenor-best': 'grosvenor_best.json',
 };
 for (const [route, filename] of Object.entries(FOOTBALL_BOOST_EV_ROUTES)) {
   const filePath = require('path').join(__dirname, 'oc-scraper', 'data', filename);
