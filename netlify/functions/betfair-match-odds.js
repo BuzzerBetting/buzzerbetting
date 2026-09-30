@@ -214,6 +214,12 @@ async function findTeamWin(team, appKey, session) {
   // United"), so the correctly-found event got filtered straight back out and every acca/boost
   // referencing "Manchester United" by its full name failed with "event not found" even though
   // the alias table already had the answer.
+  // Women's teams (2026-09-30, SportingBet's "Arsenal (W), Bayern Munich (W) and OL Lyonnes (W) all
+  // to win"): a "(W)"/"Women"/"WFC" name searches Betfair's women's fixtures ONLY, stripped of the
+  // marker for matching; every other name still excludes them (see the hits filter below).
+  const WOMEN_RE = /\s*\((?:w|women)\)|\s+women\b|\s+wfc\b/gi;
+  const wantWomen = new RegExp(WOMEN_RE.source, 'i').test(team);
+  if (wantWomen) team = team.replace(WOMEN_RE, '').trim();
   const teamM = TEAM_SEARCH_ALIASES[team.toLowerCase().trim()] || team;
   // Searching by ONE team name (no opponent — PricedUp's acca text never gives one) means a
   // common club can turn up several of its own fixtures at once (today's match plus a later
@@ -226,19 +232,19 @@ async function findTeamWin(team, appKey, session) {
     events = await bfCall('listEvents', { filter: { eventTypeIds: [FOOTBALL_EVENT_TYPE_ID], textQuery: q } }, appKey, session);
     const hits = (events || []).filter(e => {
       const name = e.event?.name || '';
-      if (/\(w\)/i.test(name)) return false; // exclude women's fixtures — same club names, wrong market
+      if (/\(w\)/i.test(name) !== wantWomen) return false; // men's leg -> never a women's fixture (same club names, wrong market), and vice versa
       // Exclude youth/reserve fixtures (same club name, wrong market/liquidity entirely) —
       // confirmed live 2026-09-14 "Como" alone matched "Roma U20 v Como U20" ahead of the
       // real "Como v Parma" senior match.
       if (/\bU1[6-9]\b|\bU2[0-3]\b|\byouth\b|\breserves?\b/i.test(name)) return false;
       if (!isPlausiblePrematchKickoff(e.event?.openDate)) return false; // already kicked off, or implausibly far out
-      const parts = name.split(' v ');
+      const parts = name.replace(/\s*\(w\)/gi, '').split(' v ');
       if (parts.length !== 2) return false;
       return fuzzyTeamMatch(teamM, parts[0]) || fuzzyTeamMatch(teamM, parts[1]);
     });
     if (hits.length) { candidates = hits; break; }
   }
-  if (!candidates.length) return { error: `event not found for team: ${team}`, available: (events || []).slice(0, 10).map(e => e.event?.name) };
+  if (!candidates.length) return { error: `event not found for team: ${team}${wantWomen ? ' (W)' : ''}`, available: (events || []).slice(0, 10).map(e => e.event?.name) };
   candidates.sort((a, b) => new Date(a.event.openDate) - new Date(b.event.openDate));
   const match = candidates[0];
 
@@ -251,7 +257,7 @@ async function findTeamWin(team, appKey, session) {
   if (!catalogue?.length) return { error: 'no MATCH_ODDS market found', eventName: match.event.name };
 
   const marketId = catalogue[0].marketId;
-  const runnerMeta = catalogue[0].runners.find(r => fuzzyTeamMatch(teamM, r.runnerName));
+  const runnerMeta = catalogue[0].runners.find(r => fuzzyTeamMatch(teamM, r.runnerName.replace(/\s*\(w\)/gi, '')));
   if (!runnerMeta) return { error: `runner not found for team: ${team}`, eventName: match.event.name, runners: catalogue[0].runners.map(r => r.runnerName) };
 
   const books = await bfCall('listMarketBook', {
