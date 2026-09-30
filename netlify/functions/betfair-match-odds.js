@@ -162,6 +162,8 @@ const TEAM_SEARCH_ALIASES = {
   // Confirmed live 2026-09-14 needed for PricedUp's own team-name spelling specifically —
   // Betfair's event name is just "Inter", not the full club name PricedUp displays.
   'internazionale': 'Inter', 'inter milan': 'Inter',
+  // SportingBet (2026-09-30) uses Lyon women's rebrand; Betfair still lists them as "Lyon (W)".
+  'ol lyonnes': 'Lyon',
 };
 // Common club-name prefixes Betfair usually drops from its own event names (e.g. "AS Roma"
 // -> "Torino v Roma", not "Torino v AS Roma") — confirmed live 2026-09-14 "AS Roma" returned
