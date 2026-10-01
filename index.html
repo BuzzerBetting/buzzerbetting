@@ -273,46 +273,6 @@ tr.ba-placed > td{background:var(--green-bg) !important}
   </div>
 </header>
 
-<!-- OC block banner — Jordan only -->
-<div id="oc-block-banner" style="display:none;background:#7f1d1d;color:#fca5a5;padding:10px 24px;font-size:13px;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:62px;z-index:99">
-  <span><i class="ti ti-alert-triangle" style="margin-right:6px"></i><strong>Oddschecker blocked</strong> — scraper is paused. Submit fresh cookies to restore.</span>
-  <button onclick="openOcCookieModal()" style="background:#dc2626;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:500;white-space:nowrap">Submit new cookies</button>
-</div>
-
-<!-- OC cookie modal -->
-<div id="oc-cookie-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;align-items:center;justify-content:center">
-  <div style="background:var(--surface);border-radius:14px;padding:28px;max-width:560px;width:calc(100% - 48px);box-shadow:0 20px 60px rgba(0,0,0,0.4)">
-    <div style="font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;margin-bottom:6px">Update OC cookies</div>
-    <div style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6">Open Oddschecker in your Dolphin browser (proxy connected), copy the full <strong>Cookie</strong> header from DevTools → Network → any OC request → Request Headers, and paste it below.</div>
-    <textarea id="oc-cookie-input" placeholder="Paste full cookie string here..." style="width:100%;height:120px;padding:10px 12px;border:0.5px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-size:12px;font-family:monospace;resize:vertical;outline:none"></textarea>
-    <div id="oc-cookie-msg" style="font-size:12px;margin-top:8px;min-height:18px"></div>
-    <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end">
-      <button onclick="closeOcCookieModal()" style="background:var(--surface2);color:var(--text2);border:0.5px solid var(--border);border-radius:8px;padding:9px 18px;font-size:13px;cursor:pointer;font-family:inherit">Cancel</button>
-      <button onclick="submitOcCookies()" id="oc-cookie-submit-btn" style="background:var(--green);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:500">Rotate IP &amp; Submit</button>
-    </div>
-  </div>
-</div>
-
-<!-- OC block banner — Jordan only, shown when Oddschecker is Cloudflare-blocked -->
-<div id="oc-block-banner" style="display:none;background:#7f1d1d;color:#fca5a5;padding:10px 24px;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:62px;z-index:99">
-  <span><i class="ti ti-alert-triangle" style="margin-right:6px"></i><strong>Oddschecker blocked</strong> — scraper is paused. Submit fresh cookies to restore.</span>
-  <button onclick="openOcCookieModal()" style="background:#dc2626;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:500;white-space:nowrap">Submit new cookies</button>
-</div>
-
-<!-- OC cookie modal -->
-<div id="oc-cookie-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;align-items:center;justify-content:center">
-  <div style="background:var(--surface);border-radius:14px;padding:28px;max-width:560px;width:calc(100% - 48px);box-shadow:0 20px 60px rgba(0,0,0,0.4)">
-    <div style="font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;margin-bottom:6px">Update OC cookies</div>
-    <div style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6">Open Oddschecker in your Dolphin browser (proxy connected), copy the full <strong>Cookie</strong> header from DevTools → Network → any OC request → Request Headers, and paste it below.</div>
-    <textarea id="oc-cookie-input" placeholder="Paste full cookie string here..." style="width:100%;height:120px;padding:10px 12px;border:0.5px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-size:12px;font-family:monospace;resize:vertical;outline:none"></textarea>
-    <div id="oc-cookie-msg" style="font-size:12px;margin-top:8px;min-height:18px"></div>
-    <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end">
-      <button onclick="closeOcCookieModal()" style="background:var(--surface2);color:var(--text2);border:0.5px solid var(--border);border-radius:8px;padding:9px 18px;font-size:13px;cursor:pointer;font-family:inherit">Cancel</button>
-      <button onclick="submitOcCookies()" id="oc-cookie-submit-btn" style="background:var(--green);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:500">Rotate IP &amp; Submit</button>
-    </div>
-  </div>
-</div>
-
 <!-- Global Player Finder pop-up (2026-09-26, user-requested: reachable from any screen). The
      Calculators-hub #calc-playerfinder view is MOVED in here while open and back on close, so
      there's one copy of the tool and its state (search, selected player, source fair) carries
@@ -3231,8 +3191,6 @@ function checkPin(){
       // either since goHome() always bounced it back to 'calc'); applyRoleRestrictions()
       // above hides every home card except Calculations/Bet Alerts for that role.
       if (d.role === 'freeze') showSec('freeze');
-      startOcBlockPoll();
-      startOcBlockPoll();
     } else {
       errEl.textContent = d.error || 'Incorrect username or passcode — try again';
       errEl.style.display='block';
@@ -3255,8 +3213,6 @@ function checkPin(){
     if(o)o.style.display='none';
     setTimeout(applyRoleRestrictions, 0);
     if (CURRENT_USER_ROLE === 'freeze') setTimeout(()=>showSec('freeze'), 0);
-    setTimeout(startOcBlockPoll, 1000);
-    setTimeout(startOcBlockPoll, 1000);
   } else {
     setTimeout(()=>{const i=document.getElementById('login-username');if(i)i.focus();},200);
   }
@@ -17224,122 +17180,6 @@ function fbUpdateAbEv(idx){
     el.style.color = ev >= 0 ? 'var(--green)' : 'var(--red)';
   } else { el.textContent = '—'; el.style.color = ''; }
 }
-// ── OC BLOCK BANNER (Jordan only) ──────────────────────────────────────────
-let ocBlockPollTimer = null;
-
-function startOcBlockPoll() {
-  if (CURRENT_USERNAME !== 'Jordan') return;
-  checkOcBlockStatus();
-  ocBlockPollTimer = setInterval(checkOcBlockStatus, 2 * 60 * 1000); // every 2 min
-}
-
-async function checkOcBlockStatus() {
-  if (CURRENT_USERNAME !== 'Jordan') return;
-  try {
-    const d = await fetch('/api/oc-status').then(r => r.json());
-    const banner = document.getElementById('oc-block-banner');
-    if (banner) banner.style.display = d.blocked ? 'flex' : 'none';
-  } catch(e) {}
-}
-
-function openOcCookieModal() {
-  const modal = document.getElementById('oc-cookie-modal');
-  if (modal) { modal.style.display = 'flex'; }
-  document.getElementById('oc-cookie-input').value = '';
-  document.getElementById('oc-cookie-msg').textContent = '';
-}
-
-function closeOcCookieModal() {
-  const modal = document.getElementById('oc-cookie-modal');
-  if (modal) modal.style.display = 'none';
-}
-
-async function submitOcCookies() {
-  const cookieString = document.getElementById('oc-cookie-input').value.trim();
-  const msg = document.getElementById('oc-cookie-msg');
-  const btn = document.getElementById('oc-cookie-submit-btn');
-  if (!cookieString) { msg.innerHTML = '<span style="color:var(--red)">Paste the cookie string first.</span>'; return; }
-  btn.disabled = true; btn.textContent = 'Rotating IP & submitting…';
-  msg.innerHTML = '<span style="color:var(--text2)">Rotating proxy IP — this takes ~5 seconds…</span>';
-  try {
-    const apiKey = '79b31c99d91da466b1db57f0b5bfe330de5c06c5b1794948';
-    const d = await fetch('/api/oc-cookies', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cookieString, apiKey })
-    }).then(r => r.json());
-    if (d.ok) {
-      msg.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Done — cookies updated, pipeline triggered.</span>';
-      setTimeout(() => {
-        closeOcCookieModal();
-        checkOcBlockStatus();
-      }, 2000);
-    } else {
-      msg.innerHTML = `<span style="color:var(--red)">${d.error || 'Failed — try again.'}</span>`;
-    }
-  } catch(e) {
-    msg.innerHTML = '<span style="color:var(--red)">Network error — try again.</span>';
-  } finally {
-    btn.disabled = false; btn.textContent = 'Rotate IP & Submit';
-  }
-}
-
-// ── OC BLOCK BANNER (Jordan only) ──────────────────────────────────────────
-let ocBlockPollTimer = null;
-
-function startOcBlockPoll() {
-  if (CURRENT_USERNAME !== 'Jordan') return;
-  checkOcBlockStatus();
-  if (!ocBlockPollTimer) ocBlockPollTimer = setInterval(checkOcBlockStatus, 2 * 60 * 1000);
-}
-
-async function checkOcBlockStatus() {
-  if (CURRENT_USERNAME !== 'Jordan') return;
-  try {
-    const d = await fetch('/.netlify/functions/oc-status').then(r => r.json());
-    const banner = document.getElementById('oc-block-banner');
-    if (banner) banner.style.display = d.blocked ? 'flex' : 'none';
-  } catch(e) {}
-}
-
-function openOcCookieModal() {
-  const modal = document.getElementById('oc-cookie-modal');
-  if (modal) modal.style.display = 'flex';
-  document.getElementById('oc-cookie-input').value = '';
-  document.getElementById('oc-cookie-msg').textContent = '';
-}
-
-function closeOcCookieModal() {
-  const modal = document.getElementById('oc-cookie-modal');
-  if (modal) modal.style.display = 'none';
-}
-
-async function submitOcCookies() {
-  const cookieString = document.getElementById('oc-cookie-input').value.trim();
-  const msg = document.getElementById('oc-cookie-msg');
-  const btn = document.getElementById('oc-cookie-submit-btn');
-  if (!cookieString) { msg.innerHTML = '<span style="color:var(--red)">Paste the cookie string first.</span>'; return; }
-  btn.disabled = true; btn.textContent = 'Rotating IP & submitting…';
-  msg.innerHTML = '<span style="color:var(--text2)">Rotating proxy IP — this takes ~5 seconds…</span>';
-  try {
-    const d = await fetch('/.netlify/functions/oc-cookies', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cookieString, apiKey: '79b31c99d91da466b1db57f0b5bfe330de5c06c5b1794948' })
-    }).then(r => r.json());
-    if (d.ok) {
-      msg.innerHTML = '<span style="color:var(--green)"><i class="ti ti-check"></i> Done — cookies updated, pipeline triggered.</span>';
-      setTimeout(() => { closeOcCookieModal(); checkOcBlockStatus(); }, 2000);
-    } else {
-      msg.innerHTML = `<span style="color:var(--red)">${d.error || 'Failed — try again.'}</span>`;
-    }
-  } catch(e) {
-    msg.innerHTML = '<span style="color:var(--red)">Network error — try again.</span>';
-  } finally {
-    btn.disabled = false; btn.textContent = 'Rotate IP & Submit';
-  }
-}
-
 async function fbSubmitAddBet(idx){
   const a = FB_ACCAS[idx]; if (!a) return;
   const accEl = document.getElementById('fb-ab-acc-' + idx);
