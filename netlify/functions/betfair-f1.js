@@ -10,7 +10,8 @@
 //
 // GET /api/betfair-f1  ->
 //   { ok:true, race:{ name, startTime }, markets:{
-//       winner:[{name,fair}], podium:[...], top6:[...], points:[...], classified:[...] } }
+//       winner:[{name,fair,back,backSize,lay,laySize}], podium:[...], top6:[...], points:[...],
+//       classified:[...] }, traded:{ winner:<£ matched>, ... } }
 // where `fair` is the no-vig price between best back and best lay (2*b*l/(b+l)) once both
 // clear a minimum liquidity bar, or the one side that exists once IT clears a higher bar alone
 // — see fairPrice(). A runner with nothing but a stray thin order resting on it is simply
@@ -201,11 +202,14 @@ async function buildF1(appKey, session) {
   for (const b of books || []) bookById[b.marketId] = b;
 
   const out = { winner: [], podium: [], top6: [], points: [], classified: [] };
+  // £ matched per market (2026-10-01) — f1_scan.py's straight (Yes) arbs need >= £100 traded.
+  const traded = {};
   for (const k of wantKeys) {
     const mkt = race.markets[k];
     if (!mkt) continue;
     const book = bookById[mkt.marketId];
     if (!book) continue;
+    traded[k] = Math.round(book.totalMatched || 0);
     const nameById = {};
     for (const r of mkt.runners) nameById[r.selectionId] = r.runnerName;
     for (const r of book.runners || []) {
@@ -228,10 +232,15 @@ async function buildF1(appKey, session) {
       // `back` (2026-09-26, user-requested): the best back price on its own, when it has real
       // size — the inverse "No" side of Podium/Top 6/Points/Classified is priced off this (the
       // user trusts the exchange back price most there), not the back/lay midpoint `fair`.
-      out[k].push({ name: nameById[r.selectionId] || String(r.selectionId), fair, back: backOk ? b : null });
+      // backSize/lay/laySize (2026-10-01): raw best-level sizes so f1_scan.py/dnf_scan.py can
+      // apply their own arb liquidity rules (£10 to lay for Yes arbs, £10 on the back for No/DNF).
+      out[k].push({
+        name: nameById[r.selectionId] || String(r.selectionId), fair, back: backOk ? b : null,
+        backSize: Math.round(bSize * 100) / 100, lay: l > 1 ? l : null, laySize: Math.round(lSize * 100) / 100,
+      });
     }
   }
-  return { ok: true, race: { name: race.name, startTime: race.startTime }, markets: out };
+  return { ok: true, race: { name: race.name, startTime: race.startTime }, markets: out, traded };
 }
 
 exports.handler = async (event) => {
