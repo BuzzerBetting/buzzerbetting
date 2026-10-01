@@ -238,6 +238,27 @@ tr.ba-placed > td{background:var(--green-bg) !important}
     <div class="brand-name">Buzzer<em>Betting</em></div>
   </div>
   <div class="hdr-right">
+    <!-- Kelly staking calculator (2026-10-01) — global, opens like the notifications panel.
+         Bankroll + fraction persist in localStorage; odds are per-bet so they don't. -->
+    <div id="kelly-wrap" style="position:relative;display:flex;align-items:center">
+      <button id="kelly-btn" onclick="toggleKellyPanel(event)" title="Kelly stake calculator" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.55);font-size:18px;padding:4px;display:flex;align-items:center;line-height:1">
+        <i class="ti ti-calculator"></i>
+      </button>
+      <div id="kelly-panel" style="display:none;position:absolute;right:0;top:calc(100% + 12px);width:260px;background:var(--surface);border:0.5px solid var(--border);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,0.22);z-index:200;overflow:hidden">
+        <div style="padding:12px 14px;border-bottom:0.5px solid var(--border);font-size:13px;font-weight:600;color:var(--text)">Kelly stake</div>
+        <div style="padding:12px 14px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <label style="display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--text2)">Bankroll (£)<input id="kelly-bank" type="number" min="0" step="any" inputmode="decimal" oninput="calcKelly(true)" style="width:100%;box-sizing:border-box;background:var(--surface2);color:var(--text);border:.5px solid var(--border);border-radius:var(--radius);padding:7px 8px;font-size:13px;font-family:inherit"></label>
+          <label style="display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--text2)">Kelly fraction<input id="kelly-frac" type="number" min="0" step="0.05" inputmode="decimal" oninput="calcKelly(true)" style="width:100%;box-sizing:border-box;background:var(--surface2);color:var(--text);border:.5px solid var(--border);border-radius:var(--radius);padding:7px 8px;font-size:13px;font-family:inherit"></label>
+          <label style="display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--text2)">Back odds<input id="kelly-odds" type="number" min="1" step="any" inputmode="decimal" oninput="calcKelly()" style="width:100%;box-sizing:border-box;background:var(--surface2);color:var(--text);border:.5px solid var(--border);border-radius:var(--radius);padding:7px 8px;font-size:13px;font-family:inherit"></label>
+          <label style="display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--text2)">Fair odds<input id="kelly-fair" type="number" min="1" step="any" inputmode="decimal" oninput="calcKelly()" style="width:100%;box-sizing:border-box;background:var(--surface2);color:var(--text);border:.5px solid var(--border);border-radius:var(--radius);padding:7px 8px;font-size:13px;font-family:inherit"></label>
+        </div>
+        <div style="padding:10px 14px 14px;border-top:0.5px solid var(--border)">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">Recommended stake</div>
+          <div id="kelly-stake" style="font-size:22px;font-weight:600;color:var(--text);margin-top:2px">—</div>
+          <div id="kelly-detail" style="font-size:11.5px;color:var(--text3);margin-top:2px"></div>
+        </div>
+      </div>
+    </div>
     <button id="pf-global-btn" onclick="openPlayerFinderModal()" title="Player finder" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.55);font-size:18px;padding:4px;display:flex;align-items:center;line-height:1">
       <i class="ti ti-user-search"></i>
     </button>
@@ -3987,7 +4008,53 @@ document.addEventListener('click', (e) => {
   const wrap = document.getElementById('notif-wrap');
   const p = document.getElementById('notif-panel');
   if (p && p.style.display === 'block' && wrap && !wrap.contains(e.target)) p.style.display = 'none';
+  const kw = document.getElementById('kelly-wrap');
+  const kp = document.getElementById('kelly-panel');
+  if (kp && kp.style.display === 'block' && kw && !kw.contains(e.target)) kp.style.display = 'none';
 });
+
+// ---- Kelly stake calculator (header) ----
+// f* = (odds/fair - 1) / (odds - 1), i.e. edge over net odds with p = 1/fair; stake = bankroll x
+// fraction x f*. Fraction defaults to 1.0 (full Kelly); it and bankroll are remembered per browser.
+function toggleKellyPanel(e) {
+  if (e) e.stopPropagation();
+  const p = document.getElementById('kelly-panel');
+  if (!p) return;
+  if (p.style.display === 'block') { p.style.display = 'none'; return; }
+  const bank = document.getElementById('kelly-bank'), frac = document.getElementById('kelly-frac');
+  try {
+    if (!bank.value) bank.value = localStorage.getItem('bb_kelly_bank') || '';
+    if (!frac.value) frac.value = localStorage.getItem('bb_kelly_frac') || '1.0';
+  } catch (err) { if (!frac.value) frac.value = '1.0'; }
+  p.style.display = 'block';
+  calcKelly();
+  (bank.value ? document.getElementById('kelly-odds') : bank).focus();
+}
+function calcKelly(persist) {
+  const num = id => parseFloat(document.getElementById(id).value);
+  const bank = num('kelly-bank'), frac = num('kelly-frac'), odds = num('kelly-odds'), fair = num('kelly-fair');
+  if (persist) {
+    try {
+      localStorage.setItem('bb_kelly_bank', document.getElementById('kelly-bank').value);
+      localStorage.setItem('bb_kelly_frac', document.getElementById('kelly-frac').value);
+    } catch (err) {}
+  }
+  const out = document.getElementById('kelly-stake'), det = document.getElementById('kelly-detail');
+  if (!(bank > 0) || !(frac > 0) || !(odds > 1) || !(fair > 1)) {
+    out.textContent = '—'; out.style.color = 'var(--text)'; det.textContent = '';
+    return;
+  }
+  const kelly = (odds / fair - 1) / (odds - 1);
+  const evPct = (odds / fair - 1) * 100;
+  if (kelly <= 0) {
+    out.textContent = 'No bet'; out.style.color = 'var(--red)';
+    det.textContent = `EV ${evPct.toFixed(1)}% — back odds not above fair`;
+    return;
+  }
+  const stake = bank * frac * kelly;
+  out.textContent = '£' + stake.toFixed(2); out.style.color = 'var(--green)';
+  det.textContent = `EV +${evPct.toFixed(1)}% · ${(frac * kelly * 100).toFixed(2)}% of bankroll`;
+}
 
 async function initTodo() {
   const isAdmin = CURRENT_USER_ROLE === 'admin';
