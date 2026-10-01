@@ -272,6 +272,22 @@ tr.ba-placed > td{background:var(--green-bg) !important}
     <div class="live-dot"></div><span id="hdr-date"></span>
   </div>
 </header>
+  <div id="oc-block-banner" style="display:none;background:#7f1d1d;color:#fca5a5;padding:10px 24px;font-size:13px;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:62px;z-index:99">
+  <span><i class="ti ti-alert-triangle" style="margin-right:6px"></i><strong>Oddschecker blocked</strong> — scraper is paused. Submit fresh cookies to restore.</span>
+  <button onclick="openOcCookieModal()" style="background:#dc2626;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:500;white-space:nowrap">Submit new cookies</button>
+</div>
+<div id="oc-cookie-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border-radius:14px;padding:28px;max-width:560px;width:calc(100% - 48px);box-shadow:0 20px 60px rgba(0,0,0,0.4)">
+    <div style="font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;margin-bottom:6px">Update OC cookies</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6">Open Oddschecker in your Dolphin browser (proxy connected), copy the full <strong>Cookie</strong> header from DevTools → Network → any OC request → Request Headers, and paste it below.</div>
+    <textarea id="oc-cookie-input" placeholder="Paste full cookie string here..." style="width:100%;height:120px;padding:10px 12px;border:0.5px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-size:12px;font-family:monospace;resize:vertical;outline:none"></textarea>
+    <div id="oc-cookie-msg" style="font-size:12px;margin-top:8px;min-height:18px"></div>
+    <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end">
+      <button onclick="closeOcCookieModal()" style="background:var(--surface2);color:var(--text2);border:0.5px solid var(--border);border-radius:8px;padding:9px 18px;font-size:13px;cursor:pointer;font-family:inherit">Cancel</button>
+      <button onclick="submitOcCookies()" id="oc-cookie-submit-btn" style="background:var(--green);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:500">Rotate IP &amp; Submit</button>
+    </div>
+  </div>
+</div>
 
 <!-- Global Player Finder pop-up (2026-09-26, user-requested: reachable from any screen). The
      Calculators-hub #calc-playerfinder view is MOVED in here while open and back on close, so
