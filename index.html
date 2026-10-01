@@ -2670,6 +2670,7 @@ tr.ba-placed > td{background:var(--green-bg) !important}
         <button onclick="baRefreshActive(this)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
       </div>
     </div>
+    <div id="ba-grosvenor-subtabs" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;width:fit-content;margin-bottom:10px"></div>
     <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Player</th><th class="r">Grosvenor</th><th class="r">Next best</th><th class="r">% above</th><th class="ba-watch-col">Placed?</th><th></th></tr></thead><tbody id="ba-grosvenor-body"></tbody></table></div></div>
     <div class="note"><i class="ti ti-info-circle"></i> Grosvenor prices (AGS, First Goalscorer, SOT 1+, Header &amp; OTB goal) that are higher than the best price on Oddschecker for the same player, ranked by how far above that next-best price they are. A price comparison only — not priced against a fair. Only matches with a fresh Oddschecker scrape are compared.</div>
   </div>
@@ -16451,21 +16452,40 @@ async function loadBaGrosvenor(){
   BA_GROSVENOR_ROWS = rows;
   renderBaGrosvenor();
 }
+// Lineups Confirmed / Pre-lineup sub-tabs (2026-10-01, user-requested) — same pattern as
+// Outliers: defaults to Confirmed each visit, tab-bar badge counts Confirmed only.
+let BA_GROSVENOR_SUBTAB = 'confirmed';
+function setGrosvenorSubtab(v){ BA_GROSVENOR_SUBTAB = v; renderBaGrosvenor(); }
+function renderBaGrosvenorSubtabs(){
+  const el = document.getElementById('ba-grosvenor-subtabs');
+  if (!el) return;
+  const confirmedN = BA_GROSVENOR_ROWS.filter(r => r.lineupConfirmed).length;
+  const tabs = [
+    { key: 'confirmed', label: 'Lineups Confirmed', n: confirmedN },
+    { key: 'prelineup', label: 'Pre-lineup', n: BA_GROSVENOR_ROWS.length - confirmedN },
+  ];
+  el.innerHTML = tabs.map(t => {
+    const active = BA_GROSVENOR_SUBTAB === t.key;
+    return `<button onclick="setGrosvenorSubtab('${t.key}')" style="background:${active ? 'var(--brand)' : 'none'};border:none;padding:7px 14px;font-size:12.5px;font-weight:${active ? '600' : '400'};color:${active ? '#fff' : 'var(--text2)'};cursor:pointer;font-family:inherit;white-space:nowrap">${escapeHtml(t.label)} (${t.n})</button>`;
+  }).join('');
+}
 function renderBaGrosvenor(){
   const body = document.getElementById('ba-grosvenor-body');
   const countEl = document.getElementById('ba-grosvenor-count');
   if (!body) return;
   syncBaSortToggle('grosvenor');
+  renderBaGrosvenorSubtabs();
+  const wantConfirmed = BA_GROSVENOR_SUBTAB === 'confirmed';
   // No fair here, so "Best EV%" ranks by % above next best; "Start time" by kickoff, ties by %.
   const sortMode = getBaSort('grosvenor');
-  const rows = BA_GROSVENOR_ROWS.slice().sort((x, y) => sortMode === 'time'
+  const rows = BA_GROSVENOR_ROWS.filter(r => !!r.lineupConfirmed === wantConfirmed).sort((x, y) => sortMode === 'time'
     ? ((baTimeSortKey(x) - baTimeSortKey(y)) || ((y.pct ?? 0) - (x.pct ?? 0)))
     : ((y.pct ?? 0) - (x.pct ?? 0)));
   BA_GROSVENOR_RENDERED = rows;
-  baSetCount('grosvenor', rows.length);
+  baSetCount('grosvenor', BA_GROSVENOR_ROWS.filter(r => r.lineupConfirmed).length);
   if (countEl) countEl.textContent = `${rows.length} best price${rows.length === 1 ? '' : 's'}`;
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">No Grosvenor prices above the Oddschecker best right now.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">No ${wantConfirmed ? 'lineups-confirmed' : 'pre-lineup'} Grosvenor prices above the Oddschecker best right now.</td></tr>`;
     return;
   }
   body.innerHTML = rows.map((r, idx) => { const pl = baPlacedRow(r.match, r.mkt, r.sel); return `<tr class="${pl.placed ? 'ba-placed' : ''}">
