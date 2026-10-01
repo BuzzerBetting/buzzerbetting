@@ -193,9 +193,15 @@ router.get('/strategy-prefs', (req, res) => {
 });
 
 // POST /api/ledger/strategy-prefs  body: { prefs: {...} }  (upsert for the current user)
+// Shallow-MERGES into the stored blob (2026-10-01) so independent widgets can each save
+// their own keys — Freeze builder fields, and the header Kelly calculator's kellyBank/kellyFrac.
 router.post('/strategy-prefs', (req, res) => {
   if (!req.username) return res.status(400).json({ ok: false, error: 'no session' });
-  const prefs = (req.body && typeof req.body.prefs === 'object' && req.body.prefs) || {};
+  const incoming = (req.body && typeof req.body.prefs === 'object' && req.body.prefs) || {};
+  const row = db.prepare(`SELECT prefs FROM user_strategy_prefs WHERE username = ?`).get(req.username);
+  let existing = {};
+  if (row) { try { existing = JSON.parse(row.prefs) || {}; } catch (e) { existing = {}; } }
+  const prefs = Object.assign({}, existing, incoming);
   db.prepare(
     `INSERT INTO user_strategy_prefs (username, prefs, updated_at) VALUES (?, ?, ?)
      ON CONFLICT(username) DO UPDATE SET prefs = excluded.prefs, updated_at = excluded.updated_at`

@@ -4015,29 +4015,48 @@ document.addEventListener('click', (e) => {
 
 // ---- Kelly stake calculator (header) ----
 // f* = (odds/fair - 1) / (odds - 1), i.e. edge over net odds with p = 1/fair; stake = bankroll x
-// fraction x f*. Fraction defaults to 1.0 (full Kelly); it and bankroll are remembered per browser.
-function toggleKellyPanel(e) {
+// fraction x f*. Fraction defaults to 1.0 (full Kelly). Bankroll + fraction are saved PER USER
+// (kellyBank/kellyFrac in the server-side strategy-prefs blob, which merges keys), so each
+// login gets back its own last-entered values on any device.
+let KELLY_SAVE_T = null, KELLY_EDITED = false;
+async function toggleKellyPanel(e) {
   if (e) e.stopPropagation();
   const p = document.getElementById('kelly-panel');
   if (!p) return;
   if (p.style.display === 'block') { p.style.display = 'none'; return; }
   const bank = document.getElementById('kelly-bank'), frac = document.getElementById('kelly-frac');
-  try {
-    if (!bank.value) bank.value = localStorage.getItem('bb_kelly_bank') || '';
-    if (!frac.value) frac.value = localStorage.getItem('bb_kelly_frac') || '1.0';
-  } catch (err) { if (!frac.value) frac.value = '1.0'; }
   p.style.display = 'block';
+  if (!frac.value) frac.value = '1.0';
   calcKelly();
-  (bank.value ? document.getElementById('kelly-odds') : bank).focus();
+  bank.focus();
+  KELLY_EDITED = false;
+  try {
+    const d = await ledgerApi('strategy-prefs');
+    const prefs = (d && d.ok && d.prefs) || {};
+    if (KELLY_EDITED) return; // user already typing — don't overwrite them
+    if (!d || !d.ok) return;
+    // Always take this user's saved values (blank if none) so nothing carries over between logins.
+    bank.value = prefs.kellyBank != null ? prefs.kellyBank : '';
+    frac.value = (prefs.kellyFrac != null && prefs.kellyFrac !== '') ? prefs.kellyFrac : '1.0';
+    calcKelly();
+    if (bank.value) document.getElementById('kelly-odds').focus();
+  } catch (err) { /* no session — calculator still works, just unsaved */ }
 }
 function calcKelly(persist) {
   const num = id => parseFloat(document.getElementById(id).value);
   const bank = num('kelly-bank'), frac = num('kelly-frac'), odds = num('kelly-odds'), fair = num('kelly-fair');
   if (persist) {
-    try {
-      localStorage.setItem('bb_kelly_bank', document.getElementById('kelly-bank').value);
-      localStorage.setItem('bb_kelly_frac', document.getElementById('kelly-frac').value);
-    } catch (err) {}
+    KELLY_EDITED = true;
+    clearTimeout(KELLY_SAVE_T);
+    KELLY_SAVE_T = setTimeout(() => {
+      ledgerApi('strategy-prefs', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prefs: {
+          kellyBank: document.getElementById('kelly-bank').value,
+          kellyFrac: document.getElementById('kelly-frac').value,
+        } })
+      }).catch(() => {});
+    }, 700);
   }
   const out = document.getElementById('kelly-stake'), det = document.getElementById('kelly-detail');
   if (!(bank > 0) || !(frac > 0) || !(odds > 1) || !(fair > 1)) {
