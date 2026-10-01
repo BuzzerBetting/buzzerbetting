@@ -120,6 +120,7 @@ router.use((req, res, next) => {
 //     the box-facing /pen-taker resolver — same Calculations feature as match-predictions.
 //   - /calc-ev-bets: Calculated +EV bet log/settlement/stats — same Calculations feature as
 //     match-predictions, no financial/ledger data.
+//   - /grosvenor-bets: the Grosvenor tab's bet log/stats (Bet Alerts) — no ledger data.
 //   - /strategy-prefs: per-user Freeze-builder UI settings, no financial data — every role.
 //   - /freeze-eligible-list: the VA-pasted Acca Freeze coupon (Freeze Builder), no financial data.
 //   - /bet-alert-books, /bet-alert-seen, /bet-alert-stats, /bet-alert-placed, /ones-to-watch: the Bet Alerts
@@ -140,6 +141,7 @@ router.use((req, res, next) => {
       && !req.path.startsWith('/match-predictions')
       && !req.path.startsWith('/pen-taker')
       && !req.path.startsWith('/calc-ev-bets')
+      && !req.path.startsWith('/grosvenor-bets')
       && !req.path.startsWith('/strategy-prefs')
       && !req.path.startsWith('/freeze-eligible-list')
       && !req.path.startsWith('/bet-alert-books')
@@ -3121,6 +3123,37 @@ router.get('/calc-ev-bets/winners', (req, res) => {
   const hours = Math.min(Math.max(parseInt(req.query.hours, 10) || 24, 1), 720);
   try {
     res.json({ ok: true, rows: calcEvLog.getWinners(market, hours) });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// ================== GROSVENOR BET LOG (2026-10-01) ==================
+// Every Lineups Confirmed row on the Bet Alerts "Grosvenor" tab, logged once at its first-seen
+// price and graded both strictly and with Grosvenor's super sub promotion — see
+// corner-model/grosvenorBetLog.js. Same optional-require pattern as calcEvLog above.
+const grosvenorBetLog = (() => {
+  try { return require('./corner-model/grosvenorBetLog'); }
+  catch (e) { console.error('[grosvenor-bets] grosvenorBetLog not loaded:', e.message); return null; }
+})();
+
+// POST /api/ledger/grosvenor-bets/ingest — body: { bets: [{matchId, match, kickoff, market,
+// selection, selId, odds, nextBest, nextBook, pct}, ...] }. Posted by oc_scraper_service.py
+// every cycle; dedups on (matchId, market, selId), first-seen price kept.
+router.post('/grosvenor-bets/ingest', (req, res) => {
+  if (!grosvenorBetLog) return res.json({ ok: true, inserted: 0 });
+  try {
+    const bets = Array.isArray(req.body && req.body.bets) ? req.body.bets : [];
+    res.json({ ok: true, ...grosvenorBetLog.recordBets(bets) });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// GET /api/ledger/grosvenor-bets/stats?range=overall|today|yesterday — settles anything
+// finished, then returns strict + super-sub totals, per-market breakdown and substitution counts.
+router.get('/grosvenor-bets/stats', async (req, res) => {
+  if (!grosvenorBetLog) return res.json({ ok: true, overall: {}, byMarket: [] });
+  try {
+    try { await grosvenorBetLog.settleAll(); } catch (e) { /* leave unsettled, try again next read */ }
+    const range = ['today', 'yesterday'].includes(req.query.range) ? req.query.range : 'overall';
+    res.json({ ok: true, ...grosvenorBetLog.getStats(range) });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
