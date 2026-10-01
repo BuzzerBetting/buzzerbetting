@@ -2641,7 +2641,13 @@ tr.ba-placed > td{background:var(--green-bg) !important}
   <div id="ba-panel-grosvenor" class="ba-panel" style="display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
       <div class="smeta" style="margin:0"><span class="pulse"></span><strong id="ba-grosvenor-count" style="color:var(--green);font-weight:500">—</strong></div>
-      <button onclick="baRefreshActive(this)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+      <div style="display:flex;gap:8px">
+        <div data-sort-group="grosvenor" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden">
+          <button onclick="setBaSort('grosvenor','ev')" data-sort="ev" style="background:none;border:none;padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Best EV%</button>
+          <button onclick="setBaSort('grosvenor','time')" data-sort="time" style="background:none;border:none;border-left:0.5px solid var(--border);padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Start time</button>
+        </div>
+        <button onclick="baRefreshActive(this)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+      </div>
     </div>
     <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Player</th><th class="r">Grosvenor</th><th class="r">Next best</th><th class="r">% above</th><th class="ba-watch-col">Placed?</th><th></th></tr></thead><tbody id="ba-grosvenor-body"></tbody></table></div></div>
     <div class="note"><i class="ti ti-info-circle"></i> Grosvenor prices (AGS, First Goalscorer, SOT 1+, Header &amp; OTB goal) that are higher than the best price on Oddschecker for the same player, ranked by how far above that next-best price they are. A price comparison only — not priced against a fair. Only matches with a fresh Oddschecker scrape are compared.</div>
@@ -9213,6 +9219,7 @@ function setBaSort(key,mode){
   else if(key==='calc-ev'){ if(cevLastBets.length) renderEVResults(cevLastBets); }
   else if(key==='watch') renderBaWatch();
   else if(key==='f1-ew'||key==='arbs'||key==='dnf') renderBaStubFeed(key);
+  else if(key==='grosvenor') renderBaGrosvenor();
 }
 function syncBaSortToggle(key){
   const cur=getBaSort(key);
@@ -16362,7 +16369,12 @@ function renderBaGrosvenor(){
   const body = document.getElementById('ba-grosvenor-body');
   const countEl = document.getElementById('ba-grosvenor-count');
   if (!body) return;
-  const rows = BA_GROSVENOR_ROWS.slice().sort((x, y) => (y.pct ?? 0) - (x.pct ?? 0));
+  syncBaSortToggle('grosvenor');
+  // No fair here, so "Best EV%" ranks by % above next best; "Start time" by kickoff, ties by %.
+  const sortMode = getBaSort('grosvenor');
+  const rows = BA_GROSVENOR_ROWS.slice().sort((x, y) => sortMode === 'time'
+    ? ((baTimeSortKey(x) - baTimeSortKey(y)) || ((y.pct ?? 0) - (x.pct ?? 0)))
+    : ((y.pct ?? 0) - (x.pct ?? 0)));
   BA_GROSVENOR_RENDERED = rows;
   baSetCount('grosvenor', rows.length);
   if (countEl) countEl.textContent = `${rows.length} best price${rows.length === 1 ? '' : 's'}`;
