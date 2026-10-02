@@ -3643,7 +3643,7 @@ const BET_TYPE_CONFIG = {
   // the fair-odds box is the BB fair (stored as the usual 'Fair Odds' key so EV £ and the server's
   // EV recalcs work unchanged — only its label differs, via fairLabel).
   'Grosvenor':        { layout:'standard', bookie:true, bookieFieldKey:'Bookie', bookieDefault:'Grosvenor', fairLabel:'BB fair odds',
-                        fields:[{key:'Kickoff',label:'Kickoff',type:'text'},{key:'Match',label:'Match',type:'text'},{key:'Market',label:'Market',type:'text'},{key:'Player',label:'Player',type:'text'},{key:'Next Best',label:'Next best odds',type:'number'}],
+                        fields:[{key:'Match',label:'Match',type:'text'},{key:'Market',label:'Market',type:'text'},{key:'Player',label:'Player',type:'text'},{key:'Next Best',label:'Next best odds',type:'number'}],
                         oddsMode:'pairedBlended' },
   'Ninja Golf BFEX':  { layout:'standard', bookie:true, bookieFieldKey:'Bookie', bookieDefault:'Betfair', stakeFieldKey:'Total Stake', fields:[{key:'Comp',label:'Competition',type:'text'},{key:'Player',label:'Player',type:'text'},{key:'Points Advised',label:'Points advised',type:'number'}], oddsMode:'blendedProfitCommission',
                         note:'The potential profit above already accounts for the 2% commission on this market — apply the same 2% again at settlement.' },
@@ -14899,8 +14899,8 @@ function logCalcEvBetAsGoalSotMethods(betIdx) {
 }
 
 // "Log" on a Bet Alerts Grosvenor row (2026-10-02) — same flow as logCalcEvBetAsGoalSotMethods
-// above, into Ledger > Bets > Buzzer > Grosvenor. Pre-fills everything the row knows (kickoff,
-// match, market, player, Grosvenor's price, next-best price). BB fair odds,
+// above, into Ledger > Bets > Buzzer > Grosvenor. Pre-fills everything the row knows (match,
+// market, player, Grosvenor's price, next-best price). BB fair odds,
 // account and stake are left for the user — the Grosvenor tab carries no fair of its own.
 function logGrosvenorBet(idx) {
   const r = (typeof BA_GROSVENOR_RENDERED !== 'undefined' ? BA_GROSVENOR_RENDERED : [])[idx];
@@ -14918,7 +14918,6 @@ function logGrosvenorBet(idx) {
     if (el) el.value = (v == null ? '' : v);
   };
   setField('Book', 'Grosvenor');
-  setField('Kickoff', [r.d, r.t].filter(Boolean).join(' '));
   setField('Match', r.match);
   setField('Market', r.mkt);
   setField('Player', r.sel);
