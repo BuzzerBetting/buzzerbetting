@@ -30,7 +30,12 @@ exports.handler = async (event) => {
     // one is ready), 'unavailable'/'none'/null. Everything else ('standard', 'confirmed', …)
     // means the actual XI is out.
     const UNCONFIRMED_LINEUP = new Set(['predicted', 'lastStarting11', 'unavailable', 'none', '']);
-    const lineupConfirmed = !UNCONFIRMED_LINEUP.has(lineup.lineupType || '');
+    // 2026-10-02: a 'standard' lineupType with NO players on either side (seen on Argentine
+    // Primera fixtures a day out — Defensa y Justicia v San Lorenzo) is FotMob's empty shell, not
+    // an announced XI. Confirmed also needs a full starting XI for both teams.
+    const xi = (team) => (team?.starters || team?.players || []).length;
+    const lineupConfirmed = !UNCONFIRMED_LINEUP.has(lineup.lineupType || '')
+      && xi(lineup.homeTeam) >= 11 && xi(lineup.awayTeam) >= 11;
 
     const parseTeam = (team) => {
       if (!team) return null;
