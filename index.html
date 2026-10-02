@@ -16543,12 +16543,15 @@ function renderBaOutliers(){
 let BA_GROSVENOR_ROWS = [];
 let BA_GROSVENOR_RENDERED = [];
 async function loadBaGrosvenor(){
-  let rows = [];
+  // A failed fetch (e.g. the DO box busy mid-scrape and the Netlify proxy timing out) keeps the
+  // last good rows rather than blanking the tab to 0 (2026-10-02, user-reported).
+  let rows = null;
   try {
     const r = await fetch('/.netlify/functions/oc-grosvenor-best');
     const d = await r.json();
     if (d && d.ok && Array.isArray(d.bets)) rows = d.bets;
   } catch(e) {}
+  if (rows === null) rows = BA_GROSVENOR_ROWS || [];
   BA_GROSVENOR_ROWS = rows;
   renderBaGrosvenor();
   syncGvStatsToggle();
