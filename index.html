@@ -3643,7 +3643,7 @@ const BET_TYPE_CONFIG = {
   // the fair-odds box is the BB fair (stored as the usual 'Fair Odds' key so EV £ and the server's
   // EV recalcs work unchanged — only its label differs, via fairLabel).
   'Grosvenor':        { layout:'standard', bookie:true, bookieFieldKey:'Bookie', bookieDefault:'Grosvenor', fairLabel:'BB fair odds',
-                        fields:[{key:'Match',label:'Match',type:'text'},{key:'Market',label:'Market',type:'text'},{key:'Player',label:'Player',type:'text'},{key:'Next Best',label:'Next best odds',type:'number'}],
+                        fields:[{key:'Match',label:'Match',type:'text'},{key:'Market',label:'Market',type:'text'},{key:'Player',label:'Player',type:'text'},{key:'Other Leg',label:'Other leg',type:'text'},{key:'Next Best',label:'Next best odds',type:'number'}],
                         oddsMode:'pairedBlended' },
   'Ninja Golf BFEX':  { layout:'standard', bookie:true, bookieFieldKey:'Bookie', bookieDefault:'Betfair', stakeFieldKey:'Total Stake', fields:[{key:'Comp',label:'Competition',type:'text'},{key:'Player',label:'Player',type:'text'},{key:'Points Advised',label:'Points advised',type:'number'}], oddsMode:'blendedProfitCommission',
                         note:'The potential profit above already accounts for the 2% commission on this market — apply the same 2% again at settlement.' },
