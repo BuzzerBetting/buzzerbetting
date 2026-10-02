@@ -16740,7 +16740,19 @@ async function loadBaStubFeed(key){
 function renderBaStubFeed(key){
   syncBaSortToggle(key);
   const bets = BA_STUB_BETS[key] || [];
-  const shown = bets.filter(b => baBookEnabled(b.bk));
+  let shown = bets.filter(b => baBookEnabled(b.bk));
+  // F1 EW (2026-10-02, user-requested): one row per driver — the best-priced enabled book,
+  // with "+N" for the other books also above fair — instead of a row per book.
+  if (key === 'f1-ew') {
+    const best = {};
+    for (const b of shown) {
+      const k = `${b.match}|${b.sel}`;
+      if (!best[k]) best[k] = { ...b, others: 0 };
+      else if ((b.odds ?? 0) > (best[k].odds ?? 0)) best[k] = { ...b, others: best[k].others + 1 };
+      else best[k].others++;
+    }
+    shown = Object.values(best);
+  }
   // Arbs ranks by profit_pct, not ev — everything else here uses the usual ev field.
   const valueOf = b => key === 'arbs' ? b.profit_pct : b.ev;
   const sortMode = getBaSort(key);
@@ -16755,7 +16767,7 @@ function renderBaStubFeed(key){
           const val = key === 'arbs'
             ? (b.profit_pct != null ? `${Number(b.profit_pct).toFixed(2)}%` : '—')
             : (b.ev != null ? `+${Number(b.ev).toFixed(1)}%` : '—');
-          return `<tr><td style="color:var(--text2)">${b.t ?? ''}</td><td style="font-weight:500">${b.match ?? ''}</td><td style="color:var(--text2);font-size:12px">${b.mkt ?? ''}</td><td>${b.sel ?? ''}</td><td class="r tn">${b.fair != null ? Number(b.fair).toFixed(2) : '—'}</td><td class="r" style="color:var(--text2);font-size:12px">${b.bk ?? ''}</td><td class="r tn" style="font-weight:500">${b.odds != null ? Number(b.odds).toFixed(2) : '—'}</td><td class="r">${val}</td><td class="r" style="white-space:nowrap">${betLinkBtn(b.url,b.bk)}<button onclick="copyBaStubBet('${key}',${i},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td></tr>`;
+          return `<tr><td style="color:var(--text2)">${b.t ?? ''}</td><td style="font-weight:500">${b.match ?? ''}</td><td style="color:var(--text2);font-size:12px">${b.mkt ?? ''}</td><td>${b.sel ?? ''}</td><td class="r tn">${b.fair != null ? Number(b.fair).toFixed(2) : '—'}</td><td class="r" style="color:var(--text2);font-size:12px">${b.bk ?? ''}${b.others ? ` <span style="color:var(--text3)" title="${b.others} other book${b.others > 1 ? 's' : ''} also above fair">+${b.others}</span>` : ''}</td><td class="r tn" style="font-weight:500">${b.odds != null ? Number(b.odds).toFixed(2) : '—'}</td><td class="r">${val}</td><td class="r" style="white-space:nowrap">${betLinkBtn(b.url,b.bk)}<button onclick="copyBaStubBet('${key}',${i},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td></tr>`;
         }).join('')
       : `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No value bets right now.</td></tr>`;
   }

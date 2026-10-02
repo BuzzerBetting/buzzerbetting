@@ -10,7 +10,7 @@
 //
 // GET /api/betfair-f1  ->
 //   { ok:true, race:{ name, startTime }, markets:{
-//       winner:[{name,fair,back,backSize,lay,laySize}], podium:[...], top6:[...], points:[...],
+//       winner:[{name,fair,back,backSize,lay,laySize,traded}], podium:[...], top6:[...], points:[...],
 //       classified:[...] }, traded:{ winner:<£ matched>, ... } }
 // where `fair` is the no-vig price between best back and best lay (2*b*l/(b+l)) once both
 // clear a minimum liquidity bar, or the one side that exists once IT clears a higher bar alone
@@ -196,7 +196,8 @@ async function buildF1(appKey, session) {
   const marketIds = wantKeys.filter((k) => race.markets[k]).map((k) => race.markets[k].marketId);
   const books = await bfCall('listMarketBook', {
     marketIds,
-    priceProjection: { priceData: ['EX_BEST_OFFERS'] },
+    // EX_TRADED (2026-10-02): per-runner £ matched, the fallback when a runner's totalMatched isn't filled in.
+    priceProjection: { priceData: ['EX_BEST_OFFERS', 'EX_TRADED'] },
   }, appKey, session);
   const bookById = {};
   for (const b of books || []) bookById[b.marketId] = b;
@@ -221,6 +222,10 @@ async function buildF1(appKey, session) {
       const l = (layLevel && layLevel.price) || 0;
       const lSize = (layLevel && layLevel.size) || 0;
       const fair = fairPrice(b, bSize, l, lSize);
+      // £ matched on this driver (2026-10-02) — f1_scan.py's EW needs >= £100 on the podium
+      // runner before using its fair (Antonelli: 1.2/2.0 spread, £0.04 matched, got through).
+      const runnerTraded = r.totalMatched
+        || ((r.ex && r.ex.tradedVolume) || []).reduce((sum, t) => sum + (t.size || 0), 0);
       // Lower bar than MIN_SIZE: a best back sitting at the TOP of the book can't be an
       // over-generous stray (it'd be matched instantly), and a stale low one only makes the
       // inverse "No" fair more conservative. E.g. Leclerc Top 6 back 1.28 had just £7 on it.
@@ -237,6 +242,7 @@ async function buildF1(appKey, session) {
       out[k].push({
         name: nameById[r.selectionId] || String(r.selectionId), fair, back: backOk ? b : null,
         backSize: Math.round(bSize * 100) / 100, lay: l > 1 ? l : null, laySize: Math.round(lSize * 100) / 100,
+        traded: Math.round(runnerTraded * 100) / 100,
       });
     }
   }
