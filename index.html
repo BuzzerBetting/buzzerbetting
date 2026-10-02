@@ -8230,6 +8230,7 @@ function renderBtDetailTable(bets) {
         ${b.result==='open' && isBackLay ? `<button class="add-btn" onclick="openBtAddAccountBackLayModal(${b.id})">Add account</button>` : ''}
         ${b.result==='open' && !isBackLay && ADD_ACCOUNT_TYPES.includes(b.bet_type) ? `<button class="add-btn" onclick="openBtAddAccountModal(${b.id}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, ${typeof b.fields.Fairs==='number'?b.fields.Fairs:'null'}, ${b.fields['Each-Way']===true}, '${(BET_TYPE_CONFIG[b.bet_type]?.bookieFieldKey||'Bookie').replace(/'/g,"\\'")}', '${escapeHtml(String(b.fields[BET_TYPE_CONFIG[b.bet_type]?.bookieFieldKey||'Bookie']||'')).replace(/'/g,"\\'")}')">Add account</button>` : ''}
         ${b.result==='open' && !b.leg_count ? `<button class="add-btn" onclick="openBtLinkModal(${b.id})">Link account</button>` : ''}
+        ${grosvenorExtraLegBtn(b.id, b.bet_type, b.fields, 'fetchBtDetailPage')}
       </td>
     </tr>`;
   });
@@ -9038,7 +9039,7 @@ async function loadBtOpenTable() {
     const colClass = k => colIsNumeric[k] ? ' class="r"' : '';
 
     let html = `<table class="dt" style="min-width:720px"><thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr>
-      <th>Date</th><th>Account ID</th>${fieldKeys.map(k=>`<th${colClass(k)}>${escapeHtml(k)}</th>`).join('')}<th></th>
+      <th>Date</th><th>Account ID</th>${fieldKeys.map(k=>`<th${colClass(k)}>${escapeHtml(k)}</th>`).join('')}<th></th><th></th>
     </tr></thead><tbody>`;
     bets.forEach(b => {
       html += `<tr>
@@ -9062,6 +9063,7 @@ async function loadBtOpenTable() {
           return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetFieldGeneric(${b.id}, '${k.replace(/'/g,"\\'")}', '${String(promptVal).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}', loadBtOpenTabs)" title="Click to amend">${cellContent || '<i class="ti ti-plus" style="color:var(--text3)"></i>'}</span></td>`;
         }).join('')}
         <td><button class="add-btn" onclick="${btOpenState.betType === 'Back & Lay' ? `openBtSettleBackLayModal(${b.id}, loadBtOpenTabs)` : `openBtSettleModal(${b.id}, 'open', null, loadBtOpenTabs, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${btOpenState.betType.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})`}">Settle</button></td>
+        <td>${grosvenorExtraLegBtn(b.id, btOpenState.betType, b.fields, 'loadBtOpenTabs')}</td>
       </tr>`;
     });
     html += '</tbody></table>';
@@ -14928,6 +14930,24 @@ function logGrosvenorBet(idx) {
   if (typeof recalcBetEntryEV === 'function') recalcBetEntryEV();
   if (typeof updateBetEntryTotal === 'function') updateBetEntryTotal();
   setTimeout(() => { document.getElementById('bef-fair-odds')?.focus(); document.getElementById('bef-Book')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 50);
+}
+
+// "Lost on extra leg" (2026-10-02, user-requested) — a tag-only toggle on Grosvenor bets in Bet
+// Tracking: marks a bet that lost because of its Other Leg rather than the Grosvenor player
+// market. Stored as fields['Lost On Extra Leg'] = 'Yes' via the generic PATCH /bets/:id/field,
+// so it also shows as its own column; it never settles or changes P/L — settle as normal.
+function grosvenorExtraLegBtn(betId, betType, fields, reloadFn) {
+  if (betType !== 'Grosvenor') return '';
+  const on = !!fields && fields['Lost On Extra Leg'] === 'Yes';
+  const style = on ? ' style="background:var(--amber-bg);color:var(--amber);border-color:var(--amber)"' : '';
+  return `<button class="add-btn"${style} title="${on ? 'Tagged — click to clear' : 'Tag this bet as lost on its other leg'}" onclick="toggleLostOnExtraLeg(${betId}, ${on ? 'false' : 'true'}, ${reloadFn})">${on ? '✓ Lost on extra leg' : 'Lost on extra leg'}</button>`;
+}
+async function toggleLostOnExtraLeg(betId, on, reloadFn) {
+  try {
+    const d = await ledgerApi('bets/' + betId + '/field', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'Lost On Extra Leg', value: on ? 'Yes' : '' }) });
+    if (!d || !d.ok) { alert((d && d.error) || 'Could not save the tag.'); return; }
+  } catch (e) { alert('Network error saving the tag.'); return; }
+  if (typeof reloadFn === 'function') reloadFn();
 }
 
 function copyCalcEvBet(betIdx, btn) {
