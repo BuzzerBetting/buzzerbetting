@@ -2608,6 +2608,18 @@ tr.ba-placed > td{background:var(--green-bg) !important}
     <div class="note"><i class="ti ti-info-circle"></i> Did-Not-Finish / retirement value. Refreshes automatically from the F1 scanner before each race.</div>
   </div>
 
+  <!-- panel: NFL TDs -->
+  <div id="ba-panel-nfl-td" class="ba-panel" style="display:none">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+      <div data-sort-group="nfl-td" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden">
+        <button onclick="setBaSort('nfl-td','ev')" data-sort="ev" style="background:none;border:none;padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Best EV%</button>
+        <button onclick="setBaSort('nfl-td','time')" data-sort="time" style="background:none;border:none;border-left:0.5px solid var(--border);padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Start time</button>
+      </div>
+    </div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:700px"><thead><tr><th>Time</th><th>Game</th><th>Market</th><th>Player</th><th class="r">Fair</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th class="r"></th></tr></thead><tbody id="ba-nfl-td-body"></tbody></table></div></div>
+    <div class="note"><i class="ti ti-info-circle"></i> NFL multi-touchdown scorers (2+/3+). Fair = Poisson from the Betfair Any Time Touchdown Scorer price, only for players with £300+ matched there — expect this to fill up closer to kick-off. Books: NetBet, William Hill, Paddy Power.</div>
+  </div>
+
   <!-- panel: Errors (2026-09-14 — market-integrity flags, not value bets: a bookmaker's own
        market still open past when it should have suspended. First source: Paddy Power's
        "Racing Specials" horse doubles, occasionally left open after their first leg's race
@@ -9309,7 +9321,7 @@ function setBaSort(key,mode){
   if(key==='oc-ev') renderOddscheckerEV();
   else if(key==='calc-ev'){ if(cevLastBets.length) renderEVResults(cevLastBets); }
   else if(key==='watch') renderBaWatch();
-  else if(key==='f1-ew'||key==='arbs'||key==='dnf') renderBaStubFeed(key);
+  else if(key==='f1-ew'||key==='arbs'||key==='dnf'||key==='nfl-td') renderBaStubFeed(key);
   else if(key==='grosvenor') renderBaGrosvenor();
 }
 function syncBaSortToggle(key){
@@ -15581,6 +15593,7 @@ const BA_EDGES = [
   { key: 'f1-ew',   label: 'F1 EW',           panel: 'ba-panel-f1-ew',    priced: true  },
   { key: 'arbs',    label: 'Arbs',            panel: 'ba-panel-arbs',     priced: true  },
   { key: 'dnf',     label: 'DNFs',            panel: 'ba-panel-dnf',      priced: true  },
+  { key: 'nfl-td',  label: 'NFL TDs',         panel: 'ba-panel-nfl-td',   priced: true  },
   { key: 'errors',  label: 'Errors',          panel: 'ba-panel-errors',   priced: true  },
   { key: 'unmatched', label: 'OC Coverage',   panel: 'ba-panel-unmatched', priced: false },
   { key: 'outliers', label: 'Outliers',       panel: 'ba-panel-outliers', priced: false },
@@ -16723,8 +16736,8 @@ async function loadBaCorners(){
   baReportSeen('corners', seen);
 }
 
-const BA_STUB_ENDPOINT = { 'f1-ew': 'bet-alerts-f1ew', 'arbs': 'bet-alerts-arbs', 'dnf': 'bet-alerts-dnf' };
-const BA_STUB_BODY = { 'f1-ew': 'ba-f1-ew-body', 'arbs': 'ba-arbs-body', 'dnf': 'ba-dnf-body' };
+const BA_STUB_ENDPOINT = { 'f1-ew': 'bet-alerts-f1ew', 'arbs': 'bet-alerts-arbs', 'dnf': 'bet-alerts-dnf', 'nfl-td': 'bet-alerts-nfltd' };
+const BA_STUB_BODY = { 'f1-ew': 'ba-f1-ew-body', 'arbs': 'ba-arbs-body', 'dnf': 'ba-dnf-body', 'nfl-td': 'ba-nfl-td-body' };
 let BA_STUB_BETS = {};  // key -> last-fetched (unfiltered) bets, so the sort toggle can re-render without a re-fetch
 let BA_STUB_SHOWN = {}; // key -> currently-rendered (filtered+sorted) bets, so the copy button indexes the row actually on screen
 async function loadBaStubFeed(key){
@@ -16741,12 +16754,12 @@ function renderBaStubFeed(key){
   syncBaSortToggle(key);
   const bets = BA_STUB_BETS[key] || [];
   let shown = bets.filter(b => baBookEnabled(b.bk));
-  // F1 EW (2026-10-02, user-requested): one row per driver — the best-priced enabled book,
-  // with "+N" for the other books also above fair — instead of a row per book.
-  if (key === 'f1-ew') {
+  // F1 EW / NFL TDs (2026-10-02, user-requested): one row per selection and market — the
+  // best-priced enabled book, with "+N" for the other books also above fair — not a row per book.
+  if (key === 'f1-ew' || key === 'nfl-td') {
     const best = {};
     for (const b of shown) {
-      const k = `${b.match}|${b.sel}`;
+      const k = `${b.match}|${b.mkt}|${b.sel}`;
       if (!best[k]) best[k] = { ...b, others: 0 };
       else if ((b.odds ?? 0) > (best[k].odds ?? 0)) best[k] = { ...b, others: best[k].others + 1 };
       else best[k].others++;

@@ -31,6 +31,7 @@ const wrap = (handler) => async (req, res) => {
 app.all('/api/betfair', wrap(require('./netlify/functions/betfair').handler));
 app.all('/api/betfair-dogs', wrap(require('./netlify/functions/betfair-dogs').handler));
 app.all('/api/betfair-f1', wrap(require('./netlify/functions/betfair-f1').handler));
+app.all('/api/betfair-nfl-td', wrap(require('./netlify/functions/betfair-nfl-td').handler));
 app.all('/api/betfair-horses', wrap(require('./netlify/functions/betfair-horses').handler));
 app.all('/api/betfair-match-odds', wrap(require('./netlify/functions/betfair-match-odds').handler));
 app.all('/api/ddhh', wrap(require('./netlify/functions/ddhh').handler));
@@ -454,6 +455,8 @@ const BET_ALERT_FEED_PATHS = {
   '/api/oc-f1-ew': require('path').join(__dirname, 'oc-scraper', 'data', 'oc_f1_ew_bets.json'),
   '/api/oc-arbs':  require('path').join(__dirname, 'oc-scraper', 'data', 'oc_arb_bets.json'),
   '/api/oc-dnf':   require('path').join(__dirname, 'oc-scraper', 'data', 'oc_dnf_bets.json'),
+  // NFL multi-TD scorers (2+/3+/4+, Poisson off the BFEX anytime-TD fair) — nfl_td_scan.py.
+  '/api/nfl-td-ev': require('path').join(__dirname, 'oc-scraper', 'data', 'nfl_td_ev_bets.json'),
   // Oddschecker Price Boosts +EV — same {t,match,mkt,sel,fair,bk,odds,ev} shape as the other
   // feeds above, each row additionally tagged boost:true (see oc_boosts_scraper.py). Covers
   // markets with a fair-odds source: AGS/FGS/CARDS/SOT (direct BFEX), HEADER/OTB (BFEX AGS x
