@@ -3618,7 +3618,7 @@ async function loadAccountSummary() {
 // with its originating +EV row later without a translation table. '6 Yard Box' is the one
 // display-only market there (William Hill price, no fair-odds model) — the bet still files,
 // there just won't be a fair to enter alongside it.
-const GSM_BET_MARKETS = ['Header', 'OTB', 'Headed SOT', 'OTB SOT', 'Left Foot SOT', 'Right Foot SOT', 'Assist', 'Left Foot Goal', 'Right Foot Goal', '6 Yard Box'];
+const GSM_BET_MARKETS = ['Header', 'OTB', 'Headed SOT', 'OTB SOT', 'Left Foot SOT', 'Right Foot SOT', 'Assist', 'Left Foot Goal', 'Right Foot Goal', 'Inside Box Goal', 'Inside Box SOT', '6 Yard Box'];
 
 const BET_TYPE_CONFIG = {
   'Value':            { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fields:[{key:'Bet Description',label:'Bet description',type:'text'}], oddsMode:'pairedBlended' },
@@ -10242,6 +10242,25 @@ function pfCalcHeadedOtbSotFair(stats,sot1Fair,pen){
   let otb=null;if(otbSot>0)otb=pfFairFromRate(Math.max(0,lamSot*(otbSot/sot)));
   return{headed,otb};
 }
+// Inside Box Goal / SOT (BoyleSports, 2026-10-02) — the complement of the OTB splits above:
+// inside rate = total rate - OTB rate. The OTB rate is pen-stripped (as the OTB market prices it)
+// but the total isn't, so a penalty taker's penalty stays inside. Mirrors gsm_fair's
+// calc_inside_box_goal_fair / calc_inside_box_sot_fair.
+function pfCalcInsideBoxFair(stats,agsFair,sot1Fair,pen){
+  const out={goal:null,sot:null};
+  if(stats&&agsFair>1&&(stats.xG||0)>0){
+    const total=pfRateFromFair(agsFair),np=total-(pen?0.125:0);
+    const rawXg=stats.xG||0,m29=rawXg-(stats.penaltyXG||0),otbXg=stats.otbXG||0;
+    const otbRate=(np>0&&m29>0&&otbXg>0)?Math.max(0,np*(otbXg/m29)):0;
+    out.goal=pfFairFromRate(total-otbRate);
+  }
+  if(stats&&sot1Fair>1&&(stats.sot||0)>=6){
+    const total=pfRateFromFair(sot1Fair),np=total-(pen?0.125:0);
+    const otbRate=np>0?Math.max(0,np*((stats.otbSot||0)/stats.sot)):0;
+    out.sot=pfFairFromRate(total-otbRate);
+  }
+  return out;
+}
 // Left/right-foot SOT (BetMGM markets) — same split as above but by leftFootSot/rightFootSot, and
 // no penalty adjustment (a penalty is a foot shot), matching gsm_fair.calc_foot_sot_fair.
 function pfCalcFootSotFair(stats,sot1Fair){
@@ -10277,11 +10296,13 @@ function pfRecalc(){
   const sotSplit=pfCalcHeadedOtbSotFair(stats,isFinite(sot1)&&sot1>1?sot1:null,pen);
   const foot=pfCalcFootGoalFair(stats,isFinite(ags)&&ags>1?ags:null);
   const footSot=pfCalcFootSotFair(stats,isFinite(sot1)&&sot1>1?sot1:null);
+  const inBox=pfCalcInsideBoxFair(stats,isFinite(ags)&&ags>1?ags:null,isFinite(sot1)&&sot1>1?sot1:null,pen);
   PF_LAST_RESULTS={
     'Header Goal':hdrOtb.header,'OTB Goal':hdrOtb.otb,
     'Headed SOT':sotSplit.headed,'OTB SOT':sotSplit.otb,
     'Left Foot SOT':footSot.lf,'Right Foot SOT':footSot.rf,
     'Left Foot Goal':foot.lf,'Right Foot Goal':foot.rf,
+    'Inside Box Goal':inBox.goal,'Inside Box SOT':inBox.sot,
   };
   body.innerHTML=Object.keys(PF_LAST_RESULTS).map(m=>`<tr id="pf-row-${m.replace(/\s+/g,'')}"></tr>`).join('');
   Object.keys(PF_LAST_RESULTS).forEach(pfRenderResultRow);
