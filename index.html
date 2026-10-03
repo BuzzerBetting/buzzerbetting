@@ -415,7 +415,33 @@ tr.ba-placed > td{background:var(--green-bg) !important}
       <div><div class="cat-title">Freeze</div><div class="cat-desc">SkyBet acca freeze builder and eligible-fixtures list</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
+    <div class="cat" onclick="showSec('bbbettracker')">
+      <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-list-check"></i></div>
+      <div><div class="cat-title">BB Bet Tracker</div><div class="cat-desc">BookieBashing's Bet Tracker, copied live — every bet with its book odds, fair and EV</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
   </div>
+</div>
+
+<!-- BB BET TRACKER (2026-10-03) — a straight copy of BookieBashing's Trackers → Bet Tracker,
+     via netlify/functions/bb-bet-tracker.js. Read-only for now; we'll build on it from here. -->
+<div id="view-bbbettracker" class="sec" style="display:none">
+  <button class="back" onclick="backToCalcMenu()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <div class="sec-title">BB Bet Tracker</div>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+    <select id="bbt-ev" onchange="renderBbTracker()" style="padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text1);font-size:13px;font-family:inherit">
+      <option value="all">All EV</option>
+      <option value="0" selected>+EV only</option>
+      <option value="5">EV ≥ 5%</option>
+      <option value="10">EV ≥ 10%</option>
+    </select>
+    <select id="bbt-book" onchange="renderBbTracker()" style="padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text1);font-size:13px;font-family:inherit"><option value="">All bookies</option></select>
+    <input id="bbt-search" type="search" placeholder="Search event / selection" oninput="renderBbTracker()" style="padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text1);font-size:13px;font-family:inherit;min-width:200px">
+    <button onclick="loadBbTracker()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+    <span id="bbt-meta" style="font-size:12px;color:var(--text3)"></span>
+  </div>
+  <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:860px"><thead><tr><th>KO</th><th>Event</th><th>Selection</th><th>Bookie</th><th class="r">Odds</th><th class="r">Fair</th><th class="r">EV%</th><th>Credit</th><th>Added</th></tr></thead><tbody id="bbt-body"></tbody></table></div></div>
+  <div class="note"><i class="ti ti-info-circle"></i> Copied from BookieBashing's Bet Tracker using BB's own query: active bets kicking off in the next 18 hours (plus "early" bets), with BB's book odds and fair odds. EV% = odds ÷ fair − 1. Auto-refreshes every 2 minutes while this page is open.</div>
 </div>
 
 <!-- FREEZE -->
@@ -3295,7 +3321,7 @@ function showSec(name){
   // any legacy showSec() call for them redirects there rather than to a standalone .sec.
   if(name==='oddschecker'||name==='calculated'||name==='ddhh'){openBetAlerts({oddschecker:'oc-ev',calculated:'calc-ev',ddhh:'ddhh'}[name]);return;}
   stopBetAlerts();
-  document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='freeze')initFreeze();if(name==='today')initToday();if(name==='bets-combined')initBetsPage();if(name==='monthly')initMonthly();if(name==='monthlyprofit')initMonthlyProfit();if(name==='assistantmonthly')initAssistantMonthly();if(name==='todo')initTodo();stopOddscheckerEVRefresh();}
+  document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='freeze')initFreeze();if(name==='bbbettracker')initBbTracker();if(name==='today')initToday();if(name==='bets-combined')initBetsPage();if(name==='monthly')initMonthly();if(name==='monthlyprofit')initMonthlyProfit();if(name==='assistantmonthly')initAssistantMonthly();if(name==='todo')initTodo();stopOddscheckerEVRefresh();}
 const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger',bettracking:'bettracking',stats:'stats-menu',betalerts:'bet-alerts'};
 function showTopSec(name){if(freezeRoleBlocks(name))return;document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='stats')renderStatsMenu();if(name==='calc')loadOddscheckerEV();stopOddscheckerEVRefresh();if(name==='betalerts')initBetAlerts();else stopBetAlerts();}
 // Jump straight to a specific Bet Alerts tab (used by the Calculations menu shortcuts and the
@@ -17037,6 +17063,64 @@ let FREEZE_SORT = 'ev'; // 'kickoff' | 'ev'
 const FREEZE_LEAD_MIN_ODDS = 4.0; // only surface lead-anytime fairs for the likely freeze side
 
 function initFreeze(){ activateFreezeTab(FREEZE_ACTIVE); }
+
+// ── BB BET TRACKER (Calculations > BB Bet Tracker, 2026-10-03) ─────────────────
+// Straight copy of BookieBashing's Trackers → Bet Tracker (netlify/functions/bb-bet-tracker.js).
+let BBT_BETS = [], BBT_POLL = null;
+function initBbTracker(){
+  loadBbTracker();
+  clearInterval(BBT_POLL);
+  BBT_POLL = setInterval(() => {
+    const v = document.getElementById('view-bbbettracker');
+    if (!v || v.style.display === 'none') { clearInterval(BBT_POLL); BBT_POLL = null; return; }
+    loadBbTracker();
+  }, 120000);
+}
+async function loadBbTracker(){
+  const meta = document.getElementById('bbt-meta');
+  if (meta) meta.textContent = 'Loading…';
+  try {
+    const d = await (await fetch('/.netlify/functions/bb-bet-tracker')).json();
+    if (!d || !d.ok) { if (meta) meta.textContent = (d && d.error) || 'Could not load the BB Bet Tracker.'; return; }
+    BBT_BETS = d.bets || [];
+    const sel = document.getElementById('bbt-book');
+    if (sel) {
+      const cur = sel.value;
+      const books = [...new Set(BBT_BETS.map(b => b.bookie))].sort();
+      sel.innerHTML = '<option value="">All bookies</option>' + books.map(b => `<option value="${escapeHtml(b)}"${b === cur ? ' selected' : ''}>${escapeHtml(b)}</option>`).join('');
+    }
+    if (meta) meta.textContent = `${BBT_BETS.length} bets on BB · updated ${new Date(d.updated).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
+    renderBbTracker();
+  } catch (e) { if (meta) meta.textContent = 'Network error loading the BB Bet Tracker.'; }
+}
+function renderBbTracker(){
+  const body = document.getElementById('bbt-body');
+  if (!body) return;
+  const evSel = document.getElementById('bbt-ev').value;
+  const book = document.getElementById('bbt-book').value;
+  const q = (document.getElementById('bbt-search').value || '').trim().toLowerCase();
+  const rows = BBT_BETS.filter(b =>
+    (evSel === 'all' || (b.ev != null && b.ev >= Number(evSel) && (Number(evSel) > 0 || b.ev > 0))) &&
+    (!book || b.bookie === book) &&
+    (!q || (b.name || '').toLowerCase().includes(q)));
+  const fmtKo = iso => { if (!iso) return ''; const d = new Date(iso); return d.toLocaleDateString('en-GB', { weekday: 'short' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); };
+  body.innerHTML = rows.length ? rows.map(b => {
+    const evCol = b.ev == null ? 'var(--text3)' : b.ev > 0 ? 'var(--green)' : 'var(--red)';
+    const tags = [b.early ? 'Early' : '', b.combo ? 'Combo' : '', b.lay ? 'Lay' : '', b.private ? 'Private' : ''].filter(Boolean)
+      .map(t => `<span class="badge" style="background:var(--surface2);color:var(--text2);margin-left:6px;font-size:10.5px">${t}</span>`).join('');
+    return `<tr>
+      <td style="white-space:nowrap;color:var(--text2);font-size:12px">${fmtKo(b.ko)}</td>
+      <td style="font-size:12.5px">${escapeHtml(b.event || '')}</td>
+      <td style="font-weight:500">${escapeHtml(b.selection || b.name || '')}${tags}</td>
+      <td style="font-size:12px;color:var(--text2)">${escapeHtml(b.bookie || '')}</td>
+      <td class="r tn" style="font-weight:500">${b.odds != null ? b.odds.toFixed(2) : '—'}</td>
+      <td class="r tn">${b.fair != null ? b.fair.toFixed(2) : '—'}</td>
+      <td class="r tn" style="color:${evCol};font-weight:600">${b.ev != null ? (b.ev > 0 ? '+' : '') + b.ev.toFixed(1) + '%' : '—'}</td>
+      <td style="font-size:11.5px;color:var(--text3)">${escapeHtml(b.credit || '')}</td>
+      <td style="font-size:11.5px;color:var(--text3);white-space:nowrap">${escapeHtml(String(b.added || '').slice(5, 16))}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">${BBT_BETS.length ? 'No bets match these filters.' : 'No bets on the BB Bet Tracker right now.'}</td></tr>`;
+}
 
 function renderFreezeTabs(){
   const wrap = document.getElementById('freeze-tabs');

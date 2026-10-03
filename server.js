@@ -38,6 +38,7 @@ app.all('/api/ddhh', wrap(require('./netlify/functions/ddhh').handler));
 app.all('/api/sheets', wrap(require('./netlify/functions/sheets').handler));
 app.all('/api/bb-odds', wrap(require('./netlify/functions/bb-odds').handler));
 app.all('/api/bb-lead', wrap(require('./netlify/functions/bb-lead').handler));
+app.all('/api/bb-bet-tracker', wrap(require('./netlify/functions/bb-bet-tracker').handler));
 app.all('/api/fixtures', wrap(require('./netlify/functions/fixtures').handler));
 app.all('/api/lineups', wrap(require('./netlify/functions/lineups').handler));
 app.all('/api/oddschecker', wrap(require('./netlify/functions/oddschecker').handler));
