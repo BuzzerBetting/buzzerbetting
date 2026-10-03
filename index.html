@@ -4082,6 +4082,11 @@ function calcKelly(persist) {
         } })
       }).catch(() => {});
     }, 700);
+    // Re-label any per-row Kelly stakes already revealed.
+    document.querySelectorAll('button[data-kelly]').forEach(b => {
+      const key = decodeURIComponent(b.dataset.kelly);
+      if (KELLY_ROW_SHOWN.has(key)) b.outerHTML = kellyRowBtn(key, +b.dataset.odds, +b.dataset.fair);
+    });
   }
   const out = document.getElementById('kelly-stake'), det = document.getElementById('kelly-detail');
   if (!(bank > 0) || !(frac > 0) || !(odds > 1) || !(fair > 1)) {
@@ -4098,6 +4103,55 @@ function calcKelly(persist) {
   const stake = bank * frac * kelly;
   out.textContent = '£' + stake.toFixed(2); out.style.color = 'var(--green)';
   det.textContent = `EV +${evPct.toFixed(1)}% · ${(frac * kelly * 100).toFixed(2)}% of bankroll`;
+}
+
+// ---- Per-row Kelly button (2026-10-03) — Normal +EV, Arbs, DNFs, NFL TDs ----
+// Uses the header calculator's bankroll + fraction (this user's saved strategy-prefs, or
+// whatever is typed in the header right now). Rows a stake was revealed on are remembered by
+// key so the stake survives the tables' auto-refresh re-render.
+let KELLY_SETTINGS = null;          // { bank, frac } once known
+const KELLY_ROW_SHOWN = new Set();  // row keys whose stake is revealed
+function kellyHeaderSettings() {
+  const bank = parseFloat(document.getElementById('kelly-bank')?.value);
+  const frac = parseFloat(document.getElementById('kelly-frac')?.value);
+  return bank > 0 ? { bank, frac: frac > 0 ? frac : 1 } : null;
+}
+async function loadKellySettings() {
+  const typed = kellyHeaderSettings();
+  if (typed) return (KELLY_SETTINGS = typed);
+  try {
+    const d = await ledgerApi('strategy-prefs');
+    const p = (d && d.ok && d.prefs) || {};
+    const bank = parseFloat(p.kellyBank), frac = parseFloat(p.kellyFrac);
+    if (bank > 0) KELLY_SETTINGS = { bank, frac: frac > 0 ? frac : 1 };
+  } catch (e) {}
+  return KELLY_SETTINGS;
+}
+function kellyRowLabel(odds, fair) {
+  const s = kellyHeaderSettings() || KELLY_SETTINGS;
+  if (!s) return { text: 'Set bankroll', color: 'var(--amber)' };
+  if (!(odds > 1) || !(fair > 1)) return { text: 'No fair', color: 'var(--text3)' };
+  const k = (odds / fair - 1) / (odds - 1);
+  if (k <= 0) return { text: 'No bet', color: 'var(--red)' };
+  return { text: '£' + (s.bank * s.frac * k).toFixed(2), color: 'var(--green)',
+           title: `${(s.frac * k * 100).toFixed(2)}% of £${s.bank} (fraction ${s.frac})` };
+}
+function kellyRowBtn(key, odds, fair) {
+  const base = 'background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;line-height:1;margin-left:4px;font-family:inherit;font-size:12px';
+  const attrs = `data-kelly="${encodeURIComponent(key)}" data-odds="${+odds || 0}" data-fair="${+fair || 0}" onclick="toggleRowKelly(this)"`;
+  if (KELLY_ROW_SHOWN.has(key)) {
+    const l = kellyRowLabel(odds, fair);
+    return `<button ${attrs} title="${l.title || 'Kelly stake'} — click to hide" style="${base};color:${l.color};font-weight:600">${l.text}</button>`;
+  }
+  return `<button ${attrs} title="Kelly stake (bankroll + fraction from the top-right calculator)" style="${base};color:var(--text2)"><i class="ti ti-calculator"></i></button>`;
+}
+async function toggleRowKelly(btn) {
+  const key = decodeURIComponent(btn.dataset.kelly), odds = +btn.dataset.odds, fair = +btn.dataset.fair;
+  if (KELLY_ROW_SHOWN.has(key)) { KELLY_ROW_SHOWN.delete(key); btn.outerHTML = kellyRowBtn(key, odds, fair); return; }
+  await loadKellySettings();
+  if (!KELLY_SETTINGS && !kellyHeaderSettings()) { toggleKellyPanel(); return; } // no bankroll yet — open the calculator
+  KELLY_ROW_SHOWN.add(key);
+  btn.outerHTML = kellyRowBtn(key, odds, fair);
 }
 
 async function initTodo() {
@@ -9517,7 +9571,7 @@ function renderOddscheckerEV(){
     const pl=baPlacedRow(b.match,b.mkt,b.sel);
     const tr=document.createElement('tr');
     if(pl.placed)tr.className='ba-placed';
-    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${boostIcon}${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:${fairColor};font-weight:500">${fairCell}</td><td class="r tn" style="color:var(--text2)">${lastTraded}</td><td class="r tn" style="color:var(--text2)">${matched}</td><td class="r" style="color:var(--text2);font-size:12px;line-height:1.5">${ocBookieLinesHtml(b)}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td>${pl.watchTd}<td class="r" style="white-space:nowrap">${betLinkBtn(b.url,b.bk)}<button onclick="copyOddscheckerLine(${i},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button>${pl.btn('oc-ev',i)}</td>`;
+    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${boostIcon}${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:${fairColor};font-weight:500">${fairCell}</td><td class="r tn" style="color:var(--text2)">${lastTraded}</td><td class="r tn" style="color:var(--text2)">${matched}</td><td class="r" style="color:var(--text2);font-size:12px;line-height:1.5">${ocBookieLinesHtml(b)}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td><td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td>${pl.watchTd}<td class="r" style="white-space:nowrap">${betLinkBtn(b.url,b.bk)}<button onclick="copyOddscheckerLine(${i},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button>${kellyRowBtn(`oc-ev|${b.match}|${b.mkt}|${b.sel}|${b.bk}`,b.odds,b.fair)}${pl.btn('oc-ev',i)}</td>`;
     sb.appendChild(tr);
   });
   if(!shown.length){
@@ -16879,7 +16933,7 @@ function renderBaStubFeed(key){
           const val = key === 'arbs'
             ? (b.profit_pct != null ? `${Number(b.profit_pct).toFixed(2)}%` : '—')
             : (b.ev != null ? `+${Number(b.ev).toFixed(1)}%` : '—');
-          return `<tr><td style="color:var(--text2)">${b.t ?? ''}</td><td style="font-weight:500">${b.match ?? ''}</td><td style="color:var(--text2);font-size:12px">${b.mkt ?? ''}</td><td>${b.sel ?? ''}</td><td class="r tn">${b.fair != null ? Number(b.fair).toFixed(2) : '—'}</td><td class="r" style="color:var(--text2);font-size:12px">${b.bk ?? ''}${b.others ? ` <span style="color:var(--text3)" title="${b.others} other book${b.others > 1 ? 's' : ''} also above fair">+${b.others}</span>` : ''}</td><td class="r tn" style="font-weight:500">${b.odds != null ? Number(b.odds).toFixed(2) : '—'}</td><td class="r">${val}</td><td class="r" style="white-space:nowrap">${betLinkBtn(b.url,b.bk)}<button onclick="copyBaStubBet('${key}',${i},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button></td></tr>`;
+          return `<tr><td style="color:var(--text2)">${b.t ?? ''}</td><td style="font-weight:500">${b.match ?? ''}</td><td style="color:var(--text2);font-size:12px">${b.mkt ?? ''}</td><td>${b.sel ?? ''}</td><td class="r tn">${b.fair != null ? Number(b.fair).toFixed(2) : '—'}</td><td class="r" style="color:var(--text2);font-size:12px">${b.bk ?? ''}${b.others ? ` <span style="color:var(--text3)" title="${b.others} other book${b.others > 1 ? 's' : ''} also above fair">+${b.others}</span>` : ''}</td><td class="r tn" style="font-weight:500">${b.odds != null ? Number(b.odds).toFixed(2) : '—'}</td><td class="r">${val}</td><td class="r" style="white-space:nowrap">${betLinkBtn(b.url,b.bk)}<button onclick="copyBaStubBet('${key}',${i},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button>${key === 'f1-ew' ? '' : kellyRowBtn(`${key}|${b.match}|${b.mkt}|${b.sel}|${b.bk}`, b.odds, b.fair)}</td></tr>`;
         }).join('')
       : `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">No value bets right now.</td></tr>`;
   }
