@@ -3157,6 +3157,18 @@ router.get('/grosvenor-bets/stats', async (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// GET /api/ledger/grosvenor-bets/winners?market=SOT 1+&hours=24&mode=ss|strict — click-through
+// from a Grosvenor bet-stats market row, same as /calc-ev-bets/winners.
+router.get('/grosvenor-bets/winners', (req, res) => {
+  if (!grosvenorBetLog) return res.json({ ok: true, rows: [] });
+  const market = req.query.market;
+  if (!market) return res.status(400).json({ ok: false, error: 'market required' });
+  const hours = Math.min(Math.max(parseInt(req.query.hours, 10) || 24, 1), 720);
+  try {
+    res.json({ ok: true, rows: grosvenorBetLog.getWinners(market, hours, req.query.mode === 'ss' ? 'ss' : 'strict') });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 // GET /api/ledger/grosvenor-bets/ss-leagues — every league a logged bet came from, with whether
 // Grosvenor runs super sub there (user-ticked). Super-sub P/L only uses won_ss in ticked leagues.
 router.get('/grosvenor-bets/ss-leagues', async (req, res) => {
