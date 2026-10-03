@@ -12,11 +12,9 @@
 //   { ok:true, race:{ name, startTime }, markets:{
 //       winner:[{name,fair,back,backSize,lay,laySize,traded}], podium:[...], top6:[...], points:[...],
 //       classified:[...] }, traded:{ winner:<£ matched>, ... } }
-// where `fair` is the no-vig price between best back and best lay (2*b*l/(b+l)) once both
-// clear a minimum liquidity bar, or the one side that exists once IT clears a higher bar alone
-// — see fairPrice(). A runner with nothing but a stray thin order resting on it is simply
-// omitted rather than treated as priced. Markets with no Betfair equivalent for the next race
-// come back as [].
+// where `fair` is the last price traded, validated against matched volume, the traded-volume
+// ladder and the live back/lay spread — see fairFromRunner() (null when it doesn't hold up).
+// Markets with no Betfair equivalent for the next race come back as [].
 const https = require('https');
 const fs = require('fs');
 
@@ -130,31 +128,39 @@ function classifyMarket(name) {
   return null;
 }
 
-// No-vig price between best back `b` and best lay `l` — gated on liquidity, unlike a bare
-// price/price average. F1's thinner markets (especially Top 6/Points Finish props, and any
-// market on a backmarker driver) can have a single stray order of a few pounds sitting at an
-// arbitrary long price with nothing real behind it; treating that as "the fair price" produced
-// nonsense (confirmed live 2026-09-11: a Top 6 Finish "fair" of 15.0 built from one thin lay
-// order, against a real ~500-1000 bookmaker price, read as a "6573% arb"). Mirrors the
-// liquidity/spread reasoning deriveBfexFair already applies to football markets, sized down for
-// F1's naturally lower volume rather than reusing football's exact thresholds.
-const MIN_SIZE = 10;       // £ — below this a two-sided quote is too thin to average
-const BACK_MIN_SIZE = 2;   // £ — for the raw `back` field only (inverse "No" pricing), see buildF1
-// Same 15% as football's deriveBfexFair (2026-10-03, user-reported): the old 50% let a wide
-// book's midpoint stand as fair — Piastri Top 6 got 2.12 off a spread the market had long left
-// (now 2.30/2.50, LTP 2.48), and Hadjar 1.40/2.00 (35%) passed too.
-const MAX_SPREAD_PCT = 0.15;
-function fairPrice(b, bSize, l, lSize) {
-  const hasBack = b > 1 && bSize >= MIN_SIZE;
-  const hasLay = l > 1 && lSize >= MIN_SIZE;
-  if (hasBack && hasLay) {
-    const mid = (b + l) / 2;
-    if ((l - b) / mid <= MAX_SPREAD_PCT) return +mid.toFixed(3);
-  }
-  // No one-sided fallback any more (2026-10-03, user-reported): a lone back price is very often
-  // a junk low-liability lay order (risk £1 laying £50 at 1.02), and it priced Hadjar Top 6 at a
-  // 1.02 "fair" against BetVictor's 2.75 — a +169% fake arb. Two-sided books only.
-  return null;
+// BFEX fair for one runner (2026-10-03, user-specified: "cut the midpoint — we look at last
+// price traded, total amounts traded at which odds, the back and lay spread"). Same approach as
+// football's deriveBfexFair (index.html / oc-scraper bfex_fair.py), WITHOUT its midpoint branch,
+// plus a check on WHERE the money actually traded:
+//   1. liquidity  — >= MIN_RUNNER_TRADED matched on this driver, and a two-sided book with
+//                   >= MIN_SIZE on the best back and best lay;
+//   2. spread     — (lay - back) / LTP <= MAX_SPREAD_PCT;
+//   3. anchor     — fair = last price traded, which must sit inside the live back/lay; a print
+//                   the market has since moved past is stale and gives no fair;
+//   4. volume     — >= MIN_VOLUME_NEAR_LTP traded within +-NEAR_LTP_PCT of LTP (Betfair's
+//                   per-price tradedVolume ladder), so one small print can't set the fair;
+//   5. moved out  — if the best back has drifted ABOVE LTP with >= MOVED_BACK_SIZE on it, the
+//                   market has moved and that back price is the fair (as deriveBfexFair does).
+// Anything failing returns null — no fair, no bet. History: a pure back/lay midpoint (with a
+// one-sided fallback, then a 50% spread allowance) priced Hadjar Top 6 at 1.02 and Piastri Top
+// 6 at 2.12 against a 2.30/2.50 book with LTP 2.48.
+const MIN_SIZE = 10;              // £ on each of the best back / best lay
+const BACK_MIN_SIZE = 2;          // £ — for the raw `back` field only (inverse "No" pricing), see buildF1
+const MAX_SPREAD_PCT = 0.15;      // same 15% as football
+const MIN_RUNNER_TRADED = 100;    // £ matched on the driver
+const NEAR_LTP_PCT = 0.05;
+const MIN_VOLUME_NEAR_LTP = 50;   // £ traded within +-5% of LTP
+const MOVED_BACK_SIZE = 100;      // £ on a best back above LTP before it replaces LTP
+function fairFromRunner({ b, bSize, l, lSize, ltp, runnerTraded, ladder }) {
+  if (!(runnerTraded >= MIN_RUNNER_TRADED) || !(ltp > 1)) return null;
+  if (!(b > 1 && bSize >= MIN_SIZE && l > 1 && lSize >= MIN_SIZE)) return null;
+  if ((l - b) / ltp > MAX_SPREAD_PCT) return null;
+  if (b > ltp && bSize >= MOVED_BACK_SIZE) return +b.toFixed(3);
+  if (ltp < b || ltp > l) return null;
+  const nearVol = (ladder || []).reduce((sum, t) =>
+    sum + (Math.abs((t.price || 0) - ltp) / ltp <= NEAR_LTP_PCT ? (t.size || 0) : 0), 0);
+  if (nearVol < MIN_VOLUME_NEAR_LTP) return null;
+  return +ltp.toFixed(3);
 }
 
 async function buildF1(appKey, session) {
@@ -224,11 +230,12 @@ async function buildF1(appKey, session) {
       const bSize = (backLevel && backLevel.size) || 0;
       const l = (layLevel && layLevel.price) || 0;
       const lSize = (layLevel && layLevel.size) || 0;
-      const fair = fairPrice(b, bSize, l, lSize);
       // £ matched on this driver (2026-10-02) — f1_scan.py's EW needs >= £100 on the podium
       // runner before using its fair (Antonelli: 1.2/2.0 spread, £0.04 matched, got through).
-      const runnerTraded = r.totalMatched
-        || ((r.ex && r.ex.tradedVolume) || []).reduce((sum, t) => sum + (t.size || 0), 0);
+      const ladder = (r.ex && r.ex.tradedVolume) || [];
+      const runnerTraded = r.totalMatched || ladder.reduce((sum, t) => sum + (t.size || 0), 0);
+      const ltp = r.lastPriceTraded || 0;
+      const fair = fairFromRunner({ b, bSize, l, lSize, ltp, runnerTraded, ladder });
       // Lower bar than MIN_SIZE: a best back sitting at the TOP of the book can't be an
       // over-generous stray (it'd be matched instantly), and a stale low one only makes the
       // inverse "No" fair more conservative. E.g. Leclerc Top 6 back 1.28 had just £7 on it.
@@ -245,7 +252,7 @@ async function buildF1(appKey, session) {
       out[k].push({
         name: nameById[r.selectionId] || String(r.selectionId), fair, back: backOk ? b : null,
         backSize: Math.round(bSize * 100) / 100, lay: l > 1 ? l : null, laySize: Math.round(lSize * 100) / 100,
-        traded: Math.round(runnerTraded * 100) / 100,
+        traded: Math.round(runnerTraded * 100) / 100, ltp: ltp > 1 ? ltp : null,
       });
     }
   }
