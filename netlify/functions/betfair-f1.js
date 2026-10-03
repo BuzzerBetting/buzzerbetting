@@ -140,7 +140,10 @@ function classifyMarket(name) {
 // F1's naturally lower volume rather than reusing football's exact thresholds.
 const MIN_SIZE = 10;       // £ — below this a two-sided quote is too thin to average
 const BACK_MIN_SIZE = 2;   // £ — for the raw `back` field only (inverse "No" pricing), see buildF1
-const MAX_SPREAD_PCT = 0.5; // wider tolerance than football's 15% — F1 props are inherently thinner
+// Same 15% as football's deriveBfexFair (2026-10-03, user-reported): the old 50% let a wide
+// book's midpoint stand as fair — Piastri Top 6 got 2.12 off a spread the market had long left
+// (now 2.30/2.50, LTP 2.48), and Hadjar 1.40/2.00 (35%) passed too.
+const MAX_SPREAD_PCT = 0.15;
 function fairPrice(b, bSize, l, lSize) {
   const hasBack = b > 1 && bSize >= MIN_SIZE;
   const hasLay = l > 1 && lSize >= MIN_SIZE;
