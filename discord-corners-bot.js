@@ -64,7 +64,9 @@ async function processImage(msg, img) {
     const d = await r.json().catch(() => ({}));
     const status = d.status || 'error';
     console.log(`[discord-corners] msg ${msg.id} -> ${status}${d.note ? ' (' + d.note + ')' : ''}`);
-    if (status === 'disabled') return; // shouldn't happen (we check first) — but never react
+    // disabled: never react. duplicate: already booked (and already has its ✅) — e.g. a catch-up
+    // re-reaching a message the live handler just booked — so no extra reaction either.
+    if (status === 'disabled' || status === 'duplicate') return;
     await msg.react(EMOJI[status] || '❓').catch(() => {});
     // On a successful booking the ✅ reaction is the only confirmation — no reply.
     // Skips/errors still get a reply since the reason (d.note) isn't conveyable by a reaction alone.
@@ -182,7 +184,7 @@ async function processGrosMessage(msg, live) {
       const d = await r.json().catch(() => ({}));
       const status = d.status || 'error';
       console.log(`[discord-grosvenor] msg ${key} -> ${status}${d.note ? ' (' + d.note + ')' : ''}`);
-      if (status === 'disabled') return;
+      if (status === 'disabled' || status === 'duplicate') return; // duplicate = already ✅'d
       await msg.react(EMOJI[status] || '❓').catch(() => {});
       if (status === 'skipped' || status === 'error' || (status === 'booked' && d.note)) {
         await msg.reply(`${status === 'booked' ? '⚠️' : EMOJI[status]} ${d.note || status}`).catch(() => {});
