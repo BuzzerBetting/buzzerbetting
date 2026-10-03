@@ -16653,12 +16653,38 @@ async function loadGvStats(){
   if (!panel) return;
   if (!panel.innerHTML) panel.innerHTML = `<div class="card" style="padding:20px;text-align:center;color:var(--text3);font-size:13px"><i class="ti ti-loader"></i> Loading bet stats…</div>`;
   try {
-    const d = await ledgerApi(`grosvenor-bets/stats?range=${GV_STATS_RANGE}`);
+    const [d] = await Promise.all([ledgerApi(`grosvenor-bets/stats?range=${GV_STATS_RANGE}`), loadGvSsLeagues()]);
     if (!d || !d.ok) { panel.innerHTML = `<div class="card" style="padding:16px;color:var(--text3);font-size:13px">Bet stats not available.</div>`; return; }
     renderGvStats(d);
   } catch (e) { panel.innerHTML = `<div class="card" style="padding:16px;color:var(--text3);font-size:13px">Failed to load bet stats.</div>`; }
 }
+// Super sub leagues (2026-10-03, user-requested) — Grosvenor runs super sub only in some
+// leagues; super-sub P/L uses the super-sub result only for bets in a ticked league (strict
+// everywhere else). Every league a logged bet came from is listed.
+let GV_SS_LEAGUES = [], GV_SS_OPEN = false, GV_LAST_STATS = null;
+async function loadGvSsLeagues(){
+  try { const d = await ledgerApi('grosvenor-bets/ss-leagues'); if (d && d.ok) GV_SS_LEAGUES = d.leagues || []; } catch(e) {}
+}
+function gvSsLeaguesHtml(){
+  if (!GV_SS_LEAGUES.length) return '<div style="font-size:12px;color:var(--text3);padding:4px">No leagues yet — they appear once a bet from them is logged.</div>';
+  return '<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Tick the leagues Grosvenor offers super sub in:</div>' + GV_SS_LEAGUES.map(l =>
+    `<label style="display:flex;align-items:center;gap:8px;padding:4px 2px;font-size:12.5px;cursor:pointer"><input type="checkbox" ${l.enabled ? 'checked' : ''} onchange="setGvSsLeague('${escapeHtml(String(l.leagueId))}', this.checked)"> <span>${escapeHtml(l.leagueName || String(l.leagueId))}${l.country ? ` <span style="color:var(--text3)">(${escapeHtml(l.country)})</span>` : ''}</span><span style="margin-left:auto;color:var(--text3);font-size:11px">${l.bets} bet${l.bets === 1 ? '' : 's'}</span></label>`).join('');
+}
+async function toggleGvSsLeagues(){
+  GV_SS_OPEN = !GV_SS_OPEN;
+  if (GV_SS_OPEN) await loadGvSsLeagues();
+  if (GV_LAST_STATS) renderGvStats(GV_LAST_STATS);
+}
+async function setGvSsLeague(leagueId, enabled){
+  try {
+    const d = await ledgerApi('grosvenor-bets/ss-leagues', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ leagueId, enabled }) });
+    if (!d || !d.ok) { alert((d && d.error) || 'Could not save.'); return; }
+    GV_SS_LEAGUES = d.leagues || GV_SS_LEAGUES;
+  } catch(e) { alert('Network error saving.'); return; }
+  loadGvStats();
+}
 function renderGvStats(d){
+  GV_LAST_STATS = d;
   const panel = document.getElementById('gv-stats-panel');
   const o = d.overall || {};
   const pctFmt = n => n == null ? '—' : Number(n).toFixed(1) + '%';
@@ -16691,7 +16717,12 @@ function renderGvStats(d){
         <strong style="font-size:14px">Grosvenor — bet stats</strong>
         <span style="font-size:11px;color:var(--text3)">Lineups Confirmed rows only · £50 flat stake, settled bets only</span>
       </div>
-      <div style="display:flex;gap:6px;margin-bottom:14px">${rangeTabsHtml}</div>
+      <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;align-items:flex-start">${rangeTabsHtml}
+        <div style="position:relative;margin-left:auto">
+          <button onclick="toggleGvSsLeagues()" title="Grosvenor only runs super sub in some leagues — super-sub P/L only counts it in the ticked ones" style="padding:6px 12px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text2);font-size:12.5px;cursor:pointer;font-family:inherit"><i class="ti ti-arrows-exchange"></i> Super sub leagues (${GV_SS_LEAGUES.filter(l => l.enabled).length}) <i class="ti ti-chevron-${GV_SS_OPEN ? 'up' : 'down'}"></i></button>
+          <div id="gv-ss-panel" style="display:${GV_SS_OPEN ? 'block' : 'none'};position:absolute;right:0;top:calc(100% + 6px);z-index:50;min-width:280px;max-height:340px;overflow-y:auto;background:var(--surface);border:.5px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.18);padding:8px 10px">${gvSsLeaguesHtml()}</div>
+        </div>
+      </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:10px">
         ${tile('Bets logged', o.bets || 0)}
         ${tile('Settled', o.settled || 0)}
@@ -16709,7 +16740,7 @@ function renderGvStats(d){
       ${table('Strict — posted player only', 'winsStrict', 'winPctStrict', 'plStrict')}
       <div style="font-size:12.5px;font-weight:600;margin:4px 0 6px">Substitutions by market</div>
       <div style="overflow-x:auto"><table class="dt" style="min-width:480px"><thead><tr><th>Market</th><th class="r">Subbed off</th><th class="r">Sub completed it</th><th class="r">Sub won it (original didn't)</th></tr></thead><tbody>${subRows || '<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:14px">No posted players subbed off yet</td></tr>'}</tbody></table></div>
-      <div style="font-size:11px;color:var(--text3);margin-top:8px">Every Lineups Confirmed Grosvenor row is logged once at the first Grosvenor price seen, then graded after full time. "Super sub": if the posted player is substituted off, his replacement counts too and their totals combine (e.g. 2+ SOT wins on 1 + 1). "Strict" counts the posted player alone. "Sub completed it" = the replacement did enough on his own, whatever the original did; "Sub won it" = bets that only won thanks to super sub. Overall/Yesterday/Today scope everything to bets logged that London day.</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">Every Lineups Confirmed Grosvenor row is logged once at the first Grosvenor price seen, then graded after full time. "Super sub": if the posted player is substituted off, his replacement counts too and their totals combine (e.g. 2+ SOT wins on 1 + 1) — but only for bets in leagues ticked under "Super sub leagues"; everything else counts strict in the super-sub figures too. "Strict" counts the posted player alone. "Sub completed it" = the replacement did enough on his own, whatever the original did; "Sub won it" = bets that only won thanks to super sub. Overall/Yesterday/Today scope everything to bets logged that London day.</div>
     </div>`;
 }
 // Lineups Confirmed / Pre-lineup sub-tabs (2026-10-01, user-requested) — same pattern as

@@ -3157,6 +3157,27 @@ router.get('/grosvenor-bets/stats', async (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// GET /api/ledger/grosvenor-bets/ss-leagues — every league a logged bet came from, with whether
+// Grosvenor runs super sub there (user-ticked). Super-sub P/L only uses won_ss in ticked leagues.
+router.get('/grosvenor-bets/ss-leagues', async (req, res) => {
+  if (!grosvenorBetLog) return res.json({ ok: true, leagues: [] });
+  try {
+    try { await grosvenorBetLog.backfillLeagues(); } catch (e) { /* partial list is fine */ }
+    res.json({ ok: true, leagues: grosvenorBetLog.getSsLeagues() });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/grosvenor-bets/ss-leagues — body: { leagueId, enabled }
+router.post('/grosvenor-bets/ss-leagues', requireAdmin, (req, res) => {
+  if (!grosvenorBetLog) return res.json({ ok: false, error: 'Grosvenor bet log not loaded' });
+  try {
+    const { leagueId, enabled } = req.body || {};
+    if (leagueId == null || leagueId === '') return res.status(400).json({ ok: false, error: 'leagueId required' });
+    grosvenorBetLog.setSsLeague(leagueId, !!enabled);
+    res.json({ ok: true, leagues: grosvenorBetLog.getSsLeagues() });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 // ================== QUICK BET — parse a placed-bet screenshot ==================
 //
 // POST /api/ledger/parse-betslip  { image: "<base64>", mediaType: "image/png" }
