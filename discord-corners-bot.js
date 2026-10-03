@@ -125,22 +125,15 @@ client.login(TOKEN);
 // Grosvenor slip screenshot is paired with the user's "2.21 bb, 2.38 next best" text, taken
 // from (in order): the image message's own text, the sender's message just before it, or the
 // sender's message just after it (waits up to ~90s live). A text is only ever used once.
-//   DISCORD_GROSVENOR_CHANNEL_ID - optional; otherwise the channel named "outliers" in the
-//                                  same server as the corners channel
-const GROS_CHANNEL_NAME = 'outliers';
-let grosChannelId = process.env.DISCORD_GROSVENOR_CHANNEL_ID || null;
+//   DISCORD_GROSVENOR_CHANNEL_ID - optional; defaults to the #outliers channel under
+//                                  "Important". (The server has another, older text channel also
+//                                  named "outliers" — a by-name lookup picked that one on
+//                                  2026-10-03, so the id is fixed instead.)
+const grosChannelId = process.env.DISCORD_GROSVENOR_CHANNEL_ID || '1473670417427202272';
 const claimedTexts = new Set();
 
-client.once('ready', async () => {
-  if (!grosChannelId) {
-    try {
-      const corners = await client.channels.fetch(CHANNEL_ID);
-      const chans = await corners.guild.channels.fetch();
-      const ch = [...chans.values()].find(c => c && c.name === GROS_CHANNEL_NAME && c.isTextBased && c.isTextBased());
-      if (ch) grosChannelId = ch.id;
-    } catch (e) { console.error('[discord-grosvenor] channel lookup failed:', e.message); }
-  }
-  console.log(grosChannelId ? `[discord-grosvenor] watching channel ${grosChannelId}` : '[discord-grosvenor] no "outliers" channel found — Grosvenor parsing inactive');
+client.once('ready', () => {
+  console.log(`[discord-grosvenor] watching channel ${grosChannelId}`);
   setInterval(pollGrosCatchup, 30000);
 });
 
