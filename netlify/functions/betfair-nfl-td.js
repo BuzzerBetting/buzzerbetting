@@ -123,7 +123,6 @@ async function buildNflTd(appKey, session) {
   }, appKey, session);
 
   const events = [];
-  // listMarketBook weight: EX_BEST_OFFERS is 5 per market, cap 200 — 20 per call is safe.
   // 8 per call: Betfair caps listMarketBook at 200 weight points and EX_BEST_OFFERS (5) + EX_TRADED
   // (17) = 22 per market — 20 per call threw ANGX-0001 TOO_MUCH_DATA once EX_TRADED was added.
   const BOOK_CHUNK = 8;
