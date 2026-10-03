@@ -119,3 +119,126 @@ async function pollCatchup() {
 }
 
 client.login(TOKEN);
+
+// ================== GROSVENOR (Outliers channel) ==================
+// Same toggle/account/catch-up flow as the corners above, against /discord-grosvenor-*. Each
+// Grosvenor slip screenshot is paired with the user's "2.21 bb, 2.38 next best" text, taken
+// from (in order): the image message's own text, the sender's message just before it, or the
+// sender's message just after it (waits up to ~90s live). A text is only ever used once.
+//   DISCORD_GROSVENOR_CHANNEL_ID - optional; otherwise the channel named "outliers" in the
+//                                  same server as the corners channel
+const GROS_CHANNEL_NAME = 'outliers';
+let grosChannelId = process.env.DISCORD_GROSVENOR_CHANNEL_ID || null;
+const claimedTexts = new Set();
+
+client.once('ready', async () => {
+  if (!grosChannelId) {
+    try {
+      const corners = await client.channels.fetch(CHANNEL_ID);
+      const chans = await corners.guild.channels.fetch();
+      const ch = [...chans.values()].find(c => c && c.name === GROS_CHANNEL_NAME && c.isTextBased && c.isTextBased());
+      if (ch) grosChannelId = ch.id;
+    } catch (e) { console.error('[discord-grosvenor] channel lookup failed:', e.message); }
+  }
+  console.log(grosChannelId ? `[discord-grosvenor] watching channel ${grosChannelId}` : '[discord-grosvenor] no "outliers" channel found — Grosvenor parsing inactive');
+  setInterval(pollGrosCatchup, 30000);
+});
+
+const isBbText = (s) => /\d/.test(s || '') && /\bbb\b|next\s*best|\bnb\b/i.test(s || '');
+const hasImage = (m) => [...m.attachments.values()].some(isImage);
+const usableText = (m, author) => m && m.author.id === author && !hasImage(m) && !claimedTexts.has(m.id) && isBbText(m.content);
+
+async function getGrosConfig() {
+  try {
+    const d = await (await fetch(`${BASE}/discord-grosvenor-config`, { headers: HDRS })).json();
+    return d && d.ok ? d : null;
+  } catch (e) { return null; }
+}
+
+async function findBbText(msg, live) {
+  if (isBbText(msg.content)) return msg.content;
+  const author = msg.author.id;
+  const near = (m) => Math.abs(m.createdTimestamp - msg.createdTimestamp) < 10 * 60 * 1000;
+  try {
+    const before = (await msg.channel.messages.fetch({ before: msg.id, limit: 1 })).first();
+    if (usableText(before, author) && near(before)) { claimedTexts.add(before.id); return before.content; }
+    // Live, the follow-up text may not exist yet — look a few times before giving up.
+    for (let i = 0; i < (live ? 6 : 1); i++) {
+      if (i) await new Promise(r => setTimeout(r, 15000));
+      const after = [...(await msg.channel.messages.fetch({ after: msg.id, limit: 5 })).values()]
+        .sort((a, b) => a.createdTimestamp - b.createdTimestamp)
+        .filter(m => m.author.id === author);
+      const next = after[0];
+      if (next && hasImage(next)) break;             // next slip arrived first — no text for this one
+      if (usableText(next, author) && near(next)) { claimedTexts.add(next.id); return next.content; }
+    }
+  } catch (e) { console.error('[discord-grosvenor] text lookup failed:', e.message); }
+  return null;
+}
+
+async function processGrosMessage(msg, live) {
+  const images = [...msg.attachments.values()].filter(isImage);
+  const text = await findBbText(msg, live);
+  for (let i = 0; i < images.length; i++) {
+    const key = i ? `${msg.id}:${i}` : msg.id;
+    try {
+      const r = await fetch(`${BASE}/discord-grosvenor-book`, {
+        method: 'POST', headers: HDRS,
+        body: JSON.stringify({ message_id: key, channel_id: msg.channelId, image_url: images[i].url, text }),
+      });
+      const d = await r.json().catch(() => ({}));
+      const status = d.status || 'error';
+      console.log(`[discord-grosvenor] msg ${key} -> ${status}${d.note ? ' (' + d.note + ')' : ''}`);
+      if (status === 'disabled') return;
+      await msg.react(EMOJI[status] || '❓').catch(() => {});
+      if (status === 'skipped' || status === 'error' || (status === 'booked' && d.note)) {
+        await msg.reply(`${status === 'booked' ? '⚠️' : EMOJI[status]} ${d.note || status}`).catch(() => {});
+      }
+    } catch (e) {
+      console.error('[discord-grosvenor] book request failed:', e.message);
+      await msg.react('❌').catch(() => {});
+    }
+  }
+}
+
+// Serialise so text claims happen in posting order.
+let grosQueue = Promise.resolve();
+client.on('messageCreate', (msg) => {
+  if (!grosChannelId || msg.channelId !== grosChannelId) return;
+  if (!hasImage(msg) || !fromAllowedSender(msg)) return;
+  grosQueue = grosQueue.then(async () => {
+    const cfg = await getGrosConfig();
+    if (!cfg || !cfg.enabled || !cfg.account_id) return;
+    await processGrosMessage(msg, true);
+  }).catch(e => console.error('[discord-grosvenor] live error:', e.message));
+});
+
+let grosCatchingUp = false;
+async function pollGrosCatchup() {
+  if (grosCatchingUp || !grosChannelId) return;
+  const cfg = await getGrosConfig();
+  if (!cfg || !cfg.enabled || !cfg.account_id || !cfg.catchup_from) return;
+  grosCatchingUp = true;
+  let after = cfg.catchup_from, processed = 0;
+  try {
+    const channel = await client.channels.fetch(grosChannelId);
+    for (let page = 0; page < 20; page++) {
+      const batch = await channel.messages.fetch({ after, limit: 100 });
+      if (!batch.size) break;
+      const asc = [...batch.values()].sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+      for (const m of asc) {
+        if (!fromAllowedSender(m) || !hasImage(m)) continue;
+        await (grosQueue = grosQueue.then(() => processGrosMessage(m, false)));
+        processed++;
+      }
+      after = asc[asc.length - 1].id;
+      if (batch.size < 100) break;
+    }
+    console.log(`[discord-grosvenor] catch-up done — processed ${processed} message(s) since ${cfg.catchup_from}`);
+  } catch (e) {
+    console.error('[discord-grosvenor] catch-up failed:', e.message);
+  } finally {
+    await fetch(`${BASE}/discord-grosvenor-catchup-clear`, { method: 'POST', headers: HDRS }).catch(() => {});
+    grosCatchingUp = false;
+  }
+}

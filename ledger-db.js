@@ -544,6 +544,34 @@ try { db.exec(`ALTER TABLE bet_legs ADD COLUMN free_bet INTEGER DEFAULT 0`); } c
 // only, no backfill.
 try { db.exec(`ALTER TABLE discord_corners_config ADD COLUMN catchup_from TEXT`); } catch (e) { /* already exists */ }
 
+// Discord Grosvenor auto-entry (2026-10-03) — same shape as the corners bot's tables, for
+// Grosvenor bet-builder screenshots posted in the Outliers channel (booked as 'Grosvenor' bets,
+// with the BB fair + next-best price read from the message text "2.21 bb, 2.38 next best").
+db.exec(`
+CREATE TABLE IF NOT EXISTS discord_grosvenor_config (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  enabled INTEGER NOT NULL DEFAULT 0,
+  account_id INTEGER,
+  default_stake REAL,
+  catchup_from TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_by TEXT
+);
+INSERT OR IGNORE INTO discord_grosvenor_config (id, enabled) VALUES (1, 0);
+CREATE TABLE IF NOT EXISTS discord_grosvenor_posts (
+  message_id TEXT PRIMARY KEY,   -- '<message id>' or '<message id>:<n>' for the nth image in a message
+  channel_id TEXT,
+  image_url TEXT,
+  text TEXT,                     -- the bb / next-best text the bot paired with the image
+  parsed TEXT,
+  bet_id INTEGER,
+  status TEXT NOT NULL,
+  note TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_discord_grosvenor_posts_created ON discord_grosvenor_posts(created_at);
+`);
+
 // The AGS (goal methods) or SOT-1+ (SOT-split methods) fair odds a row's market fair was
 // derived from — e.g. Header Goal's fair comes from AGS fair x the player's headed-xG share,
 // so this is that AGS fair. Lets the user sanity-check the source price behind a row, same

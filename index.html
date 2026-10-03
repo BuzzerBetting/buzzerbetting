@@ -915,7 +915,7 @@ tr.ba-placed > td{background:var(--green-bg) !important}
   </div>
 
   <div id="bets-content" style="display:none">
-    <!-- Corners-only extras (shown when Bet type = Corners): Discord auto-entry + CSV export -->
+    <!-- Corners extras (shown when Bet type = Corners): Discord auto-entry + CSV export. The Discord card is also shown for Grosvenor (Outliers channel) — CRN_DISCORD_FEED picks which. -->
     <div id="crn-discord-card" style="display:none;border:.5px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-bottom:16px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
         <div>
@@ -933,7 +933,7 @@ tr.ba-placed > td{background:var(--green-bg) !important}
           <button onclick="saveCrnDiscordConfig()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit">Save</button>
           <span id="crn-discord-msg" style="font-size:12px"></span>
         </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:6px">Books each parsed corner slip on the selected account with the stake from the screenshot (fallback used only if that can't be read).</div>
+        <div id="crn-discord-help" style="font-size:11px;color:var(--text3);margin-top:6px">Books each parsed corner slip on the selected account with the stake from the screenshot (fallback used only if that can't be read).</div>
       </div>
       <div id="crn-discord-recent" style="margin-top:10px;font-size:11px;color:var(--text3)"></div>
     </div>
@@ -4352,7 +4352,9 @@ function selectBetType(type, label) {
   const isBuzzerCorners = type === 'Corners';
   const dcard = document.getElementById('crn-discord-card');
   if (dcard) {
-    if (isBuzzerCorners && CURRENT_USER_ROLE === 'admin') loadCrnDiscordConfig();
+    // Grosvenor (2026-10-03) reuses the same card against the Outliers-channel endpoints.
+    const feed = isBuzzerCorners ? 'corners' : type === 'Grosvenor' ? 'grosvenor' : null;
+    if (feed && CURRENT_USER_ROLE === 'admin') { CRN_DISCORD_FEED = feed; loadCrnDiscordConfig(); }
     else dcard.style.display = 'none';
   }
   const xcard = document.getElementById('crn-export-card');
@@ -12726,13 +12728,20 @@ async function crnExportRun(btn){
 
 // ── Discord corner-bet auto-entry (config panel in the Corners tracker section) ──
 let CRN_DISCORD_CFG = { enabled: false, account_id: null, default_stake: null };
+let CRN_DISCORD_FEED = 'corners'; // 'corners' (Betfred corner slips) | 'grosvenor' (Outliers channel)
+const crnDiscordPath = (what) => `discord-${CRN_DISCORD_FEED}-${what}`;
 async function loadCrnDiscordConfig(){
   const card = document.getElementById('crn-discord-card');
   if (card) card.style.display = CURRENT_USER_ROLE === 'admin' ? 'block' : 'none';
   if (CURRENT_USER_ROLE !== 'admin') return;
   let d;
-  try { d = await ledgerApi('discord-corners-config'); } catch(e) { return; }
-  if (!d || !d.ok) return;
+  const feed = CRN_DISCORD_FEED;
+  try { d = await ledgerApi(crnDiscordPath('config')); } catch(e) { return; }
+  if (!d || !d.ok || feed !== CRN_DISCORD_FEED) return; // switched bet type mid-load
+  const help = document.getElementById('crn-discord-help');
+  if (help) help.textContent = feed === 'grosvenor'
+    ? 'Books each Grosvenor slip posted in #outliers on the selected account: match, player leg, other leg(s), total odds and stake from the screenshot; BB fair and next best from your "2.21 bb, 2.38 next best" text (same message, or the one just before/after). Fallback stake is used only if the slip\'s can\'t be read.'
+    : 'Books each parsed corner slip on the selected account with the stake from the screenshot (fallback used only if that can\'t be read).';
   CRN_DISCORD_CFG = { enabled: !!d.enabled, account_id: d.account_id || null, default_stake: d.default_stake ?? null };
   const toggle = document.getElementById('crn-discord-toggle');
   const cfgPanel = document.getElementById('crn-discord-config');
@@ -12752,7 +12761,8 @@ async function populateCrnDiscordAccounts(selectedId){
   if (!sel) return;
   let accts = [];
   try { const a = await ledgerApi('accounts?excludeClosed=1'); if (a.ok) accts = a.accounts || []; } catch(e) {}
-  accts.sort((x, y) => (/(betfred)/i.test(y.bookie) - /(betfred)/i.test(x.bookie)) || String(x.bookie).localeCompare(y.bookie));
+  const pref = CRN_DISCORD_FEED === 'grosvenor' ? /grosvenor/i : /betfred/i;
+  accts.sort((x, y) => (pref.test(y.bookie) - pref.test(x.bookie)) || String(x.bookie).localeCompare(y.bookie));
   sel.innerHTML = '<option value="">Select account…</option>' + accts.map(a =>
     `<option value="${a.id}" ${String(a.id) === String(selectedId) ? 'selected' : ''}>${a.account_id || '—'} · ${a.bookie} · ${a.profile}</option>`).join('');
 }
@@ -12763,7 +12773,10 @@ function renderCrnDiscordRecent(recent){
   const ic = { booked: '✅', skipped: '⚠️', error: '❌', disabled: '💤', duplicate: '🔁' };
   el.innerHTML = '<div style="font-weight:600;margin-bottom:3px">Recent</div>' + recent.slice(0, 6).map(r => {
     const p = r.parsed || {};
-    const who = p.scorerPlayer ? `${p.assistPlayer || '?'} → ${p.scorerPlayer}` : '(unreadable)';
+    const pl = Array.isArray(p.legs) ? p.legs.find(l => l && l.player) : null;
+    const who = CRN_DISCORD_FEED === 'grosvenor'
+      ? (pl ? `${pl.player} ${p.playerMarket || ''}${p.oddsDecimal ? ' @ ' + p.oddsDecimal : ''}` : '(unreadable)')
+      : (p.scorerPlayer ? `${p.assistPlayer || '?'} → ${p.scorerPlayer}` : '(unreadable)');
     return `<div>${ic[r.status] || '•'} ${who}${r.note ? ` — ${r.note}` : (r.bet_id ? ` — bet #${r.bet_id}` : '')}</div>`;
   }).join('');
 }
@@ -12787,7 +12800,7 @@ async function saveCrnDiscordConfig(turningOff){
   const enabled = turningOff ? false : toggle.checked;
   if (enabled && !account_id) { if (msg) msg.innerHTML = '<span style="color:var(--red)">Pick an account first.</span>'; return; }
   try {
-    const d = await ledgerApi('discord-corners-config', {
+    const d = await ledgerApi(crnDiscordPath('config'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ enabled, account_id, default_stake: stakeRaw === '' ? null : Number(stakeRaw) }),
     });

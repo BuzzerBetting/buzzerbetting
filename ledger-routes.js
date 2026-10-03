@@ -3617,6 +3617,198 @@ router.post('/discord-corners-book', async (req, res) => {
   }
 });
 
+// ================== DISCORD GROSVENOR-BET AUTO-ENTRY ==================
+// Same pattern as the corners bot above, for the Outliers channel: each Grosvenor bet-builder
+// screenshot (match, player leg, extra leg(s), total odds, total stake) is booked as a
+// 'Grosvenor' bet. The BB fair and next-best price come from the text the user posts with it
+// ("2.21 bb, 2.38 next best" / "5.12 bb next best 5.0") — the bot pairs that text with the
+// image and forwards both; the text parse is here so the bot stays a relay.
+
+const GROSVENOR_SLIP_PROMPT = `You are reading a screenshot of a Grosvenor Sport bet builder / multi that has just been placed.
+Respond with ONLY a JSON object, no prose, no markdown fences, with exactly these keys:
+- "match": the fixture line as shown (e.g. "São Paulo-SP - Santos-SP"), with the separator rewritten as " v " (e.g. "São Paulo-SP v Santos-SP"); null if not visible.
+- "legs": array of every selection, in order, as {"selection": <the bold selection text, e.g. "Damián Bobadilla - Over 0.5" or "Under 2.5">, "marketText": <the grey market line, e.g. "Player's shots on target" or "Total Goals by Santos-SP">, "player": <the player's name if this is a PLAYER market, else null>}.
+- "playerMarket": short label for the PLAYER leg's market using these where they fit: "SOT 1+", "SOT 2+", "SOT 3+" (shots on target over 0.5/1.5/2.5), "Shots 1+", "Shots 2+", "Shots 3+", "AGS" (to score), "FGS" (first goalscorer), "Header" (to score a header), "OTB" (to score from outside the box), "Assist", "Card"; otherwise a short faithful description. null if there is no player leg.
+- "oddsDecimal": the TOTAL odds in decimal (convert fractional a/b to a/b + 1); null if not visible.
+- "stake": the TOTAL stake in pounds, number only; null if not visible.
+- "potentialPayout": potential payout in pounds if shown; else null.
+- "confidenceNotes": brief note of anything cut off/unreadable/ambiguous; null if all clean.
+If more than one leg is a player market, put the one Grosvenor is being bet for (the first player leg) as the player leg.
+Read only what is visible. Never guess names or numbers.`;
+
+async function runGrosvenorSlipModel(base64Data, mediaType) {
+  const client = getAnthropic();
+  if (!client) throw new Error('Screenshot parsing is not configured on the server (no ANTHROPIC_API_KEY).');
+  const media = /jpe?g/i.test(mediaType || '') ? 'image/jpeg'
+    : /webp/i.test(mediaType || '') ? 'image/webp' : 'image/png';
+  const msg = await client.messages.create({
+    model: BETSLIP_MODEL,
+    max_tokens: 1024,
+    output_config: { effort: 'low' },
+    messages: [{ role: 'user', content: [
+      { type: 'image', source: { type: 'base64', media_type: media, data: base64Data } },
+      { type: 'text', text: GROSVENOR_SLIP_PROMPT },
+    ] }],
+  });
+  const text = (msg.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
+  try { return JSON.parse(text); }
+  catch (e) { const m = text.match(/\{[\s\S]*\}/); return JSON.parse(m ? m[0] : '{}'); }
+}
+
+// "2.21 bb, 2.38 next best" / "5.12 bb next best 5.0" / "bb 3.58 nb 3.5" -> { fair, nextBest }.
+// Orientation comes from the first token: text opening with a number has numbers before their
+// keyword ("2.21 bb"), otherwise after it ("bb 4.1"); a keyword with no free number on its
+// preferred side takes the one on the other side ("5.12 bb next best 5.0").
+function parseGrosvenorBbText(text) {
+  const toks = (String(text || '').toLowerCase().match(/\d+(?:\.\d+)?|next\s*best|\bnb\b|\bbb\b|\bfair\b/g) || [])
+    .map(x => /^\d/.test(x) ? { n: Number(x) } : { k: /next|nb/.test(x) ? 'nb' : 'bb' });
+  const numFirst = toks.length > 0 && toks[0].n != null;
+  const used = new Set(), out = {};
+  const take = (j) => (toks[j] && toks[j].n != null && !used.has(j)) ? (used.add(j), toks[j].n) : null;
+  toks.forEach((tk, i) => {
+    if (!tk.k || out[tk.k] != null) return;
+    out[tk.k] = numFirst ? (take(i - 1) ?? take(i + 1)) : (take(i + 1) ?? take(i - 1));
+  });
+  return { fair: out.bb > 1 ? out.bb : null, nextBest: out.nb > 1 ? out.nb : null };
+}
+
+const _bookGrosvenorBet = db.transaction((fields, account_id, stake, date) => {
+  const info = db.prepare(
+    `INSERT INTO bets (bet_type, date, fields, total_stake, result, pl) VALUES ('Grosvenor', ?, ?, ?, 'open', 0)`
+  ).run(date, JSON.stringify(fields), stake);
+  const betId = info.lastInsertRowid;
+  db.prepare(`INSERT INTO bet_legs (bet_id, account_id, stake) VALUES (?, ?, ?)`).run(betId, account_id, stake);
+  db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`).run(stake, account_id);
+  return betId;
+});
+
+function discordGrosvenorConfig() {
+  const row = db.prepare(`SELECT * FROM discord_grosvenor_config WHERE id = 1`).get() || { enabled: 0, account_id: null, default_stake: null, catchup_from: null };
+  let account_label = null;
+  if (row.account_id) {
+    const a = db.prepare(`SELECT account_id, bookie, profile FROM accounts WHERE id = ?`).get(row.account_id);
+    if (a) account_label = `${a.account_id || '—'} · ${a.bookie} · ${a.profile}`;
+  }
+  return {
+    enabled: !!row.enabled, account_id: row.account_id || null, account_label,
+    default_stake: row.default_stake ?? null, catchup_from: row.catchup_from || null,
+  };
+}
+
+router.get('/discord-grosvenor-config', (req, res) => {
+  try {
+    const recent = db.prepare(
+      `SELECT message_id, status, note, bet_id, parsed, text, created_at FROM discord_grosvenor_posts ORDER BY created_at DESC LIMIT 10`
+    ).all().map(r => ({ ...r, parsed: (() => { try { return JSON.parse(r.parsed); } catch (e) { return null; } })() }));
+    res.json({ ok: true, ...discordGrosvenorConfig(), recent });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+router.post('/discord-grosvenor-config', requireAdmin, (req, res) => {
+  try {
+    const { enabled, account_id, default_stake } = req.body || {};
+    const acct = account_id ? db.prepare(`SELECT id FROM accounts WHERE id = ?`).get(account_id) : null;
+    if (enabled && !acct) return res.status(400).json({ ok: false, error: 'Pick a valid account before turning the bot on.' });
+    const wasEnabled = !!(db.prepare(`SELECT enabled FROM discord_grosvenor_config WHERE id = 1`).get() || {}).enabled;
+    let catchupFrom = null;
+    if (enabled && !wasEnabled) {
+      const r = db.prepare(
+        `SELECT message_id FROM discord_grosvenor_posts WHERE status IN ('booked','skipped','error','duplicate')
+         ORDER BY CAST(message_id AS INTEGER) DESC LIMIT 1`
+      ).get();
+      catchupFrom = r ? String(r.message_id).split(':')[0] : null;
+    }
+    db.prepare(
+      `UPDATE discord_grosvenor_config
+         SET enabled = ?, account_id = ?, default_stake = ?, catchup_from = ?, updated_at = datetime('now'), updated_by = ?
+       WHERE id = 1`
+    ).run(enabled ? 1 : 0, acct ? account_id : null, default_stake != null && default_stake !== '' ? Number(default_stake) : null, catchupFrom, req.username || null);
+    res.json({ ok: true, ...discordGrosvenorConfig() });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+router.post('/discord-grosvenor-catchup-clear', (req, res) => {
+  try {
+    db.prepare(`UPDATE discord_grosvenor_config SET catchup_from = NULL WHERE id = 1`).run();
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/discord-grosvenor-book  body: { message_id, channel_id, image_url, text }
+// Bot-only (x-ledger-key gate). Always { ok:true, status, ... } like the corners route.
+router.post('/discord-grosvenor-book', async (req, res) => {
+  const { message_id, channel_id, image_url, text } = req.body || {};
+  if (!message_id || !image_url) return res.status(400).json({ ok: false, error: 'message_id and image_url required' });
+
+  const record = (status, note, bet_id, parsed) => {
+    try {
+      db.prepare(
+        `INSERT INTO discord_grosvenor_posts (message_id, channel_id, image_url, text, parsed, bet_id, status, note)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(message_id) DO UPDATE SET status = excluded.status, note = excluded.note, bet_id = excluded.bet_id, parsed = excluded.parsed, text = excluded.text`
+      ).run(message_id, channel_id || null, image_url, text || null, parsed ? JSON.stringify(parsed) : null, bet_id || null, status, note || null);
+    } catch (e) { console.error('[discord-grosvenor-book] audit write failed:', e.message); }
+  };
+
+  try {
+    const existing = db.prepare(`SELECT status, bet_id FROM discord_grosvenor_posts WHERE message_id = ?`).get(message_id);
+    if (existing && existing.status === 'booked') return res.json({ ok: true, status: 'duplicate', betId: existing.bet_id });
+
+    const cfg = discordGrosvenorConfig();
+    if (!cfg.enabled || !cfg.account_id) return res.json({ ok: true, status: 'disabled' });
+
+    const imgRes = await fetch(image_url);
+    if (!imgRes.ok) { record('error', `image fetch HTTP ${imgRes.status}`); return res.json({ ok: true, status: 'error', note: `couldn't download the image (HTTP ${imgRes.status})` }); }
+    const buf = Buffer.from(await imgRes.arrayBuffer());
+    const mediaType = imgRes.headers.get('content-type') || (/\.jpe?g/i.test(image_url) ? 'image/jpeg' : /\.webp/i.test(image_url) ? 'image/webp' : 'image/png');
+
+    let parsed;
+    try { parsed = await runGrosvenorSlipModel(buf.toString('base64'), mediaType); }
+    catch (e) { record('error', 'parse failed: ' + e.message); return res.json({ ok: true, status: 'error', note: 'could not read the screenshot' }); }
+
+    const legs = Array.isArray(parsed.legs) ? parsed.legs : [];
+    const playerIdx = legs.findIndex(l => l && l.player);
+    const playerLeg = playerIdx >= 0 ? legs[playerIdx] : null;
+    const otherLegs = legs.filter((l, i) => i !== playerIdx && l)
+      .map(l => [l.selection, l.marketText].filter(Boolean).join(' — '));
+    const odds = Number(parsed.oddsDecimal);
+    const stake = parsed.stake != null ? Number(parsed.stake) : (cfg.default_stake != null ? Number(cfg.default_stake) : null);
+    const { fair, nextBest } = parseGrosvenorBbText(text);
+
+    const miss = [];
+    if (!(odds > 1)) miss.push('odds');
+    if (!playerLeg) miss.push('player leg');
+    if (!(stake > 0)) miss.push('stake (and no default set)');
+    if (miss.length) { record('skipped', 'missing ' + miss.join(', '), null, parsed); return res.json({ ok: true, status: 'skipped', note: 'not booked — missing ' + miss.join(', ') }); }
+
+    const st = +stake.toFixed(2);
+    const fields = {
+      Bookie: 'Grosvenor',
+      Match: parsed.match || '',
+      Market: parsed.playerMarket || playerLeg.marketText || '',
+      Player: playerLeg.player,
+      'Other Leg': otherLegs.join(' + '),
+      'Next Best': nextBest || 0,
+      Odds: +odds.toFixed(3),
+      'Fair Odds': fair || 0,
+      // Same EV £ the entry form computes for pairedBlended: stake × (odds/fair − 1).
+      EV: fair ? +(st * (odds / fair - 1)).toFixed(2) : 0,
+    };
+    const betId = _bookGrosvenorBet(fields, cfg.account_id, st, new Date().toISOString());
+    const warn = [];
+    if (!fair) warn.push('no BB fair found in the message text');
+    if (!nextBest) warn.push('no next-best price found');
+    record('booked', warn.length ? warn.join('; ') : null, betId, parsed);
+    const summary = `${fields.Player} ${fields.Market}${fields['Other Leg'] ? ' + ' + fields['Other Leg'] : ''} @ ${fields.Odds} · £${st}${fair ? ` · fair ${fair}` : ''}`;
+    console.log('[discord-grosvenor-book] booked bet', betId, '-', summary);
+    res.json({ ok: true, status: 'booked', betId, summary, note: warn.length ? `booked, but ${warn.join(' and ')} — add it on the bet` : null });
+  } catch (err) {
+    console.error('[discord-grosvenor-book]', err && err.message);
+    record('error', err && err.message);
+    res.json({ ok: true, status: 'error', note: 'server error booking the bet' });
+  }
+});
+
 // ================== FOTMOB LEAGUES (Today's Matches league list) ==================
 
 // GET /api/ledger/fotmob-leagues
