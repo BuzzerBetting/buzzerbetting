@@ -9679,6 +9679,9 @@ async function loadOddscheckerEV(){
       const dd=(res.status==='fulfilled'&&res.value&&res.value.ok)?res.value:null;
       if(dd&&Array.isArray(dd.bets))ocEvBets=ocEvBets.concat(dd.bets);
     });
+    // Header / OTB (goal or SOT) are calculated markets — Calculated +EV only, never Normal +EV,
+    // whichever feed they come in on, boosts included (2026-10-03, user-specified).
+    ocEvBets=ocEvBets.filter(b=>!/\b(header|headed|otb)\b/i.test(String(b.mkt||'')));
     ocEvBets=mergeHorseDoubleDuplicates(ocEvBets);
     ocEvLastUpdated=d.updated||ocEvLastUpdated;
     const countEl=document.getElementById('oc-ev-smeta-count');
