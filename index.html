@@ -16696,7 +16696,7 @@ async function loadGvSsLeagues(){
 }
 function gvSsLeaguesHtml(){
   if (!GV_SS_LEAGUES.length) return '<div style="font-size:12px;color:var(--text3);padding:4px">No leagues yet — they appear once a bet from them is logged.</div>';
-  return '<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Tick the leagues Grosvenor offers super sub in:</div>' + GV_SS_LEAGUES.map(l =>
+  return '<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Super sub counts in every league by default — untick any Grosvenor does not run it in:</div>' + GV_SS_LEAGUES.map(l =>
     `<label style="display:flex;align-items:center;gap:8px;padding:4px 2px;font-size:12.5px;cursor:pointer"><input type="checkbox" ${l.enabled ? 'checked' : ''} onchange="setGvSsLeague('${escapeHtml(String(l.leagueId))}', this.checked)"> <span>${escapeHtml(l.leagueName || String(l.leagueId))}${l.country ? ` <span style="color:var(--text3)">(${escapeHtml(l.country)})</span>` : ''}</span><span style="margin-left:auto;color:var(--text3);font-size:11px">${l.bets} bet${l.bets === 1 ? '' : 's'}</span></label>`).join('');
 }
 async function toggleGvSsLeagues(){
@@ -16781,7 +16781,7 @@ function renderGvStats(d){
       </div>
       <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;align-items:flex-start">${rangeTabsHtml}
         <div style="position:relative;margin-left:auto">
-          <button onclick="toggleGvSsLeagues()" title="Grosvenor only runs super sub in some leagues — super-sub P/L only counts it in the ticked ones" style="padding:6px 12px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text2);font-size:12.5px;cursor:pointer;font-family:inherit"><i class="ti ti-arrows-exchange"></i> Super sub leagues (${GV_SS_LEAGUES.filter(l => l.enabled).length}) <i class="ti ti-chevron-${GV_SS_OPEN ? 'up' : 'down'}"></i></button>
+          <button onclick="toggleGvSsLeagues()" title="Super sub counts in every league unless unticked here" style="padding:6px 12px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text2);font-size:12.5px;cursor:pointer;font-family:inherit"><i class="ti ti-arrows-exchange"></i> Super sub leagues (${GV_SS_LEAGUES.filter(l => l.enabled).length}) <i class="ti ti-chevron-${GV_SS_OPEN ? 'up' : 'down'}"></i></button>
           <div id="gv-ss-panel" style="display:${GV_SS_OPEN ? 'block' : 'none'};position:absolute;right:0;top:calc(100% + 6px);z-index:50;min-width:280px;max-height:340px;overflow-y:auto;background:var(--surface);border:.5px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.18);padding:8px 10px">${gvSsLeaguesHtml()}</div>
         </div>
       </div>
@@ -16802,7 +16802,7 @@ function renderGvStats(d){
       ${table('Strict — posted player only', 'winsStrict', 'winPctStrict', 'plStrict', 'strict')}
       <div style="font-size:12.5px;font-weight:600;margin:4px 0 6px">Substitutions by market</div>
       <div style="overflow-x:auto"><table class="dt" style="min-width:480px"><thead><tr><th>Market</th><th class="r">Subbed off</th><th class="r">Sub completed it</th><th class="r">Sub won it (original didn't)</th></tr></thead><tbody>${subRows || '<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:14px">No posted players subbed off yet</td></tr>'}</tbody></table></div>
-      <div style="font-size:11px;color:var(--text3);margin-top:8px">Every Lineups Confirmed Grosvenor row is logged once at the first Grosvenor price seen, then graded after full time. "Super sub": if the posted player is substituted off, his replacement counts too and their totals combine (e.g. 2+ SOT wins on 1 + 1) — but only for bets in leagues ticked under "Super sub leagues"; everything else counts strict in the super-sub figures too. "Strict" counts the posted player alone. "Sub completed it" = the replacement did enough on his own, whatever the original did; "Sub won it" = bets that only won thanks to super sub. Overall/Yesterday/Today scope everything to bets logged that London day.</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">Every Lineups Confirmed Grosvenor row is logged once at the first Grosvenor price seen, then graded after full time. "Super sub": if the posted player is substituted off, his replacement counts too and their totals combine (e.g. 2+ SOT wins on 1 + 1) — in every league except any unticked under "Super sub leagues" (those count strict in the super-sub figures too). "Strict" counts the posted player alone. "Sub completed it" = the replacement did enough on his own, whatever the original did; "Sub won it" = bets that only won thanks to super sub. Overall/Yesterday/Today scope everything to bets logged that London day.</div>
     </div>`;
 }
 // Lineups Confirmed / Pre-lineup sub-tabs (2026-10-01, user-requested) — same pattern as
