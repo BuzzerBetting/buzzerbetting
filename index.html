@@ -14379,14 +14379,14 @@ function deriveBfexFair(runner) {
   const bestBackSize = runner.back?.[0]?.size ?? 0;
   const bestLay = runner.lay?.[0]?.price ?? null;
   const bestLaySize = runner.lay?.[0]?.size ?? 0;
+  // Fair = last price traded, or the best back once the market has moved above LTP with real
+  // money on it. No back/lay midpoint (2026-10-03, user-specified: "I don't like using
+  // midpoints") — the spread only feeds confidence below. Mirrored in oc-scraper bfex_fair.py.
   let fair = lpm;
   let usedFallback = true;
   if (bestBack && bestBack > lpm && bestBackSize >= 100) {
     fair = bestBack;
     usedFallback = false;
-  } else if (bestBack && bestLay && bestLaySize >= 10) {
-    const spread = (bestLay - bestBack) / lpm;
-    if (spread <= 0.15) { fair = parseFloat(((bestBack + bestLay) / 2).toFixed(2)); usedFallback = false; }
   }
   const wideSpread = bestBack && bestLay ? (bestLay - bestBack) / lpm > 0.15 : true;
   let confidence;

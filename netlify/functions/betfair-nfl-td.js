@@ -11,8 +11,8 @@
 //   { ok:true, events:[{ name, startTime, marketId, traded,
 //       runners:[{ name, fair, back, backSize, lay, laySize, traded }] }] }
 // `traded` on a runner is the £ matched on that player — the scanner only uses a player's fair
-// once that's >= £300 (2026-10-02, user-specified). `fair` uses the same liquidity-gated
-// back/lay midpoint as betfair-f1.js's fairPrice(); null when the book is too thin to say.
+// once that's >= £300 (2026-10-02, user-specified). `fair` is the last price traded, checked
+// against volume and spread (bfex-fair-lib.js, same as betfair-f1.js); null when it doesn't hold up.
 const https = require('https');
 const fs = require('fs');
 
@@ -104,22 +104,9 @@ async function getSession(appKey) {
   return token;
 }
 
-// Same liquidity-gated midpoint as betfair-f1.js — see its comment for why a bare back/lay
-// average isn't trusted on thin exchange books.
-const MIN_SIZE = 10;
-const SOLO_MIN_SIZE = 50;
-const MAX_SPREAD_PCT = 0.5;
-function fairPrice(b, bSize, l, lSize) {
-  const hasBack = b > 1 && bSize >= MIN_SIZE;
-  const hasLay = l > 1 && lSize >= MIN_SIZE;
-  if (hasBack && hasLay) {
-    const mid = (b + l) / 2;
-    if ((l - b) / mid <= MAX_SPREAD_PCT) return +mid.toFixed(3);
-  }
-  if (l > 1 && lSize >= SOLO_MIN_SIZE) return +l.toFixed(3);
-  if (b > 1 && bSize >= SOLO_MIN_SIZE) return +b.toFixed(3);
-  return null;
-}
+// Fair = LTP checked against matched volume, the traded ladder and the spread (never a back/lay
+// midpoint, 2026-10-03 user-specified) — shared with betfair-f1.js, see ../../bfex-fair-lib.js.
+const { runnerFair } = require('../../bfex-fair-lib');
 
 async function buildNflTd(appKey, session) {
   const now = new Date();
@@ -141,7 +128,7 @@ async function buildNflTd(appKey, session) {
     const chunk = catalogue.slice(i, i + 20);
     const books = await bfCall('listMarketBook', {
       marketIds: chunk.map((m) => m.marketId),
-      priceProjection: { priceData: ['EX_BEST_OFFERS'] },
+      priceProjection: { priceData: ['EX_BEST_OFFERS', 'EX_TRADED'] }, // EX_TRADED: the traded ladder the fair checks
     }, appKey, session);
     const bookById = {};
     for (const b of books || []) bookById[b.marketId] = b;
@@ -153,15 +140,10 @@ async function buildNflTd(appKey, session) {
       const runners = [];
       for (const r of book.runners || []) {
         if (r.status !== 'ACTIVE') continue;
-        const backLevel = r.ex && r.ex.availableToBack && r.ex.availableToBack[0];
-        const layLevel = r.ex && r.ex.availableToLay && r.ex.availableToLay[0];
-        const b = (backLevel && backLevel.price) || 0;
-        const bSize = (backLevel && backLevel.size) || 0;
-        const l = (layLevel && layLevel.price) || 0;
-        const lSize = (layLevel && layLevel.size) || 0;
+        const { b, bSize, l, lSize, ltp, fair } = runnerFair(r);
         runners.push({
           name: nameById[r.selectionId] || String(r.selectionId),
-          fair: fairPrice(b, bSize, l, lSize),
+          fair, ltp: ltp > 1 ? ltp : null,
           back: b > 1 ? b : null, backSize: Math.round(bSize * 100) / 100,
           lay: l > 1 ? l : null, laySize: Math.round(lSize * 100) / 100,
           traded: Math.round((r.totalMatched || 0) * 100) / 100,
