@@ -139,7 +139,6 @@ function classifyMarket(name) {
 // liquidity/spread reasoning deriveBfexFair already applies to football markets, sized down for
 // F1's naturally lower volume rather than reusing football's exact thresholds.
 const MIN_SIZE = 10;       // £ — below this a two-sided quote is too thin to average
-const SOLO_MIN_SIZE = 50;  // £ — a ONE-sided price needs more size before standing alone as fair
 const BACK_MIN_SIZE = 2;   // £ — for the raw `back` field only (inverse "No" pricing), see buildF1
 const MAX_SPREAD_PCT = 0.5; // wider tolerance than football's 15% — F1 props are inherently thinner
 function fairPrice(b, bSize, l, lSize) {
@@ -149,8 +148,9 @@ function fairPrice(b, bSize, l, lSize) {
     const mid = (b + l) / 2;
     if ((l - b) / mid <= MAX_SPREAD_PCT) return +mid.toFixed(3);
   }
-  if (l > 1 && lSize >= SOLO_MIN_SIZE) return +l.toFixed(3);
-  if (b > 1 && bSize >= SOLO_MIN_SIZE) return +b.toFixed(3);
+  // No one-sided fallback any more (2026-10-03, user-reported): a lone back price is very often
+  // a junk low-liability lay order (risk £1 laying £50 at 1.02), and it priced Hadjar Top 6 at a
+  // 1.02 "fair" against BetVictor's 2.75 — a +169% fake arb. Two-sided books only.
   return null;
 }
 
