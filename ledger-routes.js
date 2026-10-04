@@ -3720,18 +3720,30 @@ function parseGrosvenorBbText(text) {
 }
 
 // Accounts + stakes named in the same text: "C104 £20", "C104: 20", "£20 on C104",
-// "C104 20, C105 £15". Returns { named: [{ code, stake|null }], rest } — `rest` is the text with
-// those removed, so a stake can't be mistaken for the bb / next-best figure. A number followed
-// by bb/nb/next/fair is never taken as a stake ("C104 2.21 bb" names C104 with no stake).
+// "C104 20, C105 £15", one per line or all on one. Returns { named: [{ code, stake|null }], rest }
+// — `rest` is the text with those removed, so a stake can't be mistaken for the bb / next-best
+// figure. A number followed by bb/nb/next/fair is never taken as a stake ("C104 2.21 bb" names
+// C104 with no stake), and a trailing stake never crosses a line break. Whether a stake belongs
+// to the code before or after it is settled by how the FIRST code is written: "£14.17 C104 ..."
+// (2026-10-04, live) means leading stakes, otherwise trailing ("C104 £10 C105 £15").
+const GROS_ACCT_LEAD = /£\s*(\d+(?:\.\d+)?)\s*(?:on\s+)?\b([a-z]{1,3}\d{2,4})\b/gi;
+const GROS_ACCT_TRAIL = /\b([a-z]{1,3}\d{2,4})\b[ \t]*[:=@\-–]?[ \t]*£?[ \t]*(\d+(?:\.\d+)?)(?![\d.])(?!\s*(?:bb|nb|next|fair)\b)/gi;
+const GROS_ACCT_BARE = /\b([a-z]{1,3}\d{2,4})\b/gi;
 function parseGrosvenorAccountText(text) {
-  const named = [];
-  const rest = String(text || '').replace(
-    /(?:£\s*(\d+(?:\.\d+)?)\s*(?:on\s+)?)?\b([a-z]{1,3}\d{2,4})\b(?:\s*[:=@\-–]?\s*£?\s*(\d+(?:\.\d+)?)(?![\d.])(?!\s*(?:bb|nb|next|fair)\b))?/gi,
-    (m, pre, code, post) => {
-      const s = pre != null ? Number(pre) : (post != null ? Number(post) : null);
-      named.push({ code: code.toUpperCase(), stake: s > 0 ? s : null });
-      return ' ';
-    });
+  const found = [];
+  const pull = (s, re, codeIdx, stakeIdx) => s.replace(re, (...m) => {
+    const st = stakeIdx ? Number(m[stakeIdx]) : null;
+    found.push({ at: m[m.length - 2], code: m[codeIdx].toUpperCase(), stake: st > 0 ? st : null });
+    return ' '.repeat(m[0].length); // keep offsets, so `at` orders codes as written
+  });
+  let rest = String(text || '');
+  const first = rest.search(GROS_ACCT_BARE);
+  const leadFirst = first >= 0 && /£\s*\d+(?:\.\d+)?\s*(?:on\s+)?$/i.test(rest.slice(0, first));
+  rest = leadFirst
+    ? pull(pull(rest, GROS_ACCT_LEAD, 2, 1), GROS_ACCT_TRAIL, 1, 2)
+    : pull(pull(rest, GROS_ACCT_TRAIL, 1, 2), GROS_ACCT_LEAD, 2, 1);
+  rest = pull(rest, GROS_ACCT_BARE, 1, 0);
+  const named = found.sort((a, b) => a.at - b.at).map(({ code, stake }) => ({ code, stake }));
   return { named, rest };
 }
 
