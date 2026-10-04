@@ -124,7 +124,7 @@ client.login(TOKEN);
 
 // ================== GROSVENOR (Outliers channel) ==================
 // Same toggle/account/catch-up flow as the corners above, against /discord-grosvenor-*. Each
-// Grosvenor slip screenshot is paired with the user's "2.21 bb, 2.38 next best" text, taken
+// Grosvenor slip screenshot is paired with the user's "2.21 bb, 2.38 next best, C104 £20" text, taken
 // from (in order): the image message's own text, the sender's message just before it, or the
 // sender's message just after it (waits up to ~90s live). A text is only ever used once.
 //   DISCORD_GROSVENOR_CHANNEL_ID - optional; defaults to the #outliers channel under
@@ -139,7 +139,8 @@ client.once('ready', () => {
   setInterval(pollGrosCatchup, 30000);
 });
 
-const isBbText = (s) => /\d/.test(s || '') && /\bbb\b|next\s*best|\bnb\b/i.test(s || '');
+// bb / next-best text, or one naming the account(s) + stake(s) the slip went on ("C104 £20").
+const isBbText = (s) => /\d/.test(s || '') && /\bbb\b|next\s*best|\bnb\b|\b[a-z]{1,3}\d{2,4}\b/i.test(s || '');
 const hasImage = (m) => [...m.attachments.values()].some(isImage);
 const usableText = (m, author) => m && m.author.id === author && !hasImage(m) && !claimedTexts.has(m.id) && isBbText(m.content);
 
@@ -203,7 +204,7 @@ client.on('messageCreate', (msg) => {
   if (!hasImage(msg) || !fromAllowedSender(msg)) return;
   grosQueue = grosQueue.then(async () => {
     const cfg = await getGrosConfig();
-    if (!cfg || !cfg.enabled || !cfg.account_id) return;
+    if (!cfg || !cfg.enabled) return; // accounts come from the message text now
     await processGrosMessage(msg, true);
   }).catch(e => console.error('[discord-grosvenor] live error:', e.message));
 });
@@ -212,7 +213,7 @@ let grosCatchingUp = false;
 async function pollGrosCatchup() {
   if (grosCatchingUp || !grosChannelId) return;
   const cfg = await getGrosConfig();
-  if (!cfg || !cfg.enabled || !cfg.account_id || !cfg.catchup_from) return;
+  if (!cfg || !cfg.enabled || !cfg.catchup_from) return;
   grosCatchingUp = true;
   let after = cfg.catchup_from, processed = 0;
   try {

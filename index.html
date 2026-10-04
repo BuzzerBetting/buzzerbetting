@@ -12823,7 +12823,7 @@ async function loadCrnDiscordConfig(){
   if (!d || !d.ok || feed !== CRN_DISCORD_FEED) return; // switched bet type mid-load
   const help = document.getElementById('crn-discord-help');
   if (help) help.textContent = feed === 'grosvenor'
-    ? 'Books each Grosvenor slip posted in #outliers on the selected account: match, player leg, other leg(s), total odds and stake from the screenshot; BB fair and next best from your "2.21 bb, 2.38 next best" text (same message, or the one just before/after). Fallback stake is used only if the slip\'s can\'t be read.'
+    ? 'Books each Grosvenor slip posted in #outliers: match, player leg, other leg(s) and total odds from the screenshot; BB fair, next best, account(s) and stake(s) from your text, e.g. "2.21 bb, 2.38 nb, C104 £20" or "… C104 £20, C105 £15" (same message, or the one just before/after). Several accounts book one bet with a leg each. A lone account with no stake uses the slip\'s stake. The account below is optional, used only when the text names none.'
     : 'Books each parsed corner slip on the selected account with the stake from the screenshot (fallback used only if that can\'t be read).';
   CRN_DISCORD_CFG = { enabled: !!d.enabled, account_id: d.account_id || null, default_stake: d.default_stake ?? null };
   const toggle = document.getElementById('crn-discord-toggle');
@@ -12831,7 +12831,11 @@ async function loadCrnDiscordConfig(){
   const statusEl = document.getElementById('crn-discord-status');
   if (toggle) toggle.checked = d.enabled;
   if (cfgPanel) cfgPanel.style.display = 'none'; // opens when the user flips the toggle
-  if (statusEl) statusEl.textContent = d.enabled
+  if (statusEl) statusEl.textContent = feed === 'grosvenor'
+    ? (d.enabled
+      ? `On — accounts from your message text${d.account_id ? ` (else ${d.account_label || 'account ' + d.account_id})` : ''}`
+      : 'Off')
+    : d.enabled
     ? `On — booking to ${d.account_label || 'account ' + d.account_id}${d.default_stake ? `, fallback £${d.default_stake}` : ''}`
     : (d.account_id ? `Off (account set: ${d.account_label || d.account_id})` : 'Off — no account selected yet');
   await populateCrnDiscordAccounts(d.account_id);
@@ -12869,7 +12873,9 @@ function onCrnDiscordToggle(){
   if (toggle.checked) {
     // Turning on always needs an account confirmed — reveal the picker and wait for Save.
     cfgPanel.style.display = 'block';
-    document.getElementById('crn-discord-msg').innerHTML = '<span style="color:var(--amber)">Pick an account, then Save to start.</span>';
+    document.getElementById('crn-discord-msg').innerHTML = CRN_DISCORD_FEED === 'grosvenor'
+      ? '<span style="color:var(--amber)">Save to start (default account optional).</span>'
+      : '<span style="color:var(--amber)">Pick an account, then Save to start.</span>';
   } else {
     // Turning off is immediate.
     saveCrnDiscordConfig(true);
@@ -12881,7 +12887,7 @@ async function saveCrnDiscordConfig(turningOff){
   const account_id = document.getElementById('crn-discord-account').value || null;
   const stakeRaw = document.getElementById('crn-discord-stake').value;
   const enabled = turningOff ? false : toggle.checked;
-  if (enabled && !account_id) { if (msg) msg.innerHTML = '<span style="color:var(--red)">Pick an account first.</span>'; return; }
+  if (enabled && !account_id && CRN_DISCORD_FEED !== 'grosvenor') { if (msg) msg.innerHTML = '<span style="color:var(--red)">Pick an account first.</span>'; return; }
   try {
     const d = await ledgerApi(crnDiscordPath('config'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },

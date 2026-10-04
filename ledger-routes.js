@@ -3719,13 +3719,34 @@ function parseGrosvenorBbText(text) {
   return { fair: out.bb > 1 ? out.bb : null, nextBest: out.nb > 1 ? out.nb : null };
 }
 
-const _bookGrosvenorBet = db.transaction((fields, account_id, stake, date) => {
+// Accounts + stakes named in the same text: "C104 £20", "C104: 20", "£20 on C104",
+// "C104 20, C105 £15". Returns { named: [{ code, stake|null }], rest } — `rest` is the text with
+// those removed, so a stake can't be mistaken for the bb / next-best figure. A number followed
+// by bb/nb/next/fair is never taken as a stake ("C104 2.21 bb" names C104 with no stake).
+function parseGrosvenorAccountText(text) {
+  const named = [];
+  const rest = String(text || '').replace(
+    /(?:£\s*(\d+(?:\.\d+)?)\s*(?:on\s+)?)?\b([a-z]{1,3}\d{2,4})\b(?:\s*[:=@\-–]?\s*£?\s*(\d+(?:\.\d+)?)(?![\d.])(?!\s*(?:bb|nb|next|fair)\b))?/gi,
+    (m, pre, code, post) => {
+      const s = pre != null ? Number(pre) : (post != null ? Number(post) : null);
+      named.push({ code: code.toUpperCase(), stake: s > 0 ? s : null });
+      return ' ';
+    });
+  return { named, rest };
+}
+
+// legs: [{ account_id, stake }]. Several legs = one bet staked across several Grosvenor
+// accounts, same shape as the ledger's Add Account (each leg keeps the slip odds on record).
+const _bookGrosvenorBet = db.transaction((fields, legs, odds, date) => {
+  const total = +legs.reduce((s, l) => s + l.stake, 0).toFixed(2);
   const info = db.prepare(
     `INSERT INTO bets (bet_type, date, fields, total_stake, result, pl) VALUES ('Grosvenor', ?, ?, ?, 'open', 0)`
-  ).run(date, JSON.stringify(fields), stake);
+  ).run(date, JSON.stringify(fields), total);
   const betId = info.lastInsertRowid;
-  db.prepare(`INSERT INTO bet_legs (bet_id, account_id, stake) VALUES (?, ?, ?)`).run(betId, account_id, stake);
-  db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`).run(stake, account_id);
+  for (const l of legs) {
+    db.prepare(`INSERT INTO bet_legs (bet_id, account_id, stake, odds) VALUES (?, ?, ?, ?)`).run(betId, l.account_id, l.stake, legs.length > 1 ? odds : null);
+    db.prepare(`UPDATE accounts SET balance = balance - ?, updated_at = datetime('now') WHERE id = ?`).run(l.stake, l.account_id);
+  }
   return betId;
 });
 
@@ -3755,7 +3776,7 @@ router.post('/discord-grosvenor-config', requireAdmin, (req, res) => {
   try {
     const { enabled, account_id, default_stake } = req.body || {};
     const acct = account_id ? db.prepare(`SELECT id FROM accounts WHERE id = ?`).get(account_id) : null;
-    if (enabled && !acct) return res.status(400).json({ ok: false, error: 'Pick a valid account before turning the bot on.' });
+    if (account_id && !acct) return res.status(400).json({ ok: false, error: 'That account no longer exists.' });
     const wasEnabled = !!(db.prepare(`SELECT enabled FROM discord_grosvenor_config WHERE id = 1`).get() || {}).enabled;
     let catchupFrom = null;
     if (enabled && !wasEnabled) {
@@ -3802,7 +3823,7 @@ router.post('/discord-grosvenor-book', async (req, res) => {
     if (existing && existing.status === 'booked') return res.json({ ok: true, status: 'duplicate', betId: existing.bet_id });
 
     const cfg = discordGrosvenorConfig();
-    if (!cfg.enabled || !cfg.account_id) return res.json({ ok: true, status: 'disabled' });
+    if (!cfg.enabled) return res.json({ ok: true, status: 'disabled' });
 
     const imgRes = await fetch(image_url);
     if (!imgRes.ok) { record('error', `image fetch HTTP ${imgRes.status}`); return res.json({ ok: true, status: 'error', note: `couldn't download the image (HTTP ${imgRes.status})` }); }
@@ -3819,16 +3840,35 @@ router.post('/discord-grosvenor-book', async (req, res) => {
     const otherLegs = legs.filter((l, i) => i !== playerIdx && l)
       .map(l => [l.selection, l.marketText].filter(Boolean).join(' — '));
     const odds = Number(parsed.oddsDecimal);
-    const stake = parsed.stake != null ? Number(parsed.stake) : (cfg.default_stake != null ? Number(cfg.default_stake) : null);
-    const { fair, nextBest } = parseGrosvenorBbText(text);
+    const slipStake = parsed.stake != null ? Number(parsed.stake) : (cfg.default_stake != null ? Number(cfg.default_stake) : null);
+    const { named, rest } = parseGrosvenorAccountText(text);
+    const { fair, nextBest } = parseGrosvenorBbText(rest);
 
-    const miss = [];
+    // Accounts come from the text; the card's account is only a fallback when it names none.
+    // A lone named account with no stake takes the slip's stake; with several, each needs its own.
+    const miss = [], acctLegs = [];
+    if (named.length) {
+      const seen = new Set();
+      for (const n of named) {
+        if (seen.has(n.code)) continue;
+        seen.add(n.code);
+        const a = db.prepare(`SELECT id FROM accounts WHERE upper(account_id) = ? AND bookie LIKE '%grosvenor%' AND closed_at IS NULL`).get(n.code);
+        if (!a) { miss.push(`${n.code} isn't an open Grosvenor account`); continue; }
+        const s = n.stake != null ? n.stake : (named.length === 1 ? slipStake : null);
+        if (!(s > 0)) { miss.push(`stake for ${n.code}`); continue; }
+        acctLegs.push({ account_id: a.id, stake: +Number(s).toFixed(2) });
+      }
+    } else if (cfg.account_id) {
+      if (slipStake > 0) acctLegs.push({ account_id: cfg.account_id, stake: +slipStake.toFixed(2) });
+      else miss.push('stake (and no default set)');
+    } else {
+      miss.push('account (name it in the message, e.g. "C104 £20")');
+    }
     if (!(odds > 1)) miss.push('odds');
     if (!playerLeg) miss.push('player leg');
-    if (!(stake > 0)) miss.push('stake (and no default set)');
     if (miss.length) { record('skipped', 'missing ' + miss.join(', '), null, parsed); return res.json({ ok: true, status: 'skipped', note: 'not booked — missing ' + miss.join(', ') }); }
 
-    const st = +stake.toFixed(2);
+    const st = +acctLegs.reduce((s, l) => s + l.stake, 0).toFixed(2);
     const fields = {
       Bookie: 'Grosvenor',
       Match: parsed.match || '',
@@ -3841,7 +3881,7 @@ router.post('/discord-grosvenor-book', async (req, res) => {
       // Same EV £ the entry form computes for pairedBlended: stake × (odds/fair − 1).
       EV: fair ? +(st * (odds / fair - 1)).toFixed(2) : 0,
     };
-    const betId = _bookGrosvenorBet(fields, cfg.account_id, st, new Date().toISOString());
+    const betId = _bookGrosvenorBet(fields, acctLegs, fields.Odds, new Date().toISOString());
     const warn = [];
     if (!fair) warn.push('no BB fair found in the message text');
     if (!nextBest) warn.push('no next-best price found');
