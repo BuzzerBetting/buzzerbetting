@@ -3894,6 +3894,7 @@ router.post('/discord-grosvenor-book', async (req, res) => {
       'Fair Odds': fair || 0,
       // Same EV £ the entry form computes for pairedBlended: stake × (odds/fair − 1).
       EV: fair ? +(st * (odds / fair - 1)).toFixed(2) : 0,
+      Stake: st, // the manual Grosvenor entry stores it too — Bet Tracking's Stake column reads it
     };
     const betId = _bookGrosvenorBet(fields, acctLegs, fields.Odds, new Date().toISOString());
     const warn = [];

@@ -8190,6 +8190,9 @@ async function fetchBtDetailPage() {
     const d = await ledgerApi(`bets?type=${encodeURIComponent(btDetailType)}&limit=${BT_PAGE_SIZE}&offset=${offset}${rangeParam}`);
     if (!d.ok) { tableWrap.innerHTML = `<div style="padding:24px;color:var(--red);font-size:13px">Could not load bets: ${d.error||'unknown error'}</div>`; return; }
     const bets = d.bets || [];
+    // Discord-booked Grosvenor bets before 2026-10-04 never stored a Stake field — show the
+    // bet's own total_stake so the column (and its click-to-correct) still appears for them.
+    if (btDetailType === 'Grosvenor') bets.forEach(b => { if (b.fields && b.fields.Stake == null && b.total_stake > 0) b.fields.Stake = b.total_stake; });
     const s = d.summary || { count:0, open:0, wins:0, losses:0, totalStake:0, totalPl:0, totalEV:0 };
     BT_DETAIL_STATE.totalCount = s.count;
 
