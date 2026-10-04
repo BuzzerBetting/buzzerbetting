@@ -140,7 +140,7 @@ client.once('ready', () => {
 });
 
 // bb / next-best text, or one naming the account(s) + stake(s) the slip went on ("C104 £20").
-const isBbText = (s) => /\d/.test(s || '') && /\bbb\b|next\s*best|\bnb\b|\b[a-z]{1,3}\d{2,4}\b/i.test(s || '');
+const isBbText = (s) => /\d/.test(s || '') && /\bbb\b|next\s*best|\bnb\b|\b[a-z]\d{3}\b/i.test(s || '');
 const hasImage = (m) => [...m.attachments.values()].some(isImage);
 const usableText = (m, author) => m && m.author.id === author && !hasImage(m) && !claimedTexts.has(m.id) && isBbText(m.content);
 

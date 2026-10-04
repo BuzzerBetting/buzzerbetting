@@ -3726,9 +3726,11 @@ function parseGrosvenorBbText(text) {
 // C104 with no stake), and a trailing stake never crosses a line break. Whether a stake belongs
 // to the code before or after it is settled by how the FIRST code is written: "£14.17 C104 ..."
 // (2026-10-04, live) means leading stakes, otherwise trailing ("C104 £10 C105 £15").
-const GROS_ACCT_LEAD = /£\s*(\d+(?:\.\d+)?)\s*(?:on\s+)?\b([a-z]{1,3}\d{2,4})\b/gi;
-const GROS_ACCT_TRAIL = /\b([a-z]{1,3}\d{2,4})\b[ \t]*[:=@\-–]?[ \t]*£?[ \t]*(\d+(?:\.\d+)?)(?![\d.])(?!\s*(?:bb|nb|next|fair)\b)/gi;
-const GROS_ACCT_BARE = /\b([a-z]{1,3}\d{2,4})\b/gi;
+// Every ledger account code is one letter + three digits (C104) — keeping to that shape stops a
+// bookie name like "Bet365" in pasted text from reading as an account.
+const GROS_ACCT_LEAD = /£\s*(\d+(?:\.\d+)?)\s*(?:on\s+)?\b([a-z]\d{3})\b/gi;
+const GROS_ACCT_TRAIL = /\b([a-z]\d{3})\b[ \t]*[:=@\-–]?[ \t]*£?[ \t]*(\d+(?:\.\d+)?)(?![\d.])(?!\s*(?:bb|nb|next|fair)\b)/gi;
+const GROS_ACCT_BARE = /\b([a-z]\d{3})\b/gi;
 function parseGrosvenorAccountText(text) {
   const found = [];
   const pull = (s, re, codeIdx, stakeIdx) => s.replace(re, (...m) => {

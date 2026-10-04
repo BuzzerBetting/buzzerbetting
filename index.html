@@ -16635,8 +16635,19 @@ function renderBaOutliers(){
     <td class="r"><span class="badge" style="background:var(--amber-bg);color:var(--amber)">+${r.pctAboveNext != null ? Number(r.pctAboveNext).toFixed(0) : '—'}%</span></td>
     <td class="r tn" style="color:var(--text2)">${r.bookCount ?? '—'}</td>
     ${pl.watchTd}
-    <td style="font-size:11.5px;color:var(--text3);white-space:nowrap">${betLinkBtn(r.url, r.topBook)}${fmtDetected(r.detectedAt)}${pl.btn('outliers', idx)}</td>
+    <td style="font-size:11.5px;color:var(--text3);white-space:nowrap">${betLinkBtn(r.url, r.topBook)}<button onclick="copyBaOutlierBet(${idx},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1;margin-right:6px"><i class="ti ti-copy"></i></button>${fmtDetected(r.detectedAt)}${pl.btn('outliers', idx)}</td>
   </tr>`; }).join('');
+}
+// Outliers have no fair/EV, so the shared 8-line format carries the next-best price in the
+// Fair Odds line and "% above next best" in the EV line, same stand-in the placed ticks use.
+function copyBaOutlierBet(idx, btn){
+  const r = BA_OUTLIERS_RENDERED[idx];
+  if (!r) return;
+  const odds = r.topPrice != null ? Number(r.topPrice).toFixed(2) : '—';
+  const next = r.nextPrice != null ? `${Number(r.nextPrice).toFixed(2)} (next best)` : '—';
+  const pct = r.pctAboveNext != null ? `+${Number(r.pctAboveNext).toFixed(0)}% above next best` : '—';
+  const text = baCopyBetText(r.kickoff ?? '', r.match ?? '', r.market ?? '', r.selection ?? '', odds, next, pct, ocBookieName(r.topBook) || r.topBook || '');
+  baCopyBet(text, btn);
 }
 
 // ---- Grosvenor (2026-09-30) ----
