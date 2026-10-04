@@ -1704,6 +1704,20 @@ router.post('/bets/:id/add-account', (req, res) => {
     const stakeKey = Object.keys(parsed).find(k => k.toLowerCase().replace(/[^a-z]/g, '') === 'stake' || k.toLowerCase().replace(/[^a-z]/g, '') === 'totalstake');
     if (stakeKey) parsed[stakeKey] = newTotalStake;
 
+    // EV grows with the new leg. With a fair figure, add the new leg's own EV at its own odds
+    // (same formulas as PATCH /field); otherwise (each-way, EV %-based types) scale by stake,
+    // which is exact whenever the new leg is at the bet's existing odds.
+    const evKey = ('EV £' in parsed) ? 'EV £' : ('EV' in parsed ? 'EV' : null);
+    if (evKey && typeof parsed[evKey] === 'number') {
+      const fairVal = typeof parsed.Fairs === 'number' ? parsed.Fairs : (typeof parsed['Fair Odds'] === 'number' ? parsed['Fair Odds'] : null);
+      if (fairVal > 0 && parsed['Each-Way'] !== true) {
+        const legEv = parsed['Bet Type'] === 'Free Bet' ? stake * (odds - 1) / fairVal : stake * (odds / fairVal - 1);
+        parsed[evKey] = +(parsed[evKey] + legEv).toFixed(2);
+      } else if (existingStake > 0) {
+        parsed[evKey] = +(parsed[evKey] * newTotalStake / existingStake).toFixed(2);
+      }
+    }
+
     const firstLegBookie = legs.length ? legs[0].account_bookie : newAccount.bookie;
     if (newAccount.bookie !== firstLegBookie) {
       const newLegCount = legs.length + 1;
