@@ -198,10 +198,10 @@ function calcStats(shots, matchesPlayed) {
 
   return {
     matches, goals, shots: totalShots, sot, xG: r(totalXG),
-    headers, headedSot, headedGoals, headedXG: r(headedXG),
-    leftFoot, leftFootSot, leftFootGoals, leftFootXG: r(leftFootXG),
-    rightFoot, rightFootSot, rightFootGoals, rightFootXG: r(rightFootXG),
-    otbShots, otbSot, otbGoals, otbXG: r(otbXG),
+    headers, headedSot, headedGoals, headedXG: r(headedXG), headedTopXG: top2(s.filter(isHdr)),
+    leftFoot, leftFootSot, leftFootGoals, leftFootXG: r(leftFootXG), leftFootTopXG: top2(s.filter(isLF)),
+    rightFoot, rightFootSot, rightFootGoals, rightFootXG: r(rightFootXG), rightFootTopXG: top2(s.filter(isRF)),
+    otbShots, otbSot, otbGoals, otbXG: r(otbXG), otbTopXG: top2(s.filter(isOTB)),
     penaltyShots, penaltyGoals, penaltySot, penaltyXG: r(penaltyXG),
     freeKickShots, freeKickGoals, freeKickSot, freeKickXG: r(freeKickXG),
     insideBox, outsideBox,
@@ -212,4 +212,7 @@ function calcStats(shots, matchesPlayed) {
 }
 
 function sum(shots) { return shots.reduce((t, s) => t + (s.expectedGoals || 0), 0); }
+// The two biggest single-shot xG values, largest first: gsm_fair.py's spike gate checks whether a
+// method's xG rests on one or two big chances.
+function top2(shots) { return shots.map(s => s.expectedGoals || 0).sort((a, b) => b - a).slice(0, 2).map(r); }
 function r(n) { return Math.round((n + 1e-9) * 100) / 100; }
