@@ -16638,18 +16638,28 @@ function renderBaOutliersSubtabs(){
 // Market tickboxes (2026-09-17, user-requested) — matches oc_outliers_scan.py's own
 // MARKET_LABELS values exactly. Persisted so the filter sticks across visits; defaults to
 // every market on (opt-out, not opt-in — a market added here later shows up by default).
-const OUTLIERS_ALL_MARKETS = ['AGS', 'First scorer', 'Cards', 'SOT', 'Assist', 'Header', 'OTB'];
+const OUTLIERS_ALL_MARKETS = ['AGS', 'First scorer', 'Cards', 'SOT', 'Assist', 'Header', 'OTB', 'Shots 1+', 'Shots 2+', 'Shots 3+'];
+// Markets that existed before 'bb_outliers_markets_seen' was tracked — a saved selection from
+// back then only speaks for these, so anything newer still defaults to on.
+const OUTLIERS_ORIGINAL_MARKETS = ['AGS', 'First scorer', 'Cards', 'SOT', 'Assist', 'Header', 'OTB'];
 function getOutliersMarketFilter(){
   try {
     const raw = localStorage.getItem('bb_outliers_markets');
     if (!raw) return new Set(OUTLIERS_ALL_MARKETS);
-    return new Set(JSON.parse(raw));
+    const sel = new Set(JSON.parse(raw));
+    const seenRaw = localStorage.getItem('bb_outliers_markets_seen');
+    const seen = new Set(seenRaw ? JSON.parse(seenRaw) : OUTLIERS_ORIGINAL_MARKETS);
+    OUTLIERS_ALL_MARKETS.forEach(m => { if (!seen.has(m)) sel.add(m); });
+    return sel;
   } catch(e) { return new Set(OUTLIERS_ALL_MARKETS); }
 }
 function toggleOutliersMarket(mkt, checked){
   const cur = getOutliersMarketFilter();
   if (checked) cur.add(mkt); else cur.delete(mkt);
-  try { localStorage.setItem('bb_outliers_markets', JSON.stringify([...cur])); } catch(e) {}
+  try {
+    localStorage.setItem('bb_outliers_markets', JSON.stringify([...cur]));
+    localStorage.setItem('bb_outliers_markets_seen', JSON.stringify(OUTLIERS_ALL_MARKETS));
+  } catch(e) {}
   renderBaOutliers();
 }
 function renderBaOutliersMarketCheckboxes(){
