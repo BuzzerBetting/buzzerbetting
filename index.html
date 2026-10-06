@@ -2492,6 +2492,7 @@ tr.ba-placed > td{background:var(--green-bg) !important}
         </div>
       </div>
       <button onclick="baToggleStats()" id="ba-stats-btn" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-chart-bar"></i> Bet post stats</button>
+      <button onclick="baExportCsv()" id="ba-export-btn" title="Download every bet currently showing on this tab as a CSV" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-file-download"></i> Export CSV</button>
       <button onclick="baRefreshActive(this)" id="ba-refresh-btn" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
     </div>
   </div>
@@ -15942,6 +15943,70 @@ function baUpdateMenuTag(){
   const value = BA_EDGES.reduce((s, e) => s + (NOT_VALUE.has(e.key) ? 0 : (BA_COUNTS[e.key] || 0)), 0);
   el.textContent = (value || corners) ? `${value} value · ${corners} corner` : '—';
 }
+// ---- CSV export of the active tab ----
+// Reads the rows actually rendered on screen (so the bookmaker filter, sort and any per-tab
+// filters are already applied). Headerless action columns are dropped; placeholder rows
+// ("No 5%+ value bets right now…", colspan) are skipped. Corners isn't a table — exported from
+// its cache as one row per predicted corner taker / header target.
+function baCsvCellText(td){
+  const sel = td.querySelector('select');
+  if (sel && !td.innerText.replace(sel.innerText, '').trim()) return sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '';
+  const inp = td.querySelector('input[type="text"],input[type="number"],input:not([type])');
+  if (inp && !td.innerText.trim()) return inp.value;
+  const cb = td.querySelector('input[type="checkbox"]');
+  if (cb && !td.innerText.trim()) return cb.checked ? 'Yes' : '';
+  const txt = (td.innerText || '').replace(/\s+/g, ' ').trim();
+  if (!txt && td.querySelector('.ti-circle-check,.ti-check')) return 'Yes';
+  return txt;
+}
+function baCsvFromTables(panel){
+  const out = [];
+  const tables = [...panel.querySelectorAll('table')].filter(t => t.offsetParent !== null);
+  tables.forEach(t => {
+    const hdrRow = t.tHead && t.tHead.rows[t.tHead.rows.length - 1];
+    if (!hdrRow) return;
+    const ths = [...hdrRow.cells];
+    const keep = ths.map((th, i) => ({ i, name: (th.innerText || '').replace(/\s+/g, ' ').trim(), shown: th.offsetParent !== null && getComputedStyle(th).display !== 'none' }))
+      .filter(c => c.name && c.shown);
+    if (!keep.length) return;
+    const rows = [];
+    [...t.tBodies].forEach(tb => [...tb.rows].forEach(tr => {
+      if (tr.offsetParent === null || tr.cells.length !== ths.length) return;
+      rows.push(keep.map(c => baCsvCellText(tr.cells[c.i])));
+    }));
+    if (!rows.length) return;
+    if (out.length) out.push([]);
+    out.push(keep.map(c => c.name), ...rows);
+  });
+  return out;
+}
+function baCsvCorners(){
+  const { confirmed, meta } = BA_CORNERS_CACHE || {};
+  const rows = [['Kickoff', 'League', 'Match', 'Team', 'Market', 'Player', 'Pct / Fair', 'Side', 'Note']];
+  (confirmed || []).forEach(m => {
+    const mt = meta[String(m.matchId)] || {};
+    const name = `${(m.home && m.home.teamName) || 'Home'} v ${(m.away && m.away.teamName) || 'Away'}`;
+    const ko = mt.ko ? fmtKickoff(mt.ko) : '';
+    [m.home, m.away].forEach(s => {
+      if (!s) return;
+      (s.cornerTakers || []).forEach(c => rows.push([ko, mt.leagueName || '', name, s.teamName || '', 'Corner taker', c.name, c.pct != null ? c.pct + '%' : '', c.side || '', c.note || '']));
+      (s.cornerThreatTargets || []).forEach(t => rows.push([ko, mt.leagueName || '', name, s.teamName || '', 'Header target', t.name, t.odds != null ? Number(t.odds).toFixed(2) : '', '', t.cornerHeaderGoals > 0 ? `${t.cornerHeaderGoals} corner header goals` : '']));
+    });
+  });
+  return rows.length > 1 ? rows : [];
+}
+function baExportCsv(){
+  const edge = baEdge(BA_ACTIVE);
+  if (!edge) return;
+  const panel = document.getElementById(edge.panel);
+  const rows = edge.key === 'corners' ? baCsvCorners() : (panel ? baCsvFromTables(panel) : []);
+  if (!rows.length) { showToast(`Nothing showing on ${edge.label} to export`, { color: 'var(--amber)', bg: 'var(--amber-bg, var(--surface2))' }); return; }
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  const stamp = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
+  const slug = edge.label.toLowerCase().replace(/\+/g, 'plus').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  downloadCsv(`bet-alerts_${slug}_${stamp}.csv`, rows);
+}
+
 function baTab(key){ activateBaTab(key); }
 function activateBaTab(key){
   if (!baEdge(key)) key = 'oc-ev';
