@@ -15966,7 +15966,7 @@ function baCsvFromTables(panel){
     const hdrRow = t.tHead && t.tHead.rows[t.tHead.rows.length - 1];
     if (!hdrRow) return;
     const ths = [...hdrRow.cells];
-    const keep = ths.map((th, i) => ({ i, name: (th.innerText || '').replace(/\s+/g, ' ').trim(), shown: th.offsetParent !== null && getComputedStyle(th).display !== 'none' }))
+    const keep = ths.map((th, i) => ({ i, name: (th.textContent || '').replace(/\s+/g, ' ').trim(), shown: th.offsetParent !== null && getComputedStyle(th).display !== 'none' }))
       .filter(c => c.name && c.shown);
     if (!keep.length) return;
     const rows = [];
