@@ -3166,6 +3166,15 @@ router.get('/normal-ev-bets/list', (req, res) => {
   catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// GET /api/ledger/normal-ev-bets/settled?field=market|bookie&value=AGS&hours=24&all=1 — click-through
+// from a Normal +EV bet-results stats row: that row's bets settled in the window (winners unless all=1).
+router.get('/normal-ev-bets/settled', (req, res) => {
+  if (!normalEvLog) return res.json({ ok: true, rows: [] });
+  const hours = Math.min(Math.max(parseInt(req.query.hours, 10) || 24, 1), 720);
+  try { res.json({ ok: true, rows: normalEvLog.getSettled(req.query.field, req.query.value, hours, req.query.all === '1') }); }
+  catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 // POST /api/ledger/normal-ev-bets/settle — body: { key, result: 'won'|'lost'|'void'|null }
 // Manual result for a bet the log can't grade itself (or a correction). null clears it.
 router.post('/normal-ev-bets/settle', (req, res) => {

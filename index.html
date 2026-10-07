@@ -16801,6 +16801,57 @@ async function settleNev(idx, result){
   } catch(e) { alert('Network error saving.'); return; }
   loadNevStats();
 }
+// Click a "By market" / "By bookmaker" row -> that row's bets settled in the last 24h (2026-10-07,
+// same as Calculated +EV / Grosvenor — reuses their winners modal). Opens on winners; "All settled"
+// adds the losers and voids for the full record.
+let NEV_SETTLED_ALL = false;
+async function showNevSettled(field, idx, all){
+  const list = field === 'bookie' ? (NEV_LAST && NEV_LAST.byBookie) : (NEV_LAST && NEV_LAST.byMarket);
+  const row = list && list[idx];
+  if (!row) return;
+  if (all != null) NEV_SETTLED_ALL = all;
+  const overlay = document.getElementById('calc-ev-winners-modal-overlay');
+  const title = document.getElementById('calc-ev-winners-title');
+  const body = document.getElementById('calc-ev-winners-body');
+  const label = row.key || '—';
+  if (title) title.textContent = `Normal +EV ${label} — ${NEV_SETTLED_ALL ? 'all settled bets' : 'winners'}, last 24h`;
+  if (body) body.innerHTML = `<div style="text-align:center;color:var(--text3);padding:16px"><i class="ti ti-loader"></i> Loading…</div>`;
+  if (overlay) overlay.style.display = 'flex';
+  let d;
+  try { d = await ledgerApi(`normal-ev-bets/settled?field=${field}&value=${encodeURIComponent(row.key == null ? '' : row.key)}&hours=24&all=${NEV_SETTLED_ALL ? 1 : 0}`); } catch (e) { d = null; }
+  if (!body) return;
+  if (!d || !d.ok) { body.innerHTML = `<div style="color:var(--text3);font-size:13px">Failed to load bets.</div>`; return; }
+  const rows = d.rows || [];
+  const toggle = ['Winners', 'All settled'].map((l, i) => {
+    const on = NEV_SETTLED_ALL === !!i;
+    return `<button onclick="showNevSettled('${field}', ${idx}, ${!!i})" style="padding:5px 12px;border:.5px solid var(--border);border-radius:var(--radius);background:${on ? 'var(--brand)' : 'var(--surface)'};color:${on ? '#fff' : 'var(--text2)'};font-size:12px;cursor:pointer;font-family:inherit">${l}</button>`;
+  }).join(' ');
+  const plFmt = n => (n >= 0 ? '+£' : '-£') + Math.abs(n).toFixed(2);
+  const fmtTime = iso => { try { return new Date(iso + (String(iso).endsWith('Z') ? '' : 'Z')).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (e) { return iso || '—'; } };
+  const total = rows.reduce((t, r) => t + (r.result === 'won' ? 50 * (r.odds - 1) : r.result === 'lost' ? -50 : 0), 0);
+  const rowsHtml = rows.map(r => {
+    const pl = r.result === 'won' ? 50 * (r.odds - 1) : r.result === 'lost' ? -50 : 0;
+    const badge = r.result === 'won' ? '<span class="badge" style="background:var(--green-bg);color:var(--green)">Won</span>'
+      : r.result === 'lost' ? '<span class="badge" style="background:var(--red-bg);color:var(--red)">Lost</span>'
+      : '<span class="badge" style="color:var(--text3)">Void</span>';
+    return `<tr>
+      <td style="font-size:11.5px;white-space:nowrap">${fmtTime(r.settledAt)}</td>
+      <td style="font-size:12.5px">${escapeHtml(r.match || '')}<div style="font-size:11px;color:var(--text3)">${escapeHtml(field === 'bookie' ? (r.market || '') : (r.bookie || ''))}</div></td>
+      <td style="font-size:12.5px;font-weight:500">${escapeHtml(r.selection || '')}${r.settledBy && r.settledBy !== 'auto' ? `<div style="font-size:11px;color:var(--text3)">settled by ${escapeHtml(r.settledBy)}</div>` : ''}</td>
+      <td class="r tn" style="font-weight:600">${r.odds != null ? Number(r.odds).toFixed(2) : '—'}</td>
+      <td class="r tn" style="color:var(--text2)">${r.fair != null ? Number(r.fair).toFixed(2) : '—'}</td>
+      <td>${badge}</td>
+      <td class="r tn" style="color:${pl >= 0 ? 'var(--green)' : 'var(--red)'}">${plFmt(pl)}</td>
+    </tr>`;
+  }).join('');
+  body.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <div style="font-size:11px;color:var(--text3)">${rows.length} bet${rows.length === 1 ? '' : 's'}${NEV_SETTLED_ALL ? ` · net <span style="color:${total >= 0 ? 'var(--green)' : 'var(--red)'}">${plFmt(total)}</span>` : ''} · £50 flat stake</div>
+      <div>${toggle}</div>
+    </div>
+    ${rows.length ? `<div style="overflow-x:auto"><table class="dt" style="min-width:620px"><thead><tr><th>Settled</th><th>Match</th><th>Selection</th><th class="r">Odds</th><th class="r">Fair</th><th>Result</th><th class="r">P/L</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>`
+      : `<div style="color:var(--text3);font-size:13px;padding:8px 0">${NEV_SETTLED_ALL ? 'No bets' : 'No winners'} settled in the last 24 hours.</div>`}`;
+}
 function renderNevStats(){
   const d = NEV_LAST || {}, o = d.overall || {};
   const panel = document.getElementById('nev-stats-panel');
@@ -16812,10 +16863,10 @@ function renderNevStats(){
   const tile = (label, value, color) => `<div class="card" style="padding:10px 12px"><div style="font-size:10.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">${label}</div><div style="font-size:18px;font-weight:700${color ? ';color:' + color : ''}">${value}</div></div>`;
   const btn = (active, onclick, label) => `<button onclick="${onclick}" style="padding:6px 14px;border:.5px solid var(--border);border-radius:var(--radius);background:${active ? 'var(--brand)' : 'var(--surface)'};color:${active ? '#fff' : 'var(--text2)'};font-weight:${active ? '600' : '400'};font-size:12.5px;cursor:pointer;font-family:inherit">${label}</button>`;
   const rangeTabs = [['overall', 'Overall'], ['yesterday', 'Yesterday'], ['today', 'Today']].map(([k, l]) => btn(NEV_RANGE === k, `setNevRange('${k}')`, l)).join('');
-  const table = (title, head, list) => `
+  const table = (title, head, list, field) => `
     <div style="font-size:12.5px;font-weight:600;margin:4px 0 6px">${title}</div>
     <div style="overflow-x:auto;margin-bottom:14px"><table class="dt" style="min-width:720px"><thead><tr><th>${head}</th><th class="r">Bets</th><th class="r">Settled</th><th class="r">Won</th><th class="r">Win%</th><th class="r">Avg odds</th><th class="r">Avg EV</th><th class="r">Expected</th><th class="r">P/L</th><th class="r">ROI</th><th class="r">Need result</th></tr></thead><tbody>${
-      (list || []).length ? list.map(m => `<tr>
+      (list || []).length ? list.map((m, i) => `<tr onclick="showNevSettled('${field}', ${i})" style="cursor:pointer" title="Click to see this row's bets settled in the last 24 hours">
         <td style="font-size:12.5px">${escapeHtml(m.key || '—')}</td>
         <td class="r tn">${m.bets}</td><td class="r tn">${m.settled}</td><td class="r tn">${m.wins}</td>
         <td class="r tn">${pctFmt(m.winPct)}</td>
@@ -16868,8 +16919,8 @@ function renderNevStats(){
         ${tile('Expected (EV)', plFmt(o.evGbp))}
         ${tile('Needs result', o.needsManual || 0, (o.needsManual || 0) ? 'var(--amber)' : '')}
       </div>
-      ${table('By market', 'Market', d.byMarket)}
-      ${table('By bookmaker', 'Bookmaker', d.byBookie)}
+      ${table('By market', 'Market', d.byMarket, 'market')}
+      ${table('By bookmaker', 'Bookmaker', d.byBookie, 'bookie')}
       <div style="display:flex;gap:6px;margin:4px 0 8px;flex-wrap:wrap;align-items:center"><span style="font-size:12.5px;font-weight:600;margin-right:6px">Bets</span>${listTabs}</div>
       <div style="overflow-x:auto;max-height:520px;overflow-y:auto"><table class="dt" style="min-width:980px"><thead><tr><th>Date</th><th>Match</th><th>Market</th><th>Selection</th><th>Bookie</th><th class="r">Odds</th><th class="r">Fair</th><th class="r">EV</th><th>Result</th><th class="r">P/L</th><th></th></tr></thead><tbody>${
         listRows || '<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:14px">Nothing here</td></tr>'
