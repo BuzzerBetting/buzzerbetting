@@ -121,6 +121,7 @@ router.use((req, res, next) => {
 //   - /calc-ev-bets: Calculated +EV bet log/settlement/stats — same Calculations feature as
 //     match-predictions, no financial/ledger data.
 //   - /grosvenor-bets: the Grosvenor tab's bet log/stats (Bet Alerts) — no ledger data.
+//   - /normal-ev-bets: the Normal +EV tab's paper bet log/stats (Bet Alerts) — no ledger data.
 //   - /strategy-prefs: per-user Freeze-builder UI settings, no financial data — every role.
 //   - /freeze-eligible-list: the VA-pasted Acca Freeze coupon (Freeze Builder), no financial data.
 //   - /bet-alert-books, /bet-alert-seen, /bet-alert-stats, /bet-alert-placed, /ones-to-watch: the Bet Alerts
@@ -142,6 +143,7 @@ router.use((req, res, next) => {
       && !req.path.startsWith('/pen-taker')
       && !req.path.startsWith('/calc-ev-bets')
       && !req.path.startsWith('/grosvenor-bets')
+      && !req.path.startsWith('/normal-ev-bets')
       && !req.path.startsWith('/strategy-prefs')
       && !req.path.startsWith('/freeze-eligible-list')
       && !req.path.startsWith('/bet-alert-books')
@@ -3138,6 +3140,43 @@ router.get('/calc-ev-bets/winners', (req, res) => {
   try {
     res.json({ ok: true, rows: calcEvLog.getWinners(market, hours) });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// ================== NORMAL +EV BET LOG (2026-10-07) ==================
+// Every bet the Bet Alerts "Normal +EV" tab posts, logged server-side at first sight and settled
+// at a flat £50 (paper P/L — the placed ledgers stay staff-settled). See corner-model/normalEvLog.js;
+// its own 60s timer does the logging + auto-settling, these routes only read and hand-settle.
+const normalEvLog = (() => {
+  try { const m = require('./corner-model/normalEvLog'); m.start(); return m; }
+  catch (e) { console.error('[normal-ev-bets] normalEvLog not loaded:', e.message); return null; }
+})();
+const nevRange = q => (['today', 'yesterday'].includes(q) ? q : 'overall');
+
+// GET /api/ledger/normal-ev-bets/stats?range=overall|today|yesterday
+router.get('/normal-ev-bets/stats', (req, res) => {
+  if (!normalEvLog) return res.json({ ok: true, overall: {}, byMarket: [], byBookie: [] });
+  try { res.json({ ok: true, ...normalEvLog.getStats(nevRange(req.query.range)) }); }
+  catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// GET /api/ledger/normal-ev-bets/list?status=manual|open|settled|all&range=...
+router.get('/normal-ev-bets/list', (req, res) => {
+  if (!normalEvLog) return res.json({ ok: true, rows: [] });
+  try { res.json({ ok: true, rows: normalEvLog.listBets(req.query.status, nevRange(req.query.range), req.query.limit) }); }
+  catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/normal-ev-bets/settle — body: { key, result: 'won'|'lost'|'void'|null }
+// Manual result for a bet the log can't grade itself (or a correction). null clears it.
+router.post('/normal-ev-bets/settle', (req, res) => {
+  if (!normalEvLog) return res.json({ ok: false, error: 'Normal +EV bet log not loaded' });
+  if (req.userRole === 'freeze') return res.status(403).json({ ok: false, error: 'No access.' });
+  try {
+    const { key, result } = req.body || {};
+    if (!key) return res.status(400).json({ ok: false, error: 'key required' });
+    const changed = normalEvLog.settleManual(String(key), result == null ? null : String(result), req.username);
+    res.json({ ok: true, changed });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
 });
 
 // ================== GROSVENOR BET LOG (2026-10-01) ==================

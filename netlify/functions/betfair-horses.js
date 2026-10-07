@@ -234,3 +234,8 @@ exports.handler = async (event) => {
     };
   }
 };
+
+// Reused server-side by corner-model/normalEvLog.js (2026-10-07) to resolve and settle the
+// Normal +EV horse bets it logs — same cached session as this endpoint.
+exports.bfCall = bfCall;
+exports.getCachedSessionToken = getCachedSessionToken;

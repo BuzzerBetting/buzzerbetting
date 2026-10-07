@@ -2517,12 +2517,16 @@ tr.ba-placed > td{background:var(--green-bg) !important}
         <button onclick="setBaSort('oc-ev','ev')" data-sort="ev" style="background:none;border:none;padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Best EV%</button>
         <button onclick="setBaSort('oc-ev','time')" data-sort="time" style="background:none;border:none;border-left:0.5px solid var(--border);padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Start time</button>
       </div>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;font-size:12.5px;color:var(--text2)">
+        <input type="checkbox" id="nev-stats-toggle" onchange="setNevStatsToggle(this.checked)"> Bet results
+      </label>
     </div>
     <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--text3);margin-bottom:10px">
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block"></span>BFex fair — high confidence (£500+ matched, tight spread)</span>
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--amber);display:inline-block"></span>Usable but thinner BFEX data</span>
     </div>
     <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Time</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Fair odds</th><th class="r">Last traded</th><th class="r">Total traded</th><th class="r">Bookie</th><th class="r">Odds</th><th class="r">EV%</th><th class="ba-watch-col">Placed?</th><th></th></tr></thead><tbody id="scanner-body"></tbody></table></div></div>
+    <div id="nev-stats-panel" style="display:none;margin-top:14px"></div>
     <div class="note"><i class="ti ti-info-circle"></i> Auto-refreshes every 60s. Scanning starts once a match's lineup is confirmed and runs every 10 minutes until kickoff, tightening to every 3 minutes in the last 15 minutes before kickoff — First Goalscorer, Anytime Goalscorer, Player Shown a Card and Player Shots on Target markets, sorted by EV%. These all compare Oddschecker directly against the matching BFEX market. Header and Outside-the-Box goal need their own fair-odds calculation instead (no direct BFEX market for either) — see the <a href="javascript:void(0)" onclick="baTab('calc-ev')">Calculated +EV</a> tab.</div>
   </div>
 
@@ -9695,6 +9699,7 @@ async function loadOddscheckerEV(){
     if(refEl)refEl.textContent=d.updated?`updated ${new Date(d.updated).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`:(d.ok?'no scan yet':'could not reach scanner');
     if(tagEl)tagEl.textContent=`${ocEvBets.length} bet${ocEvBets.length===1?'':'s'} today`;
     renderOddscheckerEV();
+    if(BA_ACTIVE==='oc-ev')syncNevStatsToggle();
     return d.updated||null;
   }catch(e){
     const countEl=document.getElementById('oc-ev-smeta-count');
@@ -16752,6 +16757,126 @@ async function loadBaGrosvenor(){
 // Grosvenor price and graded twice (corner-model/grosvenorBetLog.js): strict (the posted player
 // only) and with Grosvenor's super sub promotion (posted player + his replacement, counts
 // combined). Same toggle/range pattern as Calculated +EV's bet stats.
+// ---- Normal +EV bet results (2026-10-07, user-requested) ----
+// Paper P/L of every bet this tab has posted, £50 flat, logged + settled server-side
+// (corner-model/normalEvLog.js). Football props settle off FotMob, horses off Betfair; the rest
+// (accas, combo boosts, darts) wait for a Won / Lost / Void click in the list below the stats.
+let NEV_RANGE = 'overall', NEV_LIST = 'manual', NEV_LAST = null, NEV_ROWS = [];
+try { NEV_RANGE = localStorage.getItem('bb_nev_range') || 'overall'; NEV_LIST = localStorage.getItem('bb_nev_list') || 'manual'; } catch(e) {}
+function nevStatsOn(){ try { return localStorage.getItem('bb_nev_stats') === '1'; } catch(e) { return false; } }
+function setNevStatsToggle(on){
+  try { localStorage.setItem('bb_nev_stats', on ? '1' : '0'); } catch(e) {}
+  syncNevStatsToggle();
+}
+function syncNevStatsToggle(){
+  const on = nevStatsOn();
+  const cb = document.getElementById('nev-stats-toggle');
+  if (cb) cb.checked = on;
+  const panel = document.getElementById('nev-stats-panel');
+  if (panel) panel.style.display = on ? '' : 'none';
+  if (on) loadNevStats();
+}
+function setNevRange(r){ NEV_RANGE = r; try { localStorage.setItem('bb_nev_range', r); } catch(e) {} loadNevStats(); }
+function setNevList(v){ NEV_LIST = v; try { localStorage.setItem('bb_nev_list', v); } catch(e) {} loadNevStats(); }
+async function loadNevStats(){
+  const panel = document.getElementById('nev-stats-panel');
+  if (!panel) return;
+  if (!panel.innerHTML) panel.innerHTML = `<div class="card" style="padding:20px;text-align:center;color:var(--text3);font-size:13px"><i class="ti ti-loader"></i> Loading bet results…</div>`;
+  try {
+    const [d, l] = await Promise.all([
+      ledgerApi(`normal-ev-bets/stats?range=${NEV_RANGE}`),
+      ledgerApi(`normal-ev-bets/list?status=${NEV_LIST}&range=${NEV_RANGE}`),
+    ]);
+    if (!d || !d.ok) { panel.innerHTML = `<div class="card" style="padding:16px;color:var(--text3);font-size:13px">Bet results not available.</div>`; return; }
+    NEV_LAST = d; NEV_ROWS = (l && l.ok && l.rows) || [];
+    renderNevStats();
+  } catch (e) { panel.innerHTML = `<div class="card" style="padding:16px;color:var(--text3);font-size:13px">Failed to load bet results.</div>`; }
+}
+async function settleNev(idx, result){
+  const r = NEV_ROWS[idx];
+  if (!r) return;
+  try {
+    const d = await ledgerApi('normal-ev-bets/settle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: r.key, result }) });
+    if (!d || !d.ok) { alert((d && d.error) || 'Could not save.'); return; }
+  } catch(e) { alert('Network error saving.'); return; }
+  loadNevStats();
+}
+function renderNevStats(){
+  const d = NEV_LAST || {}, o = d.overall || {};
+  const panel = document.getElementById('nev-stats-panel');
+  if (!panel) return;
+  const pctFmt = n => n == null ? '—' : Number(n).toFixed(1) + '%';
+  const plFmt = n => ((n || 0) >= 0 ? '+£' : '-£') + Math.abs(n || 0).toFixed(2);
+  const plCol = n => (n || 0) >= 0 ? 'var(--green)' : 'var(--red)';
+  const roiFmt = n => n == null ? '—' : (n >= 0 ? '+' : '') + Number(n).toFixed(1) + '%';
+  const tile = (label, value, color) => `<div class="card" style="padding:10px 12px"><div style="font-size:10.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">${label}</div><div style="font-size:18px;font-weight:700${color ? ';color:' + color : ''}">${value}</div></div>`;
+  const btn = (active, onclick, label) => `<button onclick="${onclick}" style="padding:6px 14px;border:.5px solid var(--border);border-radius:var(--radius);background:${active ? 'var(--brand)' : 'var(--surface)'};color:${active ? '#fff' : 'var(--text2)'};font-weight:${active ? '600' : '400'};font-size:12.5px;cursor:pointer;font-family:inherit">${label}</button>`;
+  const rangeTabs = [['overall', 'Overall'], ['yesterday', 'Yesterday'], ['today', 'Today']].map(([k, l]) => btn(NEV_RANGE === k, `setNevRange('${k}')`, l)).join('');
+  const table = (title, head, list) => `
+    <div style="font-size:12.5px;font-weight:600;margin:4px 0 6px">${title}</div>
+    <div style="overflow-x:auto;margin-bottom:14px"><table class="dt" style="min-width:720px"><thead><tr><th>${head}</th><th class="r">Bets</th><th class="r">Settled</th><th class="r">Won</th><th class="r">Win%</th><th class="r">Avg odds</th><th class="r">Avg EV</th><th class="r">Expected</th><th class="r">P/L</th><th class="r">ROI</th><th class="r">Need result</th></tr></thead><tbody>${
+      (list || []).length ? list.map(m => `<tr>
+        <td style="font-size:12.5px">${escapeHtml(m.key || '—')}</td>
+        <td class="r tn">${m.bets}</td><td class="r tn">${m.settled}</td><td class="r tn">${m.wins}</td>
+        <td class="r tn">${pctFmt(m.winPct)}</td>
+        <td class="r tn">${m.avgOdds != null ? Number(m.avgOdds).toFixed(2) : '—'}</td>
+        <td class="r tn">${pctFmt(m.avgEv)}</td>
+        <td class="r tn" style="color:var(--text2)">${plFmt(m.evGbp)}</td>
+        <td class="r tn" style="color:${plCol(m.pl)}">${plFmt(m.pl)}</td>
+        <td class="r tn" style="color:${plCol(m.pl)}">${roiFmt(m.roi)}</td>
+        <td class="r tn" style="color:${m.needsManual ? 'var(--amber)' : 'var(--text3)'}">${m.needsManual || 0}</td></tr>`).join('')
+      : '<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:14px">No bets logged yet</td></tr>'
+    }</tbody></table></div>`;
+  const resBadge = r => {
+    if (r.result === 'won') return '<span class="badge" style="background:var(--green-bg);color:var(--green)">Won</span>';
+    if (r.result === 'lost') return '<span class="badge" style="background:var(--red-bg);color:var(--red)">Lost</span>';
+    if (r.result === 'void') return '<span class="badge" style="color:var(--text3)">Void</span>';
+    return r.method === 'manual' ? '<span class="badge" style="background:var(--amber-bg);color:var(--amber)">Needs result</span>'
+      : `<span class="badge" style="color:var(--text3)" title="Settles automatically">Pending · ${r.method === 'fotmob' ? 'FotMob' : 'Betfair'}</span>`;
+  };
+  const sBtn = (i, res, label, cur) => `<button onclick="settleNev(${i}, ${res ? `'${res}'` : 'null'})" title="${res ? 'Mark ' + label : 'Clear result'}" style="background:${cur ? 'var(--brand)' : 'none'};color:${cur ? '#fff' : 'var(--text2)'};border:.5px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer;font-size:11px;font-family:inherit">${label}</button>`;
+  const listRows = NEV_ROWS.map((r, i) => {
+    const pl = r.result === 'won' ? 50 * (r.odds - 1) : r.result === 'lost' ? -50 : (r.result === 'void' ? 0 : null);
+    return `<tr>
+      <td style="font-size:11.5px;white-space:nowrap;color:var(--text2)">${escapeHtml(r.eventDate ? r.eventDate.slice(5) : '')} ${escapeHtml(r.kickoff || '')}</td>
+      <td style="font-size:12.5px">${escapeHtml(r.match || '')}</td>
+      <td style="font-size:12px;color:var(--text2)">${escapeHtml(r.market || '')}</td>
+      <td style="font-size:12.5px;font-weight:500">${escapeHtml(r.selection || '')}${r.note ? `<div style="font-size:11px;color:var(--text3)">${escapeHtml(r.note)}</div>` : ''}</td>
+      <td style="font-size:12px;color:var(--text2)">${escapeHtml(r.bookie || '')}</td>
+      <td class="r tn" style="font-weight:600">${r.odds != null ? Number(r.odds).toFixed(2) : '—'}</td>
+      <td class="r tn" style="color:var(--text2)">${r.fair != null ? Number(r.fair).toFixed(2) : '—'}</td>
+      <td class="r tn">${r.ev != null ? '+' + Number(r.ev).toFixed(1) + '%' : '—'}</td>
+      <td>${resBadge(r)}</td>
+      <td class="r tn" style="color:${pl == null ? 'var(--text3)' : plCol(pl)}">${pl == null ? '—' : plFmt(pl)}</td>
+      <td style="white-space:nowrap">${sBtn(i, 'won', 'Won', r.result === 'won')} ${sBtn(i, 'lost', 'Lost', r.result === 'lost')} ${sBtn(i, 'void', 'Void', r.result === 'void')}${r.result ? ' ' + sBtn(i, null, '<i class="ti ti-x"></i>', false) : ''}</td>
+    </tr>`;
+  }).join('');
+  const listTabs = [['manual', `Needs result (${o.needsManual || 0})`], ['open', 'Unsettled'], ['settled', 'Settled'], ['all', 'All']].map(([k, l]) => btn(NEV_LIST === k, `setNevList('${k}')`, l)).join('');
+  panel.innerHTML = `
+    <div class="card" style="padding:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+        <strong style="font-size:14px">Normal +EV — bet results</strong>
+        <span style="font-size:11px;color:var(--text3)">Every bet posted on this tab · £50 flat stake · paper results, not the placed ledgers</span>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">${rangeTabs}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px">
+        ${tile('Bets logged', o.bets || 0)}
+        ${tile('Settled', `${o.settled || 0}${o.voids ? ` <span style="font-size:12px;font-weight:500;color:var(--text3)">+${o.voids} void</span>` : ''}`)}
+        ${tile('Won', `${o.wins || 0} <span style="font-size:12px;font-weight:500;color:var(--text3)">${pctFmt(o.winPct)}</span>`)}
+        ${tile('P/L', plFmt(o.pl), plCol(o.pl))}
+        ${tile('ROI', roiFmt(o.roi), o.roi == null ? '' : plCol(o.roi))}
+        ${tile('Expected (EV)', plFmt(o.evGbp))}
+        ${tile('Needs result', o.needsManual || 0, (o.needsManual || 0) ? 'var(--amber)' : '')}
+      </div>
+      ${table('By market', 'Market', d.byMarket)}
+      ${table('By bookmaker', 'Bookmaker', d.byBookie)}
+      <div style="display:flex;gap:6px;margin:4px 0 8px;flex-wrap:wrap;align-items:center"><span style="font-size:12.5px;font-weight:600;margin-right:6px">Bets</span>${listTabs}</div>
+      <div style="overflow-x:auto;max-height:520px;overflow-y:auto"><table class="dt" style="min-width:980px"><thead><tr><th>Date</th><th>Match</th><th>Market</th><th>Selection</th><th>Bookie</th><th class="r">Odds</th><th class="r">Fair</th><th class="r">EV</th><th>Result</th><th class="r">P/L</th><th></th></tr></thead><tbody>${
+        listRows || '<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:14px">Nothing here</td></tr>'
+      }</tbody></table></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">Logged on the server once, at the first price the tab showed (the best-EV bookmaker if several had it). AGS, First scorer, Cards, SOT and the 2+/3+ lines settle automatically from FotMob after full time (a player who never came on is a void). Horse singles and doubles settle from the Betfair result. Everything else (accas, combo boosts, darts), or anything with no automatic result after 3 days, goes to "Needs result". "Expected" is the £50 EV the price implied when it was posted. Overall/Yesterday/Today go by the day it was first posted.</div>
+    </div>`;
+}
 function gvStatsOn(){ try { return localStorage.getItem('bb_gv_stats') === '1'; } catch(e) { return false; } }
 function setGvStatsToggle(on){
   try { localStorage.setItem('bb_gv_stats', on ? '1' : '0'); } catch(e) {}
@@ -16865,6 +16990,22 @@ function renderGvStats(d){
         <td class="r tn" style="color:${plCol(m[plKey])}">${plFmt(m[plKey])}</td></tr>`).join('')
       : '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:14px">No bets logged yet</td></tr>'
     }</tbody></table></div>`;
+  // % band breakdown (2026-10-07): ROI = P/L / (settled x £50), super sub and strict side by side.
+  const roiFmt = (pl, n) => n ? ((pl >= 0 ? '+' : '') + (pl / (n * 50) * 100).toFixed(1) + '%') : '—';
+  const bandTable = (title, list) => `
+    <div style="font-size:12.5px;font-weight:600;margin:4px 0 6px">${title}</div>
+    <div style="overflow-x:auto;margin-bottom:14px"><table class="dt" style="min-width:720px"><thead><tr><th>% above</th><th class="r">Bets</th><th class="r">Settled</th><th class="r">Won (SS)</th><th class="r">Avg odds</th><th class="r">P/L (SS)</th><th class="r">ROI (SS)</th><th class="r">P/L (strict)</th><th class="r">ROI (strict)</th><th class="r" title="Bets whose next best was flagged as a possible outlier (50%+ above the 3rd best)">Outlier next</th></tr></thead><tbody>${
+      (list || []).map(b => `<tr>
+        <td style="font-size:12.5px;white-space:nowrap">${escapeHtml(b.label)}</td>
+        <td class="r tn">${b.bets}</td><td class="r tn">${b.settled}</td>
+        <td class="r tn">${b.winsSs} <span style="color:var(--text3);font-size:11px">${pctFmt(b.winPctSs)}</span></td>
+        <td class="r tn">${b.avgOdds != null ? Number(b.avgOdds).toFixed(2) : '—'}</td>
+        <td class="r tn" style="color:${plCol(b.plSs)}">${plFmt(b.plSs)}</td>
+        <td class="r tn" style="color:${plCol(b.plSs)}">${roiFmt(b.plSs, b.settled)}</td>
+        <td class="r tn" style="color:${plCol(b.plStrict)}">${plFmt(b.plStrict)}</td>
+        <td class="r tn" style="color:${plCol(b.plStrict)}">${roiFmt(b.plStrict, b.settled)}</td>
+        <td class="r tn" style="color:var(--text3)">${b.outliers || 0}</td></tr>`).join('')
+    }</tbody></table></div>`;
   const subRows = rows.filter(m => m.subbedOff).map(m => `<tr>
       <td style="font-size:12.5px">${escapeHtml(m.market)}</td>
       <td class="r tn">${m.subbedOff}</td><td class="r tn">${m.subAloneWins}</td><td class="r tn">${m.subRescues}</td></tr>`).join('');
@@ -16895,6 +17036,8 @@ function renderGvStats(d){
       </div>
       ${table('With super sub — posted player + replacement', 'winsSs', 'winPctSs', 'plSs', 'ss')}
       ${table('Strict — posted player only', 'winsStrict', 'winPctStrict', 'plStrict', 'strict')}
+      ${bandTable('By % above next best — each band on its own', d.byBand)}
+      ${bandTable('Minimum % — every bet at or above it (what taking that as your minimum would have returned)', d.byMin)}
       <div style="font-size:12.5px;font-weight:600;margin:4px 0 6px">Substitutions by market</div>
       <div style="overflow-x:auto"><table class="dt" style="min-width:480px"><thead><tr><th>Market</th><th class="r">Subbed off</th><th class="r">Sub completed it</th><th class="r">Sub won it (original didn't)</th></tr></thead><tbody>${subRows || '<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:14px">No posted players subbed off yet</td></tr>'}</tbody></table></div>
       <div style="font-size:11px;color:var(--text3);margin-top:8px">Every Lineups Confirmed Grosvenor row is logged once at the first Grosvenor price seen, then graded after full time. "Super sub": if the posted player is substituted off, his replacement counts too and their totals combine (e.g. 2+ SOT wins on 1 + 1) — in every league except any unticked under "Super sub leagues" (those count strict in the super-sub figures too). "Strict" counts the posted player alone. "Sub completed it" = the replacement did enough on his own, whatever the original did; "Sub won it" = bets that only won thanks to super sub. Overall/Yesterday/Today scope everything to bets logged that London day.</div>
@@ -16916,6 +17059,14 @@ function renderBaGrosvenorSubtabs(){
     const active = BA_GROSVENOR_SUBTAB === t.key;
     return `<button onclick="setGrosvenorSubtab('${t.key}')" style="background:${active ? 'var(--brand)' : 'none'};border:none;padding:7px 14px;font-size:12.5px;font-weight:${active ? '600' : '400'};color:${active ? '#fff' : 'var(--text2)'};cursor:pointer;font-family:inherit;white-space:nowrap">${escapeHtml(t.label)} (${t.n})</button>`;
   }).join('');
+}
+// 2026-10-07 (user): next-best >= 50% above the 3rd best price (Oddschecker's next bookmaker after
+// it) is flagged as a possible outlier. It's still the next best the % is measured against.
+function gvOutlierBadge(r){
+  if (!r.nextOutlier) return '';
+  const third = r.thirdBest != null ? Number(r.thirdBest).toFixed(2) : '?';
+  const book = r.thirdBook ? ` (${ocBookieShort(r.thirdBook)})` : '';
+  return `<div><span class="badge" title="Next best may itself be an outlier: it is ${r.thirdBest ? Math.round((r.nextBest / r.thirdBest - 1) * 100) : '50+'}% above the 3rd best price, ${escapeHtml(third + book)}" style="background:var(--amber-bg);color:var(--amber);font-size:10.5px;margin-top:2px"><i class="ti ti-alert-triangle"></i> outlier? 3rd ${escapeHtml(third)}</span></div>`;
 }
 function renderBaGrosvenor(){
   const body = document.getElementById('ba-grosvenor-body');
@@ -16942,7 +17093,7 @@ function renderBaGrosvenor(){
     <td style="font-size:12px;color:var(--text2)">${escapeHtml(r.mkt || '')}</td>
     <td style="font-weight:500">${escapeHtml(r.sel || '')}</td>
     <td class="r tn" style="font-weight:600;color:var(--green)">${r.odds != null ? Number(r.odds).toFixed(2) : '—'}</td>
-    <td class="r tn" style="color:var(--text2)">${r.nextBest != null ? Number(r.nextBest).toFixed(2) : '—'} <span style="color:var(--text3);font-size:11px">(${escapeHtml(ocBookieShort(r.nextBook))})</span></td>
+    <td class="r tn" style="color:var(--text2)">${r.nextBest != null ? Number(r.nextBest).toFixed(2) : '—'} <span style="color:var(--text3);font-size:11px">(${escapeHtml(ocBookieShort(r.nextBook))})</span>${gvOutlierBadge(r)}</td>
     <td class="r"><span class="badge" style="background:var(--green-bg);color:var(--green)">+${r.pct != null ? Number(r.pct).toFixed(1) : '—'}%</span></td>
     ${pl.watchTd}
     <td style="font-size:11.5px;white-space:nowrap">${betLinkBtn(null, 'Grosvenor')}<button onclick="logGrosvenorBet(${idx})" title="Log this bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-plus"></i> Log</button>${pl.btn('grosvenor', idx)}</td>
