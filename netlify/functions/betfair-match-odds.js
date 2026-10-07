@@ -273,6 +273,8 @@ async function findTeamWin(team, appKey, session) {
     startTime: match.event.openDate,  // UTC ISO — caller converts to local (see bfex_fair.to_local_hhmm)
     marketId,
     runner: {
+      // 2026-10-07: identifies the leg so Normal +EV results can settle it off Betfair (normalEvLog.js).
+      marketId: marketId, selectionId: runnerMeta.selectionId, handicap: Number(runnerMeta.handicap || 0),
       totalMatched: runnerBook?.totalMatched ?? 0,
       lastPriceTraded: runnerBook?.lastPriceTraded ?? null,
       back: (runnerBook?.ex?.availableToBack ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
@@ -362,6 +364,8 @@ async function findPlayerWin(player, appKey, session, opts = {}) {
     startTime: match.event.openDate,
     marketId,
     runner: {
+      // 2026-10-07: identifies the leg so Normal +EV results can settle it off Betfair (normalEvLog.js).
+      marketId: marketId, selectionId: runnerMeta.selectionId, handicap: Number(runnerMeta.handicap || 0),
       totalMatched: runnerBook?.totalMatched ?? 0,
       lastPriceTraded: runnerBook?.lastPriceTraded ?? null,
       back: (runnerBook?.ex?.availableToBack ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
@@ -427,6 +431,8 @@ async function findEventMarketRunner(eventId, eventName, marketNameTest, runnerT
     marketName: market.marketName,
     marketId: market.marketId,
     runner: {
+      // 2026-10-07: identifies the leg so Normal +EV results can settle it off Betfair (normalEvLog.js).
+      marketId: market.marketId, selectionId: runnerMeta.selectionId, handicap: Number(runnerMeta.handicap || 0),
       totalMatched: runnerBook?.totalMatched ?? 0,
       lastPriceTraded: runnerBook?.lastPriceTraded ?? null,
       back: (runnerBook?.ex?.availableToBack ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
@@ -482,6 +488,8 @@ async function findDartsMarketRunner(player, marketName, runnerName, line, appKe
   return {
     eventName: ev.name, startTime: ev.openDate, marketName: market.marketName, marketId: market.marketId,
     runner: {
+      // 2026-10-07: identifies the leg so Normal +EV results can settle it off Betfair (normalEvLog.js).
+      marketId: market.marketId, selectionId: runnerMeta.selectionId, handicap: Number(runnerMeta.handicap || 0),
       totalMatched: rb?.totalMatched ?? 0,
       lastPriceTraded: rb?.lastPriceTraded ?? null,
       back: (rb?.ex?.availableToBack ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
