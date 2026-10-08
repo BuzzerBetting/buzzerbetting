@@ -3152,10 +3152,10 @@ const normalEvLog = (() => {
 })();
 const nevRange = q => (['today', 'yesterday'].includes(q) ? q : 'overall');
 
-// GET /api/ledger/normal-ev-bets/stats?range=overall|today|yesterday
+// GET /api/ledger/normal-ev-bets/stats?range=overall|today|yesterday&staking=flat|kelly|towin
 router.get('/normal-ev-bets/stats', (req, res) => {
   if (!normalEvLog) return res.json({ ok: true, overall: {}, byMarket: [], byBookie: [] });
-  try { res.json({ ok: true, ...normalEvLog.getStats(nevRange(req.query.range)) }); }
+  try { res.json({ ok: true, ...normalEvLog.getStats(nevRange(req.query.range), req.query.staking) }); }
   catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 

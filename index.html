@@ -16761,8 +16761,23 @@ async function loadBaGrosvenor(){
 // Paper P/L of every bet this tab has posted, £50 flat, logged + settled server-side
 // (corner-model/normalEvLog.js). Football props settle off FotMob, horses off Betfair; the rest
 // (accas, combo boosts, darts) wait for a Won / Lost / Void click in the list below the stats.
-let NEV_RANGE = 'overall', NEV_LIST = 'manual', NEV_LAST = null, NEV_ROWS = [];
-try { NEV_RANGE = localStorage.getItem('bb_nev_range') || 'overall'; NEV_LIST = localStorage.getItem('bb_nev_list') || 'manual'; } catch(e) {}
+let NEV_RANGE = 'overall', NEV_LIST = 'manual', NEV_STAKING = 'flat', NEV_LAST = null, NEV_ROWS = [];
+try { NEV_RANGE = localStorage.getItem('bb_nev_range') || 'overall'; NEV_LIST = localStorage.getItem('bb_nev_list') || 'manual'; NEV_STAKING = localStorage.getItem('bb_nev_staking') || 'flat'; } catch(e) {}
+// Staking strategies (2026-10-08) — same formulas as normalEvLog.js STAKING: £50 flat, full Kelly
+// on a fixed £2,000 bank, stake to win £300 profit.
+const NEV_STAKINGS = [['flat', '£50 flat'], ['kelly', '£2,000 full Kelly'], ['towin', '£300 to win']];
+function nevStakeFor(r, mode){
+  const odds = Number(r.odds), fair = Number(r.fair);
+  if (mode === 'kelly') return fair > 1 && odds > fair ? 2000 * (odds / fair - 1) / (odds - 1) : 0;
+  if (mode === 'towin') return odds > 1 ? 300 / (odds - 1) : 0;
+  return 50;
+}
+function nevPl(r, mode){
+  const st = nevStakeFor(r, mode);
+  return r.result === 'won' ? st * (r.odds - 1) : r.result === 'lost' ? -st : (r.result === 'void' ? 0 : null);
+}
+function nevStakingLabel(){ return (NEV_STAKINGS.find(([k]) => k === NEV_STAKING) || NEV_STAKINGS[0])[1]; }
+function setNevStaking(v){ NEV_STAKING = v; try { localStorage.setItem('bb_nev_staking', v); } catch(e) {} loadNevStats(); }
 function nevStatsOn(){ try { return localStorage.getItem('bb_nev_stats') === '1'; } catch(e) { return false; } }
 function setNevStatsToggle(on){
   try { localStorage.setItem('bb_nev_stats', on ? '1' : '0'); } catch(e) {}
@@ -16784,7 +16799,7 @@ async function loadNevStats(){
   if (!panel.innerHTML) panel.innerHTML = `<div class="card" style="padding:20px;text-align:center;color:var(--text3);font-size:13px"><i class="ti ti-loader"></i> Loading bet results…</div>`;
   try {
     const [d, l] = await Promise.all([
-      ledgerApi(`normal-ev-bets/stats?range=${NEV_RANGE}`),
+      ledgerApi(`normal-ev-bets/stats?range=${NEV_RANGE}&staking=${NEV_STAKING}`),
       ledgerApi(`normal-ev-bets/list?status=${NEV_LIST}&range=${NEV_RANGE}`),
     ]);
     if (!d || !d.ok) { panel.innerHTML = `<div class="card" style="padding:16px;color:var(--text3);font-size:13px">Bet results not available.</div>`; return; }
@@ -16828,9 +16843,9 @@ async function showNevSettled(field, idx, all){
   }).join(' ');
   const plFmt = n => (n >= 0 ? '+£' : '-£') + Math.abs(n).toFixed(2);
   const fmtTime = iso => { try { return new Date(iso + (String(iso).endsWith('Z') ? '' : 'Z')).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (e) { return iso || '—'; } };
-  const total = rows.reduce((t, r) => t + (r.result === 'won' ? 50 * (r.odds - 1) : r.result === 'lost' ? -50 : 0), 0);
+  const total = rows.reduce((t, r) => t + (nevPl(r, NEV_STAKING) || 0), 0);
   const rowsHtml = rows.map(r => {
-    const pl = r.result === 'won' ? 50 * (r.odds - 1) : r.result === 'lost' ? -50 : 0;
+    const pl = nevPl(r, NEV_STAKING) || 0;
     const badge = r.result === 'won' ? '<span class="badge" style="background:var(--green-bg);color:var(--green)">Won</span>'
       : r.result === 'lost' ? '<span class="badge" style="background:var(--red-bg);color:var(--red)">Lost</span>'
       : '<span class="badge" style="color:var(--text3)">Void</span>';
@@ -16840,16 +16855,17 @@ async function showNevSettled(field, idx, all){
       <td style="font-size:12.5px;font-weight:500">${escapeHtml(r.selection || '')}${r.settledBy && r.settledBy !== 'auto' ? `<div style="font-size:11px;color:var(--text3)">settled by ${escapeHtml(r.settledBy)}</div>` : ''}</td>
       <td class="r tn" style="font-weight:600">${r.odds != null ? Number(r.odds).toFixed(2) : '—'}</td>
       <td class="r tn" style="color:var(--text2)">${r.fair != null ? Number(r.fair).toFixed(2) : '—'}</td>
+      <td class="r tn" style="color:var(--text2)">£${nevStakeFor(r, NEV_STAKING).toFixed(2)}</td>
       <td>${badge}</td>
       <td class="r tn" style="color:${pl >= 0 ? 'var(--green)' : 'var(--red)'}">${plFmt(pl)}</td>
     </tr>`;
   }).join('');
   body.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-      <div style="font-size:11px;color:var(--text3)">${rows.length} bet${rows.length === 1 ? '' : 's'}${NEV_SETTLED_ALL ? ` · net <span style="color:${total >= 0 ? 'var(--green)' : 'var(--red)'}">${plFmt(total)}</span>` : ''} · £50 flat stake</div>
+      <div style="font-size:11px;color:var(--text3)">${rows.length} bet${rows.length === 1 ? '' : 's'}${NEV_SETTLED_ALL ? ` · net <span style="color:${total >= 0 ? 'var(--green)' : 'var(--red)'}">${plFmt(total)}</span>` : ''} · ${escapeHtml(nevStakingLabel())} staking</div>
       <div>${toggle}</div>
     </div>
-    ${rows.length ? `<div style="overflow-x:auto"><table class="dt" style="min-width:620px"><thead><tr><th>Settled</th><th>Match</th><th>Selection</th><th class="r">Odds</th><th class="r">Fair</th><th>Result</th><th class="r">P/L</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>`
+    ${rows.length ? `<div style="overflow-x:auto"><table class="dt" style="min-width:680px"><thead><tr><th>Settled</th><th>Match</th><th>Selection</th><th class="r">Odds</th><th class="r">Fair</th><th class="r">Stake</th><th>Result</th><th class="r">P/L</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>`
       : `<div style="color:var(--text3);font-size:13px;padding:8px 0">${NEV_SETTLED_ALL ? 'No bets' : 'No winners'} settled in the last 24 hours.</div>`}`;
 }
 function renderNevStats(){
@@ -16865,7 +16881,7 @@ function renderNevStats(){
   const rangeTabs = [['overall', 'Overall'], ['yesterday', 'Yesterday'], ['today', 'Today']].map(([k, l]) => btn(NEV_RANGE === k, `setNevRange('${k}')`, l)).join('');
   const table = (title, head, list, field) => `
     <div style="font-size:12.5px;font-weight:600;margin:4px 0 6px">${title}</div>
-    <div style="overflow-x:auto;margin-bottom:14px"><table class="dt" style="min-width:720px"><thead><tr><th>${head}</th><th class="r">Bets</th><th class="r">Settled</th><th class="r">Won</th><th class="r">Win%</th><th class="r">Avg odds</th><th class="r">Avg EV</th><th class="r">Expected</th><th class="r">P/L</th><th class="r">ROI</th><th class="r">Need result</th></tr></thead><tbody>${
+    <div style="overflow-x:auto;margin-bottom:14px"><table class="dt" style="min-width:860px"><thead><tr><th>${head}</th><th class="r">Bets</th><th class="r">Settled</th><th class="r">Won</th><th class="r">Win%</th><th class="r">Avg odds</th><th class="r">Avg EV</th><th class="r">Expected</th><th class="r">Staked</th><th class="r">P/L</th><th class="r">ROI</th><th class="r">Exp. ROI</th><th class="r">Need result</th></tr></thead><tbody>${
       (list || []).length ? list.map((m, i) => `<tr onclick="showNevSettled('${field}', ${i})" style="cursor:pointer" title="Click to see this row's bets settled in the last 24 hours">
         <td style="font-size:12.5px">${escapeHtml(m.key || '—')}</td>
         <td class="r tn">${m.bets}</td><td class="r tn">${m.settled}</td><td class="r tn">${m.wins}</td>
@@ -16873,10 +16889,12 @@ function renderNevStats(){
         <td class="r tn">${m.avgOdds != null ? Number(m.avgOdds).toFixed(2) : '—'}</td>
         <td class="r tn">${pctFmt(m.avgEv)}</td>
         <td class="r tn" style="color:var(--text2)">${plFmt(m.evGbp)}</td>
+        <td class="r tn" style="color:var(--text2)">£${Number(m.staked || 0).toFixed(0)}</td>
         <td class="r tn" style="color:${plCol(m.pl)}">${plFmt(m.pl)}</td>
         <td class="r tn" style="color:${plCol(m.pl)}">${roiFmt(m.roi)}</td>
+        <td class="r tn" style="color:var(--text2)">${roiFmt(m.expRoi)}</td>
         <td class="r tn" style="color:${m.needsManual ? 'var(--amber)' : 'var(--text3)'}">${m.needsManual || 0}</td></tr>`).join('')
-      : '<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:14px">No bets logged yet</td></tr>'
+      : '<tr><td colspan="13" style="text-align:center;color:var(--text3);padding:14px">No bets logged yet</td></tr>'
     }</tbody></table></div>`;
   const resBadge = r => {
     if (r.result === 'won') return '<span class="badge" style="background:var(--green-bg);color:var(--green)">Won</span>';
@@ -16887,7 +16905,7 @@ function renderNevStats(){
   };
   const sBtn = (i, res, label, cur) => `<button onclick="settleNev(${i}, ${res ? `'${res}'` : 'null'})" title="${res ? 'Mark ' + label : 'Clear result'}" style="background:${cur ? 'var(--brand)' : 'none'};color:${cur ? '#fff' : 'var(--text2)'};border:.5px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer;font-size:11px;font-family:inherit">${label}</button>`;
   const listRows = NEV_ROWS.map((r, i) => {
-    const pl = r.result === 'won' ? 50 * (r.odds - 1) : r.result === 'lost' ? -50 : (r.result === 'void' ? 0 : null);
+    const pl = nevPl(r, NEV_STAKING);
     return `<tr>
       <td style="font-size:11.5px;white-space:nowrap;color:var(--text2)">${escapeHtml(r.eventDate ? r.eventDate.slice(5) : '')} ${escapeHtml(r.kickoff || '')}</td>
       <td style="font-size:12.5px">${escapeHtml(r.match || '')}</td>
@@ -16897,35 +16915,59 @@ function renderNevStats(){
       <td class="r tn" style="font-weight:600">${r.odds != null ? Number(r.odds).toFixed(2) : '—'}</td>
       <td class="r tn" style="color:var(--text2)">${r.fair != null ? Number(r.fair).toFixed(2) : '—'}</td>
       <td class="r tn">${r.ev != null ? '+' + Number(r.ev).toFixed(1) + '%' : '—'}</td>
+      <td class="r tn" style="color:var(--text2)">£${nevStakeFor(r, NEV_STAKING).toFixed(2)}</td>
       <td>${resBadge(r)}</td>
       <td class="r tn" style="color:${pl == null ? 'var(--text3)' : plCol(pl)}">${pl == null ? '—' : plFmt(pl)}</td>
       <td style="white-space:nowrap">${sBtn(i, 'won', 'Won', r.result === 'won')} ${sBtn(i, 'lost', 'Lost', r.result === 'lost')} ${sBtn(i, 'void', 'Void', r.result === 'void')}${r.result ? ' ' + sBtn(i, null, '<i class="ti ti-x"></i>', false) : ''}</td>
     </tr>`;
   }).join('');
+  const stakingTabs = NEV_STAKINGS.map(([k, l]) => btn(NEV_STAKING === k, `setNevStaking('${k}')`, l)).join('');
+  // All three strategies side by side (same bets, same window) — the ROI comparison.
+  const cmp = d.compare || [];
+  const bestRoi = Math.max(...cmp.map(c => c.roi == null ? -Infinity : c.roi));
+  const compareHtml = cmp.length ? `<div style="overflow-x:auto;margin-bottom:14px"><table class="dt" style="min-width:620px"><thead><tr><th>Strategy</th><th class="r">Bets staked</th><th class="r">Staked</th><th class="r">Avg stake</th><th class="r">P/L</th><th class="r">ROI</th><th class="r">Exp. ROI</th><th class="r">Expected</th></tr></thead><tbody>${
+    cmp.map(c => {
+      const best = c.roi != null && c.roi === bestRoi && cmp.length > 1;
+      return `<tr onclick="setNevStaking('${c.key}')" style="cursor:pointer${c.key === NEV_STAKING ? ';background:var(--surface2)' : ''}" title="Show all stats at this staking">
+      <td style="font-size:12.5px;font-weight:${c.key === NEV_STAKING ? '600' : '400'}">${escapeHtml(c.label)}</td>
+      <td class="r tn">${c.stakedBets || 0}</td>
+      <td class="r tn" style="color:var(--text2)">£${Number(c.staked || 0).toFixed(0)}</td>
+      <td class="r tn" style="color:var(--text2)">${c.avgStake == null ? '—' : '£' + Number(c.avgStake).toFixed(2)}</td>
+      <td class="r tn" style="color:${plCol(c.pl)}">${plFmt(c.pl)}</td>
+      <td class="r tn" style="color:${c.roi == null ? 'var(--text3)' : plCol(c.roi)};font-weight:${best ? '700' : '400'}">${roiFmt(c.roi)}${best ? ' <i class="ti ti-trophy" style="font-size:12px"></i>' : ''}</td>
+      <td class="r tn" style="color:var(--text2)">${roiFmt(c.expRoi)}</td>
+      <td class="r tn" style="color:var(--text2)">${plFmt(c.evGbp)}</td></tr>`;
+    }).join('')
+  }</tbody></table></div>` : '';
   const listTabs = [['manual', `Needs result (${o.needsManual || 0})`], ['open', 'Unsettled'], ['settled', 'Settled'], ['all', 'All']].map(([k, l]) => btn(NEV_LIST === k, `setNevList('${k}')`, l)).join('');
   panel.innerHTML = `
     <div class="card" style="padding:16px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
         <strong style="font-size:14px">Normal +EV — bet results</strong>
-        <span style="font-size:11px;color:var(--text3)">Every bet posted on this tab · £50 flat stake · paper results, not the placed ledgers</span>
+        <span style="font-size:11px;color:var(--text3)">Every bet posted on this tab · ${escapeHtml(nevStakingLabel())} staking · paper results, not the placed ledgers</span>
       </div>
-      <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">${rangeTabs}</div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">${rangeTabs}</div>
+      <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center"><span style="font-size:12px;color:var(--text3);margin-right:4px">Staking</span>${stakingTabs}</div>
+      ${compareHtml}
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px">
         ${tile('Bets logged', o.bets || 0)}
         ${tile('Settled', `${o.settled || 0}${o.voids ? ` <span style="font-size:12px;font-weight:500;color:var(--text3)">+${o.voids} void</span>` : ''}`)}
         ${tile('Won', `${o.wins || 0} <span style="font-size:12px;font-weight:500;color:var(--text3)">${pctFmt(o.winPct)}</span>`)}
         ${tile('P/L', plFmt(o.pl), plCol(o.pl))}
         ${tile('ROI', roiFmt(o.roi), o.roi == null ? '' : plCol(o.roi))}
+        ${tile('Expected ROI', roiFmt(o.expRoi))}
+        ${tile('Staked', '£' + Number(o.staked || 0).toFixed(0))}
+        ${tile('Avg stake', o.avgStake == null ? '—' : '£' + Number(o.avgStake).toFixed(2))}
         ${tile('Expected (EV)', plFmt(o.evGbp))}
         ${tile('Needs result', o.needsManual || 0, (o.needsManual || 0) ? 'var(--amber)' : '')}
       </div>
       ${table('By market', 'Market', d.byMarket, 'market')}
       ${table('By bookmaker', 'Bookmaker', d.byBookie, 'bookie')}
       <div style="display:flex;gap:6px;margin:4px 0 8px;flex-wrap:wrap;align-items:center"><span style="font-size:12.5px;font-weight:600;margin-right:6px">Bets</span>${listTabs}</div>
-      <div style="overflow-x:auto;max-height:520px;overflow-y:auto"><table class="dt" style="min-width:980px"><thead><tr><th>Date</th><th>Match</th><th>Market</th><th>Selection</th><th>Bookie</th><th class="r">Odds</th><th class="r">Fair</th><th class="r">EV</th><th>Result</th><th class="r">P/L</th><th></th></tr></thead><tbody>${
-        listRows || '<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:14px">Nothing here</td></tr>'
+      <div style="overflow-x:auto;max-height:520px;overflow-y:auto"><table class="dt" style="min-width:1050px"><thead><tr><th>Date</th><th>Match</th><th>Market</th><th>Selection</th><th>Bookie</th><th class="r">Odds</th><th class="r">Fair</th><th class="r">EV</th><th class="r">Stake</th><th>Result</th><th class="r">P/L</th><th></th></tr></thead><tbody>${
+        listRows || '<tr><td colspan="12" style="text-align:center;color:var(--text3);padding:14px">Nothing here</td></tr>'
       }</tbody></table></div>
-      <div style="font-size:11px;color:var(--text3);margin-top:8px">Logged on the server once, at the first price the tab showed (the best-EV bookmaker if several had it). Player bets (AGS, First scorer, Cards, SOT and the 2+/3+ lines, boosts included) settle automatically from FotMob after full time; a player who never came on is a void. Anything priced off Betfair (horses, win accas, tennis, darts, Win to Nil / BTTS / Correct Score / HT-FT style boosts) settles from the Betfair result. Non-runners, voided legs, players that can't be found and anything with no automatic result after 3 days go to "Needs result". "Expected" is the £50 EV the price implied when it was posted. Overall/Yesterday/Today go by the day it was first posted.</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">Logged on the server once, at the first price the tab showed (the best-EV bookmaker if several had it). Player bets (AGS, First scorer, Cards, SOT and the 2+/3+ lines, boosts included) settle automatically from FotMob after full time; a player who never came on is a void. Anything priced off Betfair (horses, win accas, tennis, darts, Win to Nil / BTTS / Correct Score / HT-FT style boosts) settles from the Betfair result. Non-runners, voided legs, players that can't be found and anything with no automatic result after 3 days go to "Needs result". "Expected" is the EV the price implied when it was posted, at the selected staking; "Exp. ROI" is that as a % of what was staked on the settled bets, to set the actual ROI against. Staking: £50 flat on every bet; full Kelly sizes each bet off a fixed £2,000 bank (2000 × edge ÷ (odds − 1), not compounded — bets with no fair price stake £0); "£300 to win" stakes 300 ÷ (odds − 1) so every winner returns £300 profit. ROI = P/L ÷ total staked on settled bets. Overall/Yesterday/Today go by the day it was first posted.</div>
     </div>`;
 }
 function gvStatsOn(){ try { return localStorage.getItem('bb_gv_stats') === '1'; } catch(e) { return false; } }
