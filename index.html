@@ -562,9 +562,9 @@ tr.ba-placed > td{background:var(--green-bg) !important}
       <div><div class="cat-title">Accounts</div><div class="cat-desc">View, filter and add live accounts — balances, notes and transactions</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
-    <div class="cat" style="--accent:var(--green)" onclick="showLedgerSec('money')">
+    <div class="cat bank-user-only" data-show="flex" style="--accent:var(--green);display:none" onclick="showLedgerSec('money')">
       <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-cash"></i></div>
-      <div><div class="cat-title">Money</div><div class="cat-desc">Deposits, withdrawals and bank transactions — add and edit in one place</div></div>
+      <div><div class="cat-title">Money</div><div class="cat-desc">Your own banks: transfers, money in and out by category, and spending</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
     <div class="cat" style="--accent:var(--amber)" onclick="showLedgerSec('dashboard')">
@@ -1320,25 +1320,8 @@ tr.ba-placed > td{background:var(--green-bg) !important}
     <div id="bankroll-debts-list"></div>
   </div>
 
-  <div class="card card-pad" style="margin-bottom:16px">
-    <div class="sec-title" style="margin:0 0 4px;font-size:15px">Add spending</div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:14px">Moves money in/out of the selected bank's live balance and records it permanently below.</div>
-    <div style="display:flex;gap:8px;margin-bottom:12px">
-      <button class="add-btn" id="spending-dir-out" onclick="setSpendingDirection('out')">Money out</button>
-      <button class="add-btn" id="spending-dir-in" onclick="setSpendingDirection('in')">Money in</button>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <div><label class="lbl">Bank</label><select id="spending-bank"></select></div>
-      <div><label class="lbl">Amount £</label><input type="number" id="spending-amount" step="0.01" min="0"></div>
-    </div>
-    <div style="margin-bottom:12px"><label class="lbl">Details (optional)</label><input type="text" id="spending-details" placeholder="e.g. Weekly shop"></div>
-    <button onclick="submitSpending()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:10px 18px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Log spending</button>
-    <div id="spending-msg" style="margin-top:10px;font-size:13px"></div>
-  </div>
-
-  <div class="card card-pad" style="margin-bottom:16px">
-    <div class="sec-title" style="margin:0 0 12px;font-size:15px">Spending history</div>
-    <div id="bankroll-spending-history">Loading…</div>
+  <div class="card card-pad bank-user-only" style="margin-bottom:16px;display:none">
+    <div style="font-size:13px">Spending is now logged on the <span style="cursor:pointer;color:var(--brand);font-weight:600" onclick="showLedgerSec('money')">Money</span> page, by bank and category.</div>
   </div>
 
   <div class="card card-pad">
@@ -1409,70 +1392,10 @@ tr.ba-placed > td{background:var(--green-bg) !important}
 <div id="view-ledger-money" class="sec">
   <button class="back" onclick="backToLedgerHub()"><i class="ti ti-arrow-left"></i> Ledger</button>
   <div class="sec-title">Money</div>
-
-  <div class="card card-pad" style="margin-bottom:16px">
-    <div class="lbl" style="margin-bottom:10px">Add transaction</div>
-    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-      <button class="add-btn" id="money-type-deposit" onclick="setMoneyPageType('deposit')">Deposit</button>
-      <button class="add-btn" id="money-type-withdrawal" onclick="setMoneyPageType('withdrawal')">Withdrawal</button>
-      <button class="add-btn" id="money-type-transfer" onclick="setMoneyPageType('transfer')">Bank transfer</button>
-      <button class="add-btn" id="money-type-external" onclick="setMoneyPageType('external')">External transaction</button>
-    </div>
-
-    <div id="money-fields-account" style="display:none;margin-bottom:12px">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div><label class="lbl">Bookmaker</label><select id="money-bookmaker" onchange="refreshMoneyAccountDropdown()"></select></div>
-        <div><label class="lbl">Account</label><select id="money-account"><option value="">Select a bookmaker first…</option></select></div>
-      </div>
-    </div>
-
-    <div id="money-fields-transfer" style="display:none;margin-bottom:12px">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div><label class="lbl">Bank sending</label><select id="money-transfer-from" onchange="refreshMoneyTransferBanks()"></select></div>
-        <div><label class="lbl">Bank receiving</label><select id="money-transfer-to" onchange="refreshMoneyTransferBanks()"></select></div>
-      </div>
-    </div>
-
-    <div id="money-fields-bank" style="display:none;margin-bottom:12px">
-      <label class="lbl">Bank</label>
-      <select id="money-bank"></select>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;align-items:end">
-      <div><label class="lbl">Amount £</label><input type="number" id="money-amount" step="0.01" min="0"></div>
-      <div id="money-fields-direction" style="display:none">
-        <div style="display:flex;gap:14px">
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="money-direction" value="in" checked> Money in</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="money-direction" value="out"> Money out</label>
-        </div>
-      </div>
-    </div>
-    <div id="money-fields-reason" style="display:none;margin-bottom:12px">
-      <label class="lbl">Reason</label>
-      <input type="text" id="money-reason" placeholder="e.g. Topped up from personal savings">
-    </div>
-    <button onclick="submitMoneyPageTransaction()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:10px 18px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Log</button>
-    <div id="money-msg" style="margin-top:10px;font-size:13px"></div>
-  </div>
-
-  <div class="card card-pad" style="margin-bottom:16px">
-    <div class="lbl" style="margin-bottom:10px">Pending withdrawals</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">No money has moved for these yet — confirming is what actually moves it out of the account and into the linked bank.</div>
-    <div id="money-pending-withdrawals">Loading…</div>
-  </div>
-
-  <div class="card card-pad">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
-      <div class="lbl">History</div>
-      <select id="money-filter" onchange="loadMoneyHistory()" style="width:auto;font-size:12px;padding:5px 10px">
-        <option value="">All types</option>
-        <option value="deposit">Deposits</option>
-        <option value="withdrawal">Withdrawals</option>
-        <option value="transfer">Bank transfers</option>
-        <option value="external">External transactions</option>
-      </select>
-    </div>
-    <div id="money-history">Loading…</div>
-  </div>
+  <div style="font-size:12.5px;color:var(--text2);margin-bottom:14px">Your own banks: transfers, money in and money out, by category. Bookie deposits and withdrawals move these balances automatically. Only you can see your banks.</div>
+  <div id="money-banks" style="margin-bottom:16px">Loading…</div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px" id="money-tabs"></div>
+  <div id="money-tab-body"></div>
 </div>
 
 <div id="view-ledger-deposits" class="sec">
@@ -5503,7 +5426,7 @@ async function renderAccountsSummaryRow() {
   let html = '';
   if (showBanks) { cols.push('1fr'); html += `<div class="card card-pad"><div class="lbl" style="margin-bottom:10px">Live bank balances</div><div id="bank-balances-box" style="display:flex;flex-wrap:wrap;gap:10px">Loading…</div></div>`; }
   if (showLocked) { cols.push('220px'); html += `<div class="card card-pad" style="cursor:pointer" onclick="showLedgerSec('locked-funds')"><div class="lbl" style="margin-bottom:10px">Locked Funds</div><div style="font-size:22px;font-weight:600;color:var(--red)" id="live-accounts-locked-total">£0.00</div></div>`; }
-  if (showPending) { cols.push('220px'); html += `<div class="card card-pad" style="cursor:pointer" onclick="showLedgerSec('money')"><div class="lbl" style="margin-bottom:10px">Pending Withdrawals</div><div style="font-size:22px;font-weight:600;color:var(--amber)" id="live-accounts-pending-total">£0.00</div></div>`; }
+  if (showPending) { cols.push('220px'); html += `<div class="card card-pad" style="cursor:pointer" onclick="showLedgerSec('withdrawals')"><div class="lbl" style="margin-bottom:10px">Pending Withdrawals</div><div style="font-size:22px;font-weight:600;color:var(--amber)" id="live-accounts-pending-total">£0.00</div></div>`; }
   el.style.gridTemplateColumns = cols.length ? cols.join(' ') : '1fr';
   el.innerHTML = html || '';
   if (showBanks) renderBankBalancesBox();
@@ -5731,7 +5654,9 @@ async function loadManualAdjustmentLog() {
 let BAL_ERR_STATUS = 'open', BAL_ERR_ROWS = [], BAL_ERR_OPEN = {};
 function syncJordanOnly() {
   const isJordan = CURRENT_USERNAME === 'Jordan';
-  document.querySelectorAll('.jordan-only').forEach(el => { el.style.display = isJordan ? 'block' : 'none'; });
+  document.querySelectorAll('.jordan-only').forEach(el => { el.style.display = isJordan ? (el.dataset.show || 'block') : 'none'; });
+  const isBankUser = CURRENT_USERNAME === 'Jordan' || CURRENT_USERNAME === 'Kieran';
+  document.querySelectorAll('.bank-user-only').forEach(el => { el.style.display = isBankUser ? (el.dataset.show || 'block') : 'none'; });
   if (isJordan) refreshBalanceErrorBadge();
 }
 async function refreshBalanceErrorBadge() {
@@ -6635,8 +6560,7 @@ async function initBankroll() {
     renderBankrollSnapshots();
   } catch (e) { document.getElementById('bankroll-kpis').innerHTML = '<div style="color:var(--red);font-size:13px">Network error.</div>'; }
   loadSpendingBanks();
-  loadSpendingHistory();
-  setSpendingDirection('out');
+  // (spending moved to the Money page, 2026-10-08)
 }
 
 function renderBankrollKpis() {
@@ -7366,7 +7290,399 @@ async function submitBankTransaction() {
 // ================== LEDGER: MONEY (deposits/withdrawals/bank transfers/external) ==================
 let moneyPageType = 'deposit';
 
+// ── MONEY (2026-10-08) — own banks, Jordan and Kieran separately (bank-ledger.js) ──
+// Add flow: bank → type (to my account / to someone else / money in / money out) → category
+// → amount, date, note. Every entry moves the bank balance straight away; deleting undoes it.
+let MONEY = { banks: [], categories: [], people: [], errors: null };
+let MONEY_TAB = 'add';
+let MSTEP = {};
+let MONEY_SET_BAL = null, MONEY_ADD_BANK = false, MONEY_EDIT = null;
+let MONEY_FILTER = { bank: '', type: '', month: '' };
+let MONEY_ERR_STATUS = 'open';
+const MONEY_TYPES = [
+  ['own_transfer', 'To my account', 'ti-arrows-exchange'],
+  ['to_person', 'To someone else', 'ti-user-share'],
+  ['in', 'Money in', 'ti-arrow-down-left'],
+  ['out', 'Money out', 'ti-arrow-up-right'],
+];
+const MONEY_BRACKETS = [['essential', 'Essential'], ['non_essential', 'Non-essential'], ['business', 'Business']];
+const mGbp = n => (n < 0 ? '-£' : '£') + Math.abs(n || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const mSgn = n => (n >= 0 ? '+£' : '-£') + Math.abs(n || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function mBtn(active, onclick, label, extra) {
+  return `<button onclick="${onclick}" style="padding:8px 14px;border:.5px solid ${active ? 'var(--brand)' : 'var(--border)'};border-radius:var(--radius);background:${active ? 'var(--brand)' : 'var(--surface)'};color:${active ? '#fff' : 'var(--text)'};font-weight:${active ? 600 : 400};font-size:13px;cursor:pointer;font-family:inherit;${extra || ''}">${label}</button>`;
+}
+function mLocalNow() { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); }
+function mToUtc(local) { const d = new Date(local); return isNaN(d) ? null : d.toISOString().slice(0, 19).replace('T', ' '); }
+function mUtcToLocalInput(s) { const d = new Date(String(s).replace(' ', 'T') + 'Z'); if (isNaN(d)) return mLocalNow(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); }
+
 async function initMoneyPage() {
+  MSTEP = {}; MONEY_SET_BAL = null; MONEY_ADD_BANK = false; MONEY_EDIT = null;
+  await loadMoney();
+}
+async function loadMoney() {
+  try {
+    const d = await ledgerApi('money');
+    if (!d || !d.ok) { document.getElementById('money-banks').innerHTML = `<div class="card card-pad" style="color:var(--text3)">${escapeHtml((d && d.error) || 'Not available.')}</div>`; document.getElementById('money-tabs').innerHTML = ''; document.getElementById('money-tab-body').innerHTML = ''; return; }
+    MONEY = d;
+  } catch (e) { document.getElementById('money-banks').innerHTML = '<div class="card card-pad" style="color:var(--red)">Could not load.</div>'; return; }
+  renderMoneyBanks(); renderMoneyTabs(); renderMoneyTab();
+}
+
+// ---- bank tiles ----
+function renderMoneyBanks() {
+  const el = document.getElementById('money-banks');
+  const tiles = MONEY.banks.map(b => {
+    const setting = MONEY_SET_BAL === b.name;
+    const needsOpening = !b.opening_at;
+    const sub = needsOpening
+      ? '<span style="color:var(--amber)">Real balance not set yet</span>'
+      : (b.last_checked_at ? `Checked ${escapeHtml(formatLedgerDate(b.last_checked_at))}` : 'Not checked yet');
+    return `<div class="card" style="padding:12px 14px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+        <div style="font-size:12px;color:var(--text3);font-weight:600">${escapeHtml(b.name)}</div>
+        <span style="cursor:pointer;font-size:11px;color:var(--brand);white-space:nowrap" onclick="moneyToggleSetBalance('${escapeHtml(b.name).replace(/'/g, "\\'")}')">${needsOpening ? 'Set real balance' : 'Check'}</span>
+      </div>
+      <div style="font-size:20px;font-weight:700;margin:2px 0;color:${b.balance < 0 ? 'var(--red)' : 'var(--text)'}">${mGbp(b.balance)}</div>
+      <div style="font-size:11px;color:var(--text3)">${sub}</div>
+      ${setting ? `<div style="margin-top:8px;border-top:.5px solid var(--border);padding-top:8px">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px">${needsOpening ? 'What does the bank app show right now? This becomes the starting point.' : 'What does the bank app show right now?'}</div>
+        <div style="display:flex;gap:4px"><input type="number" step="0.01" id="money-real-bal" style="flex:1;min-width:0;padding:6px 8px;font-size:13px" onkeydown="if(event.key==='Enter')moneySubmitRealBalance()">
+        <button onclick="moneySubmitRealBalance()" style="padding:5px 10px;font-size:12px;border:none;border-radius:6px;background:var(--brand);color:#fff;cursor:pointer;font-family:inherit">Save</button></div>
+        <div id="money-real-bal-msg" style="font-size:11.5px;margin-top:4px"></div>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+  const total = MONEY.banks.reduce((s, b) => s + (b.balance || 0), 0);
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px">
+      ${tiles}
+      <div class="card" style="padding:12px 14px;display:flex;flex-direction:column;justify-content:center">
+        <div style="font-size:12px;color:var(--text3);font-weight:600">Total</div>
+        <div style="font-size:20px;font-weight:700">${mGbp(total)}</div>
+        ${MONEY_ADD_BANK
+          ? `<div style="display:flex;gap:4px;margin-top:6px"><input type="text" id="money-new-bank" placeholder="Bank name" style="flex:1;min-width:0;padding:6px 8px;font-size:12.5px" onkeydown="if(event.key==='Enter')moneyAddBank()"><button onclick="moneyAddBank()" style="padding:5px 10px;font-size:12px;border:none;border-radius:6px;background:var(--brand);color:#fff;cursor:pointer;font-family:inherit">Add</button></div><div id="money-new-bank-msg" style="font-size:11.5px;margin-top:4px"></div>`
+          : `<span style="cursor:pointer;font-size:11.5px;color:var(--brand);margin-top:4px" onclick="MONEY_ADD_BANK=true;renderMoneyBanks();setTimeout(()=>{const i=document.getElementById('money-new-bank');if(i)i.focus()},0)"><i class="ti ti-plus"></i> Add a bank</span>`}
+      </div>
+    </div>`;
+  if (MONEY_SET_BAL) setTimeout(() => { const i = document.getElementById('money-real-bal'); if (i) i.focus(); }, 0);
+}
+function moneyToggleSetBalance(name) { MONEY_SET_BAL = MONEY_SET_BAL === name ? null : name; renderMoneyBanks(); }
+async function moneySubmitRealBalance() {
+  const inp = document.getElementById('money-real-bal'), msg = document.getElementById('money-real-bal-msg');
+  const actual = parseFloat(inp && inp.value);
+  if (isNaN(actual)) { msg.innerHTML = '<span style="color:var(--red)">Enter the balance.</span>'; return; }
+  const d = await ledgerApi(`money/banks/${encodeURIComponent(MONEY_SET_BAL)}/real-balance`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actual }) });
+  if (!d || !d.ok) { msg.innerHTML = `<span style="color:var(--red)">${escapeHtml((d && d.error) || 'Failed')}</span>`; return; }
+  const r = d.result || {};
+  MONEY_SET_BAL = null;
+  await loadMoney();
+  if (r.action === 'corrected') alert(`Balance corrected by ${mSgn(r.diff)}. The site had ${mGbp(r.site)}. Logged in Errors so you can add a reason.`);
+}
+async function moneyAddBank() {
+  const inp = document.getElementById('money-new-bank'), msg = document.getElementById('money-new-bank-msg');
+  const name = inp ? inp.value.trim() : '';
+  if (!name) return;
+  const d = await ledgerApi('money/banks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+  if (!d || !d.ok) { msg.innerHTML = `<span style="color:var(--red)">${escapeHtml((d && d.error) || 'Failed')}</span>`; return; }
+  MONEY_ADD_BANK = false; MONEY_SET_BAL = name;
+  await loadMoney();
+}
+
+// ---- tabs ----
+function renderMoneyTabs() {
+  const errN = (MONEY.errors && MONEY.errors.open) || 0;
+  const tabs = [['add', '<i class="ti ti-plus"></i> Add'], ['history', '<i class="ti ti-list"></i> History'], ['spending', '<i class="ti ti-chart-pie"></i> Spending'],
+    ['errors', `<i class="ti ti-alert-triangle"></i> Errors${errN ? ` <span style="background:var(--red);color:#fff;border-radius:9px;padding:0 6px;font-size:10.5px">${errN}</span>` : ''}`],
+    ['categories', '<i class="ti ti-tags"></i> Categories']];
+  document.getElementById('money-tabs').innerHTML = tabs.map(([k, l]) => mBtn(MONEY_TAB === k, `setMoneyTab('${k}')`, l)).join('');
+}
+function setMoneyTab(t) { MONEY_TAB = t; MONEY_EDIT = null; renderMoneyTabs(); renderMoneyTab(); }
+function renderMoneyTab() {
+  if (MONEY_TAB === 'add') return renderMoneyAdd();
+  if (MONEY_TAB === 'history') return loadMoneyEntries();
+  if (MONEY_TAB === 'spending') return loadMoneySpending();
+  if (MONEY_TAB === 'errors') return loadMoneyErrors();
+  if (MONEY_TAB === 'categories') return renderMoneyCategories();
+}
+
+// ---- add flow ----
+function mSet(k, v) {
+  MSTEP[k] = v;
+  if (k === 'bank') { delete MSTEP.to_bank; if (MSTEP.to_bank === v) delete MSTEP.to_bank; }
+  if (k === 'type') { delete MSTEP.category_id; delete MSTEP.to_bank; delete MSTEP.person; }
+  renderMoneyAdd();
+}
+function renderMoneyAdd() {
+  const body = document.getElementById('money-tab-body');
+  if (!MONEY.banks.length) { body.innerHTML = '<div class="card card-pad" style="color:var(--text3)">Add a bank above first.</div>'; return; }
+  const step = (n, title, content) => `<div style="margin-bottom:14px"><div class="lbl" style="margin-bottom:8px">${n}. ${title}</div><div style="display:flex;gap:6px;flex-wrap:wrap">${content}</div></div>`;
+  let html = step(1, 'Bank', MONEY.banks.map(b => mBtn(MSTEP.bank === b.name, `mSet('bank', ${JSON.stringify(b.name).replace(/"/g, '&quot;')})`, escapeHtml(b.name))).join(''));
+  if (MSTEP.bank) html += step(2, 'Type', MONEY_TYPES.map(([k, l, ic]) => mBtn(MSTEP.type === k, `mSet('type', '${k}')`, `<i class="ti ${ic}"></i> ${l}`)).join(''));
+  let ready = false;
+  const t = MSTEP.type;
+  if (MSTEP.bank && t === 'own_transfer') {
+    const others = MONEY.banks.filter(b => b.name !== MSTEP.bank);
+    html += step(3, 'To which of your banks?', others.length ? others.map(b => mBtn(MSTEP.to_bank === b.name, `mSet('to_bank', ${JSON.stringify(b.name).replace(/"/g, '&quot;')})`, escapeHtml(b.name))).join('') : '<span style="font-size:12.5px;color:var(--text3)">You only have one bank.</span>');
+    ready = !!MSTEP.to_bank;
+  }
+  const cats = kind => MONEY.categories.filter(c => c.kind === kind);
+  const catBtns = list => list.map(c => mBtn(MSTEP.category_id === c.id, `mSet('category_id', ${c.id})`, escapeHtml(c.name))).join('');
+  const outGrouped = () => MONEY_BRACKETS.map(([b, label]) => {
+    const list = cats('out').filter(c => (c.bracket || 'non_essential') === b);
+    return list.length ? `<div style="width:100%;font-size:11px;color:var(--text3);margin:4px 0 0">${label}</div>${catBtns(list)}` : '';
+  }).join('');
+  const personInput = (label, required) => `<div style="width:100%"><input type="text" id="money-person" list="money-people" placeholder="${label}" value="${escapeHtml(MSTEP.person || '')}" oninput="MSTEP.person=this.value" style="max-width:320px;padding:8px 10px;font-size:13px">${required ? '' : ' <span style="font-size:11px;color:var(--text3)">optional</span>'}
+    <datalist id="money-people">${(MONEY.people || []).map(p => `<option value="${escapeHtml(p)}">`).join('')}</datalist>
+    ${(MONEY.people || []).length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${MONEY.people.slice(0, 10).map(p => `<span onclick="MSTEP.person=${JSON.stringify(p).replace(/"/g, '&quot;')};renderMoneyAdd()" style="cursor:pointer;font-size:11.5px;padding:3px 8px;border:.5px solid var(--border);border-radius:12px;color:var(--text2)">${escapeHtml(p)}</span>`).join('')}</div>` : ''}</div>`;
+  if (MSTEP.bank && t === 'to_person') {
+    html += step(3, 'Who to?', personInput('Name', true));
+    html += step(4, 'What for? <span style="font-weight:400;text-transform:none;color:var(--text3)">(optional, puts it in your spending)</span>', outGrouped());
+    ready = true;
+  }
+  if (MSTEP.bank && t === 'in') {
+    html += step(3, 'What kind of income?', catBtns(cats('in')));
+    const cat = MONEY.categories.find(c => c.id === MSTEP.category_id);
+    if (cat && /someone|transfer/i.test(cat.name)) html += step(4, 'From who?', personInput('Name', false));
+    ready = !!MSTEP.category_id;
+  }
+  if (MSTEP.bank && t === 'out') {
+    html += step(3, 'What was it?', outGrouped());
+    ready = !!MSTEP.category_id;
+  }
+  if (ready) {
+    html += `<div class="card" style="padding:12px 14px;margin-top:4px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;align-items:end">
+        <div><label class="lbl">Amount £</label><input type="number" id="money-amount" step="0.01" min="0" onkeydown="if(event.key==='Enter')moneySaveEntry()"></div>
+        <div><label class="lbl">When</label><input type="datetime-local" id="money-date" value="${mLocalNow()}"></div>
+        <div style="grid-column:span 2;min-width:200px"><label class="lbl">Note <span style="font-weight:400;text-transform:none;color:var(--text3)">(optional)</span></label><input type="text" id="money-note" placeholder="e.g. Tesco weekly shop" onkeydown="if(event.key==='Enter')moneySaveEntry()"></div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">
+        <button onclick="moneySaveEntry()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:10px 20px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Save</button>
+        <span id="money-save-msg" style="font-size:13px"></span>
+      </div>
+    </div>`;
+  }
+  body.innerHTML = `<div class="card card-pad">${html}</div>`;
+  if (ready) setTimeout(() => { const i = document.getElementById('money-amount'); if (i && !i.value) i.focus(); }, 0);
+}
+async function moneySaveEntry() {
+  const msg = document.getElementById('money-save-msg');
+  const amount = parseFloat(document.getElementById('money-amount').value);
+  if (!(amount > 0)) { msg.innerHTML = '<span style="color:var(--red)">Enter an amount.</span>'; return; }
+  const pi = document.getElementById('money-person');
+  const body = {
+    bank: MSTEP.bank, type: MSTEP.type, amount, to_bank: MSTEP.to_bank, category_id: MSTEP.category_id,
+    person: pi ? pi.value.trim() : (MSTEP.person || ''), note: document.getElementById('money-note').value.trim(),
+    date: mToUtc(document.getElementById('money-date').value),
+  };
+  msg.innerHTML = '<span style="color:var(--text2)">Saving…</span>';
+  const d = await ledgerApi('money/entries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!d || !d.ok) { msg.innerHTML = `<span style="color:var(--red)">${escapeHtml((d && d.error) || 'Failed')}</span>`; return; }
+  const keepBank = MSTEP.bank, keepType = MSTEP.type;
+  await loadMoney();
+  // Stay on the same bank and type, ready for the next one.
+  MSTEP = { bank: keepBank, type: keepType };
+  renderMoneyAdd();
+  const m = document.getElementById('money-save-msg');
+  const what = keepType === 'own_transfer' ? `to ${body.to_bank}` : keepType === 'to_person' ? `to ${body.person}` : '';
+  const ok = `<div style="font-size:12.5px;color:var(--green);margin-bottom:10px"><i class="ti ti-check"></i> Saved ${mGbp(amount)} ${escapeHtml(what)} from ${escapeHtml(keepBank)}.</div>`;
+  document.getElementById('money-tab-body').insertAdjacentHTML('afterbegin', ok);
+}
+
+// ---- history ----
+function mEntryLabel(e) {
+  if (e.type === 'own_transfer') return `<span style="color:var(--text2)"><i class="ti ti-arrows-exchange"></i> ${escapeHtml(e.bank)} → ${escapeHtml(e.to_bank)}</span>`;
+  if (e.type === 'correction') return '<span class="badge" style="background:var(--amber-bg);color:var(--amber)">Balance correction</span>';
+  const t = e.type === 'to_person' ? `To ${escapeHtml(e.person || '?')}` : e.type === 'in' ? 'Money in' : 'Money out';
+  return `${t}${e.category ? ` · <b>${escapeHtml(e.category)}</b>` : ''}${e.type === 'in' && e.person ? ` · from ${escapeHtml(e.person)}` : ''}`;
+}
+function mSigned(e, bank) {
+  if (e.type === 'own_transfer') return bank && bank === e.to_bank ? e.amount : bank && bank === e.bank ? -e.amount : null;
+  if (e.type === 'in' || e.type === 'correction') return e.amount;
+  return -e.amount;
+}
+async function loadMoneyEntries() {
+  const body = document.getElementById('money-tab-body');
+  const q = new URLSearchParams(Object.entries(MONEY_FILTER).filter(([, v]) => v)).toString();
+  const d = await ledgerApi('money/entries' + (q ? '?' + q : ''));
+  const rows = (d && d.ok && d.entries) || [];
+  const sel = (id, opts, cur) => `<select onchange="MONEY_FILTER.${id}=this.value;loadMoneyEntries()" style="width:auto;font-size:12.5px;padding:6px 10px">${opts.map(([v, l]) => `<option value="${escapeHtml(v)}"${v === cur ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('')}</select>`;
+  const filters = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+    ${sel('bank', [['', 'All banks'], ...MONEY.banks.map(b => [b.name, b.name])], MONEY_FILTER.bank)}
+    ${sel('type', [['', 'All types'], ['own_transfer', 'To my account'], ['to_person', 'To someone else'], ['in', 'Money in'], ['out', 'Money out'], ['correction', 'Corrections']], MONEY_FILTER.type)}
+    <input type="month" value="${escapeHtml(MONEY_FILTER.month)}" onchange="MONEY_FILTER.month=this.value;loadMoneyEntries()" style="width:auto;font-size:12.5px;padding:5px 8px">
+  </div>`;
+  const tr = rows.map(e => {
+    const amt = mSigned(e, MONEY_FILTER.bank);
+    if (MONEY_EDIT === e.id) {
+      return `<tr><td colspan="5"><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:end">
+        <div><label class="lbl">When</label><input type="datetime-local" id="money-edit-date" value="${mUtcToLocalInput(e.date)}" style="font-size:12.5px"></div>
+        ${e.type !== 'correction' ? `<div><label class="lbl">Amount £</label><input type="number" step="0.01" id="money-edit-amount" value="${e.amount}" style="width:110px;font-size:12.5px"></div>` : ''}
+        <div style="flex:1;min-width:180px"><label class="lbl">Note</label><input type="text" id="money-edit-note" value="${escapeHtml(e.note || '')}" style="font-size:12.5px"></div>
+        <button onclick="moneySaveEdit(${e.id})" style="padding:7px 12px;font-size:12px;border:none;border-radius:6px;background:var(--brand);color:#fff;cursor:pointer;font-family:inherit">Save</button>
+        <button onclick="MONEY_EDIT=null;loadMoneyEntries()" style="padding:7px 12px;font-size:12px;border:.5px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer;font-family:inherit">Cancel</button>
+      </div></td></tr>`;
+    }
+    return `<tr style="border-top:.5px solid var(--border)">
+      <td style="font-size:11.5px;white-space:nowrap;color:var(--text2)">${escapeHtml(formatLedgerDate(e.date))}</td>
+      <td style="font-size:12.5px;white-space:nowrap">${escapeHtml(e.bank)}</td>
+      <td style="font-size:12.5px">${mEntryLabel(e)}${e.note ? `<div style="font-size:11.5px;color:var(--text3)">${escapeHtml(e.note)}</div>` : ''}</td>
+      <td class="r tn" style="font-weight:600;color:${amt == null ? 'var(--text)' : amt >= 0 ? 'var(--green)' : 'var(--red)'}">${amt == null ? mGbp(e.amount) : mSgn(amt)}</td>
+      <td style="white-space:nowrap;text-align:right"><span style="cursor:pointer;color:var(--text2);font-size:12px;margin-right:8px" onclick="MONEY_EDIT=${e.id};loadMoneyEntries()" title="Edit"><i class="ti ti-pencil"></i></span><span style="cursor:pointer;color:var(--red);font-size:12px" onclick="moneyDeleteEntry(${e.id})" title="Delete (undoes the balance change)"><i class="ti ti-trash"></i></span></td>
+    </tr>`;
+  }).join('');
+  body.innerHTML = `<div class="card card-pad">${filters}<div style="overflow-x:auto"><table class="dt" style="min-width:620px"><thead><tr><th>When</th><th>Bank</th><th>What</th><th class="r">Amount</th><th></th></tr></thead><tbody>${tr || '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:16px">Nothing logged yet.</td></tr>'}</tbody></table></div></div>`;
+}
+async function moneySaveEdit(id) {
+  const body = { date: mToUtc(document.getElementById('money-edit-date').value), note: document.getElementById('money-edit-note').value };
+  const a = document.getElementById('money-edit-amount');
+  if (a) body.amount = parseFloat(a.value);
+  const d = await ledgerApi('money/entries/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!d || !d.ok) { alert((d && d.error) || 'Could not save.'); return; }
+  MONEY_EDIT = null;
+  await loadMoney();
+}
+async function moneyDeleteEntry(id) {
+  if (!confirm('Delete this entry? Its balance change is undone.')) return;
+  const d = await ledgerApi('money/entries/' + id, { method: 'DELETE' });
+  if (!d || !d.ok) { alert((d && d.error) || 'Could not delete.'); return; }
+  await loadMoney();
+}
+
+// ---- spending report ----
+let MONEY_MONTHS = 6;
+async function loadMoneySpending() {
+  const body = document.getElementById('money-tab-body');
+  const d = await ledgerApi('money/report?months=' + MONEY_MONTHS);
+  const rows = (d && d.ok && d.report && d.report.rows) || [];
+  const months = [];
+  const now = new Date();
+  for (let i = MONEY_MONTHS - 1; i >= 0; i--) { const x = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push(`${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}`); }
+  const mLabel = m => new Date(m + '-01T00:00:00').toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
+  const cell = (list, m) => list.filter(r => r.month === m).reduce((s, r) => s + r.total, 0);
+  const money = n => n ? mGbp(n) : '<span style="color:var(--text3)">—</span>';
+  const outRows = rows.filter(r => r.type === 'out' || r.type === 'to_person');
+  const catsOut = MONEY.categories.filter(c => c.kind === 'out');
+  const section = [];
+  for (const [b, label] of MONEY_BRACKETS) {
+    const list = catsOut.filter(c => (c.bracket || 'non_essential') === b);
+    const sub = outRows.filter(r => r.category_id && list.some(c => c.id === r.category_id));
+    section.push(`<tr style="background:var(--surface2)"><td style="font-weight:700">${label}</td>${months.map(m => `<td class="r tn" style="font-weight:700">${money(cell(sub, m))}</td>`).join('')}</tr>`);
+    for (const c of list) {
+      const r = outRows.filter(x => x.category_id === c.id);
+      if (!r.length) continue;
+      section.push(`<tr><td style="padding-left:18px">${escapeHtml(c.name)}</td>${months.map(m => `<td class="r tn">${money(cell(r, m))}</td>`).join('')}</tr>`);
+    }
+  }
+  const uncategorised = outRows.filter(r => !r.category_id);
+  if (uncategorised.length) section.push(`<tr style="background:var(--surface2)"><td style="font-weight:700">To someone else (no category)</td>${months.map(m => `<td class="r tn" style="font-weight:700">${money(cell(uncategorised, m))}</td>`).join('')}</tr>`);
+  section.push(`<tr style="border-top:1.5px solid var(--border)"><td style="font-weight:700">Total out</td>${months.map(m => `<td class="r tn" style="font-weight:700;color:var(--red)">${money(cell(outRows, m))}</td>`).join('')}</tr>`);
+  const inRows = rows.filter(r => r.type === 'in');
+  const inSection = MONEY.categories.filter(c => c.kind === 'in').map(c => {
+    const r = inRows.filter(x => x.category_id === c.id);
+    return r.length ? `<tr><td style="padding-left:18px">${escapeHtml(c.name)}</td>${months.map(m => `<td class="r tn">${money(cell(r, m))}</td>`).join('')}</tr>` : '';
+  }).join('');
+  const thisM = months[months.length - 1];
+  const br = b => outRows.filter(r => r.month === thisM && r.category_id && catsOut.some(c => c.id === r.category_id && (c.bracket || 'non_essential') === b)).reduce((s, r) => s + r.total, 0);
+  const tile = (label, value, color) => `<div class="card" style="padding:10px 12px"><div style="font-size:10.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">${label}</div><div style="font-size:18px;font-weight:700${color ? ';color:' + color : ''}">${value}</div></div>`;
+  body.innerHTML = `<div class="card card-pad">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+      <strong style="font-size:14px">Spending by category</strong>
+      <div style="display:flex;gap:6px">${[3, 6, 12].map(n => mBtn(MONEY_MONTHS === n, `MONEY_MONTHS=${n};loadMoneySpending()`, n + ' months', 'padding:6px 12px;font-size:12px')).join('')}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">
+      ${tile('This month: essential', mGbp(br('essential')))}
+      ${tile('Non-essential', mGbp(br('non_essential')), 'var(--amber)')}
+      ${tile('Business', mGbp(br('business')))}
+      ${tile('Money in', mGbp(cell(inRows, thisM)), 'var(--green)')}
+    </div>
+    <div style="overflow-x:auto"><table class="dt" style="min-width:${200 + months.length * 90}px"><thead><tr><th>Money out</th>${months.map(m => `<th class="r">${mLabel(m)}</th>`).join('')}</tr></thead><tbody>${section.join('')}</tbody></table></div>
+    ${inSection ? `<div style="overflow-x:auto;margin-top:14px"><table class="dt" style="min-width:${200 + months.length * 90}px"><thead><tr><th>Money in</th>${months.map(m => `<th class="r">${mLabel(m)}</th>`).join('')}</tr></thead><tbody>${inSection}<tr style="border-top:1.5px solid var(--border)"><td style="font-weight:700">Total in</td>${months.map(m => `<td class="r tn" style="font-weight:700;color:var(--green)">${money(cell(inRows, m))}</td>`).join('')}</tr></tbody></table></div>` : ''}
+    <div style="font-size:11px;color:var(--text3);margin-top:10px">Transfers between your own banks aren't spending, so they're left out. Bookie deposits and withdrawals aren't in here either.</div>
+  </div>`;
+}
+
+// ---- errors (own banks) ----
+async function loadMoneyErrors() {
+  const body = document.getElementById('money-tab-body');
+  const d = await ledgerApi('money/errors?status=' + MONEY_ERR_STATUS);
+  if (!d || !d.ok) { body.innerHTML = `<div class="card card-pad" style="color:var(--text3)">${escapeHtml((d && d.error) || 'Not available.')}</div>`; return; }
+  const rows = d.rows || [];
+  const tr = rows.map(r => {
+    const dt = r.detail || {};
+    const what = r.kind === 'bank_override'
+      ? `<span class="badge" style="background:var(--amber-bg);color:var(--amber)">Balance corrected</span><div style="font-size:11.5px;margin-top:3px">by ${escapeHtml(dt.by || '?')}: site had ${mGbp(r.expected)}, bank showed ${mGbp(r.live)}</div>`
+      : '<span class="badge" style="background:var(--red-bg);color:var(--red)">Balance moved off</span>';
+    const reasonCell = r.reason
+      ? `<div style="font-size:12px">${escapeHtml(r.reason)}</div><div style="font-size:10.5px;color:var(--text3)">${escapeHtml(formatLedgerDate(r.reason_at))} · <span style="cursor:pointer;text-decoration:underline dotted" onclick="moneySaveErrorReason(${r.id}, true)">clear</span></div>`
+      : `<div style="display:flex;gap:4px"><input id="money-err-${r.id}" type="text" placeholder="Reason…" onkeydown="if(event.key==='Enter')moneySaveErrorReason(${r.id})" style="flex:1;min-width:120px;padding:5px 7px;font-size:12px"><button onclick="moneySaveErrorReason(${r.id})" style="padding:4px 9px;font-size:11.5px;border:none;border-radius:6px;background:var(--brand);color:#fff;cursor:pointer;font-family:inherit">Save</button></div>`;
+    return `<tr style="border-top:.5px solid var(--border)">
+      <td style="font-size:11.5px;white-space:nowrap;color:var(--text2)">${escapeHtml(formatLedgerDate(r.detected_at))}</td>
+      <td style="font-size:12.5px;font-weight:600">${escapeHtml(r.bank_name || '')}</td>
+      <td style="font-size:12px">${what}</td>
+      <td class="r tn">${r.live == null ? '—' : mGbp(r.live)}</td>
+      <td class="r tn" style="color:var(--text2)">${r.expected == null ? '—' : mGbp(r.expected)}</td>
+      <td class="r tn" style="font-weight:600;color:${(r.change || 0) >= 0 ? 'var(--green)' : 'var(--red)'}">${mSgn(r.change)}</td>
+      <td style="min-width:220px">${reasonCell}</td>
+    </tr>`;
+  }).join('');
+  body.innerHTML = `<div class="card card-pad">
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Checked every 2 minutes once a bank has its real balance set. A row appears when a bank's balance moves away from what its entries and bookie deposits/withdrawals say it should be, or when you correct a balance with "Check". Give each one a reason.</div>
+    <div style="display:flex;gap:6px;margin-bottom:10px">${[['open', 'Unexplained'], ['explained', 'Explained'], ['all', 'All']].map(([k, l]) => mBtn(MONEY_ERR_STATUS === k, `MONEY_ERR_STATUS='${k}';loadMoneyErrors()`, l, 'padding:6px 12px;font-size:12.5px')).join('')}</div>
+    <div style="overflow-x:auto"><table class="dt" style="min-width:820px"><thead><tr><th>Detected</th><th>Bank</th><th>What</th><th class="r">Live</th><th class="r">Expected</th><th class="r">Change</th><th>Reason</th></tr></thead>
+    <tbody>${tr || `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:16px">${MONEY_ERR_STATUS === 'open' ? 'No unexplained errors.' : 'Nothing here.'}</td></tr>`}</tbody></table></div>
+  </div>`;
+}
+async function moneySaveErrorReason(id, clear) {
+  const inp = document.getElementById('money-err-' + id);
+  const reason = clear ? '' : (inp ? inp.value.trim() : '');
+  if (!clear && !reason) return;
+  const d = await ledgerApi('money/errors/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) });
+  if (!d || !d.ok) { alert((d && d.error) || 'Could not save.'); return; }
+  await loadMoney();
+}
+
+// ---- categories ----
+async function renderMoneyCategories() {
+  const body = document.getElementById('money-tab-body');
+  const d = await ledgerApi('money?inactive=1');
+  const cats = (d && d.ok && d.categories) || [];
+  const row = c => `<tr style="border-top:.5px solid var(--border);${c.active ? '' : 'opacity:.5'}">
+    <td><input type="text" value="${escapeHtml(c.name)}" onchange="moneyEditCategory(${c.id}, {name:this.value})" style="font-size:12.5px;padding:5px 8px"></td>
+    <td>${c.kind === 'out' ? `<select onchange="moneyEditCategory(${c.id}, {bracket:this.value})" style="width:auto;font-size:12.5px;padding:5px 8px">${MONEY_BRACKETS.map(([b, l]) => `<option value="${b}"${(c.bracket || 'non_essential') === b ? ' selected' : ''}>${l}</option>`).join('')}</select>` : '<span style="color:var(--text3);font-size:12px">—</span>'}</td>
+    <td style="text-align:right"><span style="cursor:pointer;font-size:12px;color:${c.active ? 'var(--red)' : 'var(--brand)'}" onclick="moneyEditCategory(${c.id}, {active:${c.active ? 0 : 1}})">${c.active ? 'Hide' : 'Show'}</span></td>
+  </tr>`;
+  const table = (kind, title) => `<div style="font-size:12.5px;font-weight:600;margin:6px 0">${title}</div>
+    <table class="dt" style="margin-bottom:14px"><thead><tr><th>Name</th><th>Bracket</th><th></th></tr></thead><tbody>${cats.filter(c => c.kind === kind).map(row).join('')}</tbody></table>`;
+  body.innerHTML = `<div class="card card-pad">
+    ${table('out', 'Money out')}
+    ${table('in', 'Money in')}
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:end;border-top:.5px solid var(--border);padding-top:12px">
+      <div><label class="lbl">New category</label><input type="text" id="money-newcat-name" placeholder="e.g. Gym" style="font-size:12.5px"></div>
+      <div><label class="lbl">Type</label><select id="money-newcat-kind" style="width:auto;font-size:12.5px" onchange="document.getElementById('money-newcat-bracket').style.display=this.value==='out'?'':'none'"><option value="out">Money out</option><option value="in">Money in</option></select></div>
+      <div><label class="lbl">&nbsp;</label><select id="money-newcat-bracket" style="width:auto;font-size:12.5px">${MONEY_BRACKETS.map(([b, l]) => `<option value="${b}">${l}</option>`).join('')}</select></div>
+      <button onclick="moneyAddCategory()" style="padding:8px 14px;font-size:12.5px;border:none;border-radius:var(--radius);background:var(--brand);color:#fff;cursor:pointer;font-family:inherit">Add</button>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:10px">Hiding a category takes it off the Add buttons but keeps its history in Spending.</div>
+  </div>`;
+}
+async function moneyEditCategory(id, patch) {
+  const d = await ledgerApi('money/categories/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+  if (!d || !d.ok) { alert((d && d.error) || 'Could not save.'); return; }
+  const m = await ledgerApi('money'); if (m && m.ok) MONEY = m;
+  renderMoneyCategories();
+}
+async function moneyAddCategory() {
+  const name = document.getElementById('money-newcat-name').value.trim();
+  if (!name) return;
+  const d = await ledgerApi('money/categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, kind: document.getElementById('money-newcat-kind').value, bracket: document.getElementById('money-newcat-bracket').value }) });
+  if (!d || !d.ok) { alert((d && d.error) || 'Could not add.'); return; }
+  const m = await ledgerApi('money'); if (m && m.ok) MONEY = m;
+  renderMoneyCategories();
+}
+
+// Pre-2026-10-08 Money page (deposit / withdrawal / bank transfer / external) — its markup is gone.
+async function initMoneyPageLegacy() {
   setMoneyPageType('deposit');
   document.getElementById('money-amount').value = '';
   document.getElementById('money-reason').value = '';

@@ -525,7 +525,7 @@ router.post('/accounts/publish', (req, res) => {
 // GET /api/ledger/banks
 router.get('/banks', (req, res) => {
   try {
-    const banks = db.prepare(`SELECT * FROM banks ORDER BY name`).all();
+    const banks = db.prepare(`SELECT * FROM banks WHERE owner IS NULL OR owner = 'Jordan' ORDER BY name`).all();
     const result = banks.map(b => {
       const lockedTotal = db.prepare(`SELECT COALESCE(SUM(amount),0) t FROM locked_funds WHERE bank = ?`).get(b.name).t;
       return { name: b.name, starting_balance: b.starting_balance, remaining: b.starting_balance, locked_total: lockedTotal };
@@ -540,8 +540,15 @@ router.post('/banks', requireAdmin, (req, res) => {
   try {
     const { name, starting_balance = 0 } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ ok: false, error: 'name required' });
+    // Once a bank has its real opening balance (Money page), setting it here goes through the
+    // same correction path, so the change is on record and in the error log.
+    const existing = db.prepare(`SELECT * FROM banks WHERE name = ?`).get(name.trim());
+    if (existing && existing.opening_at && bankLedger) {
+      bankLedger.setRealBalance(existing.owner || 'Jordan', existing.name, parseFloat(starting_balance) || 0);
+      return res.json({ ok: true });
+    }
     db.prepare(
-      `INSERT INTO banks (name, starting_balance) VALUES (?, ?)
+      `INSERT INTO banks (name, starting_balance, owner) VALUES (?, ?, 'Jordan')
        ON CONFLICT(name) DO UPDATE SET starting_balance = excluded.starting_balance`
     ).run(name.trim(), parseFloat(starting_balance) || 0);
     res.json({ ok: true });
@@ -559,6 +566,8 @@ router.delete('/banks/:name', (req, res) => {
     if (liveCount > 0) {
       return res.status(409).json({ ok: false, error: `Can't delete — ${liveCount} live account(s) are still linked to this bank.` });
     }
+    const entries = db.prepare(`SELECT COUNT(*) c FROM bank_entries WHERE bank = ? OR to_bank = ?`).get(name, name).c;
+    if (entries > 0) return res.status(409).json({ ok: false, error: `Can't delete — this bank has ${entries} Money entr${entries === 1 ? 'y' : 'ies'}.` });
     db.prepare(`DELETE FROM banks WHERE name = ?`).run(name);
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
@@ -583,6 +592,7 @@ router.patch('/banks/:name/rename', (req, res) => {
     db.prepare(`UPDATE bank_transfers SET from_bank = ? WHERE from_bank = ?`).run(newName, oldName);
     db.prepare(`UPDATE bank_transfers SET to_bank = ? WHERE to_bank = ?`).run(newName, oldName);
     db.prepare(`UPDATE locked_funds SET bank = ? WHERE bank = ?`).run(newName, oldName);
+    if (bankLedger) bankLedger.renameBank(oldName, newName);
   });
   try {
     if (!newName) return res.status(400).json({ ok: false, error: 'newName required' });
@@ -954,6 +964,48 @@ router.get('/manual-adjustments', requireJordan, (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// ================== MONEY (own banks — Jordan and Kieran, separately) ==================
+// bank-ledger.js: transfers between own banks, to someone else, money in / out by category,
+// "set real balance". Everything is scoped to the logged-in user's own banks.
+const bankLedger = (() => {
+  try { return require('./bank-ledger'); }
+  catch (e) { console.error('[money] bank-ledger not loaded:', e.message); return null; }
+})();
+function requireBankUser(req, res, next) {
+  if (!bankLedger || !bankLedger.BANK_USERS.includes(req.username)) return res.status(403).json({ ok: false, error: 'Not available.' });
+  next();
+}
+const moneyTry = fn => (req, res) => {
+  try { res.json({ ok: true, ...(fn(req) || {}) }); }
+  catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+};
+router.get('/money', requireBankUser, moneyTry(req => ({
+  banks: bankLedger.listBanks(req.username),
+  categories: bankLedger.listCategories(req.username, req.query.inactive === '1'),
+  people: bankLedger.people(req.username),
+  errors: balanceIntegrity ? balanceIntegrity.summary(req.username, 'banks') : null,
+})));
+router.get('/money/entries', requireBankUser, moneyTry(req => ({ entries: bankLedger.listEntries(req.username, req.query) })));
+router.post('/money/entries', requireBankUser, moneyTry(req => ({ entry: bankLedger.addEntry(req.username, req.body || {}) })));
+router.patch('/money/entries/:id', requireBankUser, moneyTry(req => { bankLedger.editEntry(req.username, Number(req.params.id), req.body || {}); }));
+router.delete('/money/entries/:id', requireBankUser, moneyTry(req => { bankLedger.deleteEntry(req.username, Number(req.params.id)); }));
+router.post('/money/banks', requireBankUser, moneyTry(req => { bankLedger.addBank(req.username, req.body && req.body.name); }));
+router.post('/money/banks/:name/real-balance', requireBankUser, moneyTry(req => {
+  const actual = parseFloat(req.body && req.body.actual);
+  if (isNaN(actual)) throw new Error('Enter the balance the bank shows');
+  return { result: bankLedger.setRealBalance(req.username, req.params.name, actual) };
+}));
+router.get('/money/report', requireBankUser, moneyTry(req => ({ report: bankLedger.report(req.username, req.query.months) })));
+router.post('/money/categories', requireBankUser, moneyTry(req => ({ id: bankLedger.addCategory(req.username, req.body || {}) })));
+router.patch('/money/categories/:id', requireBankUser, moneyTry(req => { bankLedger.editCategory(req.username, Number(req.params.id), req.body || {}); }));
+router.get('/money/errors', requireBankUser, moneyTry(req => ({
+  summary: balanceIntegrity.summary(req.username, 'banks'),
+  rows: balanceIntegrity.listErrors(req.query.status, 500, req.username, 'banks'),
+})));
+router.patch('/money/errors/:id', requireBankUser, moneyTry(req => {
+  if (!balanceIntegrity.setReason(Number(req.params.id), req.body && req.body.reason, req.username)) throw new Error('Row not found');
+}));
+
 // ================== ACCOUNT BALANCE ERROR LOG (2026-10-08, Jordan only) ==================
 // Background check in balance-integrity.js: logs a row whenever an account's live balance stops
 // matching its own history, or a settled bet's P/L doesn't fit its stake and odds. Each row can
@@ -966,7 +1018,7 @@ const balanceIntegrity = (() => {
 // GET /api/ledger/balance-errors?status=open|explained|all
 router.get('/balance-errors', requireJordan, (req, res) => {
   if (!balanceIntegrity) return res.json({ ok: false, error: 'Balance check not loaded' });
-  try { res.json({ ok: true, summary: balanceIntegrity.summary(), rows: balanceIntegrity.listErrors(req.query.status) }); }
+  try { res.json({ ok: true, summary: balanceIntegrity.summary('Jordan', 'accounts'), rows: balanceIntegrity.listErrors(req.query.status, 500, 'Jordan', 'accounts') }); }
   catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
@@ -1144,7 +1196,7 @@ router.patch('/withdrawals/:id/confirm', requireAdmin, (req, res) => {
     if (!w) throw new Error('Withdrawal not found');
     if (w.status === 'confirmed') return; // already confirmed — don't double-apply
     if (w.profile) db.prepare(`UPDATE banks SET starting_balance = starting_balance + ? WHERE name = ?`).run(w.amount, w.profile);
-    db.prepare(`UPDATE withdrawals SET status = 'confirmed' WHERE id = ?`).run(id);
+    db.prepare(`UPDATE withdrawals SET status = 'confirmed', confirmed_at = datetime('now') WHERE id = ?`).run(id);
   });
   try {
     doConfirm(req.params.id);
@@ -2458,7 +2510,7 @@ router.put('/custom-sheets/:key', (req, res) => {
 // ================== BANKROLL BREAKDOWN ==================
 
 function computeLiquidBankroll() {
-  const bankTotal = db.prepare(`SELECT COALESCE(SUM(starting_balance),0) t FROM banks`).get().t;
+  const bankTotal = db.prepare(`SELECT COALESCE(SUM(starting_balance),0) t FROM banks WHERE owner IS NULL OR owner = 'Jordan'`).get().t;
   const accountTotal = db.prepare(`SELECT COALESCE(SUM(balance),0) t FROM accounts WHERE status NOT IN ('closed')`).get().t;
   return bankTotal + accountTotal;
 }

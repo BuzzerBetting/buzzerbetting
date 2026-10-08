@@ -46,7 +46,18 @@ CREATE TABLE IF NOT EXISTS balance_errors (
   reason_at   TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_balance_errors_open ON balance_errors (reason, detected_at);
+CREATE TABLE IF NOT EXISTS bank_check_state (
+  bank       TEXT PRIMARY KEY,
+  drift      REAL NOT NULL,
+  expected   REAL,
+  live       REAL,
+  checked_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `);
+// owner: whose log the row is in (accounts are Jordan's; a bank row is its owner's).
+// bank_name: set on 'bank' / 'bank_override' rows (own banks on the Money page).
+try { db.exec(`ALTER TABLE balance_errors ADD COLUMN owner TEXT NOT NULL DEFAULT 'Jordan'`); } catch (e) { /* already exists */ }
+try { db.exec(`ALTER TABLE balance_errors ADD COLUMN bank_name TEXT`); } catch (e) { /* already exists */ }
 
 const meta = k => (db.prepare(`SELECT v FROM balance_check_meta WHERE k = ?`).get(k) || {}).v;
 const setMeta = (k, v) => db.prepare(`INSERT INTO balance_check_meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v`).run(k, v);
@@ -216,6 +227,46 @@ function checkOverrides() {
   return rows.length;
 }
 
+// ---- own banks (Money page, bank-ledger.js) ----
+// Same idea as the accounts: once a bank has an opening balance, its live balance is rebuilt
+// from the opening balance + entries + bookie deposits/withdrawals since, and a row is logged
+// whenever the gap moves. "Set real balance" corrections after the opening are logged too.
+// Rows carry the bank's owner, so Jordan and Kieran each only see their own.
+let bankLedger = null;
+function bl() { if (!bankLedger) bankLedger = require('./bank-ledger'); return bankLedger; }
+function checkBanks() {
+  const created = {};
+  const bump = o => { created[o] = (created[o] || 0) + 1; };
+  const state = new Map(db.prepare(`SELECT * FROM bank_check_state`).all().map(r => [r.bank, r]));
+  const ins = db.prepare(`INSERT INTO balance_errors (kind, owner, bank_name, expected, live, change, drift, detail) VALUES ('bank', ?, ?, ?, ?, ?, ?, ?)`);
+  const up = db.prepare(`INSERT INTO bank_check_state (bank, drift, expected, live, checked_at) VALUES (?, ?, ?, ?, datetime('now'))
+                         ON CONFLICT(bank) DO UPDATE SET drift = excluded.drift, expected = excluded.expected, live = excluded.live, checked_at = excluded.checked_at`);
+  const rows = bl().expectedBanks();
+  db.transaction(() => {
+    for (const b of rows) {
+      const prev = state.get(b.bank);
+      const before = prev ? prev.drift : 0;
+      if (Math.abs(b.drift - before) >= TOL) {
+        ins.run(b.owner, b.bank, b.expected, b.live, +(b.drift - before).toFixed(2), b.drift,
+          JSON.stringify({ previousDrift: before, since: prev ? prev.checked_at : null }));
+        bump(b.owner);
+      }
+      up.run(b.bank, b.drift, b.expected, b.live);
+    }
+    // Corrections ("Set real balance" after the opening one).
+    const last = meta('bank_corr_last_id') || '0';
+    const corr = db.prepare(`SELECT e.*, b.owner FROM bank_entries e JOIN banks b ON b.name = e.bank WHERE e.type = 'correction' AND e.id > ? ORDER BY e.id`).all(Number(last));
+    const insC = db.prepare(`INSERT INTO balance_errors (kind, owner, bank_name, detected_at, expected, live, change, detail) VALUES ('bank_override', ?, ?, ?, ?, ?, ?, ?)`);
+    for (const c of corr) {
+      const m = /real balance £(-?[\d.]+) \(site had £(-?[\d.]+)\)/.exec(c.note || '');
+      insC.run(c.owner, c.bank, c.created_at, m ? +m[2] : null, m ? +m[1] : null, +c.amount.toFixed(2), JSON.stringify({ by: c.created_by, entryId: c.id }));
+      bump(c.owner);
+    }
+    if (corr.length) setMeta('bank_corr_last_id', String(corr[corr.length - 1].id));
+  })();
+  return created;
+}
+
 let lastRun = null, running = false;
 function runCheck() {
   if (running) return null;
@@ -224,7 +275,15 @@ function runCheck() {
     const balance = checkBalances();
     const betPl = checkBetPls();
     const overrides = checkOverrides();
+    let bankRows = {};
+    try { bankRows = checkBanks(); } catch (e) { console.error('[balance-integrity] banks:', e.message); }
     lastRun = new Date().toISOString();
+    for (const [owner, n] of Object.entries(bankRows)) {
+      try {
+        db.prepare(`INSERT INTO notifications (type, audience, title, body) VALUES ('balance_error', ?, ?, ?)`)
+          .run(`user:${owner}`, `${n} new bank balance error${n === 1 ? '' : 's'}`, 'See Money → Errors');
+      } catch (e) { /* best-effort */ }
+    }
     const total = balance + betPl + overrides;
     if (total) {
       // Jordan-only bell notification (audience 'user:Jordan').
@@ -237,35 +296,42 @@ function runCheck() {
           ].filter(Boolean).join(' · '));
       } catch (e) { /* notifications are best-effort */ }
     }
-    return { balance, betPl, overrides, lastRun };
+    return { balance, betPl, overrides, banks: bankRows, lastRun };
   } finally { running = false; }
 }
 
-function listErrors(status = 'open', limit = 500) {
-  const where = status === 'explained' ? `WHERE e.reason IS NOT NULL` : status === 'all' ? '' : `WHERE e.reason IS NULL`;
+// owner: whose rows; kinds: 'banks' = only own-bank rows (Money page), 'accounts' = everything else.
+function listErrors(status = 'open', limit = 500, owner = 'Jordan', kinds = null) {
+  const conds = ['e.owner = ?'];
+  if (status === 'explained') conds.push('e.reason IS NOT NULL'); else if (status !== 'all') conds.push('e.reason IS NULL');
+  if (kinds === 'banks') conds.push(`e.kind IN ('bank', 'bank_override')`);
+  if (kinds === 'accounts') conds.push(`e.kind NOT IN ('bank', 'bank_override')`);
+  const where = 'WHERE ' + conds.join(' AND ');
   return db.prepare(`
     SELECT e.*, a.account_id AS account_code, a.bookie, a.status AS account_status, a.profile AS bank, a.balance AS current_live,
-           s.drift AS current_drift
+           COALESCE(s.drift, bs.drift) AS current_drift
     FROM balance_errors e
     LEFT JOIN accounts a ON a.id = e.account_id
     LEFT JOIN balance_check_state s ON s.account_id = e.account_id
+    LEFT JOIN bank_check_state bs ON bs.bank = e.bank_name
     ${where}
-    ORDER BY e.detected_at DESC, e.id DESC LIMIT ?`).all(Math.min(Number(limit) || 500, 2000))
+    ORDER BY e.detected_at DESC, e.id DESC LIMIT ?`).all(owner, Math.min(Number(limit) || 500, 2000))
     .map(r => ({ ...r, detail: parse(r.detail) }));
 }
-function summary() {
+function summary(owner = 'Jordan', kinds = null) {
+  const kindCond = kinds === 'banks' ? `AND kind IN ('bank', 'bank_override')` : kinds === 'accounts' ? `AND kind NOT IN ('bank', 'bank_override')` : '';
   const c = db.prepare(`SELECT COALESCE(SUM(reason IS NULL), 0) open, COALESCE(SUM(reason IS NOT NULL), 0) explained,
                                COALESCE(SUM(reason IS NULL AND kind = 'balance'), 0) openBalance, COALESCE(SUM(reason IS NULL AND kind = 'bet_pl'), 0) openBetPl,
                                COALESCE(SUM(reason IS NULL AND kind = 'override'), 0) openOverride
-                        FROM balance_errors`).get();
+                        FROM balance_errors WHERE owner = ? ${kindCond}`).get(owner);
   const drift = db.prepare(`SELECT COUNT(*) n, ROUND(SUM(ABS(s.drift)), 2) abs FROM balance_check_state s JOIN accounts a ON a.id = s.account_id
                             WHERE ABS(s.drift) >= ? AND a.status IN ('good', 'restricted')`).get(TOL);
   return { ...c, accountsOff: drift.n, accountsOffAbs: drift.abs || 0, lastRun, startedAt: meta('balance_started_at'), plFrom: meta('pl_started_at') };
 }
 function setReason(id, reason, username) {
   const r = reason == null || String(reason).trim() === '' ? null : String(reason).trim().slice(0, 500);
-  return db.prepare(`UPDATE balance_errors SET reason = ?, reason_by = ?, reason_at = CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END WHERE id = ?`)
-    .run(r, r ? (username || null) : null, r, id).changes;
+  return db.prepare(`UPDATE balance_errors SET reason = ?, reason_by = ?, reason_at = CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END WHERE id = ? AND owner = ?`)
+    .run(r, r ? (username || null) : null, r, id, username).changes;
 }
 
 function start(intervalMs = 120000) {
