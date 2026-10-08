@@ -162,6 +162,12 @@ router.use((req, res, next) => {
 
 // Blocks the request unless the session resolved to an admin. Used on every action that
 // should be Admin-only regardless of what the frontend UI shows or hides.
+// Jordan-only pages (2026-10-08): the Account Balance Error Log and the balance override log.
+function requireJordan(req, res, next) {
+  if (req.username !== 'Jordan') return res.status(403).json({ ok: false, error: 'Not available.' });
+  next();
+}
+
 function requireAdmin(req, res, next) {
   if (req.userRole !== 'admin') return res.status(403).json({ ok: false, error: 'Admin access required for this action.' });
   next();
@@ -467,9 +473,9 @@ router.post('/accounts', (req, res) => {
     const idError = validateAccountId(account_id, bookie);
     if (idError) return res.status(409).json({ ok: false, error: idError });
     const stmt = db.prepare(
-      `INSERT INTO accounts (account_id, profile, bookie, account_name, label, status, note, balance) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO accounts (account_id, profile, bookie, account_name, label, status, note, balance, starting_balance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
-    const info = stmt.run(account_id, profile, bookie, account_name, label, status, note, balance);
+    const info = stmt.run(account_id, profile, bookie, account_name, label, status, note, balance, parseFloat(balance) || 0);
     const account = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(info.lastInsertRowid);
     res.json({ ok: true, account });
   } catch (err) {
@@ -937,7 +943,7 @@ router.get('/accounts/:id/full-transactions', (req, res) => {
 // deposit or withdrawal.
 // GET /api/ledger/manual-adjustments — every manual balance override across every account,
 // most recent first. Powers the dedicated Manual Adjustment Log page.
-router.get('/manual-adjustments', (req, res) => {
+router.get('/manual-adjustments', requireJordan, (req, res) => {
   try {
     const rows = db.prepare(
       `SELECT ma.*, a.account_id AS card_id, a.bookie
@@ -946,6 +952,38 @@ router.get('/manual-adjustments', (req, res) => {
     ).all();
     res.json({ ok: true, adjustments: rows });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// ================== ACCOUNT BALANCE ERROR LOG (2026-10-08, Jordan only) ==================
+// Background check in balance-integrity.js: logs a row whenever an account's live balance stops
+// matching its own history, or a settled bet's P/L doesn't fit its stake and odds. Each row can
+// be given a reason.
+const balanceIntegrity = (() => {
+  try { const m = require('./balance-integrity'); m.start(); return m; }
+  catch (e) { console.error('[balance-errors] balance-integrity not loaded:', e.message); return null; }
+})();
+
+// GET /api/ledger/balance-errors?status=open|explained|all
+router.get('/balance-errors', requireJordan, (req, res) => {
+  if (!balanceIntegrity) return res.json({ ok: false, error: 'Balance check not loaded' });
+  try { res.json({ ok: true, summary: balanceIntegrity.summary(), rows: balanceIntegrity.listErrors(req.query.status) }); }
+  catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// PATCH /api/ledger/balance-errors/:id — body: { reason } (empty clears it, back to unexplained)
+router.patch('/balance-errors/:id', requireJordan, (req, res) => {
+  if (!balanceIntegrity) return res.json({ ok: false, error: 'Balance check not loaded' });
+  try {
+    const changed = balanceIntegrity.setReason(Number(req.params.id), req.body && req.body.reason, req.username);
+    res.json({ ok: !!changed });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/balance-errors/run — run the check now rather than waiting for the timer.
+router.post('/balance-errors/run', requireJordan, (req, res) => {
+  if (!balanceIntegrity) return res.json({ ok: false, error: 'Balance check not loaded' });
+  try { res.json({ ok: true, result: balanceIntegrity.runCheck() }); }
+  catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
 router.delete('/manual-adjustments/:id', (req, res) => {
@@ -2817,6 +2855,7 @@ router.get('/notifications', (req, res) => {
     const audiences = req.userRole === 'admin' ? ['all', 'admin', 'staff']
       : req.userRole === 'staff' ? ['all', 'staff']
       : ['all'];
+    if (req.username) audiences.push(`user:${req.username}`); // personal rows, e.g. balance errors for Jordan
     const placeholders = audiences.map(() => '?').join(',');
     const rows = db.prepare(
       `SELECT id, type, title, body, created_at FROM notifications
