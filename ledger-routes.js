@@ -3229,7 +3229,7 @@ router.get('/calc-ev-bets/winners', (req, res) => {
   if (!market) return res.status(400).json({ ok: false, error: 'market required' });
   const hours = Math.min(Math.max(parseInt(req.query.hours, 10) || 24, 1), 720);
   try {
-    res.json({ ok: true, rows: calcEvLog.getWinners(market, hours) });
+    res.json({ ok: true, rows: calcEvLog.getWinners(market, hours, req.query.range) });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
@@ -3262,7 +3262,7 @@ router.get('/normal-ev-bets/list', (req, res) => {
 router.get('/normal-ev-bets/settled', (req, res) => {
   if (!normalEvLog) return res.json({ ok: true, rows: [] });
   const hours = Math.min(Math.max(parseInt(req.query.hours, 10) || 24, 1), 720);
-  try { res.json({ ok: true, rows: normalEvLog.getSettled(req.query.field, req.query.value, hours, req.query.all === '1') }); }
+  try { res.json({ ok: true, rows: normalEvLog.getSettled(req.query.field, req.query.value, hours, req.query.all === '1', req.query.range) }); }
   catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
@@ -3318,7 +3318,7 @@ router.get('/grosvenor-bets/winners', (req, res) => {
   if (!market) return res.status(400).json({ ok: false, error: 'market required' });
   const hours = Math.min(Math.max(parseInt(req.query.hours, 10) || 24, 1), 720);
   try {
-    res.json({ ok: true, rows: grosvenorBetLog.getWinners(market, hours, req.query.mode === 'ss' ? 'ss' : 'strict') });
+    res.json({ ok: true, rows: grosvenorBetLog.getWinners(market, hours, req.query.mode === 'ss' ? 'ss' : 'strict', req.query.range) });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 

@@ -826,7 +826,7 @@ tr.ba-placed > td{background:var(--green-bg) !important}
 <div id="calc-ev-winners-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;padding:16px">
   <div class="card card-pad" style="max-width:680px;width:100%;max-height:80vh;display:flex;flex-direction:column">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div class="sec-title" id="calc-ev-winners-title" style="margin:0;font-size:16px">Winners — last 24h</div>
+      <div class="sec-title" id="calc-ev-winners-title" style="margin:0;font-size:16px">Winners</div>
       <button class="add-btn" onclick="closeCalcEvWinnersModal()"><i class="ti ti-x"></i></button>
     </div>
     <div id="calc-ev-winners-body" style="font-size:13px;overflow:auto">Loading…</div>
@@ -14994,7 +14994,7 @@ function renderCalcEvStats(d){
   const pctFmt = n => n == null ? '—' : n.toFixed(1) + '%';
   const plFmt = n => (n >= 0 ? '+£' : '-£') + Math.abs(n).toFixed(2);
   const marketRows = (d.byMarket || []).map(m => `
-    <tr onclick="showCalcEvWinners('${escapeHtml(m.market).replace(/'/g, "\\'")}')" style="cursor:pointer" title="Click to see this market's winners from the last 24 hours">
+    <tr onclick="showCalcEvWinners('${escapeHtml(m.market).replace(/'/g, "\\'")}')" style="cursor:pointer" title="Click to see this market's winners for the selected day (Overall: last 24 hours)">
       <td style="font-size:12.5px">${escapeHtml(m.market)}</td>
       <td class="r tn">${m.bets}</td>
       <td class="r tn">${m.settled}</td>
@@ -15030,7 +15030,7 @@ function renderCalcEvStats(d){
         <div class="card" style="padding:10px 12px"><div style="font-size:10.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">OTB Goal — accum. realized xG</div><div style="font-size:16px;font-weight:700">${(d.otbXg||0).toFixed(2)}</div></div>
       </div>
       <div style="overflow-x:auto"><table class="dt" style="min-width:700px"><thead><tr><th>Market</th><th class="r">Bets</th><th class="r">Settled</th><th class="r">Won</th><th class="r">Win%</th><th class="r">Avg Odds</th><th class="r">Avg EV%</th><th class="r">EV £</th><th class="r">P/L</th></tr></thead><tbody>${marketRows || '<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:14px">No bets logged yet</td></tr>'}</tbody></table></div>
-      <div style="font-size:11px;color:var(--text3);margin-top:8px">Every +EV row Calculated +EV has ever shown is logged once (first fair/odds seen), then graded against the real match result. "EV £" is the theoretical expected profit at a flat £50 stake, from the back odds taken and the fair odds priced (odds/fair - 1) x £50 — knowable pre-match, summed across every logged bet regardless of settlement. "P/L" is what actually happened at that same flat £50 stake, settled bets only. Accumulated Header/OTB xG is the real shotmap xG behind each settled bet's actual header/OTB-shot attempt(s) — not a forecast. Overall/Yesterday/Today scope every figure above to bets logged in that window (London calendar day); clicking a market row always opens its winners from the last 24 hours regardless of which tab is selected.</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">Every +EV row Calculated +EV has ever shown is logged once (first fair/odds seen), then graded against the real match result. "EV £" is the theoretical expected profit at a flat £50 stake, from the back odds taken and the fair odds priced (odds/fair - 1) x £50 — knowable pre-match, summed across every logged bet regardless of settlement. "P/L" is what actually happened at that same flat £50 stake, settled bets only. Accumulated Header/OTB xG is the real shotmap xG behind each settled bet's actual header/OTB-shot attempt(s) — not a forecast. Overall/Yesterday/Today scope every figure above to bets logged in that window (London calendar day); clicking a market row opens its winners for the selected day (Today / Yesterday), or from the last 24 hours on Overall.</div>
     </div>`;
 }
 
@@ -15038,23 +15038,32 @@ function closeCalcEvWinnersModal(){
   const overlay = document.getElementById('calc-ev-winners-modal-overlay');
   if (overlay) overlay.style.display = 'none';
 }
+// Winners window for the Bet stats click-throughs (2026-10-09, user-requested): Today / Yesterday
+// show that London day's winners (bets logged that day — the same bets the stats count); Overall
+// keeps the last 24 hours.
+function betStatsWinnersWindow(range){
+  if (range === 'today') return { q: 'range=today', label: 'today', none: 'today' };
+  if (range === 'yesterday') return { q: 'range=yesterday', label: 'yesterday', none: 'yesterday' };
+  return { q: 'hours=24', label: 'last 24h', none: 'in the last 24 hours' };
+}
 async function showCalcEvWinners(market){
+  const win = betStatsWinnersWindow(CALC_EV_STATS_RANGE);
   const overlay = document.getElementById('calc-ev-winners-modal-overlay');
   const title = document.getElementById('calc-ev-winners-title');
   const body = document.getElementById('calc-ev-winners-body');
-  if (title) title.textContent = `${market} — winners (last 24h)`;
+  if (title) title.textContent = `${market} — winners (${win.label})`;
   if (body) body.innerHTML = `<div style="text-align:center;color:var(--text3);padding:16px"><i class="ti ti-loader"></i> Loading…</div>`;
   if (overlay) overlay.style.display = 'flex';
   try {
-    const d = await ledgerApi(`calc-ev-bets/winners?market=${encodeURIComponent(market)}&hours=24`);
+    const d = await ledgerApi(`calc-ev-bets/winners?market=${encodeURIComponent(market)}&${win.q}`);
     if (!d || !d.ok) { if (body) body.innerHTML = `<div style="color:var(--text3);font-size:13px">Failed to load winners.</div>`; return; }
-    renderCalcEvWinners(d.rows || []);
+    renderCalcEvWinners(d.rows || [], win);
   } catch (e) { if (body) body.innerHTML = `<div style="color:var(--text3);font-size:13px">Failed to load winners.</div>`; }
 }
-function renderCalcEvWinners(rows){
+function renderCalcEvWinners(rows, win){
   const body = document.getElementById('calc-ev-winners-body');
   if (!body) return;
-  if (!rows.length) { body.innerHTML = `<div style="color:var(--text3);font-size:13px;padding:8px 0">No winners settled in the last 24 hours.</div>`; return; }
+  if (!rows.length) { body.innerHTML = `<div style="color:var(--text3);font-size:13px;padding:8px 0">No winners ${(win || betStatsWinnersWindow()).none}.</div>`; return; }
   const fmtTime = iso => {
     if (!iso) return '—';
     try { return new Date(iso + (iso.endsWith('Z') ? '' : 'Z')).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); }
@@ -17264,7 +17273,7 @@ async function settleNev(idx, result){
   } catch(e) { alert('Network error saving.'); return; }
   loadNevStats();
 }
-// Click a "By market" / "By bookmaker" row -> that row's bets settled in the last 24h (2026-10-07,
+// Click a "By market" / "By bookmaker" row -> that row's settled bets for the selected day (2026-10-07,
 // same as Calculated +EV / Grosvenor — reuses their winners modal). Opens on winners; "All settled"
 // adds the losers and voids for the full record.
 let NEV_SETTLED_ALL = false;
@@ -17277,11 +17286,12 @@ async function showNevSettled(field, idx, all){
   const title = document.getElementById('calc-ev-winners-title');
   const body = document.getElementById('calc-ev-winners-body');
   const label = row.key || '—';
-  if (title) title.textContent = `Normal +EV ${label} — ${NEV_SETTLED_ALL ? 'all settled bets' : 'winners'}, last 24h`;
+  const win = betStatsWinnersWindow(NEV_RANGE);
+  if (title) title.textContent = `Normal +EV ${label} — ${NEV_SETTLED_ALL ? 'all settled bets' : 'winners'}, ${win.label}`;
   if (body) body.innerHTML = `<div style="text-align:center;color:var(--text3);padding:16px"><i class="ti ti-loader"></i> Loading…</div>`;
   if (overlay) overlay.style.display = 'flex';
   let d;
-  try { d = await ledgerApi(`normal-ev-bets/settled?field=${field}&value=${encodeURIComponent(row.key == null ? '' : row.key)}&hours=24&all=${NEV_SETTLED_ALL ? 1 : 0}`); } catch (e) { d = null; }
+  try { d = await ledgerApi(`normal-ev-bets/settled?field=${field}&value=${encodeURIComponent(row.key == null ? '' : row.key)}&${win.q}&all=${NEV_SETTLED_ALL ? 1 : 0}`); } catch (e) { d = null; }
   if (!body) return;
   if (!d || !d.ok) { body.innerHTML = `<div style="color:var(--text3);font-size:13px">Failed to load bets.</div>`; return; }
   const rows = d.rows || [];
@@ -17314,7 +17324,7 @@ async function showNevSettled(field, idx, all){
       <div>${toggle}</div>
     </div>
     ${rows.length ? `<div style="overflow-x:auto"><table class="dt" style="min-width:680px"><thead><tr><th>Settled</th><th>Match</th><th>Selection</th><th class="r">Odds</th><th class="r">Fair</th><th class="r">Stake</th><th>Result</th><th class="r">P/L</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>`
-      : `<div style="color:var(--text3);font-size:13px;padding:8px 0">${NEV_SETTLED_ALL ? 'No bets' : 'No winners'} settled in the last 24 hours.</div>`}`;
+      : `<div style="color:var(--text3);font-size:13px;padding:8px 0">${NEV_SETTLED_ALL ? 'No settled bets' : 'No winners'} ${win.none}.</div>`}`;
 }
 function renderNevStats(){
   const d = NEV_LAST || {}, o = d.overall || {};
@@ -17330,7 +17340,7 @@ function renderNevStats(){
   const table = (title, head, list, field) => `
     <div style="font-size:12.5px;font-weight:600;margin:4px 0 6px">${title}</div>
     <div style="overflow-x:auto;margin-bottom:14px"><table class="dt" style="min-width:860px"><thead><tr><th>${head}</th><th class="r">Bets</th><th class="r">Settled</th><th class="r">Won</th><th class="r">Win%</th><th class="r">Avg odds</th><th class="r">Avg EV</th><th class="r">Expected</th><th class="r">Staked</th><th class="r">P/L</th><th class="r">ROI</th><th class="r">Exp. ROI</th><th class="r">Need result</th></tr></thead><tbody>${
-      (list || []).length ? list.map((m, i) => `<tr onclick="showNevSettled('${field}', ${i})" style="cursor:pointer" title="Click to see this row's bets settled in the last 24 hours">
+      (list || []).length ? list.map((m, i) => `<tr onclick="showNevSettled('${field}', ${i})" style="cursor:pointer" title="Click to see this row's settled bets for the selected day (Overall: last 24 hours)">
         <td style="font-size:12.5px">${escapeHtml(m.key || '—')}</td>
         <td class="r tn">${m.bets}</td><td class="r tn">${m.settled}</td><td class="r tn">${m.wins}</td>
         <td class="r tn">${pctFmt(m.winPct)}</td>
@@ -17473,21 +17483,22 @@ async function setGvSsLeague(leagueId, enabled){
   } catch(e) { alert('Network error saving.'); return; }
   loadGvStats();
 }
-// Click a market row in either Grosvenor stats table -> its winners settled in the last 24h
+// Click a market row in either Grosvenor stats table -> its winners for the selected day
 // (2026-10-03, same as Calculated +EV's showCalcEvWinners — reuses that modal). mode 'ss' =
 // the super-sub table (super sub only counted in ticked leagues), 'strict' = posted player only.
 async function showGvWinners(market, mode){
   const overlay = document.getElementById('calc-ev-winners-modal-overlay');
   const title = document.getElementById('calc-ev-winners-title');
   const body = document.getElementById('calc-ev-winners-body');
-  if (title) title.textContent = `Grosvenor ${market} — winners${mode === 'ss' ? ' with super sub' : ' (strict)'}, last 24h`;
+  const win = betStatsWinnersWindow(GV_STATS_RANGE);
+  if (title) title.textContent = `Grosvenor ${market} — winners${mode === 'ss' ? ' with super sub' : ' (strict)'}, ${win.label}`;
   if (body) body.innerHTML = `<div style="text-align:center;color:var(--text3);padding:16px"><i class="ti ti-loader"></i> Loading…</div>`;
   if (overlay) overlay.style.display = 'flex';
   let d;
-  try { d = await ledgerApi(`grosvenor-bets/winners?market=${encodeURIComponent(market)}&hours=24&mode=${mode}`); } catch (e) { d = null; }
+  try { d = await ledgerApi(`grosvenor-bets/winners?market=${encodeURIComponent(market)}&${win.q}&mode=${mode}`); } catch (e) { d = null; }
   if (!d || !d.ok) { if (body) body.innerHTML = `<div style="color:var(--text3);font-size:13px">Failed to load winners.</div>`; return; }
   const rows = d.rows || [];
-  if (!rows.length) { body.innerHTML = `<div style="color:var(--text3);font-size:13px;padding:8px 0">No winners settled in the last 24 hours.</div>`; return; }
+  if (!rows.length) { body.innerHTML = `<div style="color:var(--text3);font-size:13px;padding:8px 0">No winners ${win.none}.</div>`; return; }
   const fmtTime = iso => { try { return new Date(iso + (String(iso).endsWith('Z') ? '' : 'Z')).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (e) { return iso || '—'; } };
   const rowsHtml = rows.map(r => {
     const viaSub = r.won !== 1; // only possible in the super-sub list
@@ -17522,7 +17533,7 @@ function renderGvStats(d){
   const table = (title, winsKey, pctKey, plKey, mode) => `
     <div style="font-size:12.5px;font-weight:600;margin:4px 0 6px">${title}</div>
     <div style="overflow-x:auto;margin-bottom:14px"><table class="dt" style="min-width:640px"><thead><tr><th>Market</th><th class="r">Bets</th><th class="r">Settled</th><th class="r">Won</th><th class="r">Win%</th><th class="r">Avg odds</th><th class="r">Avg % above</th><th class="r">P/L</th></tr></thead><tbody>${
-      rows.length ? rows.map(m => `<tr onclick="showGvWinners('${escapeHtml(m.market).replace(/'/g, "\\'")}', '${mode}')" style="cursor:pointer" title="Click to see this market's winners from the last 24 hours">
+      rows.length ? rows.map(m => `<tr onclick="showGvWinners('${escapeHtml(m.market).replace(/'/g, "\\'")}', '${mode}')" style="cursor:pointer" title="Click to see this market's winners for the selected day (Overall: last 24 hours)">
         <td style="font-size:12.5px">${escapeHtml(m.market)}</td>
         <td class="r tn">${m.bets}</td><td class="r tn">${m.settled}</td><td class="r tn">${m[winsKey]}</td>
         <td class="r tn">${pctFmt(m[pctKey])}</td>
