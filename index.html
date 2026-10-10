@@ -13593,11 +13593,19 @@ let MATCHES_LEAGUES = null; // last-loaded fixtures, kept so the sort toggle can
 let MATCH_PREDICTIONS = {};        // matchId -> { home:{lineupConfirmed,cornerTakers,penTaker,...}, away:{...} }
 let MATCH_PRED_DATE = null;        // the fixture date the current MATCH_PREDICTIONS belong to
 let MATCH_PRED_INTERVAL = null;
-function predCornersOn(){ return localStorage.getItem('bb_pred_corners') === '1'; }
+// Corner taker / corner threat (target) predictions switched off 2026-10-10 (edge gone) — kept,
+// not deleted: true brings back the corner toggles here, the Corner bet stats panel and the Bet
+// Alerts Corners tab. Must match CORNER_PREDICTIONS_ENABLED in ledger-routes.js.
+const CORNER_PREDICTIONS_ENABLED = false;
+function predCornersOn(){ return CORNER_PREDICTIONS_ENABLED && localStorage.getItem('bb_pred_corners') === '1'; }
 function predPensOn(){ return localStorage.getItem('bb_pred_pens') === '1'; }
-function predBetStatsOn(){ return localStorage.getItem('bb_pred_bet_stats') === '1'; }
+function predBetStatsOn(){ return CORNER_PREDICTIONS_ENABLED && localStorage.getItem('bb_pred_bet_stats') === '1'; }
 function predBoostsOn(){ return localStorage.getItem('bb_pred_boosts') !== '0'; } // default ON
 function syncPredToggles(){
+  ['pred-corners-toggle', 'pred-bet-stats-toggle'].forEach(id => {
+    const lbl = document.getElementById(id)?.closest('label');
+    if (lbl) lbl.style.display = CORNER_PREDICTIONS_ENABLED ? '' : 'none';
+  });
   const c = document.getElementById('pred-corners-toggle'); if (c) c.checked = predCornersOn();
   const p = document.getElementById('pred-pens-toggle'); if (p) p.checked = predPensOn();
   const b = document.getElementById('pred-bet-stats-toggle'); if (b) b.checked = predBetStatsOn();
@@ -16249,7 +16257,7 @@ const BA_EDGES = [
   { key: 'unmatched', label: 'OC Coverage',   panel: 'ba-panel-unmatched', priced: false },
   { key: 'outliers', label: 'Outliers',       panel: 'ba-panel-outliers', priced: false },
   { key: 'grosvenor', label: 'Grosvenor',     panel: 'ba-panel-grosvenor', priced: false },
-];
+].filter(e => e.key !== 'corners' || CORNER_PREDICTIONS_ENABLED);
 let BA_BOOKS = null;             // { canonicalBookie: bool } — null until first load (= all on)
 let BA_ACTIVE = (function(){ try { return localStorage.getItem('bb_betalert_tab') || 'oc-ev'; } catch(e) { return 'oc-ev'; } })();
 let BA_POLL = null;

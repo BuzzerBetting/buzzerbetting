@@ -2924,6 +2924,13 @@ router.get('/notifications', (req, res) => {
 // names) plus, once a side's XI is confirmed, predicted corner taker(s) and penalty taker
 // from the corner-model. corner-model/ is deployed separately to the DO box (like oc-scraper)
 // so its absence is non-fatal — the route still returns lineup status.
+// Corner taker / corner threat (target) predictions switched off 2026-10-10 — the edge has gone
+// and predictForTeam + its prediction log/settlement were dead weight on every match-predictions
+// poll. Everything is left in place: flip this back to true to bring the Today's Matches corner
+// columns, the Corner bet stats panel and the Bet Alerts Corners tab back (index.html has the
+// matching CORNER_PREDICTIONS_ENABLED). Pen-taker prediction is unaffected — it still uses
+// cornerModel.predictPenTaker below.
+const CORNER_PREDICTIONS_ENABLED = false;
 const cornerModel = (() => {
   try { return require('./corner-model/predict'); }
   catch (e) { console.error('[match-predictions] corner-model not loaded:', e.message); return null; }
@@ -3025,7 +3032,7 @@ function mpSide(lineupSide, confirmed, xiKnown, isHome, homeTeamName, awayTeamNa
   // Penalty taker: resolved as soon as ANY lineup is out (predicted, last-XI placeholder, or
   // confirmed) — not gated on `confirmed` like cornerTakers below. See resolvePenTaker.
   const penTaker = xi ? resolvePenTaker(matchId, teamId, teamName, xi, new Date().toISOString()) : null;
-  if (xiKnown && teamId && cornerModel && xi) {
+  if (CORNER_PREDICTIONS_ENABLED && xiKnown && teamId && cornerModel && xi) {
     try {
       // homeTeamName/awayTeamName (the fixture's own names, not the lineup object's) are what
       // cornerThreat needs to find this fixture's cached Anytime Goalscorer odds — see
@@ -3174,6 +3181,7 @@ router.delete('/pen-taker-override', (req, res) => {
 router.get('/corner-bet-stats', async (req, res) => {
   const date = String(req.query.date || '').replace(/[^0-9]/g, '')
     || new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  if (!CORNER_PREDICTIONS_ENABLED) return res.json({ ok: true, disabled: true, date, predictedCount: 0, settledCount: 0, winCount: 0, wins: [] });
   // Real placed-bet figures are independent of predictionLog (a different data source
   // entirely — the ledger's own bets table) so compute them regardless of whether the
   // prediction model loaded, with safe zeroed defaults if realCornerBetStats itself failed.
