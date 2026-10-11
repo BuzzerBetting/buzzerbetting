@@ -4584,9 +4584,27 @@ router.post('/parse-bet365-sot', async (req, res) => {
 
 const OTW_TRIGGER_DIR = path.join(__dirname, 'oc-scraper', 'data', 'otw_triggers');
 
+// Kicked-off matches leave Ones to Watch (2026-10-11): the scanner only clears a match when a
+// scan catches its confirmed XI before kickoff, and a slow pipeline cycle (10:12→12:26 UTC on
+// 10-10) missed that window, stranding 12 of the day's matches on the tab overnight. Same hard
+// delete as the confirmed-lineup clear; 'removed' rows stay for the Removed Bets recovery list.
+// kickoff/kickoff_date are Europe/London 'HH:MM' / 'YYYY-MM-DD' (ones_to_watch_scan.py).
+function pruneKickedOffOtw() {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date()).map(x => [x.type, x.value]));
+  const londonNow = `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
+  db.prepare(
+    `DELETE FROM ones_to_watch
+      WHERE state != 'removed' AND kickoff_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+        AND kickoff GLOB '[0-9][0-9]:[0-9][0-9]' AND kickoff_date || ' ' || kickoff <= ?`
+  ).run(londonNow);
+}
+
 // GET /api/ledger/ones-to-watch -> { ok, rows:[...] }  (all non-removed rows, highest EV first; ticked pinned on top)
 router.get('/ones-to-watch', (req, res) => {
   try {
+    pruneKickedOffOtw();
     const rows = db.prepare(
       `SELECT id, match_id AS matchId, match, kickoff, kickoff_date AS kickoffDate, market, selection, fair, base_fair AS baseFair, conf, bookie, odds, ev, source, bfex_lpm AS bfexLpm, bfex_matched AS bfexMatched, bfex_fair AS bfexFair, oc_bb_blend_fair AS ocBbBlendFair, oc_safety_margin_fair AS ocSafetyMarginFair, base_bfex_fair AS baseBfexFair, base_oc_bb_blend_fair AS baseOcBbBlendFair, base_oc_safety_margin_fair AS baseOcSafetyMarginFair, state
          FROM ones_to_watch
