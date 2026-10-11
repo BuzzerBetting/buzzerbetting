@@ -3827,6 +3827,9 @@ Respond with ONLY a JSON object, no prose, no markdown fences, with exactly thes
 - "stake": the TOTAL stake in pounds, number only; null if not visible.
 - "potentialPayout": potential payout in pounds if shown; else null.
 - "confidenceNotes": brief note of anything cut off/unreadable/ambiguous; null if all clean.
+- "isMultiple": true when the slip combines selections from MORE THAN ONE match (Double / Treble / Fourfold / Accumulator etc.), else false.
+- "multipleLabel": the slip's own bet-type heading when isMultiple (e.g. "Fourfold", "Treble"); else null.
+- "groups": when isMultiple, one entry per MATCH in slip order: {"match": <fixture with " v " separator>, "odds": <that match's own price shown on its right, decimal>, "legs": [{"selection", "marketText", "player", "playerMarket"}]} — a match with "2 selections" has both in its legs. Same field meanings as above. [] when not isMultiple.
 If more than one leg is a player market, put the one Grosvenor is being bet for (the first player leg) as the player leg.
 Read only what is visible. Never guess names or numbers.`;
 
@@ -3853,17 +3856,21 @@ async function runGrosvenorSlipModel(base64Data, mediaType) {
 // Orientation comes from the first token: text opening with a number has numbers before their
 // keyword ("2.21 bb"), otherwise after it ("bb 4.1"); a keyword with no free number on its
 // preferred side takes the one on the other side ("5.12 bb next best 5.0").
+// Multiples (2026-10-11): every bb / nb in the text is kept, in order — "2.6 bb 2.8 nb, 1.5 bb
+// 1.55 nb, 1.9 bb 2 nb" gives fairs [2.6, 1.5, 1.9] and nextBests [2.8, 1.55, 2], one pair per
+// match leg in slip order. fair / nextBest stay the first of each, so singles are unchanged.
 function parseGrosvenorBbText(text) {
   const toks = (String(text || '').toLowerCase().match(/\d+(?:\.\d+)?|next\s*best|\bnb\b|\bbb\b|\bfair\b/g) || [])
     .map(x => /^\d/.test(x) ? { n: Number(x) } : { k: /next|nb/.test(x) ? 'nb' : 'bb' });
   const numFirst = toks.length > 0 && toks[0].n != null;
-  const used = new Set(), out = {};
+  const used = new Set(), out = { bb: [], nb: [] };
   const take = (j) => (toks[j] && toks[j].n != null && !used.has(j)) ? (used.add(j), toks[j].n) : null;
   toks.forEach((tk, i) => {
-    if (!tk.k || out[tk.k] != null) return;
-    out[tk.k] = numFirst ? (take(i - 1) ?? take(i + 1)) : (take(i + 1) ?? take(i - 1));
+    if (!tk.k) return;
+    const v = numFirst ? (take(i - 1) ?? take(i + 1)) : (take(i + 1) ?? take(i - 1));
+    out[tk.k].push(v > 1 ? v : null);
   });
-  return { fair: out.bb > 1 ? out.bb : null, nextBest: out.nb > 1 ? out.nb : null };
+  return { fair: out.bb[0] || null, nextBest: out.nb[0] || null, fairs: out.bb, nextBests: out.nb };
 }
 
 // Accounts + stakes named in the same text: "C104 £20", "C104: 20", "£20 on C104",
@@ -4025,11 +4032,53 @@ router.post('/discord-grosvenor-book', async (req, res) => {
     } else {
       miss.push('account (name it in the message, e.g. "C104 £20")');
     }
+    // Multiples (2026-10-11, user): a Double/Treble/Fourfold across matches books as ONE
+    // Grosvenor bet at the slip's total odds. Fair = product of the per-match BB fairs and Next
+    // Best = product of the per-match next-best prices, one bb/nb pair per match in slip order;
+    // a single bb (and/or nb) in the text is taken as the whole multiple's figure instead.
+    // Any other count leaves it 0 and books with the usual ⚠️ "add it on the bet" note.
+    const groups = parsed.isMultiple && Array.isArray(parsed.groups) ? parsed.groups.filter(g => g && g.match) : [];
+    const isMulti = groups.length >= 2;
     if (!(odds > 1)) miss.push('odds');
-    if (!playerLeg) miss.push('player leg');
+    if (!isMulti && !playerLeg) miss.push('player leg');
     if (miss.length) { record('skipped', 'missing ' + miss.join(', '), null, parsed); return res.json({ ok: true, status: 'skipped', note: 'not booked — missing ' + miss.join(', ') }); }
 
     const st = +acctLegs.reduce((s, l) => s + l.stake, 0).toFixed(2);
+    if (isMulti) {
+      const { fairs, nextBests } = parseGrosvenorBbText(rest);
+      const combine = (vals) => {
+        if (vals.length === 1 && vals[0]) return vals[0];
+        if (vals.length === groups.length && vals.every(v => v)) return vals.reduce((p, v) => p * v, 1);
+        return null;
+      };
+      const mFair = combine(fairs), mNext = combine(nextBests);
+      const perLeg = fairs.length === groups.length;
+      const legText = (l) => l.player ? `${l.player} ${l.playerMarket || l.marketText || ''}`.trim() : [l.selection, l.marketText].filter(Boolean).join(' — ');
+      const fields = {
+        Bookie: 'Grosvenor',
+        Match: groups.map(g => g.match).join(' / '),
+        Market: `${parsed.multipleLabel || 'Multiple'} (${groups.length} matches)`,
+        Player: groups.map(g => (g.legs || []).map(legText).join(' + ')).join(' / '),
+        // Per-match price, with that match's bb / nb when given one each.
+        'Other Leg': groups.map((g, i) => {
+          const bits = [perLeg && fairs[i] ? `bb ${fairs[i]}` : null, nextBests.length === groups.length && nextBests[i] ? `nb ${nextBests[i]}` : null].filter(Boolean);
+          return `${g.odds != null ? g.odds : '?'}${bits.length ? ` (${bits.join(', ')})` : ''}`;
+        }).join(' · '),
+        'Next Best': mNext ? +mNext.toFixed(3) : 0,
+        Odds: +odds.toFixed(3),
+        'Fair Odds': mFair ? +mFair.toFixed(3) : 0,
+        EV: mFair ? +(st * (odds / mFair - 1)).toFixed(2) : 0,
+        Stake: st,
+      };
+      const betId = _bookGrosvenorBet(fields, acctLegs, fields.Odds, new Date().toISOString());
+      const warn = [];
+      if (!mFair) warn.push(fairs.length ? `${fairs.length} bb price(s) for ${groups.length} matches — need one per match or one overall` : 'no BB fair found in the message text');
+      if (!mNext) warn.push('no usable next-best price');
+      record('booked', warn.length ? warn.join('; ') : null, betId, parsed);
+      const summary = `${fields.Market} @ ${fields.Odds} · £${st}${mFair ? ` · fair ${fields['Fair Odds']}` : ''}`;
+      console.log('[discord-grosvenor-book] booked multiple', betId, '-', summary);
+      return res.json({ ok: true, status: 'booked', betId, summary, note: warn.length ? `booked, but ${warn.join(' and ')} — add it on the bet` : null });
+    }
     const fields = {
       Bookie: 'Grosvenor',
       Match: parsed.match || '',
