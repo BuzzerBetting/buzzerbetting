@@ -14995,6 +14995,29 @@ async function loadCalcEvStats(){
     renderCalcEvStats(d);
   } catch (e) { panel.innerHTML = `<div class="card" style="padding:16px;color:var(--text3);font-size:13px">Failed to load bet stats.</div>`; }
 }
+// Edge % / odds band table for the Calculated +EV stats panel (2026-10-11, same idea as
+// renderGvStats' bandTable) — rows from calcEvLog.getBands.
+function calcEvBandTable(title, head, list){
+  const plFmt = n => (n >= 0 ? '+£' : '-£') + Math.abs(n).toFixed(2);
+  const col = n => (n || 0) >= 0 ? 'var(--green)' : 'var(--red)';
+  const rows = (list || []).map(b => {
+    const ae = b.expWins ? b.wins / b.expWins * 100 : null;
+    const roi = b.settled ? b.pl / (b.settled * 50) * 100 : null;
+    return `<tr>
+      <td style="font-size:12.5px;white-space:nowrap">${escapeHtml(b.label)}</td>
+      <td class="r tn">${b.bets}</td><td class="r tn">${b.settled}</td>
+      <td class="r tn">${b.wins} <span style="color:var(--text3);font-size:11px">${b.settled ? (b.wins / b.settled * 100).toFixed(1) + '%' : ''}</span></td>
+      <td class="r tn" style="color:var(--text2)">${b.expWins.toFixed(1)}</td>
+      <td class="r tn" style="color:${ae == null ? 'var(--text3)' : ae >= 100 ? 'var(--green)' : 'var(--red)'}">${ae == null ? '—' : ae.toFixed(0) + '%'}</td>
+      <td class="r tn">${b.avgOdds != null ? Number(b.avgOdds).toFixed(2) : '—'}</td>
+      <td class="r tn">${b.avgEv != null ? Number(b.avgEv).toFixed(1) + '%' : '—'}</td>
+      <td class="r tn" style="color:${col(b.pl)}">${plFmt(b.pl || 0)}</td>
+      <td class="r tn" style="color:${col(b.pl)}">${roi == null ? '—' : (roi >= 0 ? '+' : '') + roi.toFixed(1) + '%'}</td></tr>`;
+  }).join('');
+  return `
+    <div style="font-size:12.5px;font-weight:600;margin:4px 0 6px">${title}</div>
+    <div style="overflow-x:auto;margin-bottom:14px"><table class="dt" style="min-width:760px"><thead><tr><th>${head}</th><th class="r">Bets</th><th class="r">Settled</th><th class="r">Won</th><th class="r" title="Winners the fair prices said to expect: sum of 1/fair over settled bets">Exp. won</th><th class="r" title="Actual winners ÷ expected. Under 100% = fairs too short">Act ÷ Exp</th><th class="r">Avg odds</th><th class="r">Avg EV%</th><th class="r">P/L</th><th class="r">ROI</th></tr></thead><tbody>${rows || '<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:14px">No bets logged yet</td></tr>'}</tbody></table></div>`;
+}
 function renderCalcEvStats(d){
   const panel = document.getElementById('calc-ev-stats-panel');
   const o = d.overall || {};
@@ -15038,7 +15061,12 @@ function renderCalcEvStats(d){
         <div class="card" style="padding:10px 12px"><div style="font-size:10.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">OTB Goal — accum. realized xG</div><div style="font-size:16px;font-weight:700">${(d.otbXg||0).toFixed(2)}</div></div>
       </div>
       <div style="overflow-x:auto"><table class="dt" style="min-width:700px"><thead><tr><th>Market</th><th class="r">Bets</th><th class="r">Settled</th><th class="r">Won</th><th class="r">Win%</th><th class="r">Avg Odds</th><th class="r">Avg EV%</th><th class="r">EV £</th><th class="r">P/L</th></tr></thead><tbody>${marketRows || '<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:14px">No bets logged yet</td></tr>'}</tbody></table></div>
-      <div style="font-size:11px;color:var(--text3);margin-top:8px">Every +EV row Calculated +EV has ever shown is logged once (first fair/odds seen), then graded against the real match result. "EV £" is the theoretical expected profit at a flat £50 stake, from the back odds taken and the fair odds priced (odds/fair - 1) x £50 — knowable pre-match, summed across every logged bet regardless of settlement. "P/L" is what actually happened at that same flat £50 stake, settled bets only. Accumulated Header/OTB xG is the real shotmap xG behind each settled bet's actual header/OTB-shot attempt(s) — not a forecast. Overall/Yesterday/Today scope every figure above to bets logged in that window (London calendar day); clicking a market row opens its winners for the selected day (Today / Yesterday), or from the last 24 hours on Overall.</div>
+      <div style="margin-top:16px">
+        ${calcEvBandTable('By edge % — each band on its own', 'EV %', d.byBand)}
+        ${calcEvBandTable('Minimum edge % — every bet at or above it (what taking that as your minimum would have returned)', 'EV %', d.byMin)}
+        ${calcEvBandTable('By odds', 'Odds', d.byOdds)}
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">Band tables: "Exp. won" is how many winners the fair prices said to expect (sum of 1/fair over settled bets). "Act ÷ Exp" is actual winners divided by that: 100% means the fairs are calibrated, below 100% means the fairs were too short and the edge wasn't real. ROI = P/L ÷ (settled × £50).Every +EV row Calculated +EV has ever shown is logged once (first fair/odds seen), then graded against the real match result. "EV £" is the theoretical expected profit at a flat £50 stake, from the back odds taken and the fair odds priced (odds/fair - 1) x £50 — knowable pre-match, summed across every logged bet regardless of settlement. "P/L" is what actually happened at that same flat £50 stake, settled bets only. Accumulated Header/OTB xG is the real shotmap xG behind each settled bet's actual header/OTB-shot attempt(s) — not a forecast. Overall/Yesterday/Today scope every figure above to bets logged in that window (London calendar day); clicking a market row opens its winners for the selected day (Today / Yesterday), or from the last 24 hours on Overall.</div>
     </div>`;
 }
 
