@@ -4046,13 +4046,24 @@ router.post('/discord-grosvenor-book', async (req, res) => {
     const st = +acctLegs.reduce((s, l) => s + l.stake, 0).toFixed(2);
     if (isMulti) {
       const { fairs, nextBests } = parseGrosvenorBbText(rest);
+      // One pair per MATCH, or one per SELECTION (2026-10-11, live: the user priced the
+      // two-selection Cagliari leg as two separate pairs) — either way, slip order, multiplied.
+      const sizes = groups.map(g => Math.max(1, (g.legs || []).length));
+      const nSel = sizes.reduce((a, b) => a + b, 0);
       const combine = (vals) => {
         if (vals.length === 1 && vals[0]) return vals[0];
-        if (vals.length === groups.length && vals.every(v => v)) return vals.reduce((p, v) => p * v, 1);
+        if ((vals.length === groups.length || vals.length === nSel) && vals.every(v => v)) return vals.reduce((p, v) => p * v, 1);
         return null;
       };
       const mFair = combine(fairs), mNext = combine(nextBests);
-      const perLeg = fairs.length === groups.length;
+      // Each match's own bb / nb for the Other Leg column: its single figure, or its selections' product.
+      const perMatch = (vals) => {
+        if (vals.length === groups.length) return vals;
+        if (vals.length !== nSel) return null;
+        let at = 0;
+        return sizes.map(n => { const s = vals.slice(at, at += n); return s.every(v => v) ? +s.reduce((p, v) => p * v, 1).toFixed(2) : null; });
+      };
+      const gFair = perMatch(fairs), gNext = perMatch(nextBests);
       const legText = (l) => l.player ? `${l.player} ${l.playerMarket || l.marketText || ''}`.trim() : [l.selection, l.marketText].filter(Boolean).join(' — ');
       const fields = {
         Bookie: 'Grosvenor',
@@ -4061,7 +4072,7 @@ router.post('/discord-grosvenor-book', async (req, res) => {
         Player: groups.map(g => (g.legs || []).map(legText).join(' + ')).join(' / '),
         // Per-match price, with that match's bb / nb when given one each.
         'Other Leg': groups.map((g, i) => {
-          const bits = [perLeg && fairs[i] ? `bb ${fairs[i]}` : null, nextBests.length === groups.length && nextBests[i] ? `nb ${nextBests[i]}` : null].filter(Boolean);
+          const bits = [gFair && gFair[i] ? `bb ${gFair[i]}` : null, gNext && gNext[i] ? `nb ${gNext[i]}` : null].filter(Boolean);
           return `${g.odds != null ? g.odds : '?'}${bits.length ? ` (${bits.join(', ')})` : ''}`;
         }).join(' · '),
         'Next Best': mNext ? +mNext.toFixed(3) : 0,
@@ -4072,7 +4083,7 @@ router.post('/discord-grosvenor-book', async (req, res) => {
       };
       const betId = _bookGrosvenorBet(fields, acctLegs, fields.Odds, new Date().toISOString());
       const warn = [];
-      if (!mFair) warn.push(fairs.length ? `${fairs.length} bb price(s) for ${groups.length} matches — need one per match or one overall` : 'no BB fair found in the message text');
+      if (!mFair) warn.push(fairs.length ? `${fairs.length} bb price(s) for ${groups.length} matches / ${nSel} selections — need one per match, one per selection or one overall` : 'no BB fair found in the message text');
       if (!mNext) warn.push('no usable next-best price');
       record('booked', warn.length ? warn.join('; ') : null, betId, parsed);
       const summary = `${fields.Market} @ ${fields.Odds} · £${st}${mFair ? ` · fair ${fields['Fair Odds']}` : ''}`;
