@@ -2649,6 +2649,9 @@ tr.ba-placed > td{background:var(--green-bg) !important}
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;font-size:12.5px;color:var(--text2)">
           <input type="checkbox" id="gv-stats-toggle" onchange="setGvStatsToggle(this.checked)"> Bet stats
         </label>
+        <label title="Hide (not remove) Grosvenor prices under 2.5 — untick to show them again" style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;font-size:12.5px;color:var(--text2)">
+          <input type="checkbox" id="gv-hide-short-toggle" onchange="setGvHideShort(this.checked)"> Hide under 2.5
+        </label>
         <button id="gv-removed-btn" onclick="toggleGvRemoved()" title="Bets you've removed from Lineups Confirmed that haven't kicked off yet" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-eye-off"></i> Removed (0)</button>
         <button onclick="baRefreshActive(this)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
       </div>
@@ -17712,6 +17715,16 @@ function gvOutlierBadge(r){
 // this user only (bet_alert_removed, keyed like the placed ticks) until kickoff; never global.
 // "Removed (n)" at the top lists the ones not yet kicked off, each with Restore.
 let GV_REMOVED = new Map(), GV_REMOVED_OPEN = false;
+// "Hide under 2.5" (2026-10-12, user-requested): view-only filter on both subtabs — bets under
+// 2.5 lost ~8.5% over 330 settled. Remembered per browser.
+const GV_HIDE_SHORT_ODDS = 2.5;
+let GV_HIDE_SHORT = false;
+try { GV_HIDE_SHORT = localStorage.getItem('gvHideShort') === '1'; } catch(e) {}
+function setGvHideShort(on){
+  GV_HIDE_SHORT = !!on;
+  try { localStorage.setItem('gvHideShort', on ? '1' : '0'); } catch(e) {}
+  renderBaGrosvenor();
+}
 function gvKickoffPassed(d, t){
   if (!d || !/^d{1,2}:d{2}$/.test(String(t || ''))) return false;
   const k = new Date(`${d}T${String(t).padStart(5, '0')}:00`);
@@ -17769,7 +17782,10 @@ function renderBaGrosvenor(){
   const sortMode = getBaSort('grosvenor');
   // "Start time" keeps each match's rows together (2026-10-12, user-requested): kickoff, then
   // match name, then % within the match — so same-kickoff matches don't interleave.
-  const notRemoved = r => !r.lineupConfirmed || !GV_REMOVED.has(baPlacedKey(r.match, r.mkt, r.sel));
+  const notRemoved = r => (!r.lineupConfirmed || !GV_REMOVED.has(baPlacedKey(r.match, r.mkt, r.sel)))
+    && !(GV_HIDE_SHORT && r.odds != null && Number(r.odds) < GV_HIDE_SHORT_ODDS);
+  const hideCb = document.getElementById('gv-hide-short-toggle');
+  if (hideCb) hideCb.checked = GV_HIDE_SHORT;
   renderGvRemoved();
   const rows = BA_GROSVENOR_ROWS.filter(r => !!r.lineupConfirmed === wantConfirmed && notRemoved(r)).sort((x, y) => sortMode === 'time'
     ? ((baTimeSortKey(x) - baTimeSortKey(y)) || String(x.match || '').localeCompare(String(y.match || '')) || ((y.pct ?? 0) - (x.pct ?? 0)))
