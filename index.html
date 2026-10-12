@@ -17686,8 +17686,10 @@ function renderBaGrosvenor(){
   const wantConfirmed = BA_GROSVENOR_SUBTAB === 'confirmed';
   // No fair here, so "Best EV%" ranks by % above next best; "Start time" by kickoff, ties by %.
   const sortMode = getBaSort('grosvenor');
+  // "Start time" keeps each match's rows together (2026-10-12, user-requested): kickoff, then
+  // match name, then % within the match — so same-kickoff matches don't interleave.
   const rows = BA_GROSVENOR_ROWS.filter(r => !!r.lineupConfirmed === wantConfirmed).sort((x, y) => sortMode === 'time'
-    ? ((baTimeSortKey(x) - baTimeSortKey(y)) || ((y.pct ?? 0) - (x.pct ?? 0)))
+    ? ((baTimeSortKey(x) - baTimeSortKey(y)) || String(x.match || '').localeCompare(String(y.match || '')) || ((y.pct ?? 0) - (x.pct ?? 0)))
     : ((y.pct ?? 0) - (x.pct ?? 0)));
   BA_GROSVENOR_RENDERED = rows;
   baSetCount('grosvenor', BA_GROSVENOR_ROWS.filter(r => r.lineupConfirmed).length);
