@@ -3336,7 +3336,7 @@ router.get('/grosvenor-bets/ss-leagues', async (req, res) => {
   if (!grosvenorBetLog) return res.json({ ok: true, leagues: [] });
   try {
     try { await grosvenorBetLog.backfillLeagues(); } catch (e) { /* partial list is fine */ }
-    res.json({ ok: true, leagues: grosvenorBetLog.getSsLeagues() });
+    res.json({ ok: true, leagues: grosvenorBetLog.getSsLeagues(), ssMatchIds: grosvenorBetLog.getSsMatchIds ? grosvenorBetLog.getSsMatchIds() : [] });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
