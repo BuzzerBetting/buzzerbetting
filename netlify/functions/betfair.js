@@ -223,7 +223,7 @@ exports.handler = async (event) => {
     const marketIds = catalogue.map(m => m.marketId);
     const books = await bfCall('listMarketBook', {
       marketIds,
-      priceProjection: { priceData: ['EX_BEST_OFFERS'] },
+      priceProjection: { priceData: ['EX_BEST_OFFERS', 'EX_TRADED'] },
     }, appKey, session);
 
     const marketMap = {};
@@ -242,7 +242,10 @@ exports.handler = async (event) => {
           totalMatched: runner.totalMatched ?? 0,
           lastPriceTraded: runner.lastPriceTraded ?? null,
           back: (runner.ex?.availableToBack ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
-          lay: (runner.ex?.availableToLay ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size }))
+          lay: (runner.ex?.availableToLay ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
+          // Traded volume per price (2026-10-12) — deriveBfexFair / derive_bfex_fair floor the fair at
+          // the price where the cheapest 25% of the money traded, so a few £ printed short can't set it.
+          traded: (runner.ex?.tradedVolume ?? []).filter(p => p.size >= 0.5).map(p => ({ price: p.price, size: Math.round(p.size * 100) / 100 }))
         });
       }
       players.sort((a, b) => (a.back[0]?.price || 999) - (b.back[0]?.price || 999));
