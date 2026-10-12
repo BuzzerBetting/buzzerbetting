@@ -2649,9 +2649,11 @@ tr.ba-placed > td{background:var(--green-bg) !important}
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;font-size:12.5px;color:var(--text2)">
           <input type="checkbox" id="gv-stats-toggle" onchange="setGvStatsToggle(this.checked)"> Bet stats
         </label>
+        <button id="gv-removed-btn" onclick="toggleGvRemoved()" title="Bets you've removed from Lineups Confirmed that haven't kicked off yet" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-eye-off"></i> Removed (0)</button>
         <button onclick="baRefreshActive(this)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
       </div>
     </div>
+    <div id="gv-removed-panel" class="card" style="display:none;padding:12px 14px;margin-bottom:10px"></div>
     <div id="ba-grosvenor-subtabs" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;width:fit-content;margin-bottom:10px"></div>
     <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Player</th><th class="r">Grosvenor</th><th class="r">Next best</th><th class="r">% above</th><th class="ba-watch-col">Placed?</th><th></th></tr></thead><tbody id="ba-grosvenor-body"></tbody></table></div></div>
     <div id="gv-stats-panel" style="display:none;margin-top:14px"></div>
@@ -17268,6 +17270,7 @@ async function loadBaGrosvenor(){
   } catch(e) {}
   if (rows === null) rows = BA_GROSVENOR_ROWS || [];
   BA_GROSVENOR_ROWS = rows;
+  await loadGvRemoved();
   try { const d = await ledgerApi('grosvenor-bets/ss-leagues'); if (d && d.ok && Array.isArray(d.ssMatchIds)) GV_SS_MATCH_IDS = new Set(d.ssMatchIds); } catch(e) {}
   renderBaGrosvenor();
   syncGvStatsToggle();
@@ -17703,6 +17706,56 @@ function gvOutlierBadge(r){
   const book = r.thirdBook ? ` (${ocBookieShort(r.thirdBook)})` : '';
   return `<div><span class="badge" title="Next best may itself be an outlier: it is ${r.thirdBest ? Math.round((r.nextBest / r.thirdBest - 1) * 100) : '50+'}% above the 3rd best price, ${escapeHtml(third + book)}" style="background:var(--amber-bg);color:var(--amber);font-size:10.5px;margin-top:2px"><i class="ti ti-alert-triangle"></i> outlier? 3rd ${escapeHtml(third)}</span></div>`;
 }
+// Per-user "Remove" on Lineups Confirmed rows (2026-10-12, user-requested) — hides a bet for
+// this user only (bet_alert_removed, keyed like the placed ticks) until kickoff; never global.
+// "Removed (n)" at the top lists the ones not yet kicked off, each with Restore.
+let GV_REMOVED = new Map(), GV_REMOVED_OPEN = false;
+function gvKickoffPassed(d, t){
+  if (!d || !/^d{1,2}:d{2}$/.test(String(t || ''))) return false;
+  const k = new Date(`${d}T${String(t).padStart(5, '0')}:00`);
+  return !isNaN(k.getTime()) && k.getTime() <= Date.now();
+}
+function gvRemovedLive(){ return [...GV_REMOVED.values()].filter(r => !gvKickoffPassed(r.kickoff_d, r.kickoff_t)); }
+async function loadGvRemoved(){
+  try {
+    const d = await ledgerApi('bet-alert-removed?edge=grosvenor');
+    if (d && d.ok) GV_REMOVED = new Map((d.removed || []).map(r => [r.bet_key, r]));
+  } catch(e) {}
+}
+async function gvSetRemoved(b, removed){
+  try {
+    const d = await ledgerApi('bet-alert-removed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...b, edge: 'grosvenor', removed }) });
+    if (!d || !d.ok) { alert((d && d.error) || 'Could not save.'); return; }
+  } catch(e) { alert('Network error saving.'); return; }
+  await loadGvRemoved();
+  renderBaGrosvenor();
+}
+function gvRemoveBet(idx){
+  const r = BA_GROSVENOR_RENDERED[idx];
+  if (!r) return;
+  gvSetRemoved({ match: r.match, market: r.mkt, selection: r.sel, bookie: 'Grosvenor', odds: r.odds, d: r.d, t: r.t }, true);
+}
+function gvRestoreBet(i){
+  const r = gvRemovedLive()[i];
+  if (r) gvSetRemoved({ match: r.match, market: r.market, selection: r.selection }, false);
+}
+function toggleGvRemoved(){ GV_REMOVED_OPEN = !GV_REMOVED_OPEN; renderGvRemoved(); }
+function renderGvRemoved(){
+  const live = gvRemovedLive();
+  const btn = document.getElementById('gv-removed-btn');
+  if (btn) btn.innerHTML = `<i class="ti ti-eye-off"></i> Removed (${live.length})`;
+  const panel = document.getElementById('gv-removed-panel');
+  if (!panel) return;
+  panel.style.display = GV_REMOVED_OPEN ? '' : 'none';
+  if (!GV_REMOVED_OPEN) return;
+  panel.innerHTML = live.length
+    ? `<div style="font-size:12px;color:var(--text3);margin-bottom:6px">Removed for you only, until kickoff:</div>` + live.map((r, i) => `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-top:.5px solid var(--border);font-size:12.5px">
+        <span style="color:var(--text2);white-space:nowrap">${escapeHtml(r.kickoff_t || '')}</span>
+        <span style="flex:1">${escapeHtml(r.match || '')} · <span style="color:var(--text2)">${escapeHtml(r.market || '')}</span> · <strong style="font-weight:500">${escapeHtml(r.selection || '')}</strong>${r.odds != null ? ` <span style="color:var(--text3)">@ ${Number(r.odds).toFixed(2)}</span>` : ''}</span>
+        <button onclick="gvRestoreBet(${i})" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit"><i class="ti ti-arrow-back-up"></i> Restore</button>
+      </div>`).join('')
+    : '<div style="font-size:12.5px;color:var(--text3)">No removed bets waiting to kick off.</div>';
+}
 function renderBaGrosvenor(){
   const body = document.getElementById('ba-grosvenor-body');
   const countEl = document.getElementById('ba-grosvenor-count');
@@ -17714,11 +17767,13 @@ function renderBaGrosvenor(){
   const sortMode = getBaSort('grosvenor');
   // "Start time" keeps each match's rows together (2026-10-12, user-requested): kickoff, then
   // match name, then % within the match — so same-kickoff matches don't interleave.
-  const rows = BA_GROSVENOR_ROWS.filter(r => !!r.lineupConfirmed === wantConfirmed).sort((x, y) => sortMode === 'time'
+  const notRemoved = r => !r.lineupConfirmed || !GV_REMOVED.has(baPlacedKey(r.match, r.mkt, r.sel));
+  renderGvRemoved();
+  const rows = BA_GROSVENOR_ROWS.filter(r => !!r.lineupConfirmed === wantConfirmed && notRemoved(r)).sort((x, y) => sortMode === 'time'
     ? ((baTimeSortKey(x) - baTimeSortKey(y)) || String(x.match || '').localeCompare(String(y.match || '')) || ((y.pct ?? 0) - (x.pct ?? 0)))
     : ((y.pct ?? 0) - (x.pct ?? 0)));
   BA_GROSVENOR_RENDERED = rows;
-  baSetCount('grosvenor', BA_GROSVENOR_ROWS.filter(r => r.lineupConfirmed).length);
+  baSetCount('grosvenor', BA_GROSVENOR_ROWS.filter(r => r.lineupConfirmed && notRemoved(r)).length);
   if (countEl) countEl.textContent = `${rows.length} best price${rows.length === 1 ? '' : 's'}`;
   if (!rows.length) {
     body.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">No ${wantConfirmed ? 'lineups-confirmed' : 'pre-lineup'} Grosvenor prices above the Oddschecker best right now.</td></tr>`;
@@ -17733,7 +17788,7 @@ function renderBaGrosvenor(){
     <td class="r tn" style="color:var(--text2)">${r.nextBest != null ? Number(r.nextBest).toFixed(2) : '—'} <span style="color:var(--text3);font-size:11px">(${escapeHtml(ocBookieShort(r.nextBook))})</span>${gvOutlierBadge(r)}</td>
     <td class="r"><span class="badge" style="background:var(--green-bg);color:var(--green)">+${r.pct != null ? Number(r.pct).toFixed(1) : '—'}%</span></td>
     ${pl.watchTd}
-    <td style="font-size:11.5px;white-space:nowrap">${betLinkBtn(null, 'Grosvenor')}<button onclick="logGrosvenorBet(${idx})" title="Log this bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-plus"></i> Log</button>${pl.btn('grosvenor', idx)}</td>
+    <td style="font-size:11.5px;white-space:nowrap">${betLinkBtn(null, 'Grosvenor')}<button onclick="logGrosvenorBet(${idx})" title="Log this bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-plus"></i> Log</button>${pl.btn('grosvenor', idx)}${wantConfirmed ? `<button onclick="gvRemoveBet(${idx})" title="Remove for me until kickoff (not for anyone else)" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--red);line-height:1;margin-left:4px"><i class="ti ti-x"></i></button>` : ''}</td>
   </tr>`; }).join('');
 }
 

@@ -390,6 +390,24 @@ CREATE TABLE IF NOT EXISTS bet_alert_placed (
 );
 CREATE INDEX IF NOT EXISTS idx_bet_alert_placed_at ON bet_alert_placed(placed_at);
 
+-- Per-user "remove this bet" on the Grosvenor Lineups Confirmed tab (2026-10-12) — hides the row
+-- for that user only until kickoff. Same normalised bet_key as bet_alert_placed. kickoff_d/t
+-- (London) let the "Removed" list drop bets once they have kicked off.
+CREATE TABLE IF NOT EXISTS bet_alert_removed (
+  username   TEXT NOT NULL,
+  bet_key    TEXT NOT NULL,
+  edge       TEXT,
+  match      TEXT,
+  market     TEXT,
+  selection  TEXT,
+  bookie     TEXT,
+  odds       REAL,
+  kickoff_d  TEXT,
+  kickoff_t  TEXT,
+  removed_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (username, bet_key)
+);
+
 -- OC Coverage "Ignore" (2026-09-29, user-requested) — a fixture that genuinely isn't on
 -- Oddschecker (e.g. an MLS game) can be hidden from the OC Coverage tab. Shared across users;
 -- the hide lapses after 12h (see /oc-coverage-ignored) so it can reappear if still unmatched.

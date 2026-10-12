@@ -150,6 +150,7 @@ router.use((req, res, next) => {
       && !req.path.startsWith('/bet-alert-seen')
       && !req.path.startsWith('/bet-alert-stats')
       && !req.path.startsWith('/bet-alert-placed')
+      && !req.path.startsWith('/bet-alert-removed')
       && !req.path.startsWith('/bet-alert-sound')
       && !req.path.startsWith('/oc-coverage-ignored')
       && !req.path.startsWith('/ones-to-watch')
@@ -4357,6 +4358,47 @@ router.post('/bet-alert-placed', (req, res) => {
            odds = excluded.odds, ev = excluded.ev, placed_at = datetime('now')`
       ).run(req.username, key, b.edge || null, b.match || '', b.market || '', b.selection || '',
             b.bookie || null, isFinite(odds) ? odds : null, isFinite(ev) ? ev : null);
+    }
+    res.json({ ok: true, key });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// ---- removed bets (per user) — Grosvenor Lineups Confirmed "Remove" (2026-10-12) ----
+// Hides a bet for this user only, never globally. Same 3-day lookback as placed ticks (the key
+// has no date); the frontend also drops rows whose kickoff has passed from the Removed list.
+// GET /api/ledger/bet-alert-removed?edge=grosvenor → { ok, removed:[...] }
+router.get('/bet-alert-removed', (req, res) => {
+  try {
+    if (!req.username) return res.status(400).json({ ok: false, error: 'no session' });
+    const edge = String(req.query.edge || '');
+    const rows = db.prepare(
+      `SELECT bet_key, edge, match, market, selection, bookie, odds, kickoff_d, kickoff_t, removed_at
+         FROM bet_alert_removed WHERE username = ? AND (? = '' OR edge = ?) AND removed_at >= datetime('now', ?)
+        ORDER BY kickoff_d, kickoff_t, match`
+    ).all(req.username, edge, edge, BET_PLACED_LOOKBACK);
+    res.json({ ok: true, removed: rows });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/bet-alert-removed — body: { removed, edge, match, market, selection, bookie, odds, d, t }
+// removed:true hides it for the current user, false restores it.
+router.post('/bet-alert-removed', (req, res) => {
+  try {
+    if (!req.username) return res.status(400).json({ ok: false, error: 'no session' });
+    const b = req.body || {};
+    if (!b.match && !b.selection) return res.status(400).json({ ok: false, error: 'match or selection required' });
+    const key = betAlertKey(b);
+    if (b.removed === false) {
+      db.prepare(`DELETE FROM bet_alert_removed WHERE username = ? AND bet_key = ?`).run(req.username, key);
+    } else {
+      const odds = parseFloat(b.odds);
+      db.prepare(
+        `INSERT INTO bet_alert_removed (username, bet_key, edge, match, market, selection, bookie, odds, kickoff_d, kickoff_t)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(username, bet_key) DO UPDATE SET edge = excluded.edge, bookie = excluded.bookie, odds = excluded.odds,
+           kickoff_d = excluded.kickoff_d, kickoff_t = excluded.kickoff_t, removed_at = datetime('now')`
+      ).run(req.username, key, b.edge || null, b.match || '', b.market || '', b.selection || '',
+            b.bookie || null, isFinite(odds) ? odds : null, b.d || null, b.t || null);
     }
     res.json({ ok: true, key });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
