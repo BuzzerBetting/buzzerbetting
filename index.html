@@ -14876,14 +14876,24 @@ function deriveBfexFair(runner) {
   }
   // Traded-volume floor (2026-10-12, user-reported: Botman AGS fair 17.5/18 off £34 printed there
   // while £800 of £838 traded at 19-25 and the lay sat at 21 — user's fair 20). The fair can't be
-  // shorter than the price where the cheapest 25% of the traded money ends, unless the live lay
-  // has itself moved below that price (a real steam, not a few £ printed short). Mirrored in
-  // bfex_fair.py.
+  // shorter than the price where the cheapest 25% of the traded money ends, unless the market
+  // has really steamed: live lay below the floor with £50+ on it AND real money traded at/near
+  // that lay (within 5%: £50+ and 10%+ of all traded). A lay order alone doesn't override the
+  // traded money (2026-10-12, user-agreed: £80 to lay at 18 with £34 traded there -> still 20).
+  // Mirrored in bfex_fair.py.
   const floor = bfexTradedFloor(runner.traded);
-  if (floor && fair < floor && (!bestLay || bestLay >= floor)) fair = floor;
+  if (floor && fair < floor && !bfexSteamConfirmed(runner.traded, bestLay, bestLaySize, floor)) fair = floor;
   return { fair, confidence };
 }
 const BFEX_FLOOR_SHARE = 0.25, BFEX_FLOOR_MIN_TRADED = 50;
+const BFEX_STEAM_MIN_LAY = 50, BFEX_STEAM_MIN_NEAR = 50, BFEX_STEAM_NEAR_SHARE = 0.10, BFEX_STEAM_NEAR_PCT = 0.05;
+function bfexSteamConfirmed(traded, bestLay, bestLaySize, floor) {
+  if (!bestLay || bestLay >= floor || bestLaySize < BFEX_STEAM_MIN_LAY) return false;
+  const t = (traded || []).filter(p => p && p.price > 1 && p.size > 0);
+  const total = t.reduce((s, p) => s + p.size, 0);
+  const near = t.filter(p => p.price <= bestLay * (1 + BFEX_STEAM_NEAR_PCT)).reduce((s, p) => s + p.size, 0);
+  return near >= BFEX_STEAM_MIN_NEAR && near >= total * BFEX_STEAM_NEAR_SHARE;
+}
 function bfexTradedFloor(traded) {
   const t = (traded || []).filter(p => p && p.price > 1 && p.size > 0).sort((a, b) => a.price - b.price);
   const total = t.reduce((s, p) => s + p.size, 0);
