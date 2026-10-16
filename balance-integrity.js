@@ -77,7 +77,7 @@ const sumBy = sql => { const m = new Map(); for (const r of db.prepare(sql).all(
 function expectedBalances() {
   const dep = sumBy(`SELECT account_id id, SUM(amount) s FROM deposits GROUP BY account_id`);
   const wd = sumBy(`SELECT account_id id, SUM(amount) s FROM withdrawals WHERE status <> 'reversed' GROUP BY account_id`);
-  const locked = sumBy(`SELECT linked_account_id id, SUM(amount) s FROM locked_funds WHERE linked_account_id IS NOT NULL GROUP BY linked_account_id`);
+  const locked = sumBy(`SELECT linked_account_id id, SUM(amount) s FROM locked_funds WHERE linked_account_id IS NOT NULL AND COALESCE(status,'fresh') <> 'unlocked' GROUP BY linked_account_id`);
   const adj = sumBy(`SELECT account_id id, SUM(delta) s FROM manual_adjustments GROUP BY account_id`);
   let ext = new Map();
   try { ext = sumBy(`SELECT account_id id, SUM(stake) s FROM external_stakes GROUP BY account_id`); } catch (e) { /* table absent */ }

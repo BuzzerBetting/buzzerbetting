@@ -542,6 +542,24 @@ CREATE INDEX IF NOT EXISTS idx_pen_taker_overrides_match ON pen_taker_overrides(
 // only creates a brand new table, it never adds columns to one that's already there.
 try { db.exec(`ALTER TABLE withdrawals ADD COLUMN reversed_at TEXT`); } catch (e) { /* already exists */ }
 
+// Locked Funds review process (2026-10-16): every entry starts 'fresh' (not yet checked) and
+// is worked to 'in_progress' (with notes), 'unlocked' (money restored to the account / back
+// to a pending withdrawal) or 'irrecoverable'. Unlocked rows are kept for the running total
+// but no longer count as locked money anywhere (balance integrity, bank locked totals).
+try { db.exec(`ALTER TABLE locked_funds ADD COLUMN status TEXT NOT NULL DEFAULT 'fresh'`); } catch (e) { /* already exists */ }
+try { db.exec(`ALTER TABLE locked_funds ADD COLUMN status_at TEXT`); } catch (e) { /* already exists */ }
+try { db.exec(`ALTER TABLE locked_funds ADD COLUMN status_by TEXT`); } catch (e) { /* already exists */ }
+db.exec(`
+CREATE TABLE IF NOT EXISTS locked_fund_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  locked_fund_id INTEGER NOT NULL,
+  note TEXT NOT NULL,
+  author TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_locked_fund_notes_lf ON locked_fund_notes(locked_fund_id);
+`);
+
 // Back & Lay support — every other bet type shares one bet-level Odds value across all its
 // legs (bets.fields.Odds), but Back & Lay needs its own odds per leg (back accounts and
 // exchange accounts are priced independently), plus which side of the bet each leg is on,

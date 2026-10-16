@@ -528,7 +528,7 @@ router.get('/banks', (req, res) => {
   try {
     const banks = db.prepare(`SELECT * FROM banks WHERE owner IS NULL OR owner = 'Jordan' ORDER BY name`).all();
     const result = banks.map(b => {
-      const lockedTotal = db.prepare(`SELECT COALESCE(SUM(amount),0) t FROM locked_funds WHERE bank = ?`).get(b.name).t;
+      const lockedTotal = db.prepare(`SELECT COALESCE(SUM(amount),0) t FROM locked_funds WHERE bank = ? AND COALESCE(status,'fresh') <> 'unlocked'`).get(b.name).t;
       return { name: b.name, starting_balance: b.starting_balance, remaining: b.starting_balance, locked_total: lockedTotal };
     });
     res.json({ ok: true, banks: result });
@@ -797,66 +797,113 @@ router.post('/accounts/:id/lock', (req, res) => {
   } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
 });
 
-// POST /api/ledger/locked-funds/:id/unlock — only valid for 'account_locked' entries.
-// Restores the exact original account: adds the amount back to its balance and sets its
-// status back to 'good' (reappearing on Live Accounts), then removes the locked-funds row.
+// Locked Funds review process (2026-10-16): fresh -> in_progress (notes) -> unlocked | irrecoverable.
+// Unlocked rows are KEPT (status 'unlocked') so the page can show a running total; every money
+// total that treats locked_funds as "gone" (balance-integrity, banks.locked_total) excludes them.
+const LF_STATUSES = ['fresh', 'in_progress', 'unlocked', 'irrecoverable'];
+
+function lfLoad(id) {
+  const lf = db.prepare(`SELECT * FROM locked_funds WHERE id = ?`).get(id);
+  if (!lf) throw new Error('Locked funds record not found');
+  if (lf.status === 'unlocked') throw new Error('Already unlocked');
+  return lf;
+}
+function lfMarkUnlocked(id, user) {
+  db.prepare(`UPDATE locked_funds SET status = 'unlocked', status_at = datetime('now'), status_by = ? WHERE id = ?`).run(user || null, id);
+}
+
+// 'account_locked': restores the exact original account — adds the amount back to its balance
+// and sets its status back to 'good' (reappearing on Live Accounts).
+function lfUnlockAccount(lf, user) {
+  if (lf.source !== 'account_locked' || !lf.linked_account_id) throw new Error('This entry has no linked account to restore');
+  const account = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(lf.linked_account_id);
+  if (!account) throw new Error('Original account no longer exists');
+  db.prepare(`UPDATE accounts SET balance = balance + ?, status = 'good', updated_at = datetime('now') WHERE id = ?`).run(lf.amount, lf.linked_account_id);
+  lfMarkUnlocked(lf.id, user);
+}
+
+// 'confiscated_withdrawal': the bookie decided to pay out after all — recreates a pending
+// withdrawal for the same amount. No account balance change here — it's already reflecting the
+// deduction from when this withdrawal was originally requested. The bank is deliberately NOT
+// touched — if the recreated withdrawal later gets confirmed, that step credits the bank then.
+function lfRecoverWithdrawal(lf, user) {
+  if (lf.source !== 'confiscated_withdrawal' || !lf.linked_account_id) throw new Error('This entry has no linked account to recover to');
+  const account = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(lf.linked_account_id);
+  if (!account) throw new Error('Original account no longer exists');
+  if (account.status === 'closed') throw new Error('Original account is Finished — cannot recreate a pending withdrawal against it');
+  const info = db.prepare(`INSERT INTO withdrawals (account_id, amount, balance_after, status) VALUES (?, ?, ?, 'pending')`)
+    .run(lf.linked_account_id, lf.amount, account.balance);
+  lfMarkUnlocked(lf.id, user);
+  return info.lastInsertRowid;
+}
+
+// POST /api/ledger/locked-funds/:id/unlock — the "Unlocked" button, for either source.
 router.post('/locked-funds/:id/unlock', (req, res) => {
   const doUnlock = db.transaction((id) => {
-    const lf = db.prepare(`SELECT * FROM locked_funds WHERE id = ?`).get(id);
-    if (!lf) throw new Error('Locked funds record not found');
-    if (lf.source !== 'account_locked' || !lf.linked_account_id) throw new Error('This entry has no linked account to restore');
-    const account = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(lf.linked_account_id);
-    if (!account) throw new Error('Original account no longer exists');
-    db.prepare(`UPDATE accounts SET balance = balance + ?, status = 'good', updated_at = datetime('now') WHERE id = ?`).run(lf.amount, lf.linked_account_id);
-    db.prepare(`DELETE FROM locked_funds WHERE id = ?`).run(id);
+    const lf = lfLoad(id);
+    if (lf.source === 'confiscated_withdrawal') return { withdrawalId: lfRecoverWithdrawal(lf, req.username) };
+    lfUnlockAccount(lf, req.username);
+    return {};
   });
   try {
-    doUnlock(req.params.id);
-    res.json({ ok: true });
+    res.json({ ok: true, ...doUnlock(req.params.id) });
   } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
 });
 
-// DELETE /api/ledger/locked-funds/:id — simple removal, no side effects on any account.
-// POST /api/ledger/locked-funds/:id/recover — only valid for 'confiscated_withdrawal'
-// entries with a still-existing linked account. The bookie decided to pay out after all —
-// restores the amount to the account (undoing what confiscation deducted) and recreates a
-// pending withdrawal for the same amount. The bank is deliberately NOT touched here — if
-// this recreated withdrawal later gets confirmed, that step will correctly credit the bank
-// then, exactly like any other pending withdrawal.
+// POST /api/ledger/locked-funds/:id/recover — confiscated withdrawals only (older clients).
 router.post('/locked-funds/:id/recover', (req, res) => {
-  const doRecover = db.transaction((id) => {
-    const lf = db.prepare(`SELECT * FROM locked_funds WHERE id = ?`).get(id);
-    if (!lf) throw new Error('Locked funds record not found');
-    if (lf.source !== 'confiscated_withdrawal' || !lf.linked_account_id) throw new Error('This entry has no linked account to recover to');
-    const account = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(lf.linked_account_id);
-    if (!account) throw new Error('Original account no longer exists');
-    if (account.status === 'closed') throw new Error('Original account is Finished — cannot recreate a pending withdrawal against it');
-    // No account balance change here — it's already reflecting the deduction from when
-    // this withdrawal was originally requested, and stays deducted through recovery, same
-    // as it did through confiscation. This just recreates the pending record for the same
-    // money.
-    const info = db.prepare(`INSERT INTO withdrawals (account_id, amount, balance_after, status) VALUES (?, ?, ?, 'pending')`)
-      .run(lf.linked_account_id, lf.amount, account.balance);
-    db.prepare(`DELETE FROM locked_funds WHERE id = ?`).run(id);
-    return info.lastInsertRowid;
-  });
+  const doRecover = db.transaction((id) => lfRecoverWithdrawal(lfLoad(id), req.username));
   try {
     const withdrawalId = doRecover(req.params.id);
     res.json({ ok: true, withdrawalId });
   } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
 });
 
+// POST /api/ledger/locked-funds/:id/status { status: 'in_progress'|'irrecoverable', note? }
+// No money moves — irrecoverable money was already out of live tracking while locked.
+router.post('/locked-funds/:id/status', (req, res) => {
+  const status = (req.body || {}).status;
+  const note = String((req.body || {}).note || '').trim();
+  if (!['in_progress', 'irrecoverable'].includes(status)) return res.status(400).json({ ok: false, error: 'Invalid status' });
+  const doStatus = db.transaction((id) => {
+    lfLoad(id);
+    db.prepare(`UPDATE locked_funds SET status = ?, status_at = datetime('now'), status_by = ? WHERE id = ?`).run(status, req.username || null, id);
+    if (note) db.prepare(`INSERT INTO locked_fund_notes (locked_fund_id, note, author) VALUES (?, ?, ?)`).run(id, note, req.username || null);
+  });
+  try {
+    doStatus(req.params.id);
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/locked-funds/:id/notes { note }
+router.post('/locked-funds/:id/notes', (req, res) => {
+  const note = String((req.body || {}).note || '').trim();
+  if (!note) return res.status(400).json({ ok: false, error: 'Note is empty' });
+  try {
+    if (!db.prepare(`SELECT id FROM locked_funds WHERE id = ?`).get(req.params.id)) throw new Error('Locked funds record not found');
+    db.prepare(`INSERT INTO locked_fund_notes (locked_fund_id, note, author) VALUES (?, ?, ?)`).run(req.params.id, note, req.username || null);
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
+// DELETE /api/ledger/locked-funds/:id — simple removal, no side effects on any account.
 router.delete('/locked-funds/:id', (req, res) => {
   try {
+    db.prepare(`DELETE FROM locked_fund_notes WHERE locked_fund_id = ?`).run(req.params.id);
     db.prepare(`DELETE FROM locked_funds WHERE id = ?`).run(req.params.id);
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
-// GET /api/ledger/locked-funds
+// GET /api/ledger/locked-funds — every entry (all statuses) with its notes, oldest first.
 router.get('/locked-funds', (req, res) => {
   try {
     const rows = db.prepare(`SELECT * FROM locked_funds ORDER BY created_at DESC`).all();
+    const notes = db.prepare(`SELECT * FROM locked_fund_notes ORDER BY created_at, id`).all();
+    const byLf = new Map();
+    notes.forEach(n => { if (!byLf.has(n.locked_fund_id)) byLf.set(n.locked_fund_id, []); byLf.get(n.locked_fund_id).push(n); });
+    rows.forEach(r => { if (!LF_STATUSES.includes(r.status)) r.status = 'fresh'; r.notes = byLf.get(r.id) || []; });
     res.json({ ok: true, locked: rows });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
