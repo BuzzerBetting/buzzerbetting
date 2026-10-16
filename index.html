@@ -7347,8 +7347,8 @@ const MONEY_TYPES = [
   ['in', 'Money in', 'ti-arrow-down-left'],
   ['out', 'Money out', 'ti-arrow-up-right'],
 ];
-const MONEY_BRACKETS = [['essential', 'Necessary'], ['non_essential', 'Unnecessary'], ['business', 'Betting expenses'], ['savings', 'Savings & investing']];
-const MONEY_BRACKET_COLOR = { essential: 'var(--blue)', non_essential: 'var(--amber)', business: 'var(--purple)', savings: 'var(--green)' };
+const MONEY_BRACKETS = [['essential', 'Necessary'], ['non_essential', 'Unnecessary'], ['business', 'Betting expenses']];
+const MONEY_BRACKET_COLOR = { essential: 'var(--blue)', non_essential: 'var(--amber)', business: 'var(--purple)' };
 const mGbp = n => (n < 0 ? '-£' : '£') + Math.abs(n || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const mSgn = n => (n >= 0 ? '+£' : '-£') + Math.abs(n || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 function mBtn(active, onclick, label, extra) {
@@ -7490,11 +7490,10 @@ function paySet(k, v) {
   PAY[k] = v;
   if (k === 'mode') { PAY.acct = ((PAY.last || {}).acct || {})[v] || ''; PAY.to = ''; PAY.card = ''; PAY.cat = null; PAY.person = ''; }
   if (k === 'acct') {
-    if (PAY.cat === 'to_person' && v.startsWith('card:')) PAY.cat = null;
     if ('bank:' + PAY.to === v) PAY.to = '';
     paySaveState();
   }
-  if (k === 'cat' && v !== 'to_person') PAY.person = '';
+  if (k === 'cat') PAY.person = '';
   PAY_MSG = '';
   renderPayForm();
   if (k !== 'mode' && k !== 'acct') setTimeout(() => { const i = document.getElementById('pay-amount'); if (i) i.focus(); }, 0);
@@ -7519,7 +7518,7 @@ function renderPayForm() {
   const bankChip = (b, key, onclick) => payChip(key, onclick, `${escapeHtml(b.name)} <span style="opacity:.7;font-size:11px">${mGbp(b.balance)}</span>`);
   const cardChip = (c, key, onclick) => payChip(key, onclick, `<i class="ti ti-credit-card"></i> ${escapeHtml(c.name)} <span style="opacity:.7;font-size:11px">owes ${mGbp(c.owed)}</span>`);
 
-  let html = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px;margin-bottom:14px">${
+  let html = `<div id="pay-quick">${payQuickHtml()}</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px;margin-bottom:14px">${
     PAY_MODES.map(([k, l, ic]) => mBtn(p.mode === k, `paySet('mode','${k}')`, `<i class="ti ${ic}"></i> ${l}`, 'padding:10px 12px;font-size:13.5px')).join('')}</div>`;
 
   if (p.mode === 'out' || p.mode === 'in') {
@@ -7532,13 +7531,11 @@ function renderPayForm() {
 
   if (p.acct && p.mode === 'out') {
     const cats = MONEY.categories.filter(c => c.kind === 'out');
-    let groups = MONEY_BRACKETS.map(([b, label]) => {
+    const groups = MONEY_BRACKETS.map(([b, label]) => {
       const list = cats.filter(c => (c.bracket || 'non_essential') === b);
       return list.length ? `<div style="width:100%;font-size:11px;font-weight:600;color:${MONEY_BRACKET_COLOR[b]};margin:6px 0 0;text-transform:uppercase;letter-spacing:.04em">${label}</div>${
         list.map(c => payChip(p.cat === c.id, `paySet('cat', ${c.id})`, escapeHtml(c.name))).join('')}` : '';
     }).join('');
-    if (!isCard) groups += `<div style="width:100%;font-size:11px;font-weight:600;color:var(--text3);margin:6px 0 0;text-transform:uppercase;letter-spacing:.04em">Not spending</div>${
-      payChip(p.cat === 'to_person', `paySet('cat', 'to_person')`, '<i class="ti ti-user-share"></i> Sent to someone')}`;
     html += step('What for?', groups);
   }
   if (p.acct && p.mode === 'in') {
@@ -7552,12 +7549,10 @@ function renderPayForm() {
     html += step('Which card?', cards.length ? cards.map(c => cardChip(c, p.card === c.name, `paySet('card', ${payArg(c.name)})`)).join('') : '<span style="font-size:12.5px;color:var(--text3)">No credit cards yet — add one with "+ Add credit card".</span>');
   }
 
-  // Person: required for "Sent to someone", optional for money in from a person.
+  // Person: optional, for money in from someone.
   const cat = MONEY.categories.find(c => c.id === p.cat);
-  const wantPerson = (p.mode === 'out' && p.cat === 'to_person') || (p.mode === 'in' && cat && /someone|gift|loan|sold/i.test(cat.name));
-  if (wantPerson) {
-    const req = p.cat === 'to_person';
-    html += step(req ? 'Who to?' : 'Who from? <span style="font-weight:400;text-transform:none;color:var(--text3)">(optional)</span>',
+  if (p.mode === 'in' && cat && /someone|gift|loan|sold/i.test(cat.name)) {
+    html += step('Who from? <span style="font-weight:400;text-transform:none;color:var(--text3)">(optional)</span>',
       `<input type="text" id="pay-person" list="pay-people" value="${escapeHtml(p.person || '')}" oninput="PAY.person=this.value" placeholder="Name" style="max-width:240px;padding:7px 10px;font-size:13px">
        <datalist id="pay-people">${(MONEY.people || []).map(n => `<option value="${escapeHtml(n)}">`).join('')}</datalist>
        ${(MONEY.people || []).slice(0, 8).map(n => `<span onclick="PAY.person=${payArg(n)};renderPayForm()" style="cursor:pointer;font-size:11.5px;padding:3px 8px;border:.5px solid var(--border);border-radius:12px;color:var(--text2)">${escapeHtml(n)}</span>`).join('')}`);
@@ -7573,10 +7568,60 @@ function renderPayForm() {
         <button onclick="paySave()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:10px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Save</button>
       </div>
       ${owedCard && owedCard.owed > 0 ? `<div style="margin-top:8px;font-size:12px;color:var(--text2)">${escapeHtml(owedCard.name)} owes ${mGbp(owedCard.owed)} · <span style="cursor:pointer;color:var(--brand)" onclick="document.getElementById('pay-amount').value=${owedCard.owed};document.getElementById('pay-amount').focus()">Pay it all</span></div>` : ''}
+      <div style="margin-top:8px;font-size:12px"><span style="cursor:pointer;color:var(--brand)" onclick="payAddQuick()"><i class="ti ti-bolt"></i> Save as quick add</span> <span style="color:var(--text3)">— for repeat payments like padel</span></div>
       ${isCard ? `<div style="margin-top:8px;font-size:11.5px;color:var(--text3)">On the card — no bank balance changes until the card is paid off.</div>` : ''}
     </div>`;
   }
   el.innerHTML = `<div class="card card-pad">${PAY_MSG}${html}</div>`;
+}
+// ---- quick adds: saved presets for repeat payments (e.g. padel) ----
+function payQuickHtml() {
+  const list = MONEY.quickAdds || [];
+  const chips = list.map(q => `<span style="display:inline-flex;align-items:center;border:.5px solid var(--border);border-radius:16px;background:var(--surface);font-size:12.5px;overflow:hidden">
+      <span onclick="payUseQuick(${q.id})" style="cursor:pointer;padding:5px 10px"><i class="ti ti-bolt" style="color:var(--amber)"></i> ${escapeHtml(q.label)}${q.payload.amount ? ` <span style="color:var(--text3)">${mGbp(q.payload.amount)}</span>` : ''}</span>
+      <span onclick="payDeleteQuick(${q.id})" title="Delete quick add" style="cursor:pointer;padding:5px 8px 5px 2px;color:var(--text3)">×</span></span>`).join('');
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+    <span class="lbl" style="margin:0">Quick add</span>
+    ${chips || '<span style="font-size:12px;color:var(--text3)">None yet — fill in a payment, then "Save as quick add".</span>'}</div>`;
+}
+// Fill the form from a preset; amount and note stay editable, Enter saves.
+function payUseQuick(id) {
+  const q = (MONEY.quickAdds || []).find(x => x.id === id);
+  if (!q) return;
+  const p = q.payload;
+  if (!payValidAcct(p.acct, p.mode)) { alert(`The account for "${q.label}" no longer exists — delete it and save it again.`); return; }
+  if ((p.mode === 'out' || p.mode === 'in') && !MONEY.categories.some(c => c.id === p.cat)) { alert(`The category for "${q.label}" is hidden or gone — delete it and save it again.`); return; }
+  Object.assign(PAY, { mode: p.mode, acct: p.acct, cat: p.cat, to: p.to || '', card: p.card || '', person: '' });
+  PAY_MSG = '';
+  renderPayForm();
+  const a = document.getElementById('pay-amount'), n = document.getElementById('pay-note');
+  if (n && p.note) n.value = p.note;
+  if (a) { if (p.amount) a.value = p.amount; a.focus(); a.select(); }
+}
+async function payAddQuick() {
+  if (!payReady()) return;
+  const label = (prompt('Name for this quick add (e.g. Padel):') || '').trim();
+  if (!label) return;
+  const a = document.getElementById('pay-amount'), n = document.getElementById('pay-note');
+  const payload = { mode: PAY.mode, acct: PAY.acct, cat: PAY.cat, to: PAY.to, card: PAY.card,
+    amount: parseFloat(a && a.value) || null, note: n ? n.value.trim() : '' };
+  const d = await ledgerApi('money/quick-adds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label, payload }) });
+  if (!d || !d.ok) { alert((d && d.error) || 'Could not save.'); return; }
+  await payRefreshQuick();
+}
+async function payDeleteQuick(id) {
+  const q = (MONEY.quickAdds || []).find(x => x.id === id);
+  if (!q || !confirm(`Delete the "${q.label}" quick add?`)) return;
+  const d = await ledgerApi('money/quick-adds/' + id, { method: 'DELETE' });
+  if (!d || !d.ok) { alert((d && d.error) || 'Could not delete.'); return; }
+  await payRefreshQuick();
+}
+// Redraw just the quick-add bar so a half-filled form isn't wiped.
+async function payRefreshQuick() {
+  const d = await ledgerApi('money');
+  if (d && d.ok) MONEY = d;
+  const el = document.getElementById('pay-quick');
+  if (el) el.innerHTML = payQuickHtml();
 }
 async function paySave() {
   const p = PAY;
@@ -7591,7 +7636,6 @@ async function paySave() {
   const person = pi ? pi.value.trim() : (p.person || '');
   if (p.mode === 'out') {
     if (isCard) Object.assign(body, { type: 'card_out', card: acctName, category_id: p.cat });
-    else if (p.cat === 'to_person') Object.assign(body, { type: 'to_person', bank: acctName, person });
     else Object.assign(body, { type: 'out', bank: acctName, category_id: p.cat });
   } else if (p.mode === 'in') {
     Object.assign(body, isCard ? { type: 'card_in', card: acctName, category_id: p.cat } : { type: 'in', bank: acctName, category_id: p.cat, person });
@@ -7811,7 +7855,6 @@ async function loadMoneySpending() {
       ${tile('This month: necessary', mGbp(br('essential')), MONEY_BRACKET_COLOR.essential)}
       ${tile('Unnecessary', mGbp(br('non_essential')), MONEY_BRACKET_COLOR.non_essential)}
       ${tile('Betting expenses', mGbp(br('business')), MONEY_BRACKET_COLOR.business)}
-      ${tile('Saved / invested', mGbp(br('savings')), MONEY_BRACKET_COLOR.savings)}
       ${tile('Money in', mGbp(cell(inRows, thisM)), 'var(--green)')}
     </div>
     <div style="overflow-x:auto"><table class="dt" style="min-width:${200 + months.length * 90}px"><thead><tr><th>Money out</th>${months.map(m => `<th class="r">${mLabel(m)}</th>`).join('')}</tr></thead><tbody>${section.join('')}</tbody></table></div>

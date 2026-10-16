@@ -79,19 +79,18 @@ try { db.exec(`ALTER TABLE withdrawals ADD COLUMN confirmed_at TEXT`); } catch (
 db.prepare(`UPDATE withdrawals SET confirmed_at = date WHERE status = 'confirmed' AND confirmed_at IS NULL`).run();
 
 // Out brackets — keys are stored, labels live in the frontend (MONEY_BRACKETS):
-// essential = Necessary, non_essential = Unnecessary, business = Betting expenses,
-// savings = Savings & investing (money parked, not spent).
-const BRACKETS = ['essential', 'non_essential', 'business', 'savings'];
+// essential = Necessary, non_essential = Unnecessary, business = Betting expenses.
+const BRACKETS = ['essential', 'non_essential', 'business'];
 // Category set agreed with Jordan 2026-10-16; also the default for any new bank user.
 const DEFAULT_CATEGORIES = [
   ['in', 'Transfer from someone'], ['in', 'Bank interest'], ['in', 'Refund'], ['in', 'Sold something'],
-  ['in', 'Investment returns'], ['in', 'Cashback'], ['in', 'Wages / income'], ['in', 'Gift received'],
+  ['in', 'Investment returns'], ['in', 'Gift received'],
   ['in', 'Loan / borrowed'], ['in', 'Other in'],
   ['out', 'Food shopping', 'essential'], ['out', 'Fuel', 'essential'], ['out', 'Clothes', 'essential'],
   ['out', 'Living expenses', 'essential'], ['out', 'House expenses', 'essential'], ['out', 'Rent / mortgage', 'essential'],
   ['out', 'Bills & utilities', 'essential'], ['out', 'Phone & internet', 'essential'], ['out', 'Insurance', 'essential'],
   ['out', 'Health & medical', 'essential'], ['out', 'Toiletries & personal care', 'essential'],
-  ['out', 'Travel & transport', 'essential'], ['out', 'Tax', 'essential'], ['out', 'Loan / debt repayment', 'essential'],
+  ['out', 'Travel & transport', 'essential'], ['out', 'Loan / debt repayment', 'essential'],
   ['out', 'Bank & card fees', 'essential'], ['out', 'Cash withdrawal', 'essential'], ['out', 'Other necessary', 'essential'],
   ['out', 'Unnecessary food', 'non_essential'], ['out', 'Eating out', 'non_essential'], ['out', 'Car expenses', 'non_essential'],
   ['out', 'Gifts', 'non_essential'], ['out', 'Going out & entertainment', 'non_essential'], ['out', 'Holidays', 'non_essential'],
@@ -100,7 +99,6 @@ const DEFAULT_CATEGORIES = [
   ['out', 'Staff pay', 'business'], ['out', 'Subscription costs', 'business'], ['out', 'Platform fees', 'business'],
   ['out', 'Servers & hosting', 'business'], ['out', 'Account costs', 'business'], ['out', 'Phones, SIMs & equipment', 'business'],
   ['out', 'Accountant & legal', 'business'], ['out', 'Other betting expense', 'business'],
-  ['out', 'Savings', 'savings'], ['out', 'Investments', 'savings'],
 ];
 function seedCategories(owner) {
   const ins = db.prepare(`INSERT INTO bank_categories (owner, kind, name, bracket, sort) VALUES (?, ?, ?, ?, ?)`);
@@ -112,16 +110,51 @@ function ensureCategories(owner) {
   seedCategories(owner);
 }
 BANK_USERS.forEach(ensureCategories);
-// One-off (2026-10-16): Jordan's untouched 10-08 defaults -> the new set. Only while none of
-// them has ever been used; the marker category 'Essential food' doesn't exist in the new set,
-// so this never runs twice.
+// One-off category reset (2026-10-16, user-agreed list), for Jordan and Kieran: each gets the
+// current DEFAULT_CATEGORIES once, but only while none of their categories has been used.
+// Tracked in bank_ledger_meta so later edits to a user's categories are never overwritten.
+db.exec(`CREATE TABLE IF NOT EXISTS bank_ledger_meta (key TEXT PRIMARY KEY, value TEXT)`);
 db.transaction(() => {
-  const old = db.prepare(`SELECT id FROM bank_categories WHERE owner = 'Jordan'`).all().map(r => r.id);
-  if (!db.prepare(`SELECT 1 FROM bank_categories WHERE owner = 'Jordan' AND name = 'Essential food'`).get()) return;
-  if (old.length && db.prepare(`SELECT 1 FROM bank_entries WHERE category_id IN (${old.join(',')}) LIMIT 1`).get()) return;
-  db.prepare(`DELETE FROM bank_categories WHERE owner = 'Jordan'`).run();
-  seedCategories('Jordan');
+  if (db.prepare(`SELECT 1 FROM bank_ledger_meta WHERE key = 'categories_v2'`).get()) return;
+  for (const owner of BANK_USERS) {
+    const ids = db.prepare(`SELECT id FROM bank_categories WHERE owner = ?`).all(owner).map(r => r.id);
+    if (ids.length && db.prepare(`SELECT 1 FROM bank_entries WHERE category_id IN (${ids.join(',')}) LIMIT 1`).get()) continue;
+    db.prepare(`DELETE FROM bank_categories WHERE owner = ?`).run(owner);
+    seedCategories(owner);
+  }
+  db.prepare(`INSERT INTO bank_ledger_meta (key, value) VALUES ('categories_v2', datetime('now'))`).run();
 })();
+
+// Quick adds (2026-10-16): saved one-tap presets for repeat spending that isn't regular
+// enough for a direct debit (e.g. padel). payload = the quick form's own state
+// { mode, acct, cat, to, card, amount, note } — the form re-validates it on use.
+db.exec(`
+CREATE TABLE IF NOT EXISTS bank_quick_adds (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner      TEXT NOT NULL,
+  label      TEXT NOT NULL,
+  payload    TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`);
+function listQuickAdds(owner) {
+  return db.prepare(`SELECT id, label, payload FROM bank_quick_adds WHERE owner = ? ORDER BY label COLLATE NOCASE`).all(owner)
+    .map(r => { let p = {}; try { p = JSON.parse(r.payload); } catch (e) {} return { id: r.id, label: r.label, payload: p }; });
+}
+function addQuickAdd(owner, b) {
+  const label = String((b && b.label) || '').trim().slice(0, 40);
+  if (!label) throw new Error('Give the quick add a name');
+  const p = (b && b.payload) || {};
+  if (typeof p !== 'object' || !['out', 'in', 'transfer', 'card'].includes(p.mode)) throw new Error('Nothing to save');
+  const keep = {
+    mode: p.mode, acct: String(p.acct || ''), cat: p.cat == null ? null : Number(p.cat), to: String(p.to || ''), card: String(p.card || ''),
+    amount: p.amount > 0 ? round2(Number(p.amount)) : null, note: String(p.note || '').slice(0, 200),
+  };
+  return db.prepare(`INSERT INTO bank_quick_adds (owner, label, payload) VALUES (?, ?, ?)`).run(owner, label, JSON.stringify(keep)).lastInsertRowid;
+}
+function deleteQuickAdd(owner, id) {
+  db.prepare(`DELETE FROM bank_quick_adds WHERE id = ? AND owner = ?`).run(id, owner);
+}
 
 const TYPES = ['own_transfer', 'to_person', 'in', 'out', 'card_out', 'card_in', 'card_payment'];
 const CARD_TYPES = ['card_out', 'card_in', 'card_payment', 'card_correction'];
@@ -392,4 +425,5 @@ module.exports = {
   addEntry, deleteEntry, editEntry, setRealBalance, expectedBanks, listBanks, listCategories, listEntries, people, report,
   addCategory, editCategory, renameBank, effects,
   listCards, addCard, setCardOwed, removeCard, CARD_TYPES,
+  listQuickAdds, addQuickAdd, deleteQuickAdd,
 };
