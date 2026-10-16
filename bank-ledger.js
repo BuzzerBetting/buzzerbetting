@@ -50,6 +50,25 @@ for (const col of ['opening_balance REAL', 'opening_at TEXT', 'last_checked_at T
   try { db.exec(`ALTER TABLE banks ADD COLUMN ${col}`); } catch (e) { /* already exists */ }
 }
 try { db.exec(`ALTER TABLE bank_categories ADD COLUMN owner TEXT`); } catch (e) { /* already exists */ }
+
+// Credit cards (2026-10-16): spending on a card is categorised like any other money out but
+// leaves every bank balance alone — it only grows the card's `owed`. Paying the card off
+// ('card_payment') is what moves a bank, and isn't spending (it was counted when bought).
+// Kept out of the banks table on purpose so cards never leak into bank lists / bankroll.
+// Card entries reuse bank_entries with `card` set; bank = the card's name for card_out /
+// card_in / card_correction (bank is NOT NULL), the paying bank for card_payment. Card and
+// bank names are kept unique across both tables so a card name never matches a bank.
+db.exec(`
+CREATE TABLE IF NOT EXISTS credit_cards (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner      TEXT NOT NULL,
+  name       TEXT NOT NULL UNIQUE,
+  owed       REAL NOT NULL DEFAULT 0,
+  active     INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`);
+try { db.exec(`ALTER TABLE bank_entries ADD COLUMN card TEXT`); } catch (e) { /* already exists */ }
 // Every bank that existed before owners did is Jordan's (the bookie accounts' banks).
 db.prepare(`UPDATE banks SET owner = 'Jordan' WHERE owner IS NULL`).run();
 const BANK_USERS = ['Jordan', 'Kieran'];
@@ -59,72 +78,127 @@ const BANK_USERS = ['Jordan', 'Kieran'];
 try { db.exec(`ALTER TABLE withdrawals ADD COLUMN confirmed_at TEXT`); } catch (e) { /* already exists */ }
 db.prepare(`UPDATE withdrawals SET confirmed_at = date WHERE status = 'confirmed' AND confirmed_at IS NULL`).run();
 
+// Out brackets — keys are stored, labels live in the frontend (MONEY_BRACKETS):
+// essential = Necessary, non_essential = Unnecessary, business = Betting expenses,
+// savings = Savings & investing (money parked, not spent).
+const BRACKETS = ['essential', 'non_essential', 'business', 'savings'];
+// Category set agreed with Jordan 2026-10-16; also the default for any new bank user.
+const DEFAULT_CATEGORIES = [
+  ['in', 'Transfer from someone'], ['in', 'Bank interest'], ['in', 'Refund'], ['in', 'Sold something'],
+  ['in', 'Investment returns'], ['in', 'Cashback'], ['in', 'Wages / income'], ['in', 'Gift received'],
+  ['in', 'Loan / borrowed'], ['in', 'Other in'],
+  ['out', 'Food shopping', 'essential'], ['out', 'Fuel', 'essential'], ['out', 'Clothes', 'essential'],
+  ['out', 'Living expenses', 'essential'], ['out', 'House expenses', 'essential'], ['out', 'Rent / mortgage', 'essential'],
+  ['out', 'Bills & utilities', 'essential'], ['out', 'Phone & internet', 'essential'], ['out', 'Insurance', 'essential'],
+  ['out', 'Health & medical', 'essential'], ['out', 'Toiletries & personal care', 'essential'],
+  ['out', 'Travel & transport', 'essential'], ['out', 'Tax', 'essential'], ['out', 'Loan / debt repayment', 'essential'],
+  ['out', 'Bank & card fees', 'essential'], ['out', 'Cash withdrawal', 'essential'], ['out', 'Other necessary', 'essential'],
+  ['out', 'Unnecessary food', 'non_essential'], ['out', 'Eating out', 'non_essential'], ['out', 'Car expenses', 'non_essential'],
+  ['out', 'Gifts', 'non_essential'], ['out', 'Going out & entertainment', 'non_essential'], ['out', 'Holidays', 'non_essential'],
+  ['out', 'Shopping & tech', 'non_essential'], ['out', 'Personal subscriptions', 'non_essential'],
+  ['out', 'Hobbies & sport', 'non_essential'], ['out', 'Other unnecessary', 'non_essential'],
+  ['out', 'Staff pay', 'business'], ['out', 'Subscription costs', 'business'], ['out', 'Platform fees', 'business'],
+  ['out', 'Servers & hosting', 'business'], ['out', 'Account costs', 'business'], ['out', 'Phones, SIMs & equipment', 'business'],
+  ['out', 'Accountant & legal', 'business'], ['out', 'Other betting expense', 'business'],
+  ['out', 'Savings', 'savings'], ['out', 'Investments', 'savings'],
+];
+function seedCategories(owner) {
+  const ins = db.prepare(`INSERT INTO bank_categories (owner, kind, name, bracket, sort) VALUES (?, ?, ?, ?, ?)`);
+  DEFAULT_CATEGORIES.forEach(([k, n, b], i) => ins.run(owner, k, n, b || null, i));
+}
 // Each user starts with the same default categories, then edits their own.
 function ensureCategories(owner) {
   if (db.prepare(`SELECT COUNT(*) n FROM bank_categories WHERE owner = ?`).get(owner).n) return;
-  const ins = db.prepare(`INSERT INTO bank_categories (owner, kind, name, bracket, sort) VALUES (?, ?, ?, ?, ?)`);
-  [
-    ['out', 'Essential food', 'essential'], ['out', 'Non-essential food', 'non_essential'], ['out', 'Fuel', 'essential'],
-    ['out', 'Bills & utilities', 'essential'], ['out', 'Rent / housing', 'essential'], ['out', 'Subscriptions', 'non_essential'],
-    ['out', 'Betting costs', 'business'], ['out', 'Staff costs', 'business'],
-    ['out', 'Essential other', 'essential'], ['out', 'Non-essential other', 'non_essential'],
-    ['in', 'Refund', null], ['in', 'Transfer from someone', null], ['in', 'Interest', null], ['in', 'Income', null],
-    ['in', 'Cashback', null], ['in', 'Other', null],
-  ].forEach(([k, n, b], i) => ins.run(owner, k, n, b, i));
+  seedCategories(owner);
 }
 BANK_USERS.forEach(ensureCategories);
+// One-off (2026-10-16): Jordan's untouched 10-08 defaults -> the new set. Only while none of
+// them has ever been used; the marker category 'Essential food' doesn't exist in the new set,
+// so this never runs twice.
+db.transaction(() => {
+  const old = db.prepare(`SELECT id FROM bank_categories WHERE owner = 'Jordan'`).all().map(r => r.id);
+  if (!db.prepare(`SELECT 1 FROM bank_categories WHERE owner = 'Jordan' AND name = 'Essential food'`).get()) return;
+  if (old.length && db.prepare(`SELECT 1 FROM bank_entries WHERE category_id IN (${old.join(',')}) LIMIT 1`).get()) return;
+  db.prepare(`DELETE FROM bank_categories WHERE owner = 'Jordan'`).run();
+  seedCategories('Jordan');
+})();
 
-const TYPES = ['own_transfer', 'to_person', 'in', 'out'];
+const TYPES = ['own_transfer', 'to_person', 'in', 'out', 'card_out', 'card_in', 'card_payment'];
+const CARD_TYPES = ['card_out', 'card_in', 'card_payment', 'card_correction'];
 const round2 = n => Math.round(n * 100) / 100;
+// Which category kind an entry type takes (null = no category).
+const catKind = type => (type === 'in' || type === 'card_in') ? 'in' : (type === 'out' || type === 'to_person' || type === 'card_out') ? 'out' : null;
 
-// The balance effect of one entry, per bank: [[bank, delta], ...].
+// The balance effect of one entry, per bank: [[bank, delta], ...]. Card spending/refunds and
+// card corrections touch no bank at all.
 function effects(e) {
   if (e.type === 'own_transfer') return [[e.bank, -e.amount], [e.to_bank, e.amount]];
   if (e.type === 'in') return [[e.bank, e.amount]];
   if (e.type === 'correction') return [[e.bank, e.amount]];
-  return [[e.bank, -e.amount]]; // out, to_person
+  if (e.type === 'card_out' || e.type === 'card_in' || e.type === 'card_correction') return [];
+  return [[e.bank, -e.amount]]; // out, to_person, card_payment
+}
+// The effect on the card's amount owed.
+function cardDelta(e) {
+  if (e.type === 'card_out') return e.amount;
+  if (e.type === 'card_in' || e.type === 'card_payment') return -e.amount;
+  if (e.type === 'card_correction') return e.amount; // signed
+  return 0;
 }
 function apply(e, sign) {
   const up = db.prepare(`UPDATE banks SET starting_balance = starting_balance + ? WHERE name = ?`);
   for (const [bank, d] of effects(e)) up.run(sign * d, bank);
+  const cd = cardDelta(e);
+  if (cd && e.card) db.prepare(`UPDATE credit_cards SET owed = ROUND(owed + ?, 2) WHERE name = ?`).run(sign * cd, e.card);
 }
 
 function ownsBank(owner, name) { return !!db.prepare(`SELECT 1 FROM banks WHERE name = ? AND owner = ?`).get(name, owner); }
+function ownsCard(owner, name) { return !!db.prepare(`SELECT 1 FROM credit_cards WHERE name = ? AND owner = ?`).get(name, owner); }
 function ownedEntry(owner, id) {
   const row = db.prepare(`SELECT * FROM bank_entries WHERE id = ?`).get(id);
-  if (!row || !ownsBank(owner, row.bank)) throw new Error('Entry not found');
+  if (!row || !(row.card ? ownsCard(owner, row.card) : ownsBank(owner, row.bank))) throw new Error('Entry not found');
   return row;
 }
 
 const addEntry = db.transaction((owner, b) => {
   const username = owner;
   const type = b.type;
-  if (!TYPES.includes(type)) throw new Error('type must be own_transfer, to_person, in or out');
+  if (!TYPES.includes(type)) throw new Error('Unknown entry type');
   const amount = round2(parseFloat(b.amount));
   if (!(amount > 0)) throw new Error('amount must be a positive number');
-  if (!ownsBank(owner, b.bank)) throw new Error('Bank not found');
+  let bank = b.bank, card = null;
+  if (type === 'card_out' || type === 'card_in') {
+    card = b.card;
+    if (!ownsCard(owner, card)) throw new Error('Credit card not found');
+    bank = card;
+  } else {
+    if (!ownsBank(owner, bank)) throw new Error('Bank not found');
+    if (type === 'card_payment') {
+      card = b.card;
+      if (!ownsCard(owner, card)) throw new Error('Which card was paid off?');
+    }
+  }
   let toBank = null, person = null, categoryId = null;
   if (type === 'own_transfer') {
     toBank = b.to_bank;
     if (!ownsBank(owner, toBank)) throw new Error('Receiving bank not found');
-    if (toBank === b.bank) throw new Error('Pick a different receiving bank');
-  } else {
+    if (toBank === bank) throw new Error('Pick a different receiving bank');
+  } else if (type !== 'card_payment') {
     if (b.category_id != null && b.category_id !== '') {
       const cat = db.prepare(`SELECT * FROM bank_categories WHERE id = ? AND owner = ?`).get(Number(b.category_id), owner);
       if (!cat) throw new Error('Category not found');
-      const wantKind = type === 'in' ? 'in' : 'out';
-      if (cat.kind !== wantKind) throw new Error(`That category is for money ${cat.kind}`);
+      if (cat.kind !== catKind(type)) throw new Error(`That category is for money ${cat.kind}`);
       categoryId = cat.id;
-    } else if (type === 'in' || type === 'out') {
+    } else if (type !== 'to_person') {
       throw new Error('Pick a category');
     }
     person = (b.person || '').trim() || null;
     if (type === 'to_person' && !person) throw new Error('Who was it sent to?');
   }
   const date = b.date ? String(b.date).replace('T', ' ').slice(0, 19) : null;
-  const info = db.prepare(`INSERT INTO bank_entries (bank, type, category_id, to_bank, person, amount, note, date, created_by)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), ?)`)
-    .run(b.bank, type, categoryId, toBank, person, amount, (b.note || '').trim(), date, username || null);
+  const info = db.prepare(`INSERT INTO bank_entries (bank, type, category_id, to_bank, person, amount, note, date, created_by, card)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), ?, ?)`)
+    .run(bank, type, categoryId, toBank, person, amount, (b.note || '').trim(), date, username || null, card);
   const row = db.prepare(`SELECT * FROM bank_entries WHERE id = ?`).get(info.lastInsertRowid);
   apply(row, 1);
   return row;
@@ -139,14 +213,14 @@ const deleteEntry = db.transaction((owner, id) => {
 // Edit note / date / category / person freely; an amount change moves the balance by the difference.
 const editEntry = db.transaction((owner, id, b) => {
   const row = ownedEntry(owner, id);
-  if (row.type === 'correction' && b.amount !== undefined) throw new Error('Corrections can only be deleted, not edited');
+  if ((row.type === 'correction' || row.type === 'card_correction') && b.amount !== undefined) throw new Error('Corrections can only be deleted, not edited');
   const next = { ...row };
   if (b.note !== undefined) next.note = String(b.note || '').trim();
   if (b.date) next.date = String(b.date).replace('T', ' ').slice(0, 19);
   if (b.person !== undefined) next.person = (b.person || '').trim() || null;
-  if (b.category_id !== undefined && row.type !== 'own_transfer' && row.type !== 'correction') {
+  if (b.category_id !== undefined && catKind(row.type)) {
     const cat = db.prepare(`SELECT * FROM bank_categories WHERE id = ? AND owner = ?`).get(Number(b.category_id), owner);
-    if (!cat || cat.kind !== (row.type === 'in' ? 'in' : 'out')) throw new Error('Category not valid for this entry');
+    if (!cat || cat.kind !== catKind(row.type)) throw new Error('Category not valid for this entry');
     next.category_id = cat.id;
   }
   if (b.amount !== undefined) {
@@ -220,11 +294,12 @@ function listCategories(owner, includeInactive) {
   ensureCategories(owner);
   return db.prepare(`SELECT * FROM bank_categories WHERE owner = ? ${includeInactive ? '' : 'AND active = 1'} ORDER BY kind, sort, id`).all(owner);
 }
-const OWNED = `(e.bank IN (SELECT name FROM banks WHERE owner = ?))`;
+const OWNED = `(e.bank IN (SELECT name FROM banks WHERE owner = ?) OR e.card IN (SELECT name FROM credit_cards WHERE owner = ?))`;
 function listEntries(owner, q = {}) {
-  const where = [OWNED], p = [owner];
-  if (q.bank) { where.push('(e.bank = ? OR e.to_bank = ?)'); p.push(q.bank, q.bank); }
-  if (q.type) { where.push('e.type = ?'); p.push(q.type); }
+  const where = [OWNED], p = [owner, owner];
+  if (q.bank) { where.push('(e.bank = ? OR e.to_bank = ? OR e.card = ?)'); p.push(q.bank, q.bank, q.bank); }
+  if (q.type === 'card') where.push(`e.type IN ('card_out', 'card_in', 'card_payment', 'card_correction')`);
+  else if (q.type) { where.push('e.type = ?'); p.push(q.type); }
   if (q.category_id) { where.push('e.category_id = ?'); p.push(Number(q.category_id)); }
   if (q.month) { where.push(`strftime('%Y-%m', e.date) = ?`); p.push(q.month); }
   return db.prepare(`SELECT e.*, c.name AS category, c.bracket FROM bank_entries e LEFT JOIN bank_categories c ON c.id = e.category_id
@@ -232,7 +307,7 @@ function listEntries(owner, q = {}) {
     .all(...p, Math.min(Number(q.limit) || 300, 2000));
 }
 function people(owner) {
-  return db.prepare(`SELECT person, COUNT(*) n FROM bank_entries e WHERE person IS NOT NULL AND ${OWNED} GROUP BY person ORDER BY MAX(date) DESC LIMIT 30`).all(owner).map(r => r.person);
+  return db.prepare(`SELECT person, COUNT(*) n FROM bank_entries e WHERE person IS NOT NULL AND ${OWNED} GROUP BY person ORDER BY MAX(date) DESC LIMIT 30`).all(owner, owner).map(r => r.person);
 }
 // Spending report: money out + to someone, by category and month (and money in by category).
 function report(owner, months = 6) {
@@ -240,8 +315,8 @@ function report(owner, months = 6) {
   const rows = db.prepare(`
     SELECT strftime('%Y-%m', e.date) AS month, e.type, e.category_id, c.name AS category, c.bracket, c.kind, ROUND(SUM(e.amount), 2) AS total, COUNT(*) AS n
     FROM bank_entries e LEFT JOIN bank_categories c ON c.id = e.category_id
-    WHERE e.type IN ('out', 'to_person', 'in') AND e.date >= date('now', 'start of month', ?) AND ${OWNED}
-    GROUP BY month, e.type, e.category_id ORDER BY month`).all(`-${m - 1} months`, owner);
+    WHERE e.type IN ('out', 'to_person', 'in', 'card_out', 'card_in') AND e.date >= date('now', 'start of month', ?) AND ${OWNED}
+    GROUP BY month, e.type, e.category_id ORDER BY month`).all(`-${m - 1} months`, owner, owner);
   return { months: m, rows };
 }
 
@@ -249,7 +324,7 @@ function addCategory(owner, b) {
   const kind = b.kind === 'in' ? 'in' : 'out';
   const name = String(b.name || '').trim();
   if (!name) throw new Error('name required');
-  const bracket = kind === 'out' ? (['essential', 'non_essential', 'business'].includes(b.bracket) ? b.bracket : 'non_essential') : null;
+  const bracket = kind === 'out' ? (BRACKETS.includes(b.bracket) ? b.bracket : 'non_essential') : null;
   const sort = (db.prepare(`SELECT MAX(sort) m FROM bank_categories WHERE kind = ? AND owner = ?`).get(kind, owner).m || 0) + 1;
   return db.prepare(`INSERT INTO bank_categories (owner, kind, name, bracket, sort) VALUES (?, ?, ?, ?, ?)`).run(owner, kind, name, bracket, sort).lastInsertRowid;
 }
@@ -257,7 +332,7 @@ function editCategory(owner, id, b) {
   const c = db.prepare(`SELECT * FROM bank_categories WHERE id = ? AND owner = ?`).get(id, owner);
   if (!c) throw new Error('Category not found');
   const name = b.name !== undefined ? String(b.name).trim() || c.name : c.name;
-  const bracket = c.kind === 'out' && ['essential', 'non_essential', 'business'].includes(b.bracket) ? b.bracket : c.bracket;
+  const bracket = c.kind === 'out' && BRACKETS.includes(b.bracket) ? b.bracket : c.bracket;
   const active = b.active !== undefined ? (b.active ? 1 : 0) : c.active;
   db.prepare(`UPDATE bank_categories SET name = ?, bracket = ?, active = ? WHERE id = ?`).run(name, bracket, active, id);
 }
@@ -271,12 +346,50 @@ function renameBank(oldName, newName) {
 function addBank(owner, name) {
   name = String(name || '').trim();
   if (!name) throw new Error('Bank name required');
-  if (db.prepare(`SELECT 1 FROM banks WHERE name = ?`).get(name)) throw new Error(`A bank called "${name}" already exists — pick another name`);
+  if (nameTaken(name)) throw new Error(`"${name}" is already a bank or card — pick another name`);
   db.prepare(`INSERT INTO banks (name, starting_balance, owner) VALUES (?, 0, ?)`).run(name, owner);
+}
+function nameTaken(name) {
+  return !!(db.prepare(`SELECT 1 FROM banks WHERE name = ?`).get(name) || db.prepare(`SELECT 1 FROM credit_cards WHERE name = ?`).get(name));
+}
+
+// ---- credit cards ----
+function listCards(owner) {
+  return db.prepare(`SELECT name, ROUND(owed, 2) AS owed, created_at FROM credit_cards WHERE owner = ? AND active = 1 ORDER BY name`).all(owner);
+}
+// `owed` = what's on the card right now (its starting point; spending is tracked from here).
+function addCard(owner, name, owed) {
+  name = String(name || '').trim();
+  if (!name) throw new Error('Card name required');
+  if (nameTaken(name)) throw new Error(`"${name}" is already a bank or card — pick another name`);
+  const o = round2(parseFloat(owed) || 0);
+  if (o < 0) throw new Error('Amount owed can\'t be negative');
+  db.prepare(`INSERT INTO credit_cards (owner, name, owed) VALUES (?, ?, ?)`).run(owner, name, o);
+}
+// Card statement disagrees with the site: logged as a card_correction entry (no bank moves).
+const setCardOwed = db.transaction((owner, name, owed) => {
+  const c = db.prepare(`SELECT * FROM credit_cards WHERE name = ? AND owner = ?`).get(name, owner);
+  if (!c) throw new Error('Credit card not found');
+  const actual = round2(parseFloat(owed));
+  if (isNaN(actual)) throw new Error('Enter what the card statement shows as owed');
+  const diff = round2(actual - c.owed);
+  if (Math.abs(diff) < 0.005) return { action: 'matched' };
+  const info = db.prepare(`INSERT INTO bank_entries (bank, card, type, amount, note, created_by) VALUES (?, ?, 'card_correction', ?, ?, ?)`)
+    .run(name, name, diff, `Set owed to £${actual.toFixed(2)} (site had £${round2(c.owed).toFixed(2)})`, owner);
+  apply(db.prepare(`SELECT * FROM bank_entries WHERE id = ?`).get(info.lastInsertRowid), 1);
+  return { action: 'corrected', diff };
+});
+// Hide a card (only once it's paid off — its history stays).
+function removeCard(owner, name) {
+  const c = db.prepare(`SELECT * FROM credit_cards WHERE name = ? AND owner = ?`).get(name, owner);
+  if (!c) throw new Error('Credit card not found');
+  if (Math.abs(c.owed) >= 0.005) throw new Error('Pay the card off (or set owed to £0) before removing it');
+  db.prepare(`UPDATE credit_cards SET active = 0 WHERE id = ?`).run(c.id);
 }
 
 module.exports = {
   BANK_USERS, addBank, ownsBank,
   addEntry, deleteEntry, editEntry, setRealBalance, expectedBanks, listBanks, listCategories, listEntries, people, report,
   addCategory, editCategory, renameBank, effects,
+  listCards, addCard, setCardOwed, removeCard, CARD_TYPES,
 };

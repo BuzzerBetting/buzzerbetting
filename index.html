@@ -52,6 +52,7 @@ header{background:var(--header);height:62px;display:flex;align-items:center;just
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
 @media(max-width:680px){.grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:440px){.grid{grid-template-columns:1fr}}
+@media(max-width:640px){.pay-row{grid-template-columns:1fr 1fr!important}}
 .cat{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:22px 20px 20px;cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s;display:flex;flex-direction:column;gap:14px;position:relative;user-select:none;overflow:hidden}
 .cat::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent,transparent);transform:scaleX(0);transform-origin:left;transition:transform .25s ease}
 .cat:hover::before{transform:scaleX(1)}
@@ -367,6 +368,11 @@ tr.ba-placed > td{background:var(--green-bg) !important}
     <div class="cat" id="home-card-ledger" style="--accent:var(--blue)" onclick="showTopSec('ledger')">
       <div class="cat-ico" style="background:var(--blue-bg);color:var(--blue)"><i class="ti ti-wallet"></i></div>
       <div><div class="cat-title">Ledger</div><div class="cat-desc">Account tracking, live balances and bet entry</div></div>
+      <i class="ti ti-arrow-right cat-arr"></i>
+    </div>
+    <div class="cat bank-user-only" data-show="flex" id="home-card-payments" style="--accent:var(--green);display:none" onclick="showSec('payments')">
+      <div class="cat-ico" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-receipt-2"></i></div>
+      <div><div class="cat-title">Payments</div><div class="cat-desc">Log money in and out of your banks and credit cards — quick entry by category</div></div>
       <i class="ti ti-arrow-right cat-arr"></i>
     </div>
   </div>
@@ -1387,6 +1393,15 @@ tr.ba-placed > td{background:var(--green-bg) !important}
     <div class="sec-title" style="margin:0 0 12px;font-size:15px">History</div>
     <div id="debt-history">Loading…</div>
   </div>
+</div>
+
+<div id="view-payments" class="sec">
+  <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
+  <div class="sec-title">Payments</div>
+  <div style="font-size:12.5px;color:var(--text2);margin-bottom:14px">Every payment in or out of your banks. Bank payments move that bank's live balance straight away; credit card spending only adds to what the card owes until you pay it off. The breakdown is in Ledger → Money → Spending.</div>
+  <div id="pay-accounts" style="margin-bottom:14px">Loading…</div>
+  <div id="pay-form" style="margin-bottom:16px"></div>
+  <div class="card card-pad"><div class="lbl" style="margin-bottom:8px">Recent</div><div id="pay-recent">Loading…</div></div>
 </div>
 
 <div id="view-ledger-money" class="sec">
@@ -3264,7 +3279,7 @@ function showSec(name){
   // any legacy showSec() call for them redirects there rather than to a standalone .sec.
   if(name==='oddschecker'||name==='calculated'||name==='ddhh'){openBetAlerts({oddschecker:'oc-ev',calculated:'calc-ev',ddhh:'ddhh'}[name]);return;}
   stopBetAlerts();
-  document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='freeze')initFreeze();if(name==='bbbettracker')initBbTracker();if(name==='today')initToday();if(name==='bets-combined')initBetsPage();if(name==='monthly')initMonthly();if(name==='monthlyprofit')initMonthlyProfit();if(name==='assistantmonthly')initAssistantMonthly();if(name==='todo')initTodo();stopOddscheckerEVRefresh();}
+  document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='freeze')initFreeze();if(name==='bbbettracker')initBbTracker();if(name==='today')initToday();if(name==='bets-combined')initBetsPage();if(name==='monthly')initMonthly();if(name==='monthlyprofit')initMonthlyProfit();if(name==='assistantmonthly')initAssistantMonthly();if(name==='todo')initTodo();if(name==='payments')initPaymentsPage();stopOddscheckerEVRefresh();}
 const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger',bettracking:'bettracking',stats:'stats-menu',betalerts:'bet-alerts'};
 function showTopSec(name){if(freezeRoleBlocks(name))return;document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='stats')renderStatsMenu();if(name==='calc')loadOddscheckerEV();stopOddscheckerEVRefresh();if(name==='betalerts')initBetAlerts();else stopBetAlerts();}
 // Jump straight to a specific Bet Alerts tab (used by the Calculations menu shortcuts and the
@@ -7332,7 +7347,8 @@ const MONEY_TYPES = [
   ['in', 'Money in', 'ti-arrow-down-left'],
   ['out', 'Money out', 'ti-arrow-up-right'],
 ];
-const MONEY_BRACKETS = [['essential', 'Essential'], ['non_essential', 'Non-essential'], ['business', 'Business']];
+const MONEY_BRACKETS = [['essential', 'Necessary'], ['non_essential', 'Unnecessary'], ['business', 'Betting expenses'], ['savings', 'Savings & investing']];
+const MONEY_BRACKET_COLOR = { essential: 'var(--blue)', non_essential: 'var(--amber)', business: 'var(--purple)', savings: 'var(--green)' };
 const mGbp = n => (n < 0 ? '-£' : '£') + Math.abs(n || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const mSgn = n => (n >= 0 ? '+£' : '-£') + Math.abs(n || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 function mBtn(active, onclick, label, extra) {
@@ -7383,6 +7399,7 @@ function renderMoneyBanks() {
   el.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px">
       ${tiles}
+      ${payCardTiles()}
       <div class="card" style="padding:12px 14px;display:flex;flex-direction:column;justify-content:center">
         <div style="font-size:12px;color:var(--text3);font-weight:600">Total</div>
         <div style="font-size:20px;font-weight:700">${mGbp(total)}</div>
@@ -7432,100 +7449,273 @@ function renderMoneyTab() {
   if (MONEY_TAB === 'categories') return renderMoneyCategories();
 }
 
-// ---- add flow ----
-function mSet(k, v) {
-  MSTEP[k] = v;
-  if (k === 'bank') { delete MSTEP.to_bank; if (MSTEP.to_bank === v) delete MSTEP.to_bank; }
-  if (k === 'type') { delete MSTEP.category_id; delete MSTEP.to_bank; delete MSTEP.person; }
-  renderMoneyAdd();
+// ---- quick payment entry (2026-10-16) ----
+// Shared by the Payments page (main menu) and Money → Add. Mode → account → category →
+// amount, Enter saves, and the mode + account stay picked for the next one. Account chips are
+// 'bank:<name>' or 'card:<name>'; card spending/refunds don't move any bank (only what the card
+// owes), paying a card off moves the bank and isn't counted as spending again.
+const PAY_MODES = [
+  ['out', 'Money out', 'ti-arrow-up-right'],
+  ['in', 'Money in', 'ti-arrow-down-left'],
+  ['transfer', 'Between my accounts', 'ti-arrows-exchange'],
+  ['card', 'Pay off a card', 'ti-credit-card'],
+];
+let PAY = null;     // form state
+let PAY_EL = null;  // id of the container the form renders into
+let PAY_MSG = '';
+const payArg = v => JSON.stringify(v).replace(/"/g, '&quot;');
+const payChip = (active, onclick, label) => mBtn(active, onclick, label, 'padding:6px 11px;font-size:12.5px');
+function payStoreKey() { return 'pay-last-' + (CURRENT_USERNAME || ''); }
+function payLoadState() {
+  let last = {};
+  try { last = JSON.parse(localStorage.getItem(payStoreKey()) || '{}') || {}; } catch (e) {}
+  const mode = PAY_MODES.some(m => m[0] === last.mode) ? last.mode : 'out';
+  PAY = { mode, acct: ((last.acct || {})[mode]) || '', to: '', card: '', cat: null, person: '', last };
 }
-function renderMoneyAdd() {
-  const body = document.getElementById('money-tab-body');
-  if (!MONEY.banks.length) { body.innerHTML = '<div class="card card-pad" style="color:var(--text3)">Add a bank above first.</div>'; return; }
-  const step = (n, title, content) => `<div style="margin-bottom:14px"><div class="lbl" style="margin-bottom:8px">${n}. ${title}</div><div style="display:flex;gap:6px;flex-wrap:wrap">${content}</div></div>`;
-  let html = step(1, 'Bank', MONEY.banks.map(b => mBtn(MSTEP.bank === b.name, `mSet('bank', ${JSON.stringify(b.name).replace(/"/g, '&quot;')})`, escapeHtml(b.name))).join(''));
-  if (MSTEP.bank) html += step(2, 'Type', MONEY_TYPES.map(([k, l, ic]) => mBtn(MSTEP.type === k, `mSet('type', '${k}')`, `<i class="ti ${ic}"></i> ${l}`)).join(''));
-  let ready = false;
-  const t = MSTEP.type;
-  if (MSTEP.bank && t === 'own_transfer') {
-    const others = MONEY.banks.filter(b => b.name !== MSTEP.bank);
-    html += step(3, 'To which of your banks?', others.length ? others.map(b => mBtn(MSTEP.to_bank === b.name, `mSet('to_bank', ${JSON.stringify(b.name).replace(/"/g, '&quot;')})`, escapeHtml(b.name))).join('') : '<span style="font-size:12.5px;color:var(--text3)">You only have one bank.</span>');
-    ready = !!MSTEP.to_bank;
+function paySaveState() {
+  const last = PAY.last || {};
+  last.mode = PAY.mode; last.acct = last.acct || {}; last.acct[PAY.mode] = PAY.acct;
+  PAY.last = last;
+  try { localStorage.setItem(payStoreKey(), JSON.stringify(last)); } catch (e) {}
+}
+// Drop a remembered account that no longer exists (or isn't allowed in this mode).
+function payValidAcct(a, mode) {
+  if (!a) return '';
+  const [kind, name] = [a.slice(0, 4), a.slice(5)];
+  if (kind === 'bank') return MONEY.banks.some(b => b.name === name) ? a : '';
+  if (kind === 'card') return (mode === 'out' || mode === 'in') && (MONEY.cards || []).some(c => c.name === name) ? a : '';
+  return '';
+}
+function paySet(k, v) {
+  PAY[k] = v;
+  if (k === 'mode') { PAY.acct = ((PAY.last || {}).acct || {})[v] || ''; PAY.to = ''; PAY.card = ''; PAY.cat = null; PAY.person = ''; }
+  if (k === 'acct') {
+    if (PAY.cat === 'to_person' && v.startsWith('card:')) PAY.cat = null;
+    if ('bank:' + PAY.to === v) PAY.to = '';
+    paySaveState();
   }
-  const cats = kind => MONEY.categories.filter(c => c.kind === kind);
-  const catBtns = list => list.map(c => mBtn(MSTEP.category_id === c.id, `mSet('category_id', ${c.id})`, escapeHtml(c.name))).join('');
-  const outGrouped = () => MONEY_BRACKETS.map(([b, label]) => {
-    const list = cats('out').filter(c => (c.bracket || 'non_essential') === b);
-    return list.length ? `<div style="width:100%;font-size:11px;color:var(--text3);margin:4px 0 0">${label}</div>${catBtns(list)}` : '';
-  }).join('');
-  const personInput = (label, required) => `<div style="width:100%"><input type="text" id="money-person" list="money-people" placeholder="${label}" value="${escapeHtml(MSTEP.person || '')}" oninput="MSTEP.person=this.value" style="max-width:320px;padding:8px 10px;font-size:13px">${required ? '' : ' <span style="font-size:11px;color:var(--text3)">optional</span>'}
-    <datalist id="money-people">${(MONEY.people || []).map(p => `<option value="${escapeHtml(p)}">`).join('')}</datalist>
-    ${(MONEY.people || []).length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${MONEY.people.slice(0, 10).map(p => `<span onclick="MSTEP.person=${JSON.stringify(p).replace(/"/g, '&quot;')};renderMoneyAdd()" style="cursor:pointer;font-size:11.5px;padding:3px 8px;border:.5px solid var(--border);border-radius:12px;color:var(--text2)">${escapeHtml(p)}</span>`).join('')}</div>` : ''}</div>`;
-  if (MSTEP.bank && t === 'to_person') {
-    html += step(3, 'Who to?', personInput('Name', true));
-    html += step(4, 'What for? <span style="font-weight:400;text-transform:none;color:var(--text3)">(optional, puts it in your spending)</span>', outGrouped());
-    ready = true;
+  if (k === 'cat' && v !== 'to_person') PAY.person = '';
+  PAY_MSG = '';
+  renderPayForm();
+  if (k !== 'mode' && k !== 'acct') setTimeout(() => { const i = document.getElementById('pay-amount'); if (i) i.focus(); }, 0);
+}
+function payReady() {
+  const p = PAY;
+  if (!p.acct) return false;
+  if (p.mode === 'out' || p.mode === 'in') return p.cat != null;
+  if (p.mode === 'transfer') return !!p.to;
+  if (p.mode === 'card') return !!p.card;
+  return false;
+}
+function renderPayForm() {
+  const el = document.getElementById(PAY_EL);
+  if (!el) return;
+  if (!PAY) payLoadState();
+  if (!MONEY.banks.length) { el.innerHTML = '<div class="card card-pad" style="color:var(--text3)">Add a bank first.</div>'; return; }
+  const p = PAY, cards = MONEY.cards || [];
+  p.acct = payValidAcct(p.acct, p.mode);
+  const isCard = p.acct.startsWith('card:');
+  const step = (title, content) => `<div style="margin-bottom:12px"><div class="lbl" style="margin-bottom:6px">${title}</div><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${content}</div></div>`;
+  const bankChip = (b, key, onclick) => payChip(key, onclick, `${escapeHtml(b.name)} <span style="opacity:.7;font-size:11px">${mGbp(b.balance)}</span>`);
+  const cardChip = (c, key, onclick) => payChip(key, onclick, `<i class="ti ti-credit-card"></i> ${escapeHtml(c.name)} <span style="opacity:.7;font-size:11px">owes ${mGbp(c.owed)}</span>`);
+
+  let html = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px;margin-bottom:14px">${
+    PAY_MODES.map(([k, l, ic]) => mBtn(p.mode === k, `paySet('mode','${k}')`, `<i class="ti ${ic}"></i> ${l}`, 'padding:10px 12px;font-size:13.5px')).join('')}</div>`;
+
+  if (p.mode === 'out' || p.mode === 'in') {
+    const accts = MONEY.banks.map(b => bankChip(b, p.acct === 'bank:' + b.name, `paySet('acct', ${payArg('bank:' + b.name)})`))
+      .concat(cards.map(c => cardChip(c, p.acct === 'card:' + c.name, `paySet('acct', ${payArg('card:' + c.name)})`)));
+    html += step(p.mode === 'out' ? 'Paid from' : 'Paid into', accts.join(''));
+  } else {
+    html += step(p.mode === 'transfer' ? 'From' : 'Paid from', MONEY.banks.map(b => bankChip(b, p.acct === 'bank:' + b.name, `paySet('acct', ${payArg('bank:' + b.name)})`)).join(''));
   }
-  if (MSTEP.bank && t === 'in') {
-    html += step(3, 'What kind of income?', catBtns(cats('in')));
-    const cat = MONEY.categories.find(c => c.id === MSTEP.category_id);
-    if (cat && /someone|transfer/i.test(cat.name)) html += step(4, 'From who?', personInput('Name', false));
-    ready = !!MSTEP.category_id;
+
+  if (p.acct && p.mode === 'out') {
+    const cats = MONEY.categories.filter(c => c.kind === 'out');
+    let groups = MONEY_BRACKETS.map(([b, label]) => {
+      const list = cats.filter(c => (c.bracket || 'non_essential') === b);
+      return list.length ? `<div style="width:100%;font-size:11px;font-weight:600;color:${MONEY_BRACKET_COLOR[b]};margin:6px 0 0;text-transform:uppercase;letter-spacing:.04em">${label}</div>${
+        list.map(c => payChip(p.cat === c.id, `paySet('cat', ${c.id})`, escapeHtml(c.name))).join('')}` : '';
+    }).join('');
+    if (!isCard) groups += `<div style="width:100%;font-size:11px;font-weight:600;color:var(--text3);margin:6px 0 0;text-transform:uppercase;letter-spacing:.04em">Not spending</div>${
+      payChip(p.cat === 'to_person', `paySet('cat', 'to_person')`, '<i class="ti ti-user-share"></i> Sent to someone')}`;
+    html += step('What for?', groups);
   }
-  if (MSTEP.bank && t === 'out') {
-    html += step(3, 'What was it?', outGrouped());
-    ready = !!MSTEP.category_id;
+  if (p.acct && p.mode === 'in') {
+    html += step(isCard ? 'What for? (refund onto the card)' : 'What kind?', MONEY.categories.filter(c => c.kind === 'in').map(c => payChip(p.cat === c.id, `paySet('cat', ${c.id})`, escapeHtml(c.name))).join(''));
   }
-  if (ready) {
+  if (p.acct && p.mode === 'transfer') {
+    const others = MONEY.banks.filter(b => 'bank:' + b.name !== p.acct);
+    html += step('To', others.length ? others.map(b => bankChip(b, p.to === b.name, `paySet('to', ${payArg(b.name)})`)).join('') : '<span style="font-size:12.5px;color:var(--text3)">You only have one bank.</span>');
+  }
+  if (p.acct && p.mode === 'card') {
+    html += step('Which card?', cards.length ? cards.map(c => cardChip(c, p.card === c.name, `paySet('card', ${payArg(c.name)})`)).join('') : '<span style="font-size:12.5px;color:var(--text3)">No credit cards yet — add one with "+ Add credit card".</span>');
+  }
+
+  // Person: required for "Sent to someone", optional for money in from a person.
+  const cat = MONEY.categories.find(c => c.id === p.cat);
+  const wantPerson = (p.mode === 'out' && p.cat === 'to_person') || (p.mode === 'in' && cat && /someone|gift|loan|sold/i.test(cat.name));
+  if (wantPerson) {
+    const req = p.cat === 'to_person';
+    html += step(req ? 'Who to?' : 'Who from? <span style="font-weight:400;text-transform:none;color:var(--text3)">(optional)</span>',
+      `<input type="text" id="pay-person" list="pay-people" value="${escapeHtml(p.person || '')}" oninput="PAY.person=this.value" placeholder="Name" style="max-width:240px;padding:7px 10px;font-size:13px">
+       <datalist id="pay-people">${(MONEY.people || []).map(n => `<option value="${escapeHtml(n)}">`).join('')}</datalist>
+       ${(MONEY.people || []).slice(0, 8).map(n => `<span onclick="PAY.person=${payArg(n)};renderPayForm()" style="cursor:pointer;font-size:11.5px;padding:3px 8px;border:.5px solid var(--border);border-radius:12px;color:var(--text2)">${escapeHtml(n)}</span>`).join('')}`);
+  }
+
+  if (payReady()) {
+    const owedCard = p.mode === 'card' ? cards.find(c => c.name === p.card) : null;
     html += `<div class="card" style="padding:12px 14px;margin-top:4px">
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;align-items:end">
-        <div><label class="lbl">Amount £</label><input type="number" id="money-amount" step="0.01" min="0" onkeydown="if(event.key==='Enter')moneySaveEntry()"></div>
-        <div><label class="lbl">When</label><input type="datetime-local" id="money-date" value="${mLocalNow()}"></div>
-        <div style="grid-column:span 2;min-width:200px"><label class="lbl">Note <span style="font-weight:400;text-transform:none;color:var(--text3)">(optional)</span></label><input type="text" id="money-note" placeholder="e.g. Tesco weekly shop" onkeydown="if(event.key==='Enter')moneySaveEntry()"></div>
+      <div style="display:grid;grid-template-columns:140px 150px 1fr auto;gap:10px;align-items:end" class="pay-row">
+        <div><label class="lbl">Amount £</label><input type="number" id="pay-amount" step="0.01" min="0" inputmode="decimal" onkeydown="if(event.key==='Enter')paySave()"></div>
+        <div><label class="lbl">Date</label><input type="date" id="pay-date" value="${mLocalNow().slice(0, 10)}"></div>
+        <div><label class="lbl">Note <span style="font-weight:400;text-transform:none;color:var(--text3)">(optional)</span></label><input type="text" id="pay-note" placeholder="e.g. Tesco" onkeydown="if(event.key==='Enter')paySave()"></div>
+        <button onclick="paySave()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:10px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Save</button>
       </div>
-      <div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">
-        <button onclick="moneySaveEntry()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:10px 20px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">Save</button>
-        <span id="money-save-msg" style="font-size:13px"></span>
-      </div>
+      ${owedCard && owedCard.owed > 0 ? `<div style="margin-top:8px;font-size:12px;color:var(--text2)">${escapeHtml(owedCard.name)} owes ${mGbp(owedCard.owed)} · <span style="cursor:pointer;color:var(--brand)" onclick="document.getElementById('pay-amount').value=${owedCard.owed};document.getElementById('pay-amount').focus()">Pay it all</span></div>` : ''}
+      ${isCard ? `<div style="margin-top:8px;font-size:11.5px;color:var(--text3)">On the card — no bank balance changes until the card is paid off.</div>` : ''}
     </div>`;
   }
-  body.innerHTML = `<div class="card card-pad">${html}</div>`;
-  if (ready) setTimeout(() => { const i = document.getElementById('money-amount'); if (i && !i.value) i.focus(); }, 0);
+  el.innerHTML = `<div class="card card-pad">${PAY_MSG}${html}</div>`;
 }
-async function moneySaveEntry() {
-  const msg = document.getElementById('money-save-msg');
-  const amount = parseFloat(document.getElementById('money-amount').value);
-  if (!(amount > 0)) { msg.innerHTML = '<span style="color:var(--red)">Enter an amount.</span>'; return; }
-  const pi = document.getElementById('money-person');
-  const body = {
-    bank: MSTEP.bank, type: MSTEP.type, amount, to_bank: MSTEP.to_bank, category_id: MSTEP.category_id,
-    person: pi ? pi.value.trim() : (MSTEP.person || ''), note: document.getElementById('money-note').value.trim(),
-    date: mToUtc(document.getElementById('money-date').value),
-  };
-  msg.innerHTML = '<span style="color:var(--text2)">Saving…</span>';
+async function paySave() {
+  const p = PAY;
+  const amount = parseFloat(document.getElementById('pay-amount').value);
+  if (!(amount > 0)) { alert('Enter an amount.'); return; }
+  const day = document.getElementById('pay-date').value;
+  const today = mLocalNow().slice(0, 10);
+  const date = mToUtc(!day || day === today ? mLocalNow() : day + 'T12:00');
+  const acctName = p.acct.slice(5), isCard = p.acct.startsWith('card:');
+  const body = { amount, date, note: document.getElementById('pay-note').value.trim() };
+  const pi = document.getElementById('pay-person');
+  const person = pi ? pi.value.trim() : (p.person || '');
+  if (p.mode === 'out') {
+    if (isCard) Object.assign(body, { type: 'card_out', card: acctName, category_id: p.cat });
+    else if (p.cat === 'to_person') Object.assign(body, { type: 'to_person', bank: acctName, person });
+    else Object.assign(body, { type: 'out', bank: acctName, category_id: p.cat });
+  } else if (p.mode === 'in') {
+    Object.assign(body, isCard ? { type: 'card_in', card: acctName, category_id: p.cat } : { type: 'in', bank: acctName, category_id: p.cat, person });
+  } else if (p.mode === 'transfer') {
+    Object.assign(body, { type: 'own_transfer', bank: acctName, to_bank: p.to });
+  } else {
+    Object.assign(body, { type: 'card_payment', bank: acctName, card: p.card });
+  }
   const d = await ledgerApi('money/entries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  if (!d || !d.ok) { msg.innerHTML = `<span style="color:var(--red)">${escapeHtml((d && d.error) || 'Failed')}</span>`; return; }
-  const keepBank = MSTEP.bank, keepType = MSTEP.type;
-  await loadMoney();
-  // Stay on the same bank and type, ready for the next one.
-  MSTEP = { bank: keepBank, type: keepType };
-  renderMoneyAdd();
-  const m = document.getElementById('money-save-msg');
-  const what = keepType === 'own_transfer' ? `to ${body.to_bank}` : keepType === 'to_person' ? `to ${body.person}` : '';
-  const ok = `<div style="font-size:12.5px;color:var(--green);margin-bottom:10px"><i class="ti ti-check"></i> Saved ${mGbp(amount)} ${escapeHtml(what)} from ${escapeHtml(keepBank)}.</div>`;
-  document.getElementById('money-tab-body').insertAdjacentHTML('afterbegin', ok);
+  if (!d || !d.ok) { alert((d && d.error) || 'Could not save.'); return; }
+  const cat = MONEY.categories.find(c => c.id === p.cat);
+  const what = p.mode === 'transfer' ? `${acctName} → ${p.to}` : p.mode === 'card' ? `paid off ${p.card} from ${acctName}`
+    : `${cat ? cat.name : 'to ' + person} ${p.mode === 'out' ? 'from' : 'into'} ${acctName}`;
+  paySaveState();
+  PAY.cat = null; PAY.person = ''; PAY.to = ''; PAY.card = '';
+  PAY_MSG = `<div style="font-size:12.5px;color:var(--green);margin-bottom:10px"><i class="ti ti-check"></i> Saved ${mGbp(amount)} — ${escapeHtml(what)}</div>`;
+  await payRefresh();
+}
+// Reload banks/cards/categories and redraw whichever page the form is on.
+async function payRefresh() {
+  const d = await ledgerApi('money');
+  if (d && d.ok) MONEY = d;
+  if (PAY_EL === 'pay-form') { renderPayAccounts(); renderPayForm(); loadPayRecent(); }
+  else { renderMoneyBanks(); renderMoneyTabs(); renderMoneyTab(); }
+}
+
+// ---- Payments page ----
+async function initPaymentsPage() {
+  PAY_EL = 'pay-form'; payLoadState(); PAY_MSG = '';
+  const d = await ledgerApi('money');
+  if (!d || !d.ok) {
+    document.getElementById('pay-accounts').innerHTML = `<div class="card card-pad" style="color:var(--text3)">${escapeHtml((d && d.error) || 'Not available.')}</div>`;
+    document.getElementById('pay-form').innerHTML = ''; document.getElementById('pay-recent').innerHTML = '';
+    return;
+  }
+  MONEY = d;
+  renderPayAccounts(); renderPayForm(); loadPayRecent();
+  setTimeout(() => { const i = document.getElementById('pay-amount'); if (i) i.focus(); }, 0);
+}
+function renderPayAccounts() {
+  const banks = MONEY.banks.reduce((s, b) => s + (b.balance || 0), 0);
+  const owed = (MONEY.cards || []).reduce((s, c) => s + (c.owed || 0), 0);
+  const tile = (title, value, sub, color) => `<div class="card" style="padding:9px 12px"><div style="font-size:11px;color:var(--text3);font-weight:600">${title}</div><div style="font-size:16px;font-weight:700${color ? ';color:' + color : ''}">${value}</div>${sub || ''}</div>`;
+  document.getElementById('pay-accounts').innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px">
+    ${MONEY.banks.map(b => tile(escapeHtml(b.name), mGbp(b.balance), '', b.balance < 0 ? 'var(--red)' : '')).join('')}
+    ${payCardTiles()}
+    ${tile('Banks total', mGbp(banks), owed ? `<div style="font-size:11px;color:var(--text3)">after cards ${mGbp(banks - owed)}</div>` : '')}
+  </div>`;
+}
+// Credit card tiles (+ add) — used on both the Payments page and the Money page.
+function payCardTiles() {
+  return (MONEY.cards || []).map(c => `<div class="card" style="padding:9px 12px;border-style:dashed">
+      <div style="display:flex;justify-content:space-between;gap:6px"><div style="font-size:11px;color:var(--text3);font-weight:600"><i class="ti ti-credit-card"></i> ${escapeHtml(c.name)}</div>
+      <span style="font-size:11px;white-space:nowrap"><span style="cursor:pointer;color:var(--brand)" onclick="paySetCardOwed(${payArg(c.name)}, ${c.owed})">Check</span>${Math.abs(c.owed) < 0.005 ? ` · <span style="cursor:pointer;color:var(--red)" onclick="payRemoveCard(${payArg(c.name)})">Remove</span>` : ''}</span></div>
+      <div style="font-size:16px;font-weight:700;color:${c.owed > 0 ? 'var(--red)' : 'var(--text)'}">${mGbp(c.owed)}</div>
+      <div style="font-size:11px;color:var(--text3)">owed</div>
+    </div>`).join('') + `<div class="card" style="padding:9px 12px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--brand);font-size:12.5px;border-style:dashed" onclick="payAddCard()"><span><i class="ti ti-plus"></i> Add credit card</span></div>`;
+}
+async function payAddCard() {
+  const name = (prompt('Credit card name (e.g. Amex, Barclaycard):') || '').trim();
+  if (!name) return;
+  const owed = prompt(`How much is owed on ${name} right now? (0 if nothing)`, '0');
+  if (owed === null) return;
+  const d = await ledgerApi('money/cards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, owed: parseFloat(owed) || 0 }) });
+  if (!d || !d.ok) { alert((d && d.error) || 'Could not add.'); return; }
+  await payRefresh();
+}
+async function paySetCardOwed(name, current) {
+  const v = prompt(`What does ${name} show as owed right now?`, String(current));
+  if (v === null || v.trim() === '') return;
+  const d = await ledgerApi(`money/cards/${encodeURIComponent(name)}/owed`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ owed: parseFloat(v) }) });
+  if (!d || !d.ok) { alert((d && d.error) || 'Could not save.'); return; }
+  if (d.result && d.result.action === 'corrected') alert(`${name} corrected by ${mSgn(d.result.diff)} (logged in History).`);
+  await payRefresh();
+}
+async function payRemoveCard(name) {
+  if (!confirm(`Remove ${name}? Its history stays.`)) return;
+  const d = await ledgerApi(`money/cards/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  if (!d || !d.ok) { alert((d && d.error) || 'Could not remove.'); return; }
+  await payRefresh();
+}
+async function loadPayRecent() {
+  const el = document.getElementById('pay-recent');
+  const d = await ledgerApi('money/entries?limit=20');
+  const rows = (d && d.ok && d.entries) || [];
+  el.innerHTML = rows.length ? `<div style="overflow-x:auto"><table class="dt" style="min-width:560px"><tbody>${rows.map(e => {
+    const amt = mSigned(e, '');
+    return `<tr style="border-top:.5px solid var(--border)">
+      <td style="font-size:11.5px;white-space:nowrap;color:var(--text2)">${escapeHtml(formatLedgerDate(e.date))}</td>
+      <td style="font-size:12.5px;white-space:nowrap">${e.card && e.type !== 'card_payment' ? '<i class="ti ti-credit-card"></i> ' : ''}${escapeHtml(e.bank)}</td>
+      <td style="font-size:12.5px">${mEntryLabel(e)}${e.note ? `<div style="font-size:11.5px;color:var(--text3)">${escapeHtml(e.note)}</div>` : ''}</td>
+      <td class="r tn" style="font-weight:600;color:${amt == null ? 'var(--text)' : amt >= 0 ? 'var(--green)' : 'var(--red)'}">${amt == null ? mGbp(e.amount) : mSgn(amt)}</td>
+      <td style="text-align:right"><span style="cursor:pointer;color:var(--red);font-size:12px" onclick="payDelete(${e.id})" title="Delete (undoes the balance change)"><i class="ti ti-trash"></i></span></td>
+    </tr>`;
+  }).join('')}</tbody></table></div>` : '<div style="color:var(--text3);font-size:13px">Nothing logged yet.</div>';
+}
+async function payDelete(id) {
+  if (!confirm('Delete this entry? Its balance change is undone.')) return;
+  const d = await ledgerApi('money/entries/' + id, { method: 'DELETE' });
+  if (!d || !d.ok) { alert((d && d.error) || 'Could not delete.'); return; }
+  await payRefresh();
+}
+
+// Money → Add tab is the same quick form.
+function renderMoneyAdd() {
+  PAY_EL = 'money-tab-body';
+  if (!PAY) payLoadState();
+  renderPayForm();
 }
 
 // ---- history ----
 function mEntryLabel(e) {
   if (e.type === 'own_transfer') return `<span style="color:var(--text2)"><i class="ti ti-arrows-exchange"></i> ${escapeHtml(e.bank)} → ${escapeHtml(e.to_bank)}</span>`;
   if (e.type === 'correction') return '<span class="badge" style="background:var(--amber-bg);color:var(--amber)">Balance correction</span>';
+  if (e.type === 'card_correction') return '<span class="badge" style="background:var(--amber-bg);color:var(--amber)">Card owed corrected</span>';
+  if (e.type === 'card_payment') return `<span style="color:var(--text2)"><i class="ti ti-credit-card"></i> Paid off ${escapeHtml(e.card)}</span>`;
+  if (e.type === 'card_out' || e.type === 'card_in') return `<i class="ti ti-credit-card"></i> ${e.type === 'card_out' ? 'Card spend' : 'Card refund'}${e.category ? ` · <b>${escapeHtml(e.category)}</b>` : ''}`;
   const t = e.type === 'to_person' ? `To ${escapeHtml(e.person || '?')}` : e.type === 'in' ? 'Money in' : 'Money out';
   return `${t}${e.category ? ` · <b>${escapeHtml(e.category)}</b>` : ''}${e.type === 'in' && e.person ? ` · from ${escapeHtml(e.person)}` : ''}`;
 }
 function mSigned(e, bank) {
   if (e.type === 'own_transfer') return bank && bank === e.to_bank ? e.amount : bank && bank === e.bank ? -e.amount : null;
-  if (e.type === 'in' || e.type === 'correction') return e.amount;
+  if (e.type === 'in' || e.type === 'correction' || e.type === 'card_in') return e.amount;
+  if (e.type === 'card_correction') return null;
   return -e.amount;
 }
 async function loadMoneyEntries() {
@@ -7536,7 +7726,7 @@ async function loadMoneyEntries() {
   const sel = (id, opts, cur) => `<select onchange="MONEY_FILTER.${id}=this.value;loadMoneyEntries()" style="width:auto;font-size:12.5px;padding:6px 10px">${opts.map(([v, l]) => `<option value="${escapeHtml(v)}"${v === cur ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('')}</select>`;
   const filters = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
     ${sel('bank', [['', 'All banks'], ...MONEY.banks.map(b => [b.name, b.name])], MONEY_FILTER.bank)}
-    ${sel('type', [['', 'All types'], ['own_transfer', 'To my account'], ['to_person', 'To someone else'], ['in', 'Money in'], ['out', 'Money out'], ['correction', 'Corrections']], MONEY_FILTER.type)}
+    ${sel('type', [['', 'All types'], ['own_transfer', 'To my account'], ['to_person', 'To someone else'], ['in', 'Money in'], ['out', 'Money out'], ['card', 'Credit cards'], ['correction', 'Corrections']], MONEY_FILTER.type)}
     <input type="month" value="${escapeHtml(MONEY_FILTER.month)}" onchange="MONEY_FILTER.month=this.value;loadMoneyEntries()" style="width:auto;font-size:12.5px;padding:5px 8px">
   </div>`;
   const tr = rows.map(e => {
@@ -7544,7 +7734,7 @@ async function loadMoneyEntries() {
     if (MONEY_EDIT === e.id) {
       return `<tr><td colspan="5"><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:end">
         <div><label class="lbl">When</label><input type="datetime-local" id="money-edit-date" value="${mUtcToLocalInput(e.date)}" style="font-size:12.5px"></div>
-        ${e.type !== 'correction' ? `<div><label class="lbl">Amount £</label><input type="number" step="0.01" id="money-edit-amount" value="${e.amount}" style="width:110px;font-size:12.5px"></div>` : ''}
+        ${e.type !== 'correction' && e.type !== 'card_correction' ? `<div><label class="lbl">Amount £</label><input type="number" step="0.01" id="money-edit-amount" value="${e.amount}" style="width:110px;font-size:12.5px"></div>` : ''}
         <div style="flex:1;min-width:180px"><label class="lbl">Note</label><input type="text" id="money-edit-note" value="${escapeHtml(e.note || '')}" style="font-size:12.5px"></div>
         <button onclick="moneySaveEdit(${e.id})" style="padding:7px 12px;font-size:12px;border:none;border-radius:6px;background:var(--brand);color:#fff;cursor:pointer;font-family:inherit">Save</button>
         <button onclick="MONEY_EDIT=null;loadMoneyEntries()" style="padding:7px 12px;font-size:12px;border:.5px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer;font-family:inherit">Cancel</button>
@@ -7588,7 +7778,7 @@ async function loadMoneySpending() {
   const mLabel = m => new Date(m + '-01T00:00:00').toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
   const cell = (list, m) => list.filter(r => r.month === m).reduce((s, r) => s + r.total, 0);
   const money = n => n ? mGbp(n) : '<span style="color:var(--text3)">—</span>';
-  const outRows = rows.filter(r => r.type === 'out' || r.type === 'to_person');
+  const outRows = rows.filter(r => r.type === 'out' || r.type === 'to_person' || r.type === 'card_out');
   const catsOut = MONEY.categories.filter(c => c.kind === 'out');
   const section = [];
   for (const [b, label] of MONEY_BRACKETS) {
@@ -7604,7 +7794,7 @@ async function loadMoneySpending() {
   const uncategorised = outRows.filter(r => !r.category_id);
   if (uncategorised.length) section.push(`<tr style="background:var(--surface2)"><td style="font-weight:700">To someone else (no category)</td>${months.map(m => `<td class="r tn" style="font-weight:700">${money(cell(uncategorised, m))}</td>`).join('')}</tr>`);
   section.push(`<tr style="border-top:1.5px solid var(--border)"><td style="font-weight:700">Total out</td>${months.map(m => `<td class="r tn" style="font-weight:700;color:var(--red)">${money(cell(outRows, m))}</td>`).join('')}</tr>`);
-  const inRows = rows.filter(r => r.type === 'in');
+  const inRows = rows.filter(r => r.type === 'in' || r.type === 'card_in');
   const inSection = MONEY.categories.filter(c => c.kind === 'in').map(c => {
     const r = inRows.filter(x => x.category_id === c.id);
     return r.length ? `<tr><td style="padding-left:18px">${escapeHtml(c.name)}</td>${months.map(m => `<td class="r tn">${money(cell(r, m))}</td>`).join('')}</tr>` : '';
@@ -7618,14 +7808,15 @@ async function loadMoneySpending() {
       <div style="display:flex;gap:6px">${[3, 6, 12].map(n => mBtn(MONEY_MONTHS === n, `MONEY_MONTHS=${n};loadMoneySpending()`, n + ' months', 'padding:6px 12px;font-size:12px')).join('')}</div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">
-      ${tile('This month: essential', mGbp(br('essential')))}
-      ${tile('Non-essential', mGbp(br('non_essential')), 'var(--amber)')}
-      ${tile('Business', mGbp(br('business')))}
+      ${tile('This month: necessary', mGbp(br('essential')), MONEY_BRACKET_COLOR.essential)}
+      ${tile('Unnecessary', mGbp(br('non_essential')), MONEY_BRACKET_COLOR.non_essential)}
+      ${tile('Betting expenses', mGbp(br('business')), MONEY_BRACKET_COLOR.business)}
+      ${tile('Saved / invested', mGbp(br('savings')), MONEY_BRACKET_COLOR.savings)}
       ${tile('Money in', mGbp(cell(inRows, thisM)), 'var(--green)')}
     </div>
     <div style="overflow-x:auto"><table class="dt" style="min-width:${200 + months.length * 90}px"><thead><tr><th>Money out</th>${months.map(m => `<th class="r">${mLabel(m)}</th>`).join('')}</tr></thead><tbody>${section.join('')}</tbody></table></div>
     ${inSection ? `<div style="overflow-x:auto;margin-top:14px"><table class="dt" style="min-width:${200 + months.length * 90}px"><thead><tr><th>Money in</th>${months.map(m => `<th class="r">${mLabel(m)}</th>`).join('')}</tr></thead><tbody>${inSection}<tr style="border-top:1.5px solid var(--border)"><td style="font-weight:700">Total in</td>${months.map(m => `<td class="r tn" style="font-weight:700;color:var(--green)">${money(cell(inRows, m))}</td>`).join('')}</tr></tbody></table></div>` : ''}
-    <div style="font-size:11px;color:var(--text3);margin-top:10px">Transfers between your own banks aren't spending, so they're left out. Bookie deposits and withdrawals aren't in here either.</div>
+    <div style="font-size:11px;color:var(--text3);margin-top:10px">Transfers between your own banks and credit card pay-offs aren't spending, so they're left out (card purchases count when they're made). Bookie deposits and withdrawals aren't in here either.</div>
   </div>`;
 }
 

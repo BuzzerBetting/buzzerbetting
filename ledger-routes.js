@@ -1029,6 +1029,7 @@ const moneyTry = fn => (req, res) => {
 };
 router.get('/money', requireBankUser, moneyTry(req => ({
   banks: bankLedger.listBanks(req.username),
+  cards: bankLedger.listCards(req.username),
   categories: bankLedger.listCategories(req.username, req.query.inactive === '1'),
   people: bankLedger.people(req.username),
   errors: balanceIntegrity ? balanceIntegrity.summary(req.username, 'banks') : null,
@@ -1043,6 +1044,9 @@ router.post('/money/banks/:name/real-balance', requireBankUser, moneyTry(req => 
   if (isNaN(actual)) throw new Error('Enter the balance the bank shows');
   return { result: bankLedger.setRealBalance(req.username, req.params.name, actual) };
 }));
+router.post('/money/cards', requireBankUser, moneyTry(req => { bankLedger.addCard(req.username, req.body && req.body.name, req.body && req.body.owed); }));
+router.post('/money/cards/:name/owed', requireBankUser, moneyTry(req => ({ result: bankLedger.setCardOwed(req.username, req.params.name, req.body && req.body.owed) })));
+router.delete('/money/cards/:name', requireBankUser, moneyTry(req => { bankLedger.removeCard(req.username, req.params.name); }));
 router.get('/money/report', requireBankUser, moneyTry(req => ({ report: bankLedger.report(req.username, req.query.months) })));
 router.post('/money/categories', requireBankUser, moneyTry(req => ({ id: bankLedger.addCategory(req.username, req.body || {}) })));
 router.patch('/money/categories/:id', requireBankUser, moneyTry(req => { bankLedger.editCategory(req.username, Number(req.params.id), req.body || {}); }));
