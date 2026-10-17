@@ -135,6 +135,8 @@ router.use((req, res, next) => {
 //     day but this middleware still 403'd every request underneath it until now — confirmed
 //     live, a calculator-role user got "This account has no access to the Ledger" pasting a
 //     screenshot despite the button now being visible to them.
+//   - /oc-learn-alias: OC Coverage tab's "paste the real Oddschecker URL + Learn" (2026-10-17 —
+//     every role can use OC Coverage; only saves an OC team-name alias, no ledger data).
 router.use((req, res, next) => {
   if ((req.userRole === 'calculator' || req.userRole === 'freeze')
       && !req.path.startsWith('/fotmob-leagues')
@@ -153,6 +155,7 @@ router.use((req, res, next) => {
       && !req.path.startsWith('/bet-alert-removed')
       && !req.path.startsWith('/bet-alert-sound')
       && !req.path.startsWith('/oc-coverage-ignored')
+      && !req.path.startsWith('/oc-learn-alias')
       && !req.path.startsWith('/ones-to-watch')
       && !req.path.startsWith('/bet365-sot')
       && !req.path.startsWith('/parse-bet365-sot')) {
