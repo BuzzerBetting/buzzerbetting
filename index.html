@@ -15541,15 +15541,33 @@ const FAIRS_SOURCE_LABEL = { bfex: 'BFEX', margin: 'OC Margin', blend: 'OC/BB' }
 // whose selected source has no usable value (e.g. no BFEX liquidity at all) falls back to the
 // same "No calc" display the app already uses for markets with no fair-odds model — never
 // hides the row outright, since the bet is still real, just not priceable under that source.
+// The Source Fair column falls back to the row's official base (bet.baseFair) when the selected
+// source has none — e.g. "OC Safety Margin" picked but Oddschecker had no SOT ladder for the match.
+// baseFairFrom names where the shown base REALLY came from, so a BFEX 8.4 never displays as
+// "(OC Margin)" (2026-10-18, user-reported: Ivan Martin OTB SOT showed 8.4 "OC Margin" source fair
+// with no Fair — the 8.4 was BFEX's, OC had no SOT prices at all). noCalcReason explains the blank.
+function fairsSourceBaseFrom(bet, source, baseF) {
+  if (baseF != null && isFinite(baseF)) return source;
+  return String(bet.source || '').toLowerCase() === 'bfex' ? 'bfex' : (bet.source || null);
+}
+function fairsSourceNoCalcReason(bet, source) {
+  const label = FAIRS_SOURCE_LABEL[source] || source;
+  const others = Object.keys(FAIRS_SOURCE_LABEL).filter(s => s !== source)
+    .map(s => [s, fairsSourceFairValue(bet, s)]).filter(([, v]) => v != null && isFinite(v));
+  return `No ${label} fair — ` + (source === 'bfex' ? 'no usable BFEX price for this market'
+    : 'Oddschecker has no prices for this market right now')
+    + (others.length ? ` (${others.map(([s, v]) => `${FAIRS_SOURCE_LABEL[s]} fair ${Number(v).toFixed(2)}`).join(', ')})` : '');
+}
 function applyFairsSource(list, source) {
   return list.map(bet => {
     if (bet.noCalc) return bet; // e.g. 6 Yard Box — never had a fair-odds model in the first place
     const f = fairsSourceFairValue(bet, source);
-    if (f == null || !isFinite(f)) return Object.assign({}, bet, { bestFair: null, bestEv: null, noCalc: true });
+    const baseF = baseFairsSourceValue(bet, source);
+    const baseFairFrom = fairsSourceBaseFrom(bet, source, baseF);
+    if (f == null || !isFinite(f)) return Object.assign({}, bet, { bestFair: null, bestEv: null, noCalc: true, baseFairFrom, noCalcReason: fairsSourceNoCalcReason(bet, source) });
     const price = parseFloat(bet.ocOdds ?? bet.odds);
     const ev = (isFinite(price) && price > 0) ? (price / f - 1) * 100 : null;
-    const baseF = baseFairsSourceValue(bet, source);
-    return Object.assign({}, bet, { bestFair: f, bestEv: ev, noCalc: ev == null, baseFair: (baseF != null && isFinite(baseF)) ? baseF : bet.baseFair });
+    return Object.assign({}, bet, { bestFair: f, bestEv: ev, noCalc: ev == null, baseFairFrom, baseFair: (baseF != null && isFinite(baseF)) ? baseF : bet.baseFair });
   });
 }
 
@@ -15720,7 +15738,8 @@ function renderEVResults(bets) {
     // the Fairs source dropdown, which is why switching it looked like a no-op if you were
     // watching this column rather than the main Fair one (2026-09-17, user-reported). Now it
     // tracks the live dropdown selection, same as the baseFair value itself does.
-    const sourceLabel = baseFairLabel !== '—' ? (FAIRS_SOURCE_LABEL[getFairsSource()] || FAIRS_SOURCE_LABEL.blend) : '';
+    const baseFrom = bet.baseFairFrom || getFairsSource();
+    const sourceLabel = baseFairLabel !== '—' && baseFrom ? (FAIRS_SOURCE_LABEL[baseFrom] || String(baseFrom).toUpperCase()) : '';
     // Editable (2026-09-17, user-requested): typing a new AGS/SOT base fair here
     // auto-recalculates the derived Fair/EV to its right via gsmDeriveFair — see that
     // function's docstring. Overridden rows get an amber input + a reset (x) button back to
@@ -15746,10 +15765,10 @@ function renderEVResults(bets) {
       <td style="font-weight:500">${bet.player}</td>
       <td class="r tn" style="color:var(--text2)">${baseFairCell}</td>
       <td class="r tn" style="color:var(--text2)">${bfexMatchedLabel}</td>
-      <td class="r tn" style="font-weight:500">${fairLabel}</td>
+      <td class="r tn" style="font-weight:500"${bet.noCalcReason ? ` title="${escapeHtml(bet.noCalcReason)}"` : ''}>${fairLabel}</td>
       <td class="r" style="font-size:12px;color:var(--text2);line-height:1.5">${bookieLinesHtml(bet)}</td>
       <td class="r tn" style="font-weight:600;color:var(--green)">${bet.ocOdds}</td>
-      <td class="r"><span class="badge" style="background:${evBg};color:${evCol}">${evLabel}</span></td>
+      <td class="r"><span class="badge" style="background:${evBg};color:${evCol}"${bet.noCalcReason ? ` title="${escapeHtml(bet.noCalcReason)}"` : ''}>${evLabel}${bet.noCalcReason && bet.baseFair ? ' <i class="ti ti-info-circle" style="font-size:11px"></i>' : ''}</span></td>
       ${pl.watchTd}
       <td class="r" style="white-space:nowrap">${betLinkBtn(bet.url,bet.bookie)}<button onclick="logCalcEvBetAsGoalSotMethods(${betIdx})" title="Log this bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-plus"></i> Log</button> <button onclick="copyCalcEvBet(${betIdx},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button>${pl.btn('calc-ev',betIdx)}</td>`;
     tbody.appendChild(tr);
