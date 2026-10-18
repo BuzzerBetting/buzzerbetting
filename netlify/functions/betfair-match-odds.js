@@ -197,6 +197,28 @@ function searchQueries(name) {
 // leg that fails this now just goes unresolved, same as any other unresolvable leg — the
 // existing "drop the whole acca rather than guess" rule (see every acca scan's own docstring)
 // already handles it correctly from there; a missed alert is far better than a false one.
+// Youth / reserve / B-team sides share the senior club's name, so a one-name search finds them too.
+// 2026-10-18, user-reported: SportingBet "Bayer Leverkusen and Hoffenheim both to win" priced the
+// Hoffenheim leg off "Hoffenheim II v Verl" (3. Liga, 1.90) instead of the senior match (2.24) —
+// "hoffenheim" is contained in "hoffenheim ii" and the reserve game kicked off first. Roman
+// numerals / "B" are matched case-sensitively (Betfair writes "Bayern Munich II", "Real Madrid B").
+const RESERVE_WORD_RE = /\bU1[6-9]\b|\bU2[0-3]\b|\byouth\b|\breserves?\b|\bres\b|\bamateure?\b|\bjong\b|\bcastilla\b/i;
+const RESERVE_MARK_RE = /\b(?:II|III|B)\b/;
+function isReserveName(name) {
+  const s = String(name || '');
+  return RESERVE_WORD_RE.test(s) || RESERVE_MARK_RE.test(s);
+}
+// Event usable for `teams`: drops reserve/youth fixtures unless one of the asked-for names is itself
+// a reserve side.
+function reserveOk(eventName, ...teams) {
+  return !isReserveName(eventName) || teams.some(isReserveName);
+}
+// How closely an event side matches the asked-for team: 0 = exact (after normalising), 1 = fuzzy.
+// Candidates are ranked by this before kickoff, so an exact "Hoffenheim" always beats a looser hit.
+function sideMatchRank(team, side) {
+  return norm(team) === norm(side) ? 0 : 1;
+}
+
 const MAX_FUTURE_KICKOFF_MS = 48 * 60 * 60 * 1000; // 48h — comfortably covers same-night/next-day fixtures, excludes a match days out
 function isPlausiblePrematchKickoff(openDateIso) {
   const t = new Date(openDateIso).getTime();
@@ -237,8 +259,8 @@ async function findTeamWin(team, appKey, session) {
       if (/\(w\)/i.test(name) !== wantWomen) return false; // men's leg -> never a women's fixture (same club names, wrong market), and vice versa
       // Exclude youth/reserve fixtures (same club name, wrong market/liquidity entirely) —
       // confirmed live 2026-09-14 "Como" alone matched "Roma U20 v Como U20" ahead of the
-      // real "Como v Parma" senior match.
-      if (/\bU1[6-9]\b|\bU2[0-3]\b|\byouth\b|\breserves?\b/i.test(name)) return false;
+      // real "Como v Parma" senior match. Also II/B/Jong sides (see isReserveName).
+      if (!reserveOk(name, team)) return false;
       if (!isPlausiblePrematchKickoff(e.event?.openDate)) return false; // already kicked off, or implausibly far out
       const parts = name.replace(/\s*\(w\)/gi, '').split(' v ');
       if (parts.length !== 2) return false;
@@ -247,7 +269,9 @@ async function findTeamWin(team, appKey, session) {
     if (hits.length) { candidates = hits; break; }
   }
   if (!candidates.length) return { error: `event not found for team: ${team}${wantWomen ? ' (W)' : ''}`, available: (events || []).slice(0, 10).map(e => e.event?.name) };
-  candidates.sort((a, b) => new Date(a.event.openDate) - new Date(b.event.openDate));
+  // Best name match first (exact side name beats a fuzzy one), then soonest kickoff.
+  const rankOf = e => Math.min(...e.event.name.replace(/\s*\(w\)/gi, '').split(' v ').map(s => sideMatchRank(teamM, s)));
+  candidates.sort((a, b) => (rankOf(a) - rankOf(b)) || (new Date(a.event.openDate) - new Date(b.event.openDate)));
   const match = candidates[0];
 
   const eventId = match.event.id;
@@ -390,7 +414,7 @@ async function findEventByHomeAway(home, away, appKey, session) {
     candidates = (events || []).filter(e => {
       const name = e.event?.name || '';
       if (/\(w\)/i.test(name)) return false;
-      if (/\bU1[6-9]\b|\bU2[0-3]\b|\byouth\b|\breserves?\b/i.test(name)) return false;
+      if (!reserveOk(name, home, away)) return false;
       if (!isPlausiblePrematchKickoff(e.event?.openDate)) return false; // already kicked off, or implausibly far out
       const parts = name.split(' v ');
       if (parts.length !== 2) return false;
