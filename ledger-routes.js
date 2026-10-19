@@ -1642,6 +1642,21 @@ router.patch('/bets/:id/settle-backlay', (req, res) => {
   } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
 });
 
+// GET /api/ledger/monthly-pl?from=2026-08 — total bet P/L per calendar month (by bet date),
+// all sheets. Feeds the main-menu Profit breakdown, which hardcodes months before `from`.
+router.get('/monthly-pl', requireAdmin, (req, res) => {
+  try {
+    const from = /^\d{4}-\d{2}$/.test(req.query.from || '') ? req.query.from : '0000-00';
+    const months = db.prepare(
+      `SELECT strftime('%Y-%m', date) month, COUNT(*) bets,
+              COALESCE(SUM(CASE WHEN result='open' THEN 1 ELSE 0 END),0) open,
+              COALESCE(SUM(pl),0) pl
+       FROM bets WHERE strftime('%Y-%m', date) >= ? GROUP BY month ORDER BY month`
+    ).all(from);
+    res.json({ ok: true, months });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 // GET /api/ledger/bets?status=open&type=Value
 router.get('/bets', (req, res) => {
   try {

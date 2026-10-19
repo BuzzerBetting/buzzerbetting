@@ -1781,13 +1781,9 @@ tr.ba-placed > td{background:var(--green-bg) !important}
 <div id="view-profit" class="sec">
   <button class="back" onclick="goHome()"><i class="ti ti-arrow-left"></i> Menu</button>
   <div class="sec-title">Profit breakdown</div>
-  <div class="kpis">
-    <div class="kpi"><div class="kpi-l">Total profit</div><div class="kpi-v" style="color:var(--green)">£264,716</div><div class="kpi-s">Since Mar 2023</div></div>
-    <div class="kpi"><div class="kpi-l">Best month</div><div class="kpi-v" style="color:var(--amber)">£44,099</div><div class="kpi-s">Aug 2025</div></div>
-    <div class="kpi"><div class="kpi-l">Monthly average</div><div class="kpi-v" style="color:var(--blue)">£6,618</div><div class="kpi-s">40 / 40 profitable</div></div>
-    <div class="kpi"><div class="kpi-l">Current month</div><div class="kpi-v" style="color:var(--green)">£19,099</div><div class="kpi-s">Jun 2026 · in progress</div></div>
-  </div>
-  <div class="card"><div class="card-h">Monthly profit — all time</div><div style="padding:20px"><div style="position:relative;width:100%;height:240px"><canvas id="profitChart" role="img" aria-label="Monthly profit chart">Monthly profits March 2023 to June 2026.</canvas></div></div></div>
+  <div class="kpis" id="profit-kpis"></div>
+  <div id="profit-live-note" style="font-size:11px;color:var(--text3);margin:-8px 0 14px"></div>
+  <div class="card"><div class="card-h">Monthly profit — all time</div><div style="padding:20px"><div style="position:relative;width:100%;height:240px"><canvas id="profitChart" role="img" aria-label="Monthly profit chart">Monthly profits since March 2023.</canvas></div></div></div>
   <div class="card"><div class="card-h">Monthly breakdown</div><div class="scroll"><table class="dt"><thead><tr><th style="width:100px">Month</th><th class="r">Profit</th><th class="r">vs avg</th></tr></thead><tbody id="monthly-tbody"></tbody></table></div></div>
 </div>
 
@@ -3177,8 +3173,14 @@ tr.ba-placed > td{background:var(--green-bg) !important}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script>
 // ── DATA ──
-const monthly=[['Mar-23',702.54],['Apr-23',710.43],['May-23',1739.72],['Jun-23',1023.58],['Jul-23',1220.85],['Aug-23',725.03],['Sep-23',1950.56],['Oct-23',2461.47],['Nov-23',712.58],['Dec-23',1295.21],['Jan-24',1877.81],['Feb-24',3643.18],['Mar-24',12815.17],['Apr-24',10181.92],['May-24',5402.41],['Jun-24',4127.19],['Jul-24',2498.64],['Aug-24',4212.55],['Sep-24',9249.03],['Oct-24',7709.85],['Nov-24',6813.29],['Dec-24',7266.93],['Jan-25',3059.91],['Feb-25',6153.66],['Mar-25',6053.66],['Apr-25',1877.62],['May-25',2680.38],['Jun-25',5706.43],['Jul-25',1639.16],['Aug-25',44099.17],['Sep-25',12037.66],['Oct-25',4764.44],['Nov-25',11264.44],['Dec-25',18841.19],['Jan-26',6436.35],['Feb-26',3477.65],['Mar-26',10366.91],['Apr-26',11284.31],['May-26',5940.42],['Jun-26',19099.43]];
-const avgP=monthly.reduce((s,m)=>s+m[1],0)/monthly.length;
+// Months up to Jul-26 are fixed history (pre-ledger figures). From PROFIT_LIVE_FROM onward
+// they're filled live from the ledger's bet P/L — see loadLiveProfit().
+const PROFIT_HISTORY=[['Mar-23',702.54],['Apr-23',710.43],['May-23',1739.72],['Jun-23',1023.58],['Jul-23',1220.85],['Aug-23',725.03],['Sep-23',1950.56],['Oct-23',2461.47],['Nov-23',712.58],['Dec-23',1295.21],['Jan-24',1877.81],['Feb-24',3643.18],['Mar-24',12815.17],['Apr-24',10181.92],['May-24',5402.41],['Jun-24',4127.19],['Jul-24',2498.64],['Aug-24',4212.55],['Sep-24',9249.03],['Oct-24',7709.85],['Nov-24',6813.29],['Dec-24',7266.93],['Jan-25',3059.91],['Feb-25',6153.66],['Mar-25',6053.66],['Apr-25',1877.62],['May-25',2680.38],['Jun-25',5706.43],['Jul-25',1639.16],['Aug-25',44099.17],['Sep-25',12037.66],['Oct-25',4764.44],['Nov-25',11264.44],['Dec-25',18841.19],['Jan-26',6436.35],['Feb-26',3477.65],['Mar-26',10366.91],['Apr-26',11284.31],['May-26',6218.12],['Jun-26',24133.17],['Jul-26',21617.79]];
+const PROFIT_LIVE_FROM='2026-08';
+let monthly=PROFIT_HISTORY.slice();
+let avgP=monthly.reduce((s,m)=>s+m[1],0)/monthly.length;
+let chartBuilt=false,profitChartObj=null;
+const profitBarColors=()=>monthly.map(m=>m[1]<0?'#dc2626':m[1]>10000?'#b45309':'#16a34a');
 const bets=[{t:'14:30',match:'Arsenal vs Chelsea',mkt:'AGS',sel:'Saka',fair:3.45,bk:'Bet365',odds:4.00,ev:15.9,stake:50},{t:'14:30',match:'Arsenal vs Chelsea',mkt:'Header',sel:'Gabriel',fair:12.20,bk:'BetWay',odds:15.00,ev:22.9,stake:30},{t:'16:00',match:'Man City vs Liverpool',mkt:'AGS',sel:'Haaland',fair:1.85,bk:'William Hill',odds:2.10,ev:13.5,stake:80},{t:'16:00',match:'Man City vs Liverpool',mkt:'First scorer',sel:'Salah',fair:8.40,bk:'Paddy Power',odds:10.00,ev:19.0,stake:40},{t:'16:00',match:'Man City vs Liverpool',mkt:'Header',sel:'Dias',fair:22.50,bk:'Unibet',odds:29.00,ev:28.9,stake:20},{t:'20:00',match:'Spurs vs Everton',mkt:'AGS',sel:'Son',fair:2.95,bk:'Betfair SB',odds:3.50,ev:18.6,stake:60}];
 
 // ── THEME ──
@@ -3279,7 +3281,7 @@ function showSec(name){
   // any legacy showSec() call for them redirects there rather than to a standalone .sec.
   if(name==='oddschecker'||name==='calculated'||name==='ddhh'){openBetAlerts({oddschecker:'oc-ev',calculated:'calc-ev',ddhh:'ddhh'}[name]);return;}
   stopBetAlerts();
-  document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit')setTimeout(buildChart,60);if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='freeze')initFreeze();if(name==='bbbettracker')initBbTracker();if(name==='today')initToday();if(name==='bets-combined')initBetsPage();if(name==='monthly')initMonthly();if(name==='monthlyprofit')initMonthlyProfit();if(name==='assistantmonthly')initAssistantMonthly();if(name==='todo')initTodo();if(name==='payments')initPaymentsPage();stopOddscheckerEVRefresh();}
+  document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit'){setTimeout(buildChart,60);loadLiveProfit();}if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='freeze')initFreeze();if(name==='bbbettracker')initBbTracker();if(name==='today')initToday();if(name==='bets-combined')initBetsPage();if(name==='monthly')initMonthly();if(name==='monthlyprofit')initMonthlyProfit();if(name==='assistantmonthly')initAssistantMonthly();if(name==='todo')initTodo();if(name==='payments')initPaymentsPage();stopOddscheckerEVRefresh();}
 const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger',bettracking:'bettracking',stats:'stats-menu',betalerts:'bet-alerts'};
 function showTopSec(name){if(freezeRoleBlocks(name))return;document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='stats')renderStatsMenu();if(name==='calc')loadOddscheckerEV();stopOddscheckerEVRefresh();if(name==='betalerts')initBetAlerts();else stopBetAlerts();}
 // Jump straight to a specific Bet Alerts tab (used by the Calculations menu shortcuts and the
@@ -10087,7 +10089,52 @@ async function loadTotalBetsStat(){
 loadTotalBetsStat();
 
 // ── MONTHLY TABLE ──
-(function(){const tb=document.getElementById('monthly-tbody');[...monthly].reverse().forEach(([m,p])=>{const vs=((p-avgP)/avgP*100),pos=vs>=0;const tr=document.createElement('tr');tr.innerHTML=`<td>${m}</td><td class="r tn" style="color:var(--green)">£${p.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td><td class="r" style="color:var(--${pos?'green':'red'})">${pos?'+':''}${vs.toFixed(1)}%</td>`;tb.appendChild(tr);});})();
+const PROFIT_MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const gbp0=v=>(v<0?'-':'')+'£'+Math.abs(v).toLocaleString('en-GB',{maximumFractionDigits:0});
+const gbp2=v=>(v<0?'-':'')+'£'+Math.abs(v).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+function profitMonthLong(lbl){const [m,y]=lbl.split('-');return `${m} 20${y}`;}
+function renderProfitBreakdown(liveNote){
+  const now=new Date(),curLbl=`${PROFIT_MON[now.getMonth()]}-${String(now.getFullYear()).slice(2)}`;
+  const total=monthly.reduce((s,m)=>s+m[1],0);
+  const best=monthly.reduce((b,m)=>m[1]>b[1]?m:b,monthly[0]);
+  const cur=monthly.find(m=>m[0]===curLbl);
+  // The in-progress month is left out of the average/profitable count so a part-month doesn't drag it down.
+  const done=monthly.filter(m=>m[0]!==curLbl);
+  avgP=done.reduce((s,m)=>s+m[1],0)/(done.length||1);
+  const kpi=(l,v,col,sub)=>`<div class="kpi"><div class="kpi-l">${l}</div><div class="kpi-v" style="color:var(--${col})">${v}</div><div class="kpi-s">${sub}</div></div>`;
+  document.getElementById('profit-kpis').innerHTML=
+    kpi('Total profit',gbp0(total),total>=0?'green':'red',`Since ${profitMonthLong(monthly[0][0])}`)+
+    kpi('Best month',gbp0(best[1]),'amber',profitMonthLong(best[0]))+
+    kpi('Monthly average',gbp0(avgP),'blue',`${done.filter(m=>m[1]>0).length} / ${done.length} profitable`)+
+    (cur?kpi('Current month',gbp0(cur[1]),cur[1]>=0?'green':'red',`${profitMonthLong(cur[0])} · in progress`):kpi('Current month','—','text3',profitMonthLong(curLbl)));
+  document.getElementById('profit-live-note').textContent=liveNote||'';
+  const tb=document.getElementById('monthly-tbody');tb.innerHTML='';
+  [...monthly].reverse().forEach(([m,p])=>{const vs=((p-avgP)/avgP*100),pos=vs>=0;const tr=document.createElement('tr');tr.innerHTML=`<td>${m}${m===curLbl?' <span style="font-size:10px;color:var(--text3)">live</span>':''}</td><td class="r tn" style="color:var(--${p>=0?'green':'red'})">${gbp2(p)}</td><td class="r" style="color:var(--${pos?'green':'red'})">${pos?'+':''}${vs.toFixed(1)}%</td>`;tb.appendChild(tr);});
+  if(profitChartObj){const ds=profitChartObj.data.datasets[0];profitChartObj.data.labels=monthly.map(m=>m[0]);ds.data=monthly.map(m=>m[1]);ds.backgroundColor=profitBarColors();profitChartObj.update();}
+}
+// Every month from PROFIT_LIVE_FROM up to the current one comes from the ledger (a month with
+// no bets shows £0 rather than going missing). Re-fetched each time the Profit breakdown opens.
+async function loadLiveProfit(){
+  try{
+    const d=await ledgerApi('monthly-pl?from='+PROFIT_LIVE_FROM);
+    if(!d.ok)throw new Error(d.error||'Unknown error');
+    const byMonth={};(d.months||[]).forEach(r=>{byMonth[r.month]=r;});
+    const now=new Date(),endKey=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    const live=[];let openBets=0,[y,mo]=PROFIT_LIVE_FROM.split('-').map(Number);
+    for(let key=PROFIT_LIVE_FROM;key<=endKey;){
+      const r=byMonth[key];if(r)openBets+=r.open;
+      live.push([`${PROFIT_MON[mo-1]}-${String(y).slice(2)}`,Math.round(((r&&r.pl)||0)*100)/100]);
+      if(mo===12){y++;mo=1;}else mo++;
+      key=`${y}-${String(mo).padStart(2,'0')}`;
+    }
+    monthly=PROFIT_HISTORY.concat(live);
+    renderProfitBreakdown(`${profitMonthLong(live[0][0])} onwards is live from the ledger (settled bet P/L by bet date)${openBets?` · ${openBets} open bet${openBets===1?'':'s'} not counted yet`:''}.`);
+  }catch(e){
+    monthly=PROFIT_HISTORY.slice();
+    renderProfitBreakdown(`Couldn't load live months from the ledger (${e.message||'network error'}), showing history to ${profitMonthLong(PROFIT_HISTORY[PROFIT_HISTORY.length-1][0])} only.`);
+  }
+}
+renderProfitBreakdown('Loading live months from the ledger…');
 
 // ── SCANNER TABLE (Oddschecker +EV) ──
 // Real data — GET /.netlify/functions/oc-ev proxies to the DO server's /api/oc-ev, which
@@ -10467,8 +10514,7 @@ function stopOddscheckerEVRefresh(){
 }
 
 // ── CHART ──
-let chartBuilt=false;
-function buildChart(){if(chartBuilt)return;chartBuilt=true;const dk=matchMedia('(prefers-color-scheme: dark)').matches;new Chart(document.getElementById('profitChart'),{type:'bar',data:{labels:monthly.map(m=>m[0]),datasets:[{label:'Profit',data:monthly.map(m=>m[1]),backgroundColor:monthly.map(m=>m[1]>10000?'#b45309':'#16a34a'),borderRadius:3,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:dk?'#1e2a38':'#fff',titleColor:dk?'rgba(255,255,255,.45)':'rgba(0,0,0,.4)',bodyColor:dk?'#e6edf3':'#111827',borderColor:dk?'rgba(255,255,255,.1)':'rgba(0,0,0,.1)',borderWidth:1,callbacks:{label:c=>`\u00a3${c.raw.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}`}}},scales:{x:{grid:{display:false},ticks:{color:dk?'rgba(255,255,255,.3)':'rgba(0,0,0,.35)',font:{size:10},maxRotation:45,autoSkip:true,maxTicksLimit:14},border:{display:false}},y:{grid:{color:dk?'rgba(255,255,255,.06)':'rgba(0,0,0,.05)'},ticks:{color:dk?'rgba(255,255,255,.3)':'rgba(0,0,0,.35)',font:{size:10},callback:v=>`\u00a3${v>=1000?(v/1000).toFixed(0)+'k':v}`},border:{display:false}}}}});}
+function buildChart(){if(chartBuilt)return;chartBuilt=true;const dk=matchMedia('(prefers-color-scheme: dark)').matches;profitChartObj=new Chart(document.getElementById('profitChart'),{type:'bar',data:{labels:monthly.map(m=>m[0]),datasets:[{label:'Profit',data:monthly.map(m=>m[1]),backgroundColor:profitBarColors(),borderRadius:3,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:dk?'#1e2a38':'#fff',titleColor:dk?'rgba(255,255,255,.45)':'rgba(0,0,0,.4)',bodyColor:dk?'#e6edf3':'#111827',borderColor:dk?'rgba(255,255,255,.1)':'rgba(0,0,0,.1)',borderWidth:1,callbacks:{label:c=>`\u00a3${c.raw.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}`}}},scales:{x:{grid:{display:false},ticks:{color:dk?'rgba(255,255,255,.3)':'rgba(0,0,0,.35)',font:{size:10},maxRotation:45,autoSkip:true,maxTicksLimit:14},border:{display:false}},y:{grid:{color:dk?'rgba(255,255,255,.06)':'rgba(0,0,0,.05)'},ticks:{color:dk?'rgba(255,255,255,.3)':'rgba(0,0,0,.35)',font:{size:10},callback:v=>`\u00a3${v>=1000?(v/1000).toFixed(0)+'k':v}`},border:{display:false}}}}});}
 
 // ── GSM: GOAL & SHOT METHODS ──
 let gsmInit=false,penTaker=false;
