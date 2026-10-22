@@ -23,11 +23,12 @@
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
-const { skyThrottle, noteResponse, isBlocked, SKY_PROXY_AGENT } = require('./skybet-throttle');
+const { skyThrottle, noteResponse, isBlocked, SKY_PROXY_AGENT, skyPageFetch } = require('./skybet-throttle');
 const oddsMonkeyLib = require('./oddsmonkey-lib');
 const freezeEligibleLib = require('./freeze-eligible-lib');
 
-// Every SkyBet request (skybet.com pages + apitbd GraphQL) goes through here: it paces
+// apitbd GraphQL requests go through here (skybet.com pages use skyPageFetch — see
+// skybet-throttle.js); both share the same pacer + circuit. It paces
 // calls and, on a 429/503, opens a process-wide circuit so the warmer / builder / accafreeze
 // scraper stop hammering SkyBet until its (hours-long) ban lifts. Throws SKY_BLOCKED meanwhile.
 // Routed via SKY_PROXY_AGENT (SKYBET_PROXY_URL) when set — see skybet-throttle.js.
@@ -262,11 +263,13 @@ async function fetchBfexMatchOdds(appKey, session) {
 }
 
 // ── SkyBet: per-fixture Full Time Result odds (search → event page) ──────────
+// No Cookie header (2026-10-22): the search/odds API needs no session, and sending the stale
+// SKYBET_COOKIES login cookies made it answer 401 UAG-005 to every search — the reason this
+// path found nothing from 2026-09-19 on. (skybet-accafreeze-lib.js still uses them.)
 function skyHeaders(json) {
   const h = {
     'User-Agent': SKY_UA,
     'Accept': json ? 'application/json' : 'text/html',
-    'Cookie': process.env.SKYBET_COOKIES || '',
     'Referer': 'https://skybet.com/football/s-1',
     'Origin': 'https://skybet.com',
   };
@@ -389,7 +392,7 @@ async function resolveSkyOdds(fx, cache) {
 
   let odds = null;
   try {
-    const res = await skyFetch('https://skybet.com/' + found.url, { headers: skyHeaders(false) });
+    const res = await skyPageFetch('https://skybet.com/' + found.url, skyHeaders(false));
     if (res.ok) {
       const html = await res.text();
       odds = parseEventPageOdds(html);                                   // fast path (inline market)

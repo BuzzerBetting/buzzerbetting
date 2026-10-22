@@ -55,4 +55,23 @@ function noteResponse(res) {
   }
 }
 
-module.exports = { skyThrottle, noteResponse, isBlocked, blockedForMs, SKY_PROXY_AGENT };
+// 2026-10-22: skybet.com pages (event pages, coupon/hub pages) are behind a Cloudflare challenge
+// that undici never passes — its TLS fingerprint isn't a browser's — while curl_cffi impersonating
+// Chrome 150 passes reliably through the same proxy. So page GETs go via the local Python helper
+// (oc-scraper/scripts/sky_fetch_helper.py, systemd sky_fetch_helper.service), which relays
+// SkyBet's own status/body/Retry-After, so callers and noteResponse() work unchanged. No cookies
+// are forwarded. The apitbd.skybet.com GraphQL API isn't challenged and stays on plain fetch.
+const SKY_PAGE_HELPER = process.env.SKY_PAGE_HELPER_URL || 'http://127.0.0.1:8765';
+
+async function skyPageFetch(url, headers = {}) {
+  await skyThrottle();
+  const h = {};
+  for (const k of ['Referer', 'Accept', 'Accept-Language']) if (headers[k]) h[k] = headers[k];
+  if (process.env.SKYBET_PROXY_URL) h['X-Proxy'] = process.env.SKYBET_PROXY_URL;
+  const res = await fetch(`${SKY_PAGE_HELPER}/fetch?url=${encodeURIComponent(url)}`,
+    { headers: h, signal: AbortSignal.timeout(45000) });
+  noteResponse(res);
+  return res;
+}
+
+module.exports = { skyThrottle, noteResponse, isBlocked, blockedForMs, SKY_PROXY_AGENT, skyPageFetch };
