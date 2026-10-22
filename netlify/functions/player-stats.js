@@ -36,8 +36,10 @@ exports.handler = async (event) => {
         const shots = data?.shotmap || [];
         const matchesItem = data?.topStatCard?.items?.find(i => i.localizedTitleId === 'matches_uppercase');
         const matchesPlayed = matchesItem ? parseInt(matchesItem.statValue) || 0 : 0;
+        const minutesItem = data?.topStatCard?.items?.find(i => i.localizedTitleId === 'minutes_played');
+        const minutesPlayed = minutesItem ? parseInt(String(minutesItem.statValue).replace(/,/g, '')) || 0 : 0;
         if (!shots.length && !matchesPlayed) return null;
-        return { seasonId, season, shots, matchesPlayed };
+        return { seasonId, season, shots, matchesPlayed, minutesPlayed };
       })
     );
 
@@ -71,7 +73,8 @@ exports.handler = async (event) => {
     const agg = (datasets, filterFn) => {
       const shots = filterFn(datasets.flatMap(d => d.shots));
       const matches = datasets.reduce((t, d) => t + d.matchesPlayed, 0);
-      return calcStats(shots, matches || null);
+      const minutes = datasets.reduce((t, d) => t + (d.minutesPlayed || 0), 0);
+      return { ...calcStats(shots, matches || null), minutes };
     };
 
     return {
@@ -85,6 +88,9 @@ exports.handler = async (event) => {
         timeframes: {
           currentTeam:   agg(allDatasets.filter(d => d.season === 0), filterCurrentTeam),
           currentSeason: agg(allDatasets.filter(d => d.season === 0), filterCurrentTeam),
+          // This season, every club and competition, with minutes — oc-scraper's Header Goal
+          // current-season header-rate gate (gsm_fair.header_rate_ok, 2026-10-22).
+          currentSeasonAll: agg(allDatasets.filter(d => d.season === 0), filterAll),
           lastSeason:    agg(allDatasets.filter(d => d.season <= 1), filterAll),
           last2Seasons:  agg(allDatasets.filter(d => d.season <= 2), filterAll),
         },
