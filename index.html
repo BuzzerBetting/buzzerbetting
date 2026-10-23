@@ -15711,6 +15711,16 @@ function setWatchBaseOverrideById(id, value) {
   setWatchBaseOverride(baseFairOverrideKey(r), value);
 }
 
+// Per-market Calc +EV bars — must match oc-scraper/oc/ev_engine.py (_min_ev_pct and the
+// constants above it).
+const CALC_EV_HIGH_EDGE_GOAL_MARKETS = new Set(['OTB', 'Left Foot Goal', 'Right Foot Goal', 'Inside Box Goal']);
+const CALC_EV_SOT_MARKETS = new Set(['Headed SOT', 'OTB SOT', 'Left Foot SOT', 'Right Foot SOT', 'Inside Box SOT']);
+function calcEvMinPct(market) {
+  if (CALC_EV_HIGH_EDGE_GOAL_MARKETS.has(market)) return 75.0;
+  if (CALC_EV_SOT_MARKETS.has(market)) return 20.0;
+  return 5.0;
+}
+
 function renderEVResults(bets) {
   const resultsEl = document.getElementById('cev-results');
   const tbody = document.getElementById('cev-tbody');
@@ -15730,9 +15740,11 @@ function renderEVResults(bets) {
   // so a row that stops clearing the bar under the selected source drops out. noCalc rows
   // (display-only, e.g. 6 Yard Box / no value under this source) and manual base-fair
   // overrides (the user's own what-if entry) stay shown.
-  const CALC_EV_THRESHOLD_PCT_CLIENT = 5.0; // must match oc-scraper/oc/ev_engine.py
-  bets = bets.filter(b => b.noCalc || b.baseFairOverridden || (typeof b.bestEv === 'number' && isFinite(b.bestEv) && b.bestEv >= CALC_EV_THRESHOLD_PCT_CLIENT));
+  // 2026-10-23, user-reported (8% Headed SOT showing despite the 20% SOT-method bar): the bar is
+  // per market — mirror ev_engine.py's _min_ev_pct, not a flat 5% — and it's applied after the
+  // disabled-book remap, which re-prices a row at the next-best allowed book's lower odds.
   if (typeof baBookEnabled === 'function') bets = bets.map(remapToAllowedBook).filter(Boolean);
+  bets = bets.filter(b => b.noCalc || b.baseFairOverridden || (typeof b.bestEv === 'number' && isFinite(b.bestEv) && b.bestEv >= calcEvMinPct(b.market)));
   const cevSortMode = getBaSort('calc-ev');
   bets = bets.slice().sort((x, y) => cevSortMode === 'time'
     ? (baTimeSortKey(x) - baTimeSortKey(y))
