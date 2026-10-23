@@ -10326,7 +10326,9 @@ function renderOddscheckerEV(){
   // Bet Alerts bookmaker filter — keep the original index so the copy button still points at
   // the right ocEvBets row. baBookEnabled() is defined in the Bet Alerts block and returns
   // true for everything until the filter has loaded.
-  const shown=ocEvBets.map((b,i)=>({b,i})).filter(({b})=>(typeof baBookEnabled!=='function')||baBookEnabled(b.bk));
+  // 2026-10-24 (user): Normal +EV is BFEX-priced only. Backstop for any feed that tags a
+  // non-BFEX fair (e.g. 'combo' OC/BB); untagged rows stay, so nothing is hidden by accident.
+  const shown=ocEvBets.map((b,i)=>({b,i})).filter(({b})=>(!b.source||b.source==='bfex')&&((typeof baBookEnabled!=='function')||baBookEnabled(b.bk)));
   const ocSortMode=getBaSort('oc-ev');
   shown.sort((x,y)=>ocSortMode==='time'?(baTimeSortKey(x.b)-baTimeSortKey(y.b)):(y.b.ev-x.b.ev));
   const countEl=document.getElementById('oc-ev-smeta-count');
