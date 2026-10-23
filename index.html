@@ -17487,7 +17487,8 @@ function renderBaOutliersSubtabs(){
 // Market tickboxes (2026-09-17, user-requested) — matches oc_outliers_scan.py's own
 // MARKET_LABELS values exactly. Persisted so the filter sticks across visits; defaults to
 // every market on (opt-out, not opt-in — a market added here later shows up by default).
-const OUTLIERS_ALL_MARKETS = ['AGS', 'First scorer', 'Cards', 'SOT', 'Assist', 'Header', 'OTB', 'Shots 1+', 'Shots 2+', 'Shots 3+'];
+// Header/OTB goal removed 2026-10-23 (user): they only ever belong on Calculated +EV.
+const OUTLIERS_ALL_MARKETS = ['AGS', 'First scorer', 'Cards', 'SOT', 'Assist', 'Shots 1+', 'Shots 2+', 'Shots 3+'];
 // Markets that existed before 'bb_outliers_markets_seen' was tracked — a saved selection from
 // back then only speaks for these, so anything newer still defaults to on.
 const OUTLIERS_ORIGINAL_MARKETS = ['AGS', 'First scorer', 'Cards', 'SOT', 'Assist', 'Header', 'OTB'];
