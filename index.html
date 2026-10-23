@@ -15718,6 +15718,7 @@ const CALC_EV_SOT_MARKETS = new Set(['Headed SOT', 'OTB SOT', 'Left Foot SOT', '
 function calcEvMinPct(market) {
   if (CALC_EV_HIGH_EDGE_GOAL_MARKETS.has(market)) return 75.0;
   if (CALC_EV_SOT_MARKETS.has(market)) return 20.0;
+  if (market === 'Header') return 20.0;
   return 5.0;
 }
 
