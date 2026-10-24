@@ -16722,16 +16722,24 @@ function baAllKnownBooks(){
   const add = v => { const r = baResolveBook(v); if (r) set.add(r); };
   (typeof ocEvBets !== 'undefined' ? ocEvBets : []).forEach(b => add(b && b.bk));
   (typeof cevLastBets !== 'undefined' ? cevLastBets : []).forEach(b => add(b && b.bookie));
+  // Every other bookmaker-priced tab too, so each book that can appear anywhere has a tickbox.
+  (typeof BA_WATCH_ROWS !== 'undefined' ? BA_WATCH_ROWS : []).forEach(r => add(r && r.bookie));
+  (typeof BA_OUTLIERS_ROWS !== 'undefined' ? BA_OUTLIERS_ROWS : []).forEach(r => add(r && r.topBook));
+  (typeof BA_EARLY_ROWS !== 'undefined' ? BA_EARLY_ROWS : []).forEach(r => { add(r && r.bk); ((r && r.alsoAbove) || []).forEach(a => add(a.bk)); });
+  Object.values(typeof BA_STUB_BETS !== 'undefined' ? BA_STUB_BETS : {}).forEach(list => (list || []).forEach(b => add(b && b.bk)));
   if (BA_BOOKS) Object.keys(BA_BOOKS).forEach(k => set.add(k));
   return [...set];
 }
-// True = show this bet. Unknown / not-yet-toggled books default to visible.
+// True = show this bet. A book the filter hasn't seen yet (not in the saved map) is shown while
+// every book is on, but hidden once the user has narrowed the list — 2026-10-24, user-reported:
+// filtered to 5 books, yet Unibet/Coral/BetVictor/Boyle rows still showed because they had never
+// been in the tickbox list, so they fell through to "visible".
 function baBookEnabled(bk){
-  if (!BA_BOOKS) return true;
+  if (!BA_BOOKS || !bk) return true;
   const canon = baResolveBook(bk);
   if (canon && (canon in BA_BOOKS)) return !!BA_BOOKS[canon];
-  if (bk && (bk in BA_BOOKS)) return !!BA_BOOKS[bk];
-  return true;
+  if (bk in BA_BOOKS) return !!BA_BOOKS[bk];
+  return !Object.values(BA_BOOKS).some(v => !v);
 }
 function baBooksEnabledCount(){
   const all = baAllKnownBooks();
@@ -17503,7 +17511,7 @@ async function loadBaOutliers(){
   BA_OUTLIERS_ROWS = rows;
   renderBaOutliers();
   const mf = getOutliersMarketFilter();
-  baSoundCheck('outliers', rows.filter(r => r.lineupConfirmed && mf.has(r.market))
+  baSoundCheck('outliers', rows.filter(r => r.lineupConfirmed && mf.has(r.market) && baBookEnabled(r.topBook))
     .map(r => ({ match: r.match, market: r.market, selection: r.selection, bk: r.topBook, odds: r.topPrice, ev: r.pctAboveNext })));
 }
 // Confirmed/pre-lineup sub-tab (2026-09-17, user-requested) — defaults to Confirmed every
@@ -17518,7 +17526,7 @@ function renderBaOutliersSubtabs(){
   // sub-tab badges were counting every market regardless of the tickboxes, so they didn't
   // match the "N outliers" count once a market got unticked). Both now agree always.
   const marketFilter = getOutliersMarketFilter();
-  const visible = BA_OUTLIERS_ROWS.filter(r => marketFilter.has(r.market));
+  const visible = BA_OUTLIERS_ROWS.filter(r => marketFilter.has(r.market) && !gvKickoffPassed(r.kickoffDate, r.kickoff) && baBookEnabled(r.topBook));
   const confirmedN = visible.filter(r => r.lineupConfirmed).length;
   const preN = visible.length - confirmedN;
   const tabs = [
@@ -17578,7 +17586,7 @@ function renderBaOutliers(){
   // 2026-10-24, user-reported (Tigre outliers still up after kickoff): the outliers file only
   // refreshes when the pipeline finishes, which can be 30+ min after midnight, so drop
   // kicked-off matches here rather than trusting the file to be current.
-  const visibleAnySubtab = BA_OUTLIERS_ROWS.filter(r => marketFilter.has(r.market) && !gvKickoffPassed(r.kickoffDate, r.kickoff));
+  const visibleAnySubtab = BA_OUTLIERS_ROWS.filter(r => marketFilter.has(r.market) && !gvKickoffPassed(r.kickoffDate, r.kickoff) && baBookEnabled(r.topBook));
   const rows = visibleAnySubtab
     .filter(r => !!r.lineupConfirmed === wantConfirmed)
     .sort((x, y) => getBaSort('outliers') === 'time'
