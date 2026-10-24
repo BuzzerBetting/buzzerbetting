@@ -2655,6 +2655,34 @@ tr.ba-placed > td{background:var(--green-bg) !important}
     <div class="note"><i class="ti ti-info-circle"></i> Grosvenor prices (AGS, First Goalscorer, SOT 1+, Cards, Assist, Header &amp; OTB goal) that are higher than the best price on Oddschecker for the same player, ranked by how far above that next-best price they are. A price comparison only — not priced against a fair. Only matches with a fresh Oddschecker scrape are compared.</div>
   </div>
 
+  <!-- Early Prices (2026-10-24): Shots N+ / SOT N+ prices above a form-blended fair (last 5 /
+       this season / last season per-90, x expected minutes, x opponent), every Oddschecker book +
+       Grosvenor. Fed by oc-scraper/scripts/early_prices_scan.py (early_prices.json). Palps are
+       NOT filtered out — the user decides at the time. -->
+  <div id="ba-panel-early" class="ba-panel" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      <div class="smeta" style="margin:0"><span class="pulse"></span><strong id="ba-early-count" style="color:var(--green);font-weight:500">—</strong> <span id="ba-early-updated" style="color:var(--text3);font-size:12px"></span></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div data-sort-group="early" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden">
+          <button onclick="setBaSort('early','ev')" data-sort="ev" style="background:none;border:none;padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Best EV%</button>
+          <button onclick="setBaSort('early','time')" data-sort="time" style="background:none;border:none;border-left:0.5px solid var(--border);padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Start time</button>
+        </div>
+        <button id="ep-results-btn" onclick="toggleEpResults()" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-chart-bar"></i> Results</button>
+        <button onclick="baRefreshActive(this)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
+      </div>
+    </div>
+    <div id="ep-results-panel" class="card" style="display:none;padding:14px;margin-bottom:12px"></div>
+    <div id="ba-early-subtabs" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;width:fit-content;margin-bottom:10px"></div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;margin-bottom:10px;font-size:12.5px;color:var(--text2)">
+      <span id="ba-early-markets" style="display:flex;flex-wrap:wrap;gap:4px 12px"></span>
+      <label style="display:flex;align-items:center;gap:5px">Min EV <input id="ep-min-ev" type="number" min="0" step="5" style="width:60px;padding:4px 6px;border:.5px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-family:inherit" onchange="setEpMinEv(this.value)">%</label>
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="Only prices at least 25% above the median of the other bookmakers — the model AND the market both say it's wrong"><input id="ep-offcons" type="checkbox" onchange="setEpOffCons(this.checked)"> Off consensus only (25%+)</label>
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="Oddschecker's timestamp for when this bookmaker's price last changed. Unchanged doesn't mean dead — just worth checking."><input id="ep-hidestale" type="checkbox" onchange="setEpHideStale(this.checked)"> Hide prices unchanged 24h+</label>
+    </div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:980px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Player</th><th title="Oldest to newest, this stat in his last 5 appearances (green = would have landed this line)">Last 5</th><th class="r">Price</th><th class="r">Fair</th><th class="r">EV</th><th class="r" title="Median of every other bookmaker group's price, and how far this price is above it">Others' median</th><th class="r">Books</th><th class="ba-watch-col">Placed?</th><th></th></tr></thead><tbody id="ba-early-body"></tbody></table></div></div>
+    <div class="note"><i class="ti ti-info-circle"></i> Player Shots 1+–5+ and SOT 1+–3+ prices from every Oddschecker bookmaker plus Grosvenor that are 10%+ above a form fair: his shots/SOT per 90 (last 5 appearances weighted heaviest, then the last 5 months, then the year before, pulled toward his position's average) × his usual minutes as a starter × how many shots the opponent concedes and home/away, spread a little wider than Poisson. Weights were set by backtesting 7,000 recent starters priced only on what was known before kickoff (calibrated to within ~5%). "Unchanged" tags are Oddschecker's time since that bookmaker's price last moved. Starters only (FotMob predicted XI until the lineup is confirmed). Nothing is filtered out as a likely palp. Void-if-not-starting rules and super-sub promos aren't accounted for yet. Every price shown is logged at first sight and settled off FotMob — see Results.</div>
+  </div>
+
   <!-- panel: Ones to Watch -->
   <div id="ba-panel-watch" class="ba-panel" style="display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
@@ -10164,6 +10192,7 @@ function setBaSort(key,mode){
   else if(key==='watch') renderBaWatch();
   else if(key==='f1-ew'||key==='arbs'||key==='dnf'||key==='nfl-td') renderBaStubFeed(key);
   else if(key==='grosvenor') renderBaGrosvenor();
+  else if(key==='early') renderBaEarly();
 }
 function syncBaSortToggle(key){
   const cur=getBaSort(key);
@@ -10259,6 +10288,7 @@ function baPlacedBet(edge,idx){
   // Grosvenor has no fair/EV either — "% above next best" stands in, same as Outliers.
   if(edge==='grosvenor'){ const r=BA_GROSVENOR_RENDERED[idx]; return r&&{match:r.match,market:r.mkt,selection:r.sel,bookie:'Grosvenor',odds:r.odds,ev:r.pct}; }
   if(edge==='nfl-td'){ const b=(BA_STUB_SHOWN['nfl-td']||[])[idx]; return b&&{match:b.match,market:b.mkt,selection:b.sel,bookie:ocBookieName(b.bk)||b.bk,odds:b.odds,ev:b.ev}; }
+  if(edge==='early'){ const r=BA_EARLY_RENDERED[idx]; return r&&{match:r.match,market:r.mkt,selection:r.sel,bookie:ocBookieName(r.showBk)||r.showBk,odds:r.showOdds,ev:r.showEv}; }
   return null;
 }
 function baPlacedLabel(p){
@@ -10281,6 +10311,7 @@ function baRerenderPlacedTables(){
   if(typeof cevLastBets!=='undefined'&&cevLastBets.length)renderEVResults(cevLastBets);
   if(typeof renderBaOutliers==='function')renderBaOutliers();
   if(typeof renderBaGrosvenor==='function')renderBaGrosvenor();
+  if(typeof renderBaEarly==='function'&&BA_EARLY_ROWS.length)renderBaEarly();
   if((BA_STUB_BETS['nfl-td']||[]).length)renderBaStubFeed('nfl-td');
 }
 async function baLoadPlaced(){
@@ -16628,6 +16659,7 @@ const BA_EDGES = [
   { key: 'oc-ev',   label: 'Normal +EV', panel: 'view-oddschecker',  priced: true  },
   { key: 'calc-ev', label: 'Calculated +EV',  panel: 'view-calculated',   priced: true  },
   { key: 'watch',   label: 'Ones to Watch',   panel: 'ba-panel-watch',    priced: true  },
+  { key: 'early',   label: 'Early Prices',    panel: 'ba-panel-early',    priced: true  },
   { key: 'ddhh',    label: 'DDHH',            panel: 'view-ddhh',         priced: false },
   { key: 'corners', label: 'Corners',         panel: 'ba-panel-corners',  priced: false },
   { key: 'f1-ew',   label: 'F1 EW',           panel: 'ba-panel-f1-ew',    priced: true  },
@@ -16789,7 +16821,8 @@ function baUpdateMenuTag(){
   // bets at all — excluded too (2026-09-26, user-reported: "23 value" was 20 of those). Errors
   // and Outliers are flagged prices (market-integrity / model-free "one book way above the
   // rest"), not bets priced against a fair, so they're left out as well.
-  const NOT_VALUE = new Set(['corners', 'unmatched', 'errors', 'outliers', 'grosvenor']);
+  // Early Prices is a paper-trade model (2026-10-24) — kept out of the value count for now.
+  const NOT_VALUE = new Set(['corners', 'unmatched', 'errors', 'outliers', 'grosvenor', 'early']);
   const corners = BA_COUNTS['corners'] || 0;
   const value = BA_EDGES.reduce((s, e) => s + (NOT_VALUE.has(e.key) ? 0 : (BA_COUNTS[e.key] || 0)), 0);
   el.textContent = (value || corners) ? `${value} value · ${corners} corner` : '—';
@@ -16924,6 +16957,8 @@ function loadBaEdge(key, isPoll){
     loadBaOutliers();
   } else if (key === 'grosvenor') {
     loadBaGrosvenor();
+  } else if (key === 'early') {
+    loadBaEarly();
   } else {
     loadBaStubFeed(key);
   }
@@ -18132,6 +18167,146 @@ function renderBaGrosvenor(){
     ${pl.watchTd}
     <td style="font-size:11.5px;white-space:nowrap">${betLinkBtn(null, 'Grosvenor')}<button onclick="logGrosvenorBet(${idx})" title="Log this bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-plus"></i> Log</button>${pl.btn('grosvenor', idx)}${wantConfirmed ? `<button onclick="gvRemoveBet(${idx})" title="Remove for me until kickoff (not for anyone else)" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--red);line-height:1;margin-left:4px"><i class="ti ti-x"></i></button>` : ''}</td>
   </tr>`; }).join('');
+}
+
+// ---- Early Prices (2026-10-24) ----
+// Shots N+ / SOT N+ prices above a form-blended fair — see oc-scraper/scripts/early_prices_scan.py.
+// Rows carry the best book plus every other book also 10%+ over fair (alsoAbove), so when the
+// bookmaker filter hides the best one the next enabled book is shown instead.
+let BA_EARLY_ROWS = [];
+let BA_EARLY_RENDERED = [];
+let BA_EARLY_RESULTS = null;
+let BA_EARLY_UPDATED = null;
+let BA_EARLY_SUBTAB = 'all';
+let EP_RESULTS_OPEN = false;
+const EP_MARKETS = ['Shots 1+', 'Shots 2+', 'Shots 3+', 'Shots 4+', 'Shots 5+', 'SOT 1+', 'SOT 2+', 'SOT 3+'];
+const EP_OFFCONS_PCT = 25;
+function epPref(k, dflt){ try { const v = localStorage.getItem('bb_ep_' + k); return v == null ? dflt : JSON.parse(v); } catch(e) { return dflt; } }
+function epSetPref(k, v){ try { localStorage.setItem('bb_ep_' + k, JSON.stringify(v)); } catch(e) {} }
+function setEpMinEv(v){ const n = parseFloat(v); epSetPref('minEv', isFinite(n) ? n : 10); renderBaEarly(); }
+function setEpOffCons(on){ epSetPref('offCons', !!on); renderBaEarly(); }
+function setEpHideStale(on){ epSetPref('hideStale', !!on); renderBaEarly(); }
+// "unchanged 5h" / "unchanged 3d" — Oddschecker's age of the shown book's price (best book only;
+// Grosvenor has none). Under 4h shows nothing.
+function epAgeTag(r){
+  if (r.showBk !== r.bk || r.ageMin == null || r.ageMin < 240) return '';
+  const a = r.ageMin, txt = a >= 1440 ? Math.round(a / 1440) + 'd' : Math.round(a / 60) + 'h';
+  return `<div style="font-size:11px;color:var(--amber);font-weight:400" title="Oddschecker says this price hasn't changed in ${txt} — could be fine, could be a dead price">unchanged ${txt}</div>`;
+}
+function toggleEpMarket(m, on){ const s = new Set(epPref('markets', EP_MARKETS)); if (on) s.add(m); else s.delete(m); epSetPref('markets', [...s]); renderBaEarly(); }
+function setEarlySubtab(v){ BA_EARLY_SUBTAB = v; renderBaEarly(); }
+function toggleEpResults(){ EP_RESULTS_OPEN = !EP_RESULTS_OPEN; renderEpResults(); }
+async function loadBaEarly(){
+  try {
+    const r = await fetch('/.netlify/functions/oc-early-prices');
+    const d = await r.json();
+    if (d && d.ok) {
+      BA_EARLY_ROWS = Array.isArray(d.bets) ? d.bets : [];
+      BA_EARLY_RESULTS = d.results || null;
+      BA_EARLY_UPDATED = d.updated || null;
+    }
+  } catch(e) {}
+  renderBaEarly();
+  renderEpResults();
+  baSoundCheck('early', epVisible().map(r => ({ match: r.match, market: r.mkt, selection: r.sel, bk: r.showBk, odds: r.showOdds, ev: r.showEv })));
+}
+// The price to show for a row under the bookmaker filter: best enabled book among best + alsoAbove.
+function epPick(r){
+  const cands = [{ bk: r.bk, odds: r.odds }].concat(r.alsoAbove || []);
+  const c = cands.find(x => baBookEnabled(ocBookieName(x.bk) || x.bk));
+  if (!c) return null;
+  return { bk: c.bk, odds: c.odds, ev: r.fair ? (c.odds / r.fair - 1) * 100 : null };
+}
+function epVisible(){
+  const minEv = epPref('minEv', 10), offCons = epPref('offCons', false), hideStale = epPref('hideStale', false);
+  const mk = new Set(epPref('markets', EP_MARKETS));
+  return BA_EARLY_ROWS.map(r => { const p = epPick(r); return p ? Object.assign({}, r, { showBk: p.bk, showOdds: p.odds, showEv: p.ev }) : null; })
+    .filter(r => r && mk.has(r.mkt) && !gvKickoffPassed(r.d, r.t)
+      && !(hideStale && r.showBk === r.bk && r.ageMin != null && r.ageMin >= 1440)
+      && (r.showEv ?? 0) >= minEv
+      && (!offCons || (r.consensus && (r.showOdds / r.consensus - 1) * 100 >= EP_OFFCONS_PCT)));
+}
+function renderBaEarly(){
+  const body = document.getElementById('ba-early-body');
+  if (!body) return;
+  syncBaSortToggle('early');
+  const minEl = document.getElementById('ep-min-ev'); if (minEl && document.activeElement !== minEl) minEl.value = epPref('minEv', 10);
+  const ocEl = document.getElementById('ep-offcons'); if (ocEl) ocEl.checked = !!epPref('offCons', false);
+  const stEl = document.getElementById('ep-hidestale'); if (stEl) stEl.checked = !!epPref('hideStale', false);
+  const mk = new Set(epPref('markets', EP_MARKETS));
+  const mEl = document.getElementById('ba-early-markets');
+  if (mEl) mEl.innerHTML = EP_MARKETS.map(m => `<label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" ${mk.has(m) ? 'checked' : ''} onchange="toggleEpMarket('${m}', this.checked)">${escapeHtml(m)}</label>`).join('');
+  const vis = epVisible();
+  const confN = vis.filter(r => r.lineup === 'confirmed').length;
+  const sub = document.getElementById('ba-early-subtabs');
+  if (sub) sub.innerHTML = [['all', 'All', vis.length], ['confirmed', 'Lineups Confirmed', confN], ['predicted', 'Predicted XI', vis.length - confN]].map(([k, l, n]) => {
+    const on = BA_EARLY_SUBTAB === k;
+    return `<button onclick="setEarlySubtab('${k}')" style="background:${on ? 'var(--brand)' : 'none'};border:none;padding:7px 14px;font-size:12.5px;font-weight:${on ? '600' : '400'};color:${on ? '#fff' : 'var(--text2)'};cursor:pointer;font-family:inherit;white-space:nowrap">${l} (${n})</button>`;
+  }).join('');
+  const sortMode = getBaSort('early');
+  const rows = vis.filter(r => BA_EARLY_SUBTAB === 'all' || r.lineup === BA_EARLY_SUBTAB).sort((x, y) => sortMode === 'time'
+    ? ((baTimeSortKey(x) - baTimeSortKey(y)) || String(x.match || '').localeCompare(String(y.match || '')) || ((y.showEv ?? 0) - (x.showEv ?? 0)))
+    : ((y.showEv ?? 0) - (x.showEv ?? 0)));
+  BA_EARLY_RENDERED = rows;
+  baSetCount('early', vis.length);
+  const countEl = document.getElementById('ba-early-count');
+  if (countEl) countEl.textContent = `${rows.length} price${rows.length === 1 ? '' : 's'}`;
+  const upEl = document.getElementById('ba-early-updated');
+  if (upEl) upEl.textContent = BA_EARLY_UPDATED ? `· updated ${new Date(BA_EARLY_UPDATED).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : '';
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="12" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">No early prices above the form fair with these filters right now.</td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.map((r, idx) => {
+    const pl = baPlacedRow(r.match, r.mkt, r.sel);
+    const seq = (r.last5 || []).map((v, i) => `<span title="${(r.last5Min || [])[i] != null ? r.last5Min[i] + ' min' : ''}" style="display:inline-block;min-width:16px;text-align:center;padding:1px 3px;margin-right:2px;border-radius:4px;font-weight:600;background:${v >= r.line ? 'var(--green-bg)' : 'var(--surface2)'};color:${v >= r.line ? 'var(--green)' : 'var(--text2)'}">${v}</span>`).join('');
+    const gap = r.consensus ? (r.showOdds / r.consensus - 1) * 100 : null;
+    const off = gap != null && gap >= EP_OFFCONS_PCT;
+    const also = (r.alsoAbove || []).filter(a => a.bk !== r.showBk);
+    const lu = r.lineup === 'confirmed' ? '<span class="badge" style="background:var(--green-bg);color:var(--green);margin-left:6px">Confirmed</span>' : '<span class="badge" style="background:var(--surface2);color:var(--text3);margin-left:6px">Predicted</span>';
+    return `<tr class="${pl.placed ? 'ba-placed' : ''}">
+    <td style="font-size:12px;color:var(--text2);white-space:nowrap">${escapeHtml(r.t || '')}</td>
+    <td style="font-size:12.5px">${escapeHtml(r.match || '')}</td>
+    <td style="font-size:12px;color:var(--text2);white-space:nowrap">${escapeHtml(r.mkt || '')}</td>
+    <td style="font-weight:500">${escapeHtml(r.sel || '')}${lu}${r.fmName && baPlacedNorm(r.fmName) !== baPlacedNorm(r.sel) ? `<div style="font-weight:400;font-size:11px;color:var(--text3)" title="FotMob's name for the player whose stats priced this — check it's the same person">FotMob: ${escapeHtml(r.fmName)}</div>` : ''}<div style="font-weight:400;font-size:11.5px;color:var(--text3);margin-top:2px" title="Blended per-90 rate × expected minutes × opponent/venue = expected count this match">${Number(r.per90).toFixed(2)}/90 · ${r.expMin}′ · opp ×${Number(r.oppMult).toFixed(2)} → exp ${Number(r.mu).toFixed(2)} · ${r.apps} apps</div></td>
+    <td style="white-space:nowrap;font-size:12px">${seq}</td>
+    <td class="r tn" style="font-weight:600;color:var(--green);white-space:nowrap">${Number(r.showOdds).toFixed(2)} <span style="color:var(--text3);font-size:11px;font-weight:400">(${escapeHtml(ocBookieShort(r.showBk))})</span>${epAgeTag(r)}${also.length ? `<div style="font-size:11px;color:var(--text3);font-weight:400">also ${also.map(a => `${escapeHtml(ocBookieShort(a.bk))} ${Number(a.odds).toFixed(2)}`).join(', ')}</div>` : ''}</td>
+    <td class="r tn" style="color:var(--text2)">${Number(r.fair).toFixed(2)}</td>
+    <td class="r"><span class="badge" style="background:var(--green-bg);color:var(--green)">+${Number(r.showEv).toFixed(1)}%</span></td>
+    <td class="r tn" style="color:var(--text2);white-space:nowrap">${r.consensus ? Number(r.consensus).toFixed(2) : '—'}${gap != null ? ` <span class="badge" style="background:${off ? 'var(--amber-bg)' : 'var(--surface2)'};color:${off ? 'var(--amber)' : 'var(--text3)'}">${gap >= 0 ? '+' : ''}${gap.toFixed(0)}%</span>` : ''}</td>
+    <td class="r tn" style="color:var(--text2)">${r.nBooks ?? '—'}</td>
+    ${pl.watchTd}
+    <td style="font-size:11.5px;white-space:nowrap">${betLinkBtn(null, ocBookieName(r.showBk) || r.showBk)}<button onclick="copyBaEarlyBet(${idx},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button>${pl.btn('early', idx)}</td>
+  </tr>`;
+  }).join('');
+}
+function copyBaEarlyBet(idx, btn){
+  const r = BA_EARLY_RENDERED[idx];
+  if (!r) return;
+  const text = baCopyBetText(r.t ?? '', r.match ?? '', r.mkt ?? '', r.sel ?? '', Number(r.showOdds).toFixed(2), Number(r.fair).toFixed(2), `+${Number(r.showEv).toFixed(1)}%`, ocBookieName(r.showBk) || r.showBk || '');
+  baCopyBet(text, btn);
+}
+function renderEpResults(){
+  const el = document.getElementById('ep-results-panel');
+  if (!el) return;
+  el.style.display = EP_RESULTS_OPEN ? '' : 'none';
+  if (!EP_RESULTS_OPEN) return;
+  const R = BA_EARLY_RESULTS;
+  if (!R || !R.all || !R.all.bets) { el.innerHTML = '<div style="font-size:13px;color:var(--text3)">No settled early prices yet — every price shown is logged at first sight (odds, fair, book) and graded off FotMob once the match is done.</div>'; return; }
+  const plc = v => v > 0 ? 'var(--green)' : v < 0 ? 'var(--red)' : 'var(--text2)';
+  const line = (lab, a) => `<tr><td>${escapeHtml(lab)}</td><td class="r tn">${a.bets}</td><td class="r tn">${a.won}</td><td class="r tn">${a.expWon}</td><td class="r tn">${a.expWon ? (a.won / a.expWon).toFixed(2) : '—'}</td><td class="r tn" style="color:${plc(a.plUnits)};font-weight:600">${a.plUnits >= 0 ? '+' : ''}${a.plUnits}</td><td class="r tn" style="color:${plc(a.roi)}">${a.roi != null ? a.roi + '%' : '—'}</td><td class="r tn" style="color:var(--text3)">${a.dnp || 0}</td></tr>`;
+  const head = '<thead><tr><th></th><th class="r">Bets</th><th class="r">Won</th><th class="r">Exp. won</th><th class="r">Act ÷ Exp</th><th class="r">P/L (pts)</th><th class="r">ROI</th><th class="r">DNP</th></tr></thead>';
+  const recent = (R.recent || []).map(b => {
+    const c = b.result === 'won' ? 'var(--green)' : b.result === 'lost' ? 'var(--red)' : 'var(--text3)';
+    const d = b.kickoffUtc ? new Date(b.kickoffUtc).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    return `<tr><td style="font-size:12px;color:var(--text2);white-space:nowrap">${escapeHtml(d)}</td><td style="font-size:12px">${escapeHtml(b.match || '')}</td><td style="font-size:12px">${escapeHtml(b.mkt || '')}</td><td style="font-weight:500">${escapeHtml(b.sel || '')}</td><td style="font-size:12px;color:var(--text3)">${escapeHtml(b.last5 || '')}</td><td class="r tn">${Number(b.odds).toFixed(2)} <span style="color:var(--text3);font-size:11px">(${escapeHtml(ocBookieShort(b.bk))})</span></td><td class="r tn" style="color:var(--text2)">${Number(b.fair).toFixed(2)}</td><td class="r tn">+${Number(b.ev).toFixed(0)}%</td><td class="r tn">${b.actual != null ? b.actual : '—'}</td><td style="color:${c};font-weight:600;text-transform:uppercase;font-size:11.5px">${escapeHtml(b.result || '')}</td></tr>`;
+  }).join('');
+  el.innerHTML = `<div style="font-size:13px;font-weight:600;margin-bottom:8px">Paper-trade results <span style="font-weight:400;color:var(--text3);font-size:12px">— every price at first sight, 1pt level stakes at that price; DNP (didn't play) excluded</span></div>
+    <div style="overflow-x:auto"><table class="dt" style="min-width:620px">${head}<tbody>${line('All', R.all)}${Object.entries(R.byMarket || {}).map(([k, a]) => line(k, a)).join('')}</tbody></table></div>
+    <div style="font-size:12.5px;font-weight:600;margin:12px 0 6px">By EV at first sight</div>
+    <div style="overflow-x:auto"><table class="dt" style="min-width:620px">${head}<tbody>${Object.entries(R.byEv || {}).map(([k, a]) => line(k, a)).join('')}</tbody></table></div>
+    <div style="font-size:12.5px;font-weight:600;margin:12px 0 6px">Latest settled</div>
+    <div style="overflow-x:auto;max-height:420px;overflow-y:auto"><table class="dt" style="min-width:900px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Player</th><th>Last 5</th><th class="r">Odds</th><th class="r">Fair</th><th class="r">EV</th><th class="r">Actual</th><th>Result</th></tr></thead><tbody>${recent}</tbody></table></div>`;
 }
 
 // Called by renderOddscheckerEV / renderEVResults once they've built their (filtered) list.

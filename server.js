@@ -398,6 +398,20 @@ for (const [route, filename] of Object.entries(FOOTBALL_BOOST_EV_ROUTES)) {
   });
 }
 
+// GET /api/early-prices — the Bet Alerts "Early Prices" tab (2026-10-24): Shots N+ / SOT N+
+// prices above a form-blended fair, plus the paper-trade results, written by
+// oc-scraper/scripts/early_prices_scan.py.
+const EARLY_PRICES_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'early_prices.json');
+app.get('/api/early-prices', (req, res) => {
+  if (!fs.existsSync(EARLY_PRICES_PATH)) return res.json({ ok: true, updated: null, bets: [], results: null });
+  try {
+    const payload = JSON.parse(fs.readFileSync(EARLY_PRICES_PATH, 'utf8'));
+    res.json({ ok: true, updated: payload.updated || null, bets: payload.bets || [], results: payload.results || null, pricedMatches: payload.pricedMatches || 0 });
+  } catch (e) {
+    res.json({ ok: false, error: 'Failed reading early_prices.json: ' + e.message });
+  }
+});
+
 // GET /api/bet-alert-errors — the Bet Alerts "Errors" tab: market-integrity flags (a
 // bookmaker's market still open past when it should have suspended), not value bets. First
 // fed by paddypower_horse_ev_scan.py (Paddy Power's "Racing Specials" doubles occasionally
@@ -525,6 +539,47 @@ app.post('/api/oc-ev/refresh', (req, res) => {
   child.on('exit', () => { ocEvRefreshInFlight = false; });
   child.unref();
   res.json({ ok: true, started: true });
+});
+
+// OC block status + cookie update endpoints
+const OC_BLOCK_STATE_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'oc_block_state.json');
+const OC_COOKIES_PATH = require('path').join(__dirname, 'oc-scraper', 'oc', 'cookies.json');
+const OC_COOKIE_REFRESH_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'oc_cookie_refresh.json');
+
+app.get('/api/oc-status', (req, res) => {
+  try {
+    const state = fs.existsSync(OC_BLOCK_STATE_PATH) ? JSON.parse(fs.readFileSync(OC_BLOCK_STATE_PATH, 'utf8')) : {};
+    const blockedUntil = parseFloat(state.until || 0);
+    const blocked = Date.now() / 1000 < blockedUntil;
+    res.json({ ok: true, blocked, minutesLeft: blocked ? Math.round((blockedUntil - Date.now() / 1000) / 60) : 0, since: state.since || null });
+  } catch (e) { res.json({ ok: true, blocked: false, minutesLeft: 0 }); }
+});
+
+app.post('/api/oc-cookies', async (req, res) => {
+  const { cookieString, apiKey } = req.body || {};
+  if (apiKey !== process.env.LEDGER_API_KEY) return res.json({ ok: false, error: 'Unauthorised' });
+  if (!cookieString) return res.json({ ok: false, error: 'cookieString required' });
+  try {
+    const rotateUrl = process.env.OC_PROXY_ROTATE_URL;
+    if (rotateUrl) { try { await fetch(rotateUrl); await new Promise(r => setTimeout(r, 4000)); } catch(e) {} }
+    const cookies = {};
+    cookieString.split(';').forEach(part => {
+      const idx = part.indexOf('='); if (idx === -1) return;
+      const key = part.slice(0, idx).trim(); const val = part.slice(idx + 1).trim();
+      if (key) cookies[key] = val;
+    });
+    fs.writeFileSync(OC_COOKIES_PATH, JSON.stringify({ timestamp: Date.now() / 1000, cookies }, null, 2));
+    fs.writeFileSync(OC_BLOCK_STATE_PATH, '{}');
+    fs.writeFileSync(OC_COOKIE_REFRESH_PATH, '{}');
+    if (!ocEvRefreshInFlight) {
+      ocEvRefreshInFlight = true;
+      const child = spawn('bash', ['run_pipeline.sh'], { cwd: OC_SCRAPER_DIR, stdio: 'ignore', detached: true });
+      child.on('error', () => { ocEvRefreshInFlight = false; });
+      child.on('exit', () => { ocEvRefreshInFlight = false; });
+      child.unref();
+    }
+    res.json({ ok: true, message: 'Cookies updated, proxy rotated, pipeline triggered' });
+  } catch (e) { res.json({ ok: false, error: e.message }); }
 });
 
 app.listen(PORT, () => console.log(`BuzzerBetting server running on port ${PORT}`));
