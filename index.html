@@ -17530,7 +17530,10 @@ function renderBaOutliers(){
   renderBaOutliersMarketCheckboxes();
   const marketFilter = getOutliersMarketFilter();
   const wantConfirmed = BA_OUTLIERS_SUBTAB === 'confirmed';
-  const visibleAnySubtab = BA_OUTLIERS_ROWS.filter(r => marketFilter.has(r.market));
+  // 2026-10-24, user-reported (Tigre outliers still up after kickoff): the outliers file only
+  // refreshes when the pipeline finishes, which can be 30+ min after midnight, so drop
+  // kicked-off matches here rather than trusting the file to be current.
+  const visibleAnySubtab = BA_OUTLIERS_ROWS.filter(r => marketFilter.has(r.market) && !gvKickoffPassed(r.kickoffDate, r.kickoff));
   const rows = visibleAnySubtab
     .filter(r => !!r.lineupConfirmed === wantConfirmed)
     .sort((x, y) => (y.pctAboveNext ?? 0) - (x.pctAboveNext ?? 0));
@@ -18047,7 +18050,7 @@ function setGvHideShort(on){
   renderBaGrosvenor();
 }
 function gvKickoffPassed(d, t){
-  if (!d || !/^d{1,2}:d{2}$/.test(String(t || ''))) return false;
+  if (!d || !/^\d{1,2}:\d{2}$/.test(String(t || ''))) return false;
   const k = new Date(`${d}T${String(t).padStart(5, '0')}:00`);
   return !isNaN(k.getTime()) && k.getTime() <= Date.now();
 }
