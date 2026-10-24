@@ -3445,7 +3445,7 @@ function getAnthropic() {
 let _playerLookup = null;
 try { _playerLookup = require('./corner-model/players'); } catch (e) { /* team autofill just disabled */ }
 
-const BETSLIP_MODEL = process.env.BETSLIP_MODEL || 'claude-opus-5';
+const BETSLIP_MODEL = process.env.BETSLIP_MODEL || 'claude-opus-5-5';
 const BETSLIP_PROMPT = `You are reading a screenshot of a football bet that has just been placed (usually a Betfred bet builder / same-game multi).
 Respond with ONLY a JSON object, no prose, no markdown fences, with exactly these keys:
 - "bookmaker": sportsbook name if visible (e.g. "Betfred"), else null.
@@ -3573,7 +3573,7 @@ router.post('/parse-betslip', requireAdmin, async (req, res) => {
 //
 // NOT admin-only: staff file the Assistant-side ("Viper Horse (VA)") screenshots. Booking is
 // still gated by POST /bets' staff-can-only-use-Assistant check, so this only reads an image.
-const VIPER_MODEL = process.env.BETSLIP_MODEL || 'claude-opus-5';
+const VIPER_MODEL = process.env.BETSLIP_MODEL || 'claude-opus-5-5';
 const VIPER_PROMPT = `You are reading a screenshot from a horse-racing bet tracker ("Viper"). It shows one or more
 ALREADY-PLACED each-way bets, either as rows in a "Singles" list or as one card per multiple
 (Double / Treble / Fourfold). The same screenshot may contain several bets — return every one.
@@ -4676,7 +4676,7 @@ router.post('/bet365-sot-odds', (req, res) => {
 // Reads one Bet365 screenshot of a "Player Shots on Target Outside the Box" or "Player Headed
 // Shots on Target" market and returns { players:[{player, odds}], marketHint, warnings }.
 // Not admin-only (staff paste these). Clone of /parse-viper's model call shape.
-const B365_SOT_MODEL = process.env.BETSLIP_MODEL || 'claude-opus-5';
+const B365_SOT_MODEL = process.env.BETSLIP_MODEL || 'claude-opus-5-5';
 const B365_SOT_PROMPT = `You are reading ONE screenshot of a Bet365 football player market. It is either
 "Player Shots on Target Outside the Box" (shots on target from outside the penalty area) or
 "Player Headed Shots on Target" (headed shots on target). Each row is a player name and a
