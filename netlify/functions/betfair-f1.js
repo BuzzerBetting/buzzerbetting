@@ -120,8 +120,14 @@ async function getSession(appKey) {
   return token;
 }
 
+// Session markets that share the race's event and contain a needle word — 2026-10-24: Betfair's
+// "Overall Qualifying Winner" matched 'winner' and, listed after the race "Winner" at the same
+// start time, replaced it, so the race-winner fair (and the EW/Arbs built on it) was pole odds.
+const NOT_RACE_MARKET = /qualif|sprint|practice|pole|shootout/i;
+
 function classifyMarket(name) {
   const n = String(name || '').toLowerCase();
+  if (NOT_RACE_MARKET.test(n)) return null;
   for (const m of MARKET_MAP) {
     if (m.needles.some((needle) => n.includes(needle))) return m.key;
   }
@@ -184,12 +190,17 @@ async function buildF1(appKey, session) {
   const out = { winner: [], podium: [], top6: [], points: [], classified: [] };
   // £ matched per market (2026-10-01) — f1_scan.py's straight (Yes) arbs need >= £100 traded.
   const traded = {};
+  // Betfair status per market (2026-10-24). Every market in the event carries the FIRST session's
+  // start time (qualifying, the day before the race), so the scans decide "race started" from
+  // the race market going in-play / closing, not from the clock passing startTime.
+  const marketState = {};
   for (const k of wantKeys) {
     const mkt = race.markets[k];
     if (!mkt) continue;
     const book = bookById[mkt.marketId];
     if (!book) continue;
     traded[k] = Math.round(book.totalMatched || 0);
+    marketState[k] = { status: book.status || null, inplay: !!book.inplay };
     const nameById = {};
     for (const r of mkt.runners) nameById[r.selectionId] = r.runnerName;
     for (const r of book.runners || []) {
@@ -226,7 +237,7 @@ async function buildF1(appKey, session) {
       });
     }
   }
-  return { ok: true, race: { name: race.name, startTime: race.startTime }, markets: out, traded };
+  return { ok: true, race: { name: race.name, startTime: race.startTime }, markets: out, traded, marketState };
 }
 
 exports.handler = async (event) => {
