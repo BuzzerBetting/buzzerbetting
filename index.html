@@ -10359,7 +10359,7 @@ function renderOddscheckerEV(){
   // true for everything until the filter has loaded.
   // 2026-10-24 (user): Normal +EV is BFEX-priced only. Backstop for any feed that tags a
   // non-BFEX fair (e.g. 'combo' OC/BB); untagged rows stay, so nothing is hidden by accident.
-  const shown=ocEvBets.map((b,i)=>({b,i})).filter(({b})=>(!b.source||b.source==='bfex')&&((typeof baBookEnabled!=='function')||baBookEnabled(b.bk)));
+  const shown=ocEvBets.map((b,i)=>({b,i})).filter(({b})=>(!b.source||b.source==='bfex')&&!gvKickoffPassed(b.d,b.t)&&((typeof baBookEnabled!=='function')||baBookEnabled(b.bk)));
   const ocSortMode=getBaSort('oc-ev');
   shown.sort((x,y)=>ocSortMode==='time'?(baTimeSortKey(x.b)-baTimeSortKey(y.b)):(y.b.ev-x.b.ev));
   const countEl=document.getElementById('oc-ev-smeta-count');
@@ -15256,7 +15256,7 @@ async function scanAllCalcEV(statusEl, opts) {
     if (d && d.status === 'fulfilled') d = d.value;
     if (!d || !d.ok || !Array.isArray(d.bets)) return;
     d.bets.forEach(b => allEvBets.push({
-      t: b.t, matchId: b.matchId, match: b.match, market: b.mkt, player: b.sel, playerId: b.selId,
+      t: b.t, d: b.d, matchId: b.matchId, match: b.match, market: b.mkt, player: b.sel, playerId: b.selId,
       bestFair: b.fair, baseFair: b.baseFair, bookie: b.bk,
       ocOdds: typeof b.odds === 'number' ? b.odds.toFixed(2) : b.odds,
       bestEv: b.ev, isConfident: b.conf === 'green', noCalc: !!b.noCalc, // noCalc: 6 Yard Box display-only rows
@@ -15779,6 +15779,8 @@ function renderEVResults(bets) {
   // disabled-book remap, which re-prices a row at the next-best allowed book's lower odds.
   if (typeof baBookEnabled === 'function') bets = bets.map(remapToAllowedBook).filter(Boolean);
   bets = bets.filter(b => b.noCalc || b.baseFairOverridden || (typeof b.bestEv === 'number' && isFinite(b.bestEv) && b.bestEv >= calcEvMinPct(b.market)));
+  // 2026-10-24 (user): a row only shows until its kickoff — baKickoffClock re-renders the minute it passes.
+  bets = bets.filter(b => !gvKickoffPassed(b.d, b.t));
   const cevSortMode = getBaSort('calc-ev');
   bets = bets.slice().sort((x, y) => cevSortMode === 'time'
     ? (baTimeSortKey(x) - baTimeSortKey(y))
@@ -16974,7 +16976,7 @@ async function loadBaWatch(){
   } catch(e) {}
   BA_WATCH_ROWS = rows;
   renderBaWatch();
-  const shown = rows.filter(r => baBookEnabled(r.bookie));
+  const shown = rows.filter(r => baBookEnabled(r.bookie) && !gvKickoffPassed(r.kickoffDate, r.kickoff));
   baSetCount('watch', shown.length);
   baReportSeen('watch', shown.map(r => ({ match: r.match, market: r.market, selection: r.selection, bk: r.bookie, odds: r.odds, ev: r.ev })));
   refreshBaWatchRemovedBadge();
@@ -16999,7 +17001,7 @@ function renderBaWatch(){
   if (!body) return;
   syncBaSortToggle('watch');
   syncFairsSourceSelects();
-  let rows = BA_WATCH_ROWS.filter(r => baBookEnabled(r.bookie));
+  let rows = BA_WATCH_ROWS.filter(r => baBookEnabled(r.bookie) && !gvKickoffPassed(r.kickoffDate, r.kickoff));
   rows = applyFairsSourceWatch(rows, getFairsSource());
   rows = applyWatchBaseOverrides(rows); // manual Source Fair edits win over the dropdown source
   // 2026-09-24, user-reported: switching the fairs-source dropdown recomputes fair/ev off a
@@ -18089,6 +18091,35 @@ function gvKickoffPassed(d, t){
   const k = new Date(`${d}T${String(t).padStart(5, '0')}:00`);
   return !isNaN(k.getTime()) && k.getTime() <= Date.now();
 }
+// 2026-10-24 (user): every row shows only until its kickoff. Each tab's render already drops
+// kicked-off rows; this clock re-renders the open tab from the data it already has (no fetch,
+// no re-scan) whenever a loaded row's kickoff time has ticked past since the last check.
+let BA_KO_LAST = Date.now();
+function baKickoffTs(d, t){
+  if (!d || !/^\d{1,2}:\d{2}$/.test(String(t || ''))) return null;
+  const k = new Date(`${d}T${String(t).padStart(5, '0')}:00`).getTime();
+  return isNaN(k) ? null : k;
+}
+function baKickoffClock(){
+  const last = BA_KO_LAST, now = Date.now();
+  BA_KO_LAST = now;
+  const v = document.getElementById('view-bet-alerts');
+  if (!v || v.style.display === 'none') return;
+  const tabs = {
+    'oc-ev':     () => [typeof ocEvBets !== 'undefined' ? ocEvBets : [], r => [r.d, r.t], () => renderOddscheckerEV()],
+    'calc-ev':   () => [cevLastBets, r => [r.d, r.t], () => renderEVResults(cevLastBets)],
+    'watch':     () => [BA_WATCH_ROWS, r => [r.kickoffDate, r.kickoff], () => renderBaWatch()],
+    'outliers':  () => [BA_OUTLIERS_ROWS, r => [r.kickoffDate, r.kickoff], () => renderBaOutliers()],
+    'grosvenor': () => [BA_GROSVENOR_ROWS, r => [r.d, r.t], () => renderBaGrosvenor()],
+    'early':     () => [BA_EARLY_ROWS, r => [r.d, r.t], () => renderBaEarly()],
+  };
+  const tab = tabs[BA_ACTIVE];
+  if (!tab) return;
+  const [rows, when, render] = tab();
+  const crossed = (rows || []).some(r => { const k = baKickoffTs(...when(r)); return k != null && k > last && k <= now; });
+  if (crossed) render();
+}
+setInterval(baKickoffClock, 20000);
 function gvRemovedLive(){ return [...GV_REMOVED.values()].filter(r => !gvKickoffPassed(r.kickoff_d, r.kickoff_t)); }
 async function loadGvRemoved(){
   try {
@@ -18146,11 +18177,11 @@ function renderBaGrosvenor(){
   const hideCb = document.getElementById('gv-hide-short-toggle');
   if (hideCb) hideCb.checked = GV_HIDE_SHORT;
   renderGvRemoved();
-  const rows = BA_GROSVENOR_ROWS.filter(r => !!r.lineupConfirmed === wantConfirmed && notRemoved(r)).sort((x, y) => sortMode === 'time'
+  const rows = BA_GROSVENOR_ROWS.filter(r => !!r.lineupConfirmed === wantConfirmed && notRemoved(r) && !gvKickoffPassed(r.d, r.t)).sort((x, y) => sortMode === 'time'
     ? ((baTimeSortKey(x) - baTimeSortKey(y)) || String(x.match || '').localeCompare(String(y.match || '')) || ((y.pct ?? 0) - (x.pct ?? 0)))
     : ((y.pct ?? 0) - (x.pct ?? 0)));
   BA_GROSVENOR_RENDERED = rows;
-  baSetCount('grosvenor', BA_GROSVENOR_ROWS.filter(r => r.lineupConfirmed && notRemoved(r)).length);
+  baSetCount('grosvenor', BA_GROSVENOR_ROWS.filter(r => r.lineupConfirmed && notRemoved(r) && !gvKickoffPassed(r.d, r.t)).length);
   if (countEl) countEl.textContent = `${rows.length} best price${rows.length === 1 ? '' : 's'}`;
   if (!rows.length) {
     body.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">No ${wantConfirmed ? 'lineups-confirmed' : 'pre-lineup'} Grosvenor prices above the Oddschecker best right now.</td></tr>`;
