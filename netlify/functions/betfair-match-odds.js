@@ -522,7 +522,53 @@ async function findDartsMarketRunner(player, marketName, runnerName, line, appKe
   };
 }
 
+// action=card[&hours=36] (2026-10-25) — every football fixture kicking off in the next `hours`, with
+// its MATCH_ODDS and OVER_UNDER_25 best back/lay, in bulk (catalogue in 12h windows per market
+// type to stay under the 1000-result cap, books 40 markets per call to stay under the data-weight
+// limit). For oc-scraper's early_prices_scan.py, which turns each into team expected goals —
+// one call per pipeline run instead of one search per fixture.
+async function fetchCard(hours, appKey, session) {
+  const now = Date.now(), end = now + hours * 3600e3, WINDOW = 12 * 3600e3;
+  const markets = [];
+  for (const code of ['MATCH_ODDS', 'OVER_UNDER_25']) {
+    for (let from = now; from < end; from += WINDOW) {
+      const cat = await bfCall('listMarketCatalogue', {
+        filter: { eventTypeIds: [FOOTBALL_EVENT_TYPE_ID], marketTypeCodes: [code],
+                  marketStartTime: { from: new Date(from).toISOString(), to: new Date(Math.min(end, from + WINDOW)).toISOString() } },
+        marketProjection: ['EVENT', 'RUNNER_DESCRIPTION', 'MARKET_START_TIME'], maxResults: 1000,
+      }, appKey, session);
+      for (const m of cat || []) markets.push({ code, m });
+    }
+  }
+  const books = {};
+  for (let i = 0; i < markets.length; i += 40) {
+    const ids = markets.slice(i, i + 40).map(x => x.m.marketId);
+    const bk = await bfCall('listMarketBook', { marketIds: ids, priceProjection: { priceData: ['EX_BEST_OFFERS'] } }, appKey, session);
+    for (const b of bk || []) books[b.marketId] = b;
+  }
+  const events = {};
+  for (const { code, m } of markets) {
+    const b = books[m.marketId];
+    if (!b || b.status !== 'OPEN' || b.inplay) continue;
+    const ev = events[m.event.id] || (events[m.event.id] = { eventId: m.event.id, name: m.event.name, start: m.marketStartTime });
+    const runners = (m.runners || []).map(r => {
+      const rb = (b.runners || []).find(x => x.selectionId === r.selectionId) || {};
+      return { name: r.runnerName, sortPriority: r.sortPriority,
+               back: rb.ex?.availableToBack?.[0]?.price ?? null, lay: rb.ex?.availableToLay?.[0]?.price ?? null,
+               ltp: rb.lastPriceTraded ?? null };
+    }).sort((a, b) => a.sortPriority - b.sortPriority);
+    ev[code === 'MATCH_ODDS' ? 'matchOdds' : 'ou25'] = { totalMatched: b.totalMatched, runners };
+  }
+  return Object.values(events).filter(e => e.matchOdds);
+}
+
 async function runAction(action, params, appKey, session) {
+  if (action === 'card') {
+    const hours = Math.max(1, Math.min(72, parseFloat(params.hours) || 36));
+    const events = await fetchCard(hours, appKey, session);
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, count: events.length, events }) };
+  }
+
   if (action === 'team-win') {
     if (!params.team) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team required' }) };
     const result = await findTeamWin(params.team, appKey, session);
