@@ -2687,6 +2687,7 @@ tr.ba-placed > td{background:var(--green-bg) !important}
       <label style="display:flex;align-items:center;gap:5px">Min EV <input id="ep-min-ev" type="number" min="0" step="5" style="width:60px;padding:4px 6px;border:.5px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-family:inherit" onchange="setEpMinEv(this.value)">%</label>
       <label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="Only prices at least 25% above the median of the other bookmakers — the model AND the market both say it's wrong"><input id="ep-offcons" type="checkbox" onchange="setEpOffCons(this.checked)"> Off consensus only (25%+)</label>
       <label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="Oddschecker's timestamp for when this bookmaker's price last changed. Unchanged doesn't mean dead — just worth checking."><input id="ep-hidestale" type="checkbox" onchange="setEpHideStale(this.checked)"> Hide prices unchanged 24h+</label>
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="Only show bets that would have landed at least once in the player's last 5 appearances"><input id="ep-hit5" type="checkbox" onchange="setEpHit5(this.checked)"> Landed in last 5</label>
     </div>
     <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:980px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Player</th><th title="Oldest to newest, this stat in his last 5 appearances (green = would have landed this line)">Last 5</th><th class="r">Price</th><th class="r">Fair</th><th class="r">EV</th><th class="r" title="Best price from any other bookmaker group, and how far it is above the median of the rest (amber = the next best looks overpriced too)">Next best</th><th class="r">Books</th><th class="ba-watch-col">Placed?</th><th></th></tr></thead><tbody id="ba-early-body"></tbody></table></div></div>
     <div class="note"><i class="ti ti-info-circle"></i> Player Shots 1+–5+ and SOT 1+–3+ prices from every Oddschecker bookmaker plus Grosvenor that are 10%+ above a form fair: his shots/SOT per 90 (last 5 appearances weighted heaviest, then the last 5 months, then the year before, pulled toward his position's average) × his usual minutes as a starter × how many shots the opponent concedes and home/away, spread a little wider than Poisson. Weights were set by backtesting 7,000 recent starters priced only on what was known before kickoff (calibrated to within ~5%). "Unchanged" tags are Oddschecker's time since that bookmaker's price last moved. Starters only (FotMob predicted XI until the lineup is confirmed). Nothing is filtered out as a likely palp. Void-if-not-starting rules and super-sub promos aren't accounted for yet. Every price shown is logged at first sight and settled off FotMob — see Results.</div>
@@ -18372,6 +18373,11 @@ function epSetPref(k, v){ try { localStorage.setItem('bb_ep_' + k, JSON.stringif
 function setEpMinEv(v){ const n = parseFloat(v); epSetPref('minEv', isFinite(n) ? n : 10); renderBaEarly(); }
 function setEpOffCons(on){ epSetPref('offCons', !!on); renderBaEarly(); }
 function setEpHideStale(on){ epSetPref('hideStale', !!on); renderBaEarly(); }
+// "Landed in last 5" (2026-10-25, user rule, on by default): the bet must have won at least once
+// in his last 5 appearances. Paper log to date: 0.81 act/exp, +0.9% ROI with a hit vs 0.56 and
+// -42.9% without (1,250 settled). View filter only — the scan still logs every row.
+function setEpHit5(on){ epSetPref('hit5', !!on); renderBaEarly(); }
+function epHit5(r){ return (r.last5 || []).some(v => v >= r.line); }
 // "unchanged 5h" / "unchanged 3d" — Oddschecker's age of the shown book's price (best book only;
 // Grosvenor has none). Under 4h shows nothing.
 function epAgeTag(r){
@@ -18414,11 +18420,12 @@ function epNextBest(r){
   return { bk: nb.bk, odds: nb.odds, gap: med ? (nb.odds / med - 1) * 100 : null };
 }
 function epVisible(){
-  const minEv = epPref('minEv', 10), offCons = epPref('offCons', false), hideStale = epPref('hideStale', false);
+  const minEv = epPref('minEv', 10), offCons = epPref('offCons', false), hideStale = epPref('hideStale', false), hit5 = epPref('hit5', true);
   const mk = new Set(epPref('markets', EP_MARKETS));
   return BA_EARLY_ROWS.map(r => { const p = epPick(r); return p ? Object.assign({}, r, { showBk: p.bk, showOdds: p.odds, showEv: p.ev }) : null; })
     .filter(r => r && mk.has(r.mkt) && !gvKickoffPassed(r.d, r.t)
       && !(hideStale && r.showBk === r.bk && r.ageMin != null && r.ageMin >= 1440)
+      && (!hit5 || epHit5(r))
       && (r.showEv ?? 0) >= minEv
       && (!offCons || (r.consensus && (r.showOdds / r.consensus - 1) * 100 >= EP_OFFCONS_PCT)));
 }
@@ -18429,6 +18436,7 @@ function renderBaEarly(){
   const minEl = document.getElementById('ep-min-ev'); if (minEl && document.activeElement !== minEl) minEl.value = epPref('minEv', 10);
   const ocEl = document.getElementById('ep-offcons'); if (ocEl) ocEl.checked = !!epPref('offCons', false);
   const stEl = document.getElementById('ep-hidestale'); if (stEl) stEl.checked = !!epPref('hideStale', false);
+  const h5El = document.getElementById('ep-hit5'); if (h5El) h5El.checked = !!epPref('hit5', true);
   const mk = new Set(epPref('markets', EP_MARKETS));
   const mEl = document.getElementById('ba-early-markets');
   if (mEl) mEl.innerHTML = EP_MARKETS.map(m => `<label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" ${mk.has(m) ? 'checked' : ''} onchange="toggleEpMarket('${m}', this.checked)">${escapeHtml(m)}</label>`).join('');
