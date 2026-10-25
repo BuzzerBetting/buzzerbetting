@@ -2686,7 +2686,7 @@ tr.ba-placed > td{background:var(--green-bg) !important}
       <label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="Only prices at least 25% above the median of the other bookmakers — the model AND the market both say it's wrong"><input id="ep-offcons" type="checkbox" onchange="setEpOffCons(this.checked)"> Off consensus only (25%+)</label>
       <label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="Oddschecker's timestamp for when this bookmaker's price last changed. Unchanged doesn't mean dead — just worth checking."><input id="ep-hidestale" type="checkbox" onchange="setEpHideStale(this.checked)"> Hide prices unchanged 24h+</label>
     </div>
-    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:980px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Player</th><th title="Oldest to newest, this stat in his last 5 appearances (green = would have landed this line)">Last 5</th><th class="r">Price</th><th class="r">Fair</th><th class="r">EV</th><th class="r" title="Median of every other bookmaker group's price, and how far this price is above it">Others' median</th><th class="r">Books</th><th class="ba-watch-col">Placed?</th><th></th></tr></thead><tbody id="ba-early-body"></tbody></table></div></div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:980px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Player</th><th title="Oldest to newest, this stat in his last 5 appearances (green = would have landed this line)">Last 5</th><th class="r">Price</th><th class="r">Fair</th><th class="r">EV</th><th class="r" title="Best price from any other bookmaker group, and how far it is above the median of the rest (amber = the next best looks overpriced too)">Next best</th><th class="r">Books</th><th class="ba-watch-col">Placed?</th><th></th></tr></thead><tbody id="ba-early-body"></tbody></table></div></div>
     <div class="note"><i class="ti ti-info-circle"></i> Player Shots 1+–5+ and SOT 1+–3+ prices from every Oddschecker bookmaker plus Grosvenor that are 10%+ above a form fair: his shots/SOT per 90 (last 5 appearances weighted heaviest, then the last 5 months, then the year before, pulled toward his position's average) × his usual minutes as a starter × how many shots the opponent concedes and home/away, spread a little wider than Poisson. Weights were set by backtesting 7,000 recent starters priced only on what was known before kickoff (calibrated to within ~5%). "Unchanged" tags are Oddschecker's time since that bookmaker's price last moved. Starters only (FotMob predicted XI until the lineup is confirmed). Nothing is filtered out as a likely palp. Void-if-not-starting rules and super-sub promos aren't accounted for yet. Every price shown is logged at first sight and settled off FotMob — see Results.</div>
   </div>
 
@@ -18352,6 +18352,16 @@ function epPick(r){
   if (!c) return null;
   return { bk: c.bk, odds: c.odds, ev: r.fair ? (c.odds / r.fair - 1) * 100 : null };
 }
+// Next best price after the shown book (2026-10-25, user rule — replaces the others' median
+// column), plus how far it sits above the median of the books after it; amber at the same
+// EP_OFFCONS_PCT line, meaning the next best looks overpriced too, not just the shown book.
+function epNextBest(r){
+  const rest = (r.ranked || []).filter(x => x.bk !== r.showBk);
+  if (!rest.length) return null;
+  const nb = rest[0], tail = rest.slice(1).map(x => x.odds).sort((a, b) => a - b);
+  const med = tail.length >= 2 ? (tail.length % 2 ? tail[(tail.length - 1) / 2] : (tail[tail.length / 2 - 1] + tail[tail.length / 2]) / 2) : null;
+  return { bk: nb.bk, odds: nb.odds, gap: med ? (nb.odds / med - 1) * 100 : null };
+}
 function epVisible(){
   const minEv = epPref('minEv', 10), offCons = epPref('offCons', false), hideStale = epPref('hideStale', false);
   const mk = new Set(epPref('markets', EP_MARKETS));
@@ -18395,8 +18405,8 @@ function renderBaEarly(){
   body.innerHTML = rows.map((r, idx) => {
     const pl = baPlacedRow(r.match, r.mkt, r.sel);
     const seq = (r.last5 || []).map((v, i) => `<span title="${(r.last5Min || [])[i] != null ? r.last5Min[i] + ' min' : ''}" style="display:inline-block;min-width:16px;text-align:center;padding:1px 3px;margin-right:2px;border-radius:4px;font-weight:600;background:${v >= r.line ? 'var(--green-bg)' : 'var(--surface2)'};color:${v >= r.line ? 'var(--green)' : 'var(--text2)'}">${v}</span>`).join('');
-    const gap = r.consensus ? (r.showOdds / r.consensus - 1) * 100 : null;
-    const off = gap != null && gap >= EP_OFFCONS_PCT;
+    const nb = epNextBest(r);
+    const off = nb && nb.gap != null && nb.gap >= EP_OFFCONS_PCT;
     const also = (r.alsoAbove || []).filter(a => a.bk !== r.showBk);
     const lu = r.lineup === 'confirmed' ? '<span class="badge" style="background:var(--green-bg);color:var(--green);margin-left:6px">Confirmed</span>' : '<span class="badge" style="background:var(--surface2);color:var(--text3);margin-left:6px">Predicted</span>';
     return `<tr class="${pl.placed ? 'ba-placed' : ''}">
@@ -18408,7 +18418,7 @@ function renderBaEarly(){
     <td class="r tn" style="font-weight:600;color:var(--green);white-space:nowrap">${Number(r.showOdds).toFixed(2)} <span style="color:var(--text3);font-size:11px;font-weight:400">(${escapeHtml(ocBookieShort(r.showBk))})</span>${epAgeTag(r)}${also.length ? `<div style="font-size:11px;color:var(--text3);font-weight:400">also ${also.map(a => `${escapeHtml(ocBookieShort(a.bk))} ${Number(a.odds).toFixed(2)}`).join(', ')}</div>` : ''}</td>
     <td class="r tn" style="color:var(--text2)">${Number(r.fair).toFixed(2)}</td>
     <td class="r"><span class="badge" style="background:var(--green-bg);color:var(--green)">+${Number(r.showEv).toFixed(1)}%</span></td>
-    <td class="r tn" style="color:var(--text2);white-space:nowrap">${r.consensus ? Number(r.consensus).toFixed(2) : '—'}${gap != null ? ` <span class="badge" style="background:${off ? 'var(--amber-bg)' : 'var(--surface2)'};color:${off ? 'var(--amber)' : 'var(--text3)'}">${gap >= 0 ? '+' : ''}${gap.toFixed(0)}%</span>` : ''}</td>
+    <td class="r tn" style="color:var(--text2);white-space:nowrap">${nb ? `${Number(nb.odds).toFixed(2)} <span style="color:var(--text3);font-size:11px">(${escapeHtml(ocBookieShort(nb.bk))})</span>` : '—'}${nb && nb.gap != null ? ` <span class="badge" title="Next best vs the median of the remaining books" style="background:${off ? 'var(--amber-bg)' : 'var(--surface2)'};color:${off ? 'var(--amber)' : 'var(--text3)'}">${nb.gap >= 0 ? '+' : ''}${nb.gap.toFixed(0)}%</span>` : ''}</td>
     <td class="r tn" style="color:var(--text2)">${r.nBooks ?? '—'}</td>
     ${pl.watchTd}
     <td style="font-size:11.5px;white-space:nowrap">${betLinkBtn(null, ocBookieName(r.showBk) || r.showBk)}<button onclick="logEarlyBet(${idx})" title="Log this bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1;margin-right:6px"><i class="ti ti-plus"></i> Log</button><button onclick="copyBaEarlyBet(${idx},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button>${pl.btn('early', idx)}</td>
