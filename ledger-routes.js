@@ -4472,7 +4472,9 @@ router.post('/bet-alert-removed', (req, res) => {
     if (!req.username) return res.status(400).json({ ok: false, error: 'no session' });
     const b = req.body || {};
     if (!b.match && !b.selection) return res.status(400).json({ ok: false, error: 'match or selection required' });
-    const key = betAlertKey(b);
+    // Grosvenor keeps the bare key (its existing rows); any other tab's key carries the tab, so
+    // removing a bet on Outliers doesn't also hide the same player/market on Grosvenor.
+    const key = (!b.edge || b.edge === 'grosvenor') ? betAlertKey(b) : `${b.edge} | ${betAlertKey(b)}`;
     if (b.removed === false) {
       db.prepare(`DELETE FROM bet_alert_removed WHERE username = ? AND bet_key = ?`).run(req.username, key);
     } else {

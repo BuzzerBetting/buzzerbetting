@@ -2625,9 +2625,11 @@ tr.ba-placed > td{background:var(--green-bg) !important}
         <button onclick="setBaSort('outliers','ev')" data-sort="ev" title="Highest % above the next-best price first" style="background:none;border:none;padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Best EV%</button>
         <button onclick="setBaSort('outliers','time')" data-sort="time" style="background:none;border:none;border-left:0.5px solid var(--border);padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Start time</button>
       </div>
+      <button id="ol-removed-btn" onclick="toggleOlRemoved()" title="Bets you've removed from Lineups Confirmed that haven't kicked off yet" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-eye-off"></i> Removed (0)</button>
       <button onclick="baRefreshActive(this)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
       </div>
     </div>
+    <div id="ol-removed-panel" class="card" style="display:none;padding:12px 14px;margin-bottom:10px"></div>
     <div id="ba-outliers-subtabs" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;width:fit-content;margin-bottom:10px"></div>
     <div id="ba-outliers-markets" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-bottom:10px;font-size:12.5px;color:var(--text2)"></div>
     <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:820px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Top price</th><th class="r">Next best</th><th class="r">% above</th><th class="r">Books</th><th class="ba-watch-col">Placed?</th><th>Detected</th></tr></thead><tbody id="ba-outliers-body"></tbody></table></div></div>
@@ -17592,9 +17594,10 @@ async function loadBaOutliers(){
     if (d && d.ok && Array.isArray(d.rows)) rows = d.rows;
   } catch(e) {}
   BA_OUTLIERS_ROWS = rows;
+  await loadOlRemoved();
   renderBaOutliers();
   const mf = getOutliersMarketFilter();
-  baSoundCheck('outliers', rows.filter(r => r.lineupConfirmed && mf.has(r.market) && baBookEnabled(r.topBook))
+  baSoundCheck('outliers', rows.filter(r => r.lineupConfirmed && mf.has(r.market) && baBookEnabled(r.topBook) && !olIsRemoved(r))
     .map(r => ({ match: r.match, market: r.market, selection: r.selection, bk: r.topBook, odds: r.topPrice, ev: r.pctAboveNext })));
 }
 // Confirmed/pre-lineup sub-tab (2026-09-17, user-requested) — defaults to Confirmed every
@@ -17609,7 +17612,7 @@ function renderBaOutliersSubtabs(){
   // sub-tab badges were counting every market regardless of the tickboxes, so they didn't
   // match the "N outliers" count once a market got unticked). Both now agree always.
   const marketFilter = getOutliersMarketFilter();
-  const visible = BA_OUTLIERS_ROWS.filter(r => marketFilter.has(r.market) && !gvKickoffPassed(r.kickoffDate, r.kickoff) && baBookEnabled(r.topBook));
+  const visible = BA_OUTLIERS_ROWS.filter(r => marketFilter.has(r.market) && !gvKickoffPassed(r.kickoffDate, r.kickoff) && baBookEnabled(r.topBook) && !olIsRemoved(r));
   const confirmedN = visible.filter(r => r.lineupConfirmed).length;
   const preN = visible.length - confirmedN;
   const tabs = [
@@ -17669,7 +17672,8 @@ function renderBaOutliers(){
   // 2026-10-24, user-reported (Tigre outliers still up after kickoff): the outliers file only
   // refreshes when the pipeline finishes, which can be 30+ min after midnight, so drop
   // kicked-off matches here rather than trusting the file to be current.
-  const visibleAnySubtab = BA_OUTLIERS_ROWS.filter(r => marketFilter.has(r.market) && !gvKickoffPassed(r.kickoffDate, r.kickoff) && baBookEnabled(r.topBook));
+  renderOlRemoved();
+  const visibleAnySubtab = BA_OUTLIERS_ROWS.filter(r => marketFilter.has(r.market) && !gvKickoffPassed(r.kickoffDate, r.kickoff) && baBookEnabled(r.topBook) && !olIsRemoved(r));
   const rows = visibleAnySubtab
     .filter(r => !!r.lineupConfirmed === wantConfirmed)
     .sort((x, y) => getBaSort('outliers') === 'time'
@@ -17709,8 +17713,55 @@ function renderBaOutliers(){
     <td class="r"><span class="badge" style="background:var(--amber-bg);color:var(--amber)">+${r.pctAboveNext != null ? Number(r.pctAboveNext).toFixed(0) : '—'}%</span></td>
     <td class="r tn" style="color:var(--text2)">${r.bookCount ?? '—'}</td>
     ${pl.watchTd}
-    <td style="font-size:11.5px;color:var(--text3);white-space:nowrap">${betLinkBtn(r.url, r.topBook)}<button onclick="logOutlierBet(${idx})" title="Log this bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1;margin-right:6px"><i class="ti ti-plus"></i> Log</button><button onclick="copyBaOutlierBet(${idx},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1;margin-right:6px"><i class="ti ti-copy"></i></button>${fmtDetected(r.detectedAt)}${pl.btn('outliers', idx)}</td>
+    <td style="font-size:11.5px;color:var(--text3);white-space:nowrap">${betLinkBtn(r.url, r.topBook)}<button onclick="logOutlierBet(${idx})" title="Log this bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1;margin-right:6px"><i class="ti ti-plus"></i> Log</button><button onclick="copyBaOutlierBet(${idx},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1;margin-right:6px"><i class="ti ti-copy"></i></button>${fmtDetected(r.detectedAt)}${pl.btn('outliers', idx)}${wantConfirmed ? `<button onclick="olRemoveBet(${idx})" title="Remove for me until kickoff (not for anyone else)" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--red);line-height:1;margin-left:4px"><i class="ti ti-x"></i></button>` : ''}</td>
   </tr>`; }).join('');
+}
+// "✕" on Lineups Confirmed rows (2026-10-25, user-requested) — same per-user, until-kickoff hide
+// as Grosvenor's, stored under edge 'outliers' (its key carries the edge server-side, so it never
+// hides the same bet on Grosvenor). Pre-lineup rows aren't affected.
+let OL_REMOVED = new Map(), OL_REMOVED_OPEN = false;
+function olKey(match, market, selection){ return 'outliers | ' + baPlacedKey(match, market, selection); }
+function olIsRemoved(r){ return !!r.lineupConfirmed && OL_REMOVED.has(olKey(r.match, r.market, r.selection)); }
+function olRemovedLive(){ return [...OL_REMOVED.values()].filter(r => !gvKickoffPassed(r.kickoff_d, r.kickoff_t)); }
+async function loadOlRemoved(){
+  try {
+    const d = await ledgerApi('bet-alert-removed?edge=outliers');
+    if (d && d.ok) OL_REMOVED = new Map((d.removed || []).map(r => [r.bet_key, r]));
+  } catch(e) {}
+}
+async function olSetRemoved(b, removed){
+  try {
+    const d = await ledgerApi('bet-alert-removed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...b, edge: 'outliers', removed }) });
+    if (!d || !d.ok) { alert((d && d.error) || 'Could not save.'); return; }
+  } catch(e) { alert('Network error saving.'); return; }
+  await loadOlRemoved();
+  renderBaOutliers();
+}
+function olRemoveBet(idx){
+  const r = BA_OUTLIERS_RENDERED[idx];
+  if (!r) return;
+  olSetRemoved({ match: r.match, market: r.market, selection: r.selection, bookie: ocBookieName(r.topBook) || r.topBook, odds: r.topPrice, d: r.kickoffDate, t: r.kickoff }, true);
+}
+function olRestoreBet(i){
+  const r = olRemovedLive()[i];
+  if (r) olSetRemoved({ match: r.match, market: r.market, selection: r.selection }, false);
+}
+function toggleOlRemoved(){ OL_REMOVED_OPEN = !OL_REMOVED_OPEN; renderOlRemoved(); }
+function renderOlRemoved(){
+  const live = olRemovedLive();
+  const btn = document.getElementById('ol-removed-btn');
+  if (btn) btn.innerHTML = `<i class="ti ti-eye-off"></i> Removed (${live.length})`;
+  const panel = document.getElementById('ol-removed-panel');
+  if (!panel) return;
+  panel.style.display = OL_REMOVED_OPEN ? '' : 'none';
+  if (!OL_REMOVED_OPEN) return;
+  panel.innerHTML = live.length
+    ? `<div style="font-size:12px;color:var(--text3);margin-bottom:6px">Removed for you only, until kickoff:</div>` + live.map((r, i) => `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-top:.5px solid var(--border);font-size:12.5px">
+        <span style="color:var(--text2);white-space:nowrap">${escapeHtml(r.kickoff_t || '')}</span>
+        <span style="flex:1">${escapeHtml(r.match || '')} · <span style="color:var(--text2)">${escapeHtml(r.market || '')}</span> · <strong style="font-weight:500">${escapeHtml(r.selection || '')}</strong>${r.odds != null ? ` <span style="color:var(--text3)">@ ${Number(r.odds).toFixed(2)}${r.bookie ? ' (' + escapeHtml(r.bookie) + ')' : ''}</span>` : ''}</span>
+        <button onclick="olRestoreBet(${i})" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit"><i class="ti ti-arrow-back-up"></i> Restore</button>
+      </div>`).join('')
+    : '<div style="font-size:12.5px;color:var(--text3)">No removed bets waiting to kick off.</div>';
 }
 // Outliers have no fair/EV, so the shared 8-line format carries the next-best price in the
 // Fair Odds line and "% above next best" in the EV line, same stand-in the placed ticks use.
