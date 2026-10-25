@@ -56,7 +56,7 @@ function legCommitted(leg) {
 const HARDCODED_BUZZER_TYPES = [
   'Value', 'Keithbot', 'Dogs + Horses', 'BB Horse', 'BB Golf', 'American Props', 'Freeze',
   'Ninja Golf BFEX', 'Corners', 'Offers (Personal)', 'Other Bets', 'Casino (Personal)', 'Back & Lay',
-  'Viper Horse', 'Goal SOT Methods', 'Grosvenor'
+  'Viper Horse', 'Goal SOT Methods', 'Grosvenor', 'Outliers'
 ];
 const HARDCODED_ASSISTANT_TYPES = ['Discord', 'BB - RTP', 'BB - BT', 'Casino', 'Offers (VA)', 'Dogs + Horses (VA)', 'Viper Horse (VA)',
   'Goal SOT Methods (VA)'];
@@ -1694,6 +1694,19 @@ router.get('/bets', (req, res) => {
               COALESCE(SUM(CAST(json_extract(fields, '$.EV') AS REAL)),0) totalEV
        FROM bets ${whereClause}`
     ).get(...params);
+    // Outliers sheet holds both Outliers and Early Price bets — same aggregates split per Source.
+    if (type === 'Outliers') {
+      summary.bySource = db.prepare(
+        `SELECT COALESCE(json_extract(fields, '$.Source'), '') source, COUNT(*) count,
+                COALESCE(SUM(CASE WHEN result='open' THEN 1 ELSE 0 END),0) open,
+                COALESCE(SUM(CASE WHEN result='won' THEN 1 ELSE 0 END),0) wins,
+                COALESCE(SUM(CASE WHEN result='lost' THEN 1 ELSE 0 END),0) losses,
+                COALESCE(SUM(total_stake),0) totalStake,
+                COALESCE(SUM(pl),0) totalPl,
+                COALESCE(SUM(CAST(json_extract(fields, '$.EV') AS REAL)),0) totalEV
+         FROM bets ${whereClause} GROUP BY source ORDER BY source`
+      ).all(...params);
+    }
 
     const lim = Math.min(parseInt(limit) || 200, 5000);
     const off = Math.max(parseInt(offset) || 0, 0);
@@ -1804,7 +1817,7 @@ router.post('/bets/:id/legs', (req, res) => {
 const ADD_ACCOUNT_TYPES = [
   'Value', 'Keithbot', 'American Props', 'Corners', 'Discord', 'Offers (Personal)',
   'Offers (VA)', 'Other Bets', 'Dogs + Horses', 'Dogs + Horses (VA)', 'BB - BT',
-  'Goal SOT Methods', 'Goal SOT Methods (VA)', 'Grosvenor',
+  'Goal SOT Methods', 'Goal SOT Methods (VA)', 'Grosvenor', 'Outliers',
 ];
 
 // POST /api/ledger/bets/:id/add-account — folds a second (third, ...) bookmaker/account leg

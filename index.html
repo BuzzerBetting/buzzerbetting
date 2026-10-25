@@ -634,6 +634,7 @@ tr.ba-placed > td{background:var(--green-bg) !important}
       <div><div class="lbl" style="margin-bottom:3px">Total EV</div><div style="font-size:18px;font-weight:600" id="bt-detail-ev">—</div></div>
       <div><div class="lbl" style="margin-bottom:3px">P/L</div><div style="font-size:18px;font-weight:600" id="bt-detail-pl">—</div></div>
     </div>
+    <div id="bt-detail-sources" style="display:none;margin-top:12px;padding-top:12px;border-top:.5px solid var(--border)"></div>
   </div>
 
   <div id="bt-detail-legend" style="display:none;margin-bottom:12px;font-size:12.5px;color:var(--text2);align-items:center;gap:8px">
@@ -3649,6 +3650,13 @@ const BET_TYPE_CONFIG = {
   'Grosvenor':        { layout:'standard', bookie:true, bookieFieldKey:'Bookie', bookieDefault:'Grosvenor', fairLabel:'BB fair odds',
                         fields:[{key:'Match',label:'Match',type:'text'},{key:'Market',label:'Market',type:'text'},{key:'Player',label:'Player',type:'text'},{key:'Other Leg',label:'Other leg',type:'text'},{key:'Next Best',label:'Next best odds',type:'number'}],
                         oddsMode:'pairedBlended' },
+  // Outliers (2026-10-25) — one sheet for bets taken off the Bet Alerts Outliers AND Early Prices
+  // tabs, told apart by the required Source field (badged in the tracker, P/L split per source in
+  // the summary). Outliers carry no fair, so fair odds is left blank for them (EV stays £0);
+  // Early Prices log their form-model fair. Next best only means anything for Outliers.
+  'Outliers':         { layout:'standard', bookie:true, bookieFieldKey:'Bookie', fairLabel:'Fair odds (blank for Outliers)',
+                        fields:[{key:'Source',label:'Source',type:'select',options:['Outliers','Early Price'],required:true},{key:'Kickoff',label:'Kickoff',type:'text'},{key:'Match',label:'Match',type:'text'},{key:'Market',label:'Market',type:'text'},{key:'Player',label:'Player',type:'text'},{key:'Next Best',label:'Next best odds (Outliers)',type:'number'}],
+                        oddsMode:'pairedBlended' },
   'Ninja Golf BFEX':  { layout:'standard', bookie:true, bookieFieldKey:'Bookie', bookieDefault:'Betfair', stakeFieldKey:'Total Stake', fields:[{key:'Comp',label:'Competition',type:'text'},{key:'Player',label:'Player',type:'text'},{key:'Points Advised',label:'Points advised',type:'number'}], oddsMode:'blendedProfitCommission',
                         note:'The potential profit above already accounts for the 2% commission on this market — apply the same 2% again at settlement.' },
   'BB Horse':         { layout:'paste', pasteSpec:'bbhorse', bookie:true, bookieFieldKey:'Bookie', oddsMode:'eachWay', hideProfitBreakdown:true, stakeFieldKey:'Total Stake' },
@@ -3682,7 +3690,7 @@ const BET_TYPE_CONFIG = {
 const ADD_ACCOUNT_TYPES = [
   'Value', 'Keithbot', 'American Props', 'Corners', 'Discord', 'Offers (Personal)',
   'Offers (VA)', 'Other Bets', 'Dogs + Horses', 'Dogs + Horses (VA)', 'BB - BT',
-  'Goal SOT Methods', 'Goal SOT Methods (VA)', 'Grosvenor',
+  'Goal SOT Methods', 'Goal SOT Methods (VA)', 'Grosvenor', 'Outliers',
 ];
 
 // Column layout guesses for paste-to-autofill types. `key` becomes the stored field name.
@@ -3761,6 +3769,7 @@ const BET_TYPE_GROUPS = {
     {key:'Corners', label:'Corners'},
     {key:'Goal SOT Methods', label:'Goal SOT Methods'},
     {key:'Grosvenor', label:'Grosvenor'},
+    {key:'Outliers', label:'Outliers'},
     {key:'Viper Horse', label:'Viper Horses'},
     {key:'Offers (Personal)', label:'Offers'},
     {key:'Other Bets', label:'Other Bets'},
@@ -5232,6 +5241,8 @@ async function submitBetEntry() {
       }
       fields[f.key] = f.type==='number' ? (parseFloat(el.value)||0) : (el.value||'').trim();
     });
+    const missing = (cfg.fields||[]).find(f => f.required && !fields[f.key]);
+    if (missing) { msgEl.innerHTML = `<span style="color:var(--red)">Select ${escapeHtml(missing.label)}.</span>`; return; }
   }
 
   if (cfg.oddsMode === 'blendedProfit' || cfg.oddsMode === 'blendedProfitCommission' || cfg.oddsMode === 'pairedBlended' || cfg.oddsMode === 'pairedBlendedFromPasteFair') {
@@ -5959,7 +5970,32 @@ function formatFieldValue(val) {
 
 // EV represents an expected-value figure in £ on virtually every tab — shown with a £
 // prefix universally, same treatment as Stake/P&L already get.
+// Outliers sheet: the same summary figures split by Source (Outliers vs Early Price).
+function renderBtDetailSources(bySource) {
+  const el = document.getElementById('bt-detail-sources');
+  if (!el) return;
+  if (!Array.isArray(bySource) || !bySource.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const gbp = v => '£' + Math.abs(v || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  el.style.display = 'block';
+  el.innerHTML = bySource.map(r => {
+    const settled = (r.wins || 0) + (r.losses || 0);
+    const roi = r.totalStake > 0 ? (r.totalPl / r.totalStake * 100) : null;
+    return `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:14px;font-size:12.5px;color:var(--text2);padding:3px 0">
+      <span style="min-width:96px">${formatBetField('Source', r.source) || '<span style="color:var(--text3)">No source</span>'}</span>
+      <span>${r.count} bets</span><span>${r.open} open</span>
+      <span>${r.wins}W / ${r.losses}L${settled ? ` (${(r.wins / settled * 100).toFixed(0)}%)` : ''}</span>
+      <span>Stake ${gbp(r.totalStake)}</span><span>EV ${r.totalEV < 0 ? '-' : ''}${gbp(r.totalEV)}</span>
+      <span style="font-weight:600;color:${r.totalPl >= 0 ? 'var(--green)' : 'var(--red)'}">P/L ${r.totalPl >= 0 ? '+' : '-'}${gbp(r.totalPl)}</span>
+      ${roi != null ? `<span style="color:var(--text3)">ROI ${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%</span>` : ''}
+    </div>`;
+  }).join('');
+}
+
 function formatBetField(key, val) {
+  if (key === 'Source' && (val === 'Outliers' || val === 'Early Price')) {
+    const c = val === 'Outliers' ? 'amber' : 'blue';
+    return `<span class="badge" style="background:var(--${c}-bg);color:var(--${c})">${val}</span>`;
+  }
   const formatted = formatFieldValue(val);
   if (typeof val === 'number' && key.trim().toUpperCase() === 'EV') return '£' + formatted;
   return formatted;
@@ -8267,6 +8303,7 @@ const BET_TRACKING_GROUPS = {
     {key:'Corners', label:'Corners'},
     {key:'Goal SOT Methods', label:'Goal SOT Methods'},
     {key:'Grosvenor', label:'Grosvenor'},
+    {key:'Outliers', label:'Outliers'},
     {key:'Offers (Personal)', label:'Offers'},
     {key:'Other Bets', label:'Other Bets'},
     {key:'Casino (Personal)', label:'Casino'},
@@ -8939,6 +8976,7 @@ async function fetchBtDetailPage() {
     const plEl = document.getElementById('bt-detail-pl');
     plEl.textContent = (s.totalPl>=0?'+':'-')+'£'+Math.abs(s.totalPl).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
     plEl.style.color = s.totalPl>=0?'var(--green)':'var(--red)';
+    renderBtDetailSources(s.bySource);
 
     if (!s.count) { tableWrap.innerHTML = '<div style="padding:24px;color:var(--text3);font-size:13px">No bets recorded yet for this type.</div>'; document.getElementById('bt-detail-legend').style.display = 'none'; return; }
     if (!bets.length) { tableWrap.innerHTML = '<div style="padding:24px;color:var(--text3);font-size:13px">No bets on this page.</div>'; return; }
@@ -15901,6 +15939,51 @@ function logCalcEvBetAsGoalSotMethods(betIdx) {
 // above, into Ledger > Bets > Buzzer > Grosvenor. Pre-fills everything the row knows (match,
 // market, player, Grosvenor's price, next-best price). BB fair odds,
 // account and stake are left for the user — the Grosvenor tab carries no fair of its own.
+// "Log" on a Bet Alerts Outliers / Early Prices row (2026-10-25) — into Ledger > Bets > Buzzer >
+// Outliers with Source pre-picked, same flow as logGrosvenorBet below. Account and stake are left
+// for the user; Early Prices also pre-fill the form-model fair, Outliers the next-best price.
+function openOutliersBetForm(source, vals) {
+  showSec('bets-combined');
+  document.getElementById('bets-user-select').value = 'buzzer';
+  onBetsUserChange();
+  document.getElementById('bets-type-select').value = 'Outliers';
+  onBetsTypeChange();
+  toggleBetsAddForm();
+  const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = (v == null ? '' : v); };
+  setVal('bef-Source', source);
+  setVal('bef-Book', vals.bookie);
+  if (typeof refreshLegAccountDropdowns === 'function') refreshLegAccountDropdowns();
+  setVal('bef-Kickoff', vals.kickoff);
+  setVal('bef-Match', vals.match);
+  setVal('bef-Market', vals.market);
+  setVal('bef-Player', vals.player);
+  setVal('bef-Next_Best', vals.nextBest);
+  setVal('bef-fair-odds', vals.fair);
+  const oddsInput = document.querySelector('#bet-entry-legs .leg-odds');
+  if (oddsInput) oddsInput.value = vals.odds ?? '';
+  if (typeof recalcBetEntryEV === 'function') recalcBetEntryEV();
+  if (typeof updateBetEntryTotal === 'function') updateBetEntryTotal();
+  setTimeout(() => { document.getElementById('bef-Book')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 50);
+}
+function logOutlierBet(idx) {
+  const r = (typeof BA_OUTLIERS_RENDERED !== 'undefined' ? BA_OUTLIERS_RENDERED : [])[idx];
+  if (!r) return;
+  openOutliersBetForm('Outliers', {
+    bookie: ocBookieName(r.topBook) || r.topBook, kickoff: [r.kickoffDate, r.kickoff].filter(Boolean).join(' '),
+    match: r.match, market: r.market, player: r.selection,
+    odds: r.topPrice, nextBest: r.nextPrice != null ? Number(r.nextPrice).toFixed(2) : '', fair: '',
+  });
+}
+function logEarlyBet(idx) {
+  const r = (typeof BA_EARLY_RENDERED !== 'undefined' ? BA_EARLY_RENDERED : [])[idx];
+  if (!r) return;
+  openOutliersBetForm('Early Price', {
+    bookie: ocBookieName(r.showBk) || r.showBk, kickoff: [r.d, r.t].filter(Boolean).join(' '),
+    match: r.match, market: r.mkt, player: r.sel,
+    odds: r.showOdds, nextBest: '', fair: r.fair != null ? Number(r.fair).toFixed(2) : '',
+  });
+}
+
 function logGrosvenorBet(idx) {
   const r = (typeof BA_GROSVENOR_RENDERED !== 'undefined' ? BA_GROSVENOR_RENDERED : [])[idx];
   if (!r) return;
@@ -17626,7 +17709,7 @@ function renderBaOutliers(){
     <td class="r"><span class="badge" style="background:var(--amber-bg);color:var(--amber)">+${r.pctAboveNext != null ? Number(r.pctAboveNext).toFixed(0) : '—'}%</span></td>
     <td class="r tn" style="color:var(--text2)">${r.bookCount ?? '—'}</td>
     ${pl.watchTd}
-    <td style="font-size:11.5px;color:var(--text3);white-space:nowrap">${betLinkBtn(r.url, r.topBook)}<button onclick="copyBaOutlierBet(${idx},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1;margin-right:6px"><i class="ti ti-copy"></i></button>${fmtDetected(r.detectedAt)}${pl.btn('outliers', idx)}</td>
+    <td style="font-size:11.5px;color:var(--text3);white-space:nowrap">${betLinkBtn(r.url, r.topBook)}<button onclick="logOutlierBet(${idx})" title="Log this bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1;margin-right:6px"><i class="ti ti-plus"></i> Log</button><button onclick="copyBaOutlierBet(${idx},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1;margin-right:6px"><i class="ti ti-copy"></i></button>${fmtDetected(r.detectedAt)}${pl.btn('outliers', idx)}</td>
   </tr>`; }).join('');
 }
 // Outliers have no fair/EV, so the shared 8-line format carries the next-best price in the
@@ -18328,7 +18411,7 @@ function renderBaEarly(){
     <td class="r tn" style="color:var(--text2);white-space:nowrap">${r.consensus ? Number(r.consensus).toFixed(2) : '—'}${gap != null ? ` <span class="badge" style="background:${off ? 'var(--amber-bg)' : 'var(--surface2)'};color:${off ? 'var(--amber)' : 'var(--text3)'}">${gap >= 0 ? '+' : ''}${gap.toFixed(0)}%</span>` : ''}</td>
     <td class="r tn" style="color:var(--text2)">${r.nBooks ?? '—'}</td>
     ${pl.watchTd}
-    <td style="font-size:11.5px;white-space:nowrap">${betLinkBtn(null, ocBookieName(r.showBk) || r.showBk)}<button onclick="copyBaEarlyBet(${idx},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button>${pl.btn('early', idx)}</td>
+    <td style="font-size:11.5px;white-space:nowrap">${betLinkBtn(null, ocBookieName(r.showBk) || r.showBk)}<button onclick="logEarlyBet(${idx})" title="Log this bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1;margin-right:6px"><i class="ti ti-plus"></i> Log</button><button onclick="copyBaEarlyBet(${idx},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button>${pl.btn('early', idx)}</td>
   </tr>`;
   }).join('');
 }
