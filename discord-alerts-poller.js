@@ -258,7 +258,8 @@ const BUILDERS = {
     const ignored = new Set(db.prepare(`SELECT match_key FROM oc_coverage_ignored WHERE ignored_at >= datetime('now', ?)`)
       .all(OC_COVERAGE_IGNORE_WINDOW).map(r => r.match_key));
     return ((d && d.rows) || []).filter(r => !ignored.has(norm(r.match)))
-      .map(r => ({ match: r.match, market: 'OC Coverage', selection: r.kickoff || '', t: r.kickoff, extra: 'not found on Oddschecker' }));
+      .map(r => ({ match: r.match, market: 'OC Coverage', selection: r.kickoff || '', t: r.kickoff, extra: 'not found on Oddschecker',
+        line: `**OC Coverage:** ${r.match}${r.kickoff ? ' ' + r.kickoff : ''} — not found on Oddschecker, so no AGS/SOT/Header/OTB coverage` }));
   },
   async outliers(ctx) {
     const d = await getJson('/api/oc-outliers');
@@ -297,6 +298,7 @@ async function stubFeed(ctx, path, collapse) {
 // ---- message text ----
 const fmtOdds = v => v != null ? Number(v).toFixed(2) : null;
 function betLine(label, b, prev) {
+  if (b.line) return b.line;
   let s = `**${label}:** ${b.selection || b.match}`;
   if (b.market) s += `, ${b.market}`;
   if (b.odds != null) s += ` @ ${fmtOdds(b.odds)}`;
@@ -304,7 +306,8 @@ function betLine(label, b, prev) {
   if (b.ev != null) s += ` (${b.ev >= 0 ? '+' : ''}${b.ev.toFixed(1)}%${b.evLabel ? ' ' + b.evLabel : ''})`;
   if (b.fair != null) s += `, fair ${fmtOdds(b.fair)}`;
   if (b.selection && b.match) s += `, ${b.match}`;
-  if (b.t && b.t !== b.selection) s += ` ${b.t}`;
+  // Horse races already carry the time in the race name ("15:31 Newcastle") — don't repeat it.
+  if (b.t && b.t !== b.selection && !String(b.match || '').includes(b.t)) s += ` ${b.t}`;
   if (b.extra) s += ` — ${b.extra}`;
   if (prev) {
     const was = [prev.odds != null && b.odds != null && prev.odds !== b.odds ? `odds ${fmtOdds(prev.odds)}` : null,
