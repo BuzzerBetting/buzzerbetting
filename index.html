@@ -285,6 +285,21 @@ tr.ba-placed > td{background:var(--green-bg) !important}
             <input type="checkbox" id="notif-sec-todo" onchange="onNotifToggle('todo',this.checked)">
           </label>
         </div>
+        <div id="notif-discord" style="padding:10px 14px;border-bottom:0.5px solid var(--border);display:flex;flex-direction:column;gap:7px">
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:12.5px;color:var(--text2)">
+            <span><i class="ti ti-brand-discord" style="color:#5865F2;margin-right:4px"></i>Discord notifications</span>
+            <span id="discord-status" style="font-size:11.5px"></span>
+          </div>
+          <div id="discord-warn" style="display:none;font-size:11.5px;line-height:1.4;color:var(--red);background:var(--red-bg);border-radius:6px;padding:6px 8px"></div>
+          <input id="discord-url" type="text" autocomplete="off" spellcheck="false" placeholder="Paste your Discord webhook URL" style="width:100%;box-sizing:border-box;padding:6px 8px;font-size:12px;border:.5px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-family:inherit">
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button onclick="discordTest()" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:5px 9px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit">Send test message</button>
+            <button onclick="discordSave(false)" style="background:var(--brand);border:.5px solid var(--brand);border-radius:6px;padding:5px 12px;cursor:pointer;color:#fff;font-size:12px;font-family:inherit">Save</button>
+            <button id="discord-remove" onclick="discordSave(true)" style="display:none;margin-left:auto;background:none;border:.5px solid var(--border);border-radius:6px;padding:5px 9px;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit">Remove</button>
+          </div>
+          <div id="discord-msg" style="font-size:11.5px;line-height:1.4;color:var(--text3)"></div>
+          <div style="font-size:11px;line-height:1.4;color:var(--text3)">Pick which tabs post with the <i class="ti ti-brand-discord"></i> icon next to each Bet Alerts tab's bell. Sent from the server, so it works with the site closed.</div>
+        </div>
         <div style="padding:6px 6px 8px">
           <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);padding:6px 10px 8px">Last 24 hours</div>
           <div id="notif-list" style="max-height:300px;overflow-y:auto"></div>
@@ -3978,6 +3993,7 @@ function toggleNotifPanel(e) {
   const canTodo = CURRENT_USER_ROLE === 'admin' || CURRENT_USER_ROLE === 'staff';
   document.getElementById('notif-sec-todo-row').style.display = canTodo ? 'flex' : 'none';
   renderNotifList();
+  loadDiscordSettings();
   p.style.display = 'block';
   localStorage.setItem('bb_notif_opened_at', nowSqlish());
   updateNotifDot();
@@ -16904,7 +16920,8 @@ function renderBaTabs(){
     const b = document.createElement('button');
     const on = baSoundOn(e.key);
     b.innerHTML = `${escapeHtml(e.label)}${n != null ? ` <span style="color:var(--red);font-weight:700">(${n})</span>` : ''}`
-      + ` <i class="ti ${on ? 'ti-bell-ringing' : 'ti-bell-off'}" onclick="event.stopPropagation();baToggleSound('${e.key}')" title="${on ? 'Sound alerts on for this tab — click to mute' : 'Sound alerts muted for this tab — click to turn on'}" style="font-size:13px;margin-left:3px;color:${on ? 'var(--green)' : 'var(--text3)'};opacity:${on ? 1 : .6}"></i>`;
+      + ` <i class="ti ${on ? 'ti-bell-ringing' : 'ti-bell-off'}" onclick="event.stopPropagation();baToggleSound('${e.key}')" title="${on ? 'Sound alerts on for this tab — click to mute' : 'Sound alerts muted for this tab — click to turn on'}" style="font-size:13px;margin-left:3px;color:${on ? 'var(--green)' : 'var(--text3)'};opacity:${on ? 1 : .6}"></i>`
+      + baDiscordIconHtml(e.key);
     b.onclick = () => baTab(e.key);
     b.style.cssText = `padding:8px 12px;border:none;border-bottom:2px solid ${active ? 'var(--brand)' : 'transparent'};background:none;color:${active ? 'var(--text)' : 'var(--text3)'};font-weight:${active ? '600' : '400'};font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap`;
     wrap.appendChild(b);
@@ -17470,6 +17487,7 @@ async function pollBaSounds(){
 }
 async function startBaSoundPolling(){
   unlockTodoAudio();
+  baLoadDiscordPrefs();
   await baLoadSoundPrefs();
   if (BA_SOUND_POLL) clearInterval(BA_SOUND_POLL);
   pollBaSounds();
@@ -17481,6 +17499,97 @@ document.addEventListener('click', () => {
   unlockTodoAudio();
   try { if (TODO_AUDIO_CTX && TODO_AUDIO_CTX.state === 'suspended') TODO_AUDIO_CTX.resume(); } catch(e) {}
 }, { capture: true });
+
+// ---- Discord bet alerts (2026-10-27, Dan's spec) ----
+// Sending is all server-side (discord-alerts-poller.js on the DO box, every 60s, browser open or
+// not). Here: the per-tab Discord icon next to each tab's bell (user_bet_alert_discord, missing =
+// off) and the webhook box in the bell's Notifications panel. The webhook URL is never read back
+// — the server only returns a masked copy. DDHH / Corners have no icon (nothing server-side to
+// price them from).
+const BA_DISCORD_EDGES = new Set(['oc-ev', 'calc-ev', 'watch', 'early', 'f1-ew', 'arbs', 'dnf', 'nfl-td', 'errors', 'unmatched', 'outliers', 'grosvenor']);
+let BA_DISCORD_PREFS = {};
+let BA_DISCORD_HOOK = null; // { configured, masked, status, lastError, lastSentAt } once loaded
+function baDiscordOn(key){ return BA_DISCORD_PREFS[key] === true; }
+function baDiscordIconHtml(key){
+  if (!BA_DISCORD_EDGES.has(key)) return '';
+  const on = baDiscordOn(key);
+  const dead = BA_DISCORD_HOOK && BA_DISCORD_HOOK.status === 'dead';
+  const noHook = !BA_DISCORD_HOOK || !BA_DISCORD_HOOK.configured;
+  const title = noHook ? 'Discord alerts — add your webhook in the Notifications panel (bell, top right) first'
+    : dead ? 'Discord webhook stopped working — fix it in the Notifications panel'
+    : on ? 'Posting new bets on this tab to Discord — click to stop' : 'Not posting this tab to Discord — click to turn on';
+  const color = on ? (dead ? 'var(--red)' : '#5865F2') : 'var(--text3)';
+  return ` <i class="ti ti-brand-discord" onclick="event.stopPropagation();baToggleDiscord('${key}')" title="${title}" style="font-size:13px;margin-left:2px;color:${color};opacity:${on ? 1 : .45}"></i>`;
+}
+async function baLoadDiscordPrefs(){
+  try {
+    const [p, h] = await Promise.all([ledgerApi('bet-alert-discord'), ledgerApi('discord-webhook')]);
+    if (p && p.ok) BA_DISCORD_PREFS = p.prefs || {};
+    if (h && h.ok) BA_DISCORD_HOOK = h;
+  } catch(e) {}
+  renderBaTabs();
+}
+async function baToggleDiscord(key){
+  if (!BA_DISCORD_HOOK || !BA_DISCORD_HOOK.configured) {
+    showToast('Add your Discord webhook first — bell icon (top right) → Discord notifications.', { duration: 7000 });
+    toggleNotifPanel();
+    return;
+  }
+  BA_DISCORD_PREFS = Object.assign({}, BA_DISCORD_PREFS, { [key]: !baDiscordOn(key) });
+  renderBaTabs();
+  try {
+    await ledgerApi('bet-alert-discord', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prefs: BA_DISCORD_PREFS }) });
+    if (baDiscordOn(key)) showToast(`${baLabel(key)}: new bets will post to Discord (anything already listed is skipped).`, { duration: 6000 });
+  } catch(e) { showToast('Could not save the Discord setting — try again.'); }
+}
+function renderDiscordSettings(msg, msgColor){
+  const h = BA_DISCORD_HOOK || { configured: false };
+  const st = document.getElementById('discord-status');
+  const warn = document.getElementById('discord-warn');
+  const input = document.getElementById('discord-url');
+  const rm = document.getElementById('discord-remove');
+  if (st) st.innerHTML = !h.configured ? '<span style="color:var(--text3)">Not set up</span>'
+    : h.status === 'dead' ? '<span style="color:var(--red);font-weight:600">Stopped</span>'
+    : '<span style="color:var(--green);font-weight:600">Connected</span>';
+  if (warn) {
+    warn.style.display = h.configured && h.status === 'dead' ? 'block' : 'none';
+    warn.textContent = `⚠ Discord rejected this webhook (deleted or revoked), so nothing is being sent. Make a new webhook in Discord and save it here.${h.lastError ? ' — ' + h.lastError : ''}`;
+  }
+  if (input) input.placeholder = h.configured ? `Saved: ${h.masked || 'webhook'} — paste a new one to replace` : 'Paste your Discord webhook URL';
+  if (rm) rm.style.display = h.configured ? '' : 'none';
+  const m = document.getElementById('discord-msg');
+  if (m && msg !== undefined) { m.textContent = msg || ''; m.style.color = msgColor || 'var(--text3)'; }
+}
+async function loadDiscordSettings(){
+  try { const h = await ledgerApi('discord-webhook'); if (h && h.ok) BA_DISCORD_HOOK = h; } catch(e) {}
+  renderDiscordSettings();
+  renderBaTabs();
+}
+async function discordTest(){
+  const input = document.getElementById('discord-url');
+  const url = (input && input.value || '').trim();
+  renderDiscordSettings('Sending…');
+  try {
+    const d = await ledgerApi('discord-webhook/test', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ url }) });
+    if (d && d.ok) renderDiscordSettings('Test message sent — check your Discord channel.' + (url ? ' Hit Save to keep this webhook.' : ''), 'var(--green)');
+    else { if (!url) await loadDiscordSettings(); renderDiscordSettings((d && d.error) || 'Test failed.', 'var(--red)'); }
+  } catch(e) { renderDiscordSettings('Could not reach the server — try again.', 'var(--red)'); }
+}
+async function discordSave(remove){
+  const input = document.getElementById('discord-url');
+  const url = remove ? '' : (input && input.value || '').trim();
+  if (!remove && !url) { renderDiscordSettings('Paste a webhook URL first.', 'var(--red)'); return; }
+  if (remove && !confirm('Remove your Discord webhook? Nothing will post to Discord until you add one again.')) return;
+  try {
+    const d = await ledgerApi('discord-webhook', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ url }) });
+    if (d && d.ok) {
+      if (input) input.value = '';
+      BA_DISCORD_HOOK = d;
+      renderDiscordSettings(remove ? 'Webhook removed.' : 'Saved. Turn tabs on with the Discord icon next to each Bet Alerts tab.', 'var(--green)');
+      renderBaTabs();
+    } else renderDiscordSettings((d && d.error) || 'Could not save.', 'var(--red)');
+  } catch(e) { renderDiscordSettings('Could not reach the server — try again.', 'var(--red)'); }
+}
 
 // OC Coverage tab (2026-09-17) — purely informational (no alert sound, unlike Errors above):
 // today's fixtures the Oddschecker scraper couldn't find a match page for, so they got zero

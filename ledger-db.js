@@ -808,4 +808,41 @@ CREATE TABLE IF NOT EXISTS user_bet_alert_sound (
 );
 `);
 
+// Discord bet alerts (2026-10-27) — see discord-alerts-poller.js. Per-user webhook (never sent back
+// to the browser), per-tab on/off, and what has already been posted so a bet posts once.
+db.exec(`
+CREATE TABLE IF NOT EXISTS user_discord_webhook (
+  username     TEXT PRIMARY KEY,
+  url          TEXT NOT NULL,
+  status       TEXT NOT NULL DEFAULT 'ok',   -- 'ok' | 'dead' (Discord said 401/403/404)
+  last_error   TEXT,
+  last_sent_at TEXT,
+  updated_at   TEXT
+);
+-- Per-user Discord on/off per tab — { edgeKey: bool }, missing key = off.
+CREATE TABLE IF NOT EXISTS user_bet_alert_discord (
+  username   TEXT PRIMARY KEY,
+  prefs      TEXT NOT NULL,
+  updated_at TEXT
+);
+-- What's already been posted (or silently seeded) per user, so a bet posts once.
+CREATE TABLE IF NOT EXISTS discord_sent (
+  username TEXT NOT NULL,
+  edge     TEXT NOT NULL,
+  bet_key  TEXT NOT NULL,
+  odds     REAL,
+  ev       REAL,
+  sent_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  seen_day TEXT NOT NULL,
+  PRIMARY KEY (username, edge, bet_key)
+);
+-- A (user, tab) row here means its first look has happened; missing = next look seeds silently.
+CREATE TABLE IF NOT EXISTS discord_seeded (
+  username TEXT NOT NULL,
+  edge     TEXT NOT NULL,
+  PRIMARY KEY (username, edge)
+);
+`);
+
+
 module.exports = db;
