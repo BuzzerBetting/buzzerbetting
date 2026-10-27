@@ -6201,7 +6201,7 @@ async function loadAccountModalSettlement() {
     listEl.innerHTML = bets.map(b => {
       const f = b.fields || {};
       const betDesc = (f.Race && f['Horse/Trap']) ? `${f.Race} - ${f['Horse/Trap']}` : f.Bet || f['Bet Description'] || f.Horse || f.Player || f.Offer || f['Bet 1'] || '';
-      const odds = typeof f.Odds === 'number' ? f.Odds : null;
+      const odds = betSettleOdds(f);
       return `<div style="padding:10px 0;border-bottom:0.5px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
         <div style="flex:1">
           <div style="font-size:11px;color:var(--text3);margin-bottom:2px">${formatLedgerDate(b.date)} · ${escapeHtml(b.bet_type)}</div>
@@ -7231,7 +7231,7 @@ async function loadDashboardOpenBets() {
           <td style="padding:7px 8px" class="r">£${(b.total_stake||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
           <td style="padding:7px 8px">${b.bet_type === 'Back & Lay' ? `<button class="add-btn" onclick="openBtSettleBackLayModal(${b.id}, loadDashboardOpenBets)">Settle</button>` : BET_TYPE_CONFIG[b.bet_type]?.winningsBasedPL
             ? `<button class="add-btn" onclick="editBetWinnings(${b.id}, ${b.fields.Winnings||0}, loadDashboardOpenBets)">Enter Winnings</button>`
-            : `<button class="add-btn" onclick="openBtSettleModal(${b.id}, 'open', null, loadDashboardOpenBets, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${b.bet_type.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">Settle</button>`}</td>
+            : `<button class="add-btn" onclick="openBtSettleModal(${b.id}, 'open', null, loadDashboardOpenBets, ${b.total_stake||0}, ${betSettleOdds(b.fields)??'null'}, '${b.bet_type.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">Settle</button>`}</td>
         </tr>`;
       }).join('')}
       </tbody></table></div>`;
@@ -9102,7 +9102,7 @@ function renderBtDetailTable(bets) {
       <td class="r" style="color:${(b.pl||0)>=0?'var(--green)':'var(--red)'}">${(b.pl||0)>=0?'+':'-'}£${Math.abs(b.pl||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td style="white-space:nowrap;display:flex;gap:6px">
         ${isBackLay ? `<button class="add-btn" onclick="openBtSettleBackLayModal(${b.id}, fetchBtDetailPage)">${b.result==='open'?'Settle':'Override'}</button>`
-          : BET_TYPE_CONFIG[b.bet_type]?.winningsBasedPL ? `<button class="add-btn" onclick="deleteBetDirect(${b.id}, fetchBtDetailPage)" style="color:var(--red);border-color:var(--red)">Delete</button>` : `<button class="add-btn" onclick="openBtSettleModal(${b.id}, '${b.result}', ${b.pl||0}, fetchBtDetailPage, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${b.bet_type.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">${b.result==='open'?'Settle':'Override'}</button>`}
+          : BET_TYPE_CONFIG[b.bet_type]?.winningsBasedPL ? `<button class="add-btn" onclick="deleteBetDirect(${b.id}, fetchBtDetailPage)" style="color:var(--red);border-color:var(--red)">Delete</button>` : `<button class="add-btn" onclick="openBtSettleModal(${b.id}, '${b.result}', ${b.pl||0}, fetchBtDetailPage, ${b.total_stake||0}, ${betSettleOdds(b.fields)??'null'}, '${b.bet_type.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})">${b.result==='open'?'Settle':'Override'}</button>`}
         ${b.result==='open' && isBackLay ? `<button class="add-btn" onclick="openBtAddAccountBackLayModal(${b.id})">Add account</button>` : ''}
         ${b.result==='open' && !isBackLay && ADD_ACCOUNT_TYPES.includes(b.bet_type) ? `<button class="add-btn" onclick="openBtAddAccountModal(${b.id}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, ${typeof b.fields.Fairs==='number'?b.fields.Fairs:'null'}, ${b.fields['Each-Way']===true}, '${(BET_TYPE_CONFIG[b.bet_type]?.bookieFieldKey||'Bookie').replace(/'/g,"\\'")}', '${escapeHtml(String(b.fields[BET_TYPE_CONFIG[b.bet_type]?.bookieFieldKey||'Bookie']||'')).replace(/'/g,"\\'")}')">Add account</button>` : ''}
         ${b.result==='open' && !b.leg_count ? `<button class="add-btn" onclick="openBtLinkModal(${b.id})">Link account</button>` : ''}
@@ -9392,6 +9392,12 @@ const EACH_WAY_BET_TYPES = ['Dogs + Horses', 'Dogs + Horses (VA)', 'BB Horse', '
 
 const BET_TYPE_TOGGLE_TABS = ['Offers (Personal)', 'Offers (VA)', 'Other Bets'];
 
+// The price a Win's P/L is worked out from. Most sheets store it as 'Odds'; Other Bets stores
+// 'Back Odds' (2026-10-27, user-reported: Kutlu 2 shots Win suggested £0 — no Odds field).
+function betSettleOdds(f) {
+  const o = f ? (typeof f.Odds === 'number' ? f.Odds : f['Back Odds']) : null;
+  return typeof o === 'number' && o > 0 ? o : null;
+}
 function openBtSettleModal(betId, currentResult, currentPl, refreshFn, stake, odds, betType, currentBfexSp, terms, placeOdds, currentBetKind) {
   btSettleContext = { betId, refreshFn, stake: stake || 0, odds: odds || null, betType, terms: terms || null, placeOdds: placeOdds || null };
   document.getElementById('bt-settle-pl').value = (currentPl !== undefined && currentPl !== null) ? currentPl : '';
@@ -9938,7 +9944,7 @@ async function loadBtOpenTable() {
           const promptVal = (rawVal === undefined || rawVal === null) ? '' : rawVal;
           return `<td${colClass(k)}><span style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="editBetFieldGeneric(${b.id}, '${k.replace(/'/g,"\\'")}', '${String(promptVal).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}', loadBtOpenTabs)" title="Click to amend">${cellContent || '<i class="ti ti-plus" style="color:var(--text3)"></i>'}</span></td>`;
         }).join('')}
-        <td><button class="add-btn" onclick="${btOpenState.betType === 'Back & Lay' ? `openBtSettleBackLayModal(${b.id}, loadBtOpenTabs)` : `openBtSettleModal(${b.id}, 'open', null, loadBtOpenTabs, ${b.total_stake||0}, ${typeof b.fields.Odds==='number'?b.fields.Odds:'null'}, '${btOpenState.betType.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})`}">Settle</button></td>
+        <td><button class="add-btn" onclick="${btOpenState.betType === 'Back & Lay' ? `openBtSettleBackLayModal(${b.id}, loadBtOpenTabs)` : `openBtSettleModal(${b.id}, 'open', null, loadBtOpenTabs, ${b.total_stake||0}, ${betSettleOdds(b.fields)??'null'}, '${btOpenState.betType.replace(/'/g,"\\'")}', ${typeof b.fields['BFEX SP']==='number'?b.fields['BFEX SP']:'null'}, ${b.fields.Terms?`'${String(b.fields.Terms).replace(/'/g,"\\'")}'`:'null'}, ${typeof b.fields['Place Odds']==='number'?b.fields['Place Odds']:'null'}, ${b.fields['Bet Type']?`'${String(b.fields['Bet Type']).replace(/'/g,"\\'")}'`:'null'})`}">Settle</button></td>
         <td>${grosvenorExtraLegBtn(b.id, btOpenState.betType, b.fields, 'loadBtOpenTabs')}</td>
       </tr>`;
     });
