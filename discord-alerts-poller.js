@@ -192,13 +192,17 @@ const OUTLIERS_ALL_MARKETS = new Set(['AGS', 'First scorer', 'Cards', 'SOT', 'As
 const GV_RECORD_MIN_MATCHES = 25;
 const GV_RECORD_MARKETS = { 'AGS': 'exact', 'SOT 1+': 'exact', 'Cards': 'exact', 'Assist': 'exact',
   'FGS': 'upper', 'Header Goal': 'upper', 'OTB Goal': 'upper' };
+// Team weighting: rate × teamXgRatio^pow (Early Prices team-xG ratio), clamped 0.4–2.0; Cards unweighted.
+const GV_TEAM_POW = { 'AGS': 1, 'FGS': 1, 'Header Goal': 1, 'OTB Goal': 1, 'Assist': 1, 'SOT 1+': 0.6 };
 function gvBelowRecord(r, ssMatchIds) {
   if (!GV_RECORD_MARKETS[r.mkt] || !r.playerStats || r.odds == null || ssMatchIds.has(String(r.matchId))) return false;
   const m = String(r.playerStats).match(/\((\d+) in (\d+)\)/) || String(r.playerStats).match(/^(0) \S+ in (\d+) matches/);
   if (!m) return false;
   const n = +m[1], games = +m[2];
   if (games < GV_RECORD_MIN_MATCHES) return false;
-  return Number(r.odds) < 1 / (1 - Math.exp(-(n + 1) / (games + 10)));
+  const pow = GV_TEAM_POW[r.mkt], x = Number(r.teamXgRatio);
+  const mult = pow && x > 0 ? Math.max(0.4, Math.min(2, Math.pow(x, pow))) : 1;
+  return Number(r.odds) < 1 / (1 - Math.exp(-(n + 1) / (games + 10) * mult));
 }
 let gvBetLog;
 function gvSsMatchIds() {

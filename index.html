@@ -18423,11 +18423,22 @@ function renderBaGrosvenorSubtabs(){
 // an all-goals record, which overstates their chance, so they're dropped only when even that
 // fails. Matches in a ticked super-sub league aren't judged (the replacement counts there), nor
 // are markets with no record (Shots N+). Keep in step with discord-alerts-poller.js gvRecordCheck.
+// Team weighting (2026-10-30, user): the record rate is scaled by the Early Prices team-xG ratio
+// (teamXgRatio = this match's Betfair-odds-implied team xG / the team xG the player usually plays
+// under, set by oc_scraper_service.py) to the power GV_TEAM_POW — goals/assists scale with team
+// goals (1.0), SOT uses Early Prices' backtested 0.6, Cards aren't weighted. Multiplier clamped
+// 0.4–2.0 like player_form.match_mult. No ratio (no odds / thin history) = unweighted.
 let GV_SS_MATCH_IDS = new Set();
 const GV_RECORD_MIN_MATCHES = 25;
 const GV_RECORD_MARKETS = { 'AGS': 'exact', 'SOT 1+': 'exact', 'Cards': 'exact', 'Assist': 'exact',
   'FGS': 'upper', 'Header Goal': 'upper', 'OTB Goal': 'upper' };
-// → null (not judged) or { chance, fair, pass, upper }
+const GV_TEAM_POW = { 'AGS': 1, 'FGS': 1, 'Header Goal': 1, 'OTB Goal': 1, 'Assist': 1, 'SOT 1+': 0.6 };
+function gvTeamMult(r){
+  const pow = GV_TEAM_POW[r.mkt], x = Number(r.teamXgRatio);
+  if (!pow || !(x > 0)) return 1;
+  return Math.max(0.4, Math.min(2, Math.pow(x, pow)));
+}
+// → null (not judged) or { chance, fair, pass, upper, mult }
 function gvRecordCheck(r){
   const kind = GV_RECORD_MARKETS[r.mkt];
   if (!kind || !r.playerStats || r.odds == null || GV_SS_MATCH_IDS.has(String(r.matchId))) return null;
@@ -18435,15 +18446,24 @@ function gvRecordCheck(r){
   if (!m) return null;
   const n = +m[1], games = +m[2];
   if (games < GV_RECORD_MIN_MATCHES) return null;
-  const chance = 1 - Math.exp(-(n + 1) / (games + 10));
+  const mult = gvTeamMult(r);
+  const chance = 1 - Math.exp(-(n + 1) / (games + 10) * mult);
   const fair = 1 / chance;
-  return { chance, fair, pass: Number(r.odds) >= fair, upper: kind === 'upper' };
+  return { chance, fair, pass: Number(r.odds) >= fair, upper: kind === 'upper', mult };
+}
+// Grey line under the stats: the team weighting applied (shown whenever there is one).
+function gvTeamNote(r){
+  const c = gvRecordCheck(r);
+  if (!c || c.mult === 1) return '';
+  const up = c.mult > 1;
+  return `<div style="font-weight:400;font-size:11px;color:var(--text3);margin-top:1px" title="Betfair match odds put ${escapeHtml(r.match || 'the team')}'s side at ${Number(r.teamXg).toFixed(2)} xG for this match; the player's team usually has ${Number(r.teamXgUsual).toFixed(2)} in his appearances. His record rate is scaled by ×${c.mult.toFixed(2)}.">Team xG ${Number(r.teamXg).toFixed(2)} vs usual ${Number(r.teamXgUsual).toFixed(2)} → ${up ? 'more' : 'less'} chance (×${c.mult.toFixed(2)}) · record fair ${c.fair.toFixed(2)}${c.upper ? '+' : ''}</div>`;
 }
 function gvRecordNote(r){
   const c = gvRecordCheck(r);
   if (!c || c.pass) return '';
   const what = c.upper ? 'any goal' : 'per match';
-  return `<div style="font-weight:400;font-size:11px;color:var(--red);margin-top:1px" title="The player's record gives about ${(c.chance * 100).toFixed(1)}% (${what}), a fair price of ${c.fair.toFixed(2)}. Grosvenor's ${Number(r.odds).toFixed(2)} is below that.${c.upper ? ' Based on all goals, so the real fair price is even longer.' : ''}">⚠ below record: fair ${c.fair.toFixed(2)}${c.upper ? '+' : ''} (${(c.chance * 100).toFixed(1)}% ${what}) vs Grosvenor ${Number(r.odds).toFixed(2)}</div>`;
+  const team = c.mult !== 1 ? `, team-weighted ×${c.mult.toFixed(2)}` : '';
+  return `<div style="font-weight:400;font-size:11px;color:var(--red);margin-top:1px" title="The player's record${team} gives about ${(c.chance * 100).toFixed(1)}% (${what}), a fair price of ${c.fair.toFixed(2)}. Grosvenor's ${Number(r.odds).toFixed(2)} is below that.${c.upper ? ' Based on all goals, so the real fair price is even longer.' : ''}">⚠ below record: fair ${c.fair.toFixed(2)}${c.upper ? '+' : ''} (${(c.chance * 100).toFixed(1)}% ${what}${team}) vs Grosvenor ${Number(r.odds).toFixed(2)}</div>`;
 }
 // "Hide below record" (2026-10-30): on by default; Discord always leaves these out.
 let GV_HIDE_RECORD = true;
@@ -18587,7 +18607,7 @@ function renderBaGrosvenor(){
     <td style="font-size:12px;color:var(--text2);white-space:nowrap">${escapeHtml(r.t || '')}</td>
     <td style="font-size:12.5px">${escapeHtml(r.match || '')}</td>
     <td style="font-size:12px;color:var(--text2)">${escapeHtml(r.mkt || '')}</td>
-    <td style="font-weight:500">${escapeHtml(r.sel || '')}${r.playerStats ? `<div style="font-weight:400;font-size:11.5px;color:var(--text3);margin-top:2px" title="FotMob, current + previous two seasons, all competitions">${escapeHtml(r.playerStats)}</div>` : ''}${gvRecordNote(r)}</td>
+    <td style="font-weight:500">${escapeHtml(r.sel || '')}${r.playerStats ? `<div style="font-weight:400;font-size:11.5px;color:var(--text3);margin-top:2px" title="FotMob, current + previous two seasons, all competitions">${escapeHtml(r.playerStats)}</div>` : ''}${gvTeamNote(r)}${gvRecordNote(r)}</td>
     <td class="r tn" style="font-weight:600;color:var(--green)">${r.odds != null ? Number(r.odds).toFixed(2) : '—'}</td>
     <td class="r tn" style="color:var(--text2)">${r.nextBest != null ? Number(r.nextBest).toFixed(2) : '—'} <span style="color:var(--text3);font-size:11px">(${escapeHtml(ocBookieShort(r.nextBook))})</span>${gvOutlierBadge(r)}</td>
     <td class="r"><span class="badge" style="background:var(--green-bg);color:var(--green)">+${r.pct != null ? Number(r.pct).toFixed(1) : '—'}%</span></td>
