@@ -3018,7 +3018,7 @@ router.get('/notifications', (req, res) => {
 // columns, the Corner bet stats panel and the Bet Alerts Corners tab back (index.html has the
 // matching CORNER_PREDICTIONS_ENABLED). Pen-taker prediction is unaffected — it still uses
 // cornerModel.predictPenTaker below.
-const CORNER_PREDICTIONS_ENABLED = false;
+const CORNER_PREDICTIONS_ENABLED = true;
 const cornerModel = (() => {
   try { return require('./corner-model/predict'); }
   catch (e) { console.error('[match-predictions] corner-model not loaded:', e.message); return null; }
