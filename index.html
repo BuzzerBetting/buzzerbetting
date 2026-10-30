@@ -2696,6 +2696,9 @@ tr.ba-placed > td{background:var(--green-bg) !important}
         <label title="Hide (not remove) Grosvenor prices under 2.5 — untick to show them again" style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;font-size:12.5px;color:var(--text2)">
           <input type="checkbox" id="gv-hide-short-toggle" onchange="setGvHideShort(this.checked)"> Hide under 2.5
         </label>
+        <label title="Hide bets where Grosvenor's price is below the fair price from the player's own FotMob record (AGS, SOT 1+, Cards, Assist; FGS/Header/OTB only when even all goals can't justify it). These never post to Discord. Untick to see them with the reason in red." style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;font-size:12.5px;color:var(--text2)">
+          <input type="checkbox" id="gv-hide-record-toggle" onchange="setGvHideRecord(this.checked)"> Hide below player record<span id="gv-hide-record-n" style="color:var(--text3)"></span>
+        </label>
         <button id="gv-removed-btn" onclick="toggleGvRemoved()" title="Bets you've removed from Lineups Confirmed that haven't kicked off yet" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-eye-off"></i> Removed (0)</button>
         <button onclick="baRefreshActive(this)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
       </div>
@@ -18413,26 +18416,44 @@ function renderBaGrosvenorSubtabs(){
     return `<button onclick="setGrosvenorSubtab('${t.key}')" style="background:${active ? 'var(--brand)' : 'none'};border:none;padding:7px 14px;font-size:12.5px;font-weight:${active ? '600' : '400'};color:${active ? '#fff' : 'var(--text2)'};cursor:pointer;font-family:inherit;white-space:nowrap">${escapeHtml(t.label)} (${t.n})</button>`;
   }).join('');
 }
-// Price vs record note (2026-10-12, user-requested): red line under the FotMob stats when OC's
-// next best implies 3x+ the chance the player's own record gives (e.g. Assist at 10.0 = 10%
-// for a 1-in-72 assister). Display only — nothing is hidden. Record rate is smoothed
-// ((n+1)/(matches+10)) and turned into a 1+ chance via Poisson; needs 25+ matches. FGS is
-// skipped (record is all goals), as are matches in a ticked super-sub league (the
-// replacement counts too there).
+// Player-record check (2026-10-30, user-requested — replaces the 10-12 "next best vs record"
+// note): is Grosvenor's own price at least the fair price the player's FotMob record gives?
+// Record rate is smoothed ((n+1)/(matches+10)) and turned into a 1+ chance via Poisson; needs
+// 25+ matches. AGS / SOT 1+ / Cards / Assist are judged directly. FGS / Header / OTB only have
+// an all-goals record, which overstates their chance, so they're dropped only when even that
+// fails. Matches in a ticked super-sub league aren't judged (the replacement counts there), nor
+// are markets with no record (Shots N+). Keep in step with discord-alerts-poller.js gvRecordCheck.
 let GV_SS_MATCH_IDS = new Set();
-const GV_RECORD_MIN_MATCHES = 25, GV_RECORD_RATIO = 3;
-function gvRecordNote(r){
-  if (!r.playerStats || r.nextBest == null || r.mkt === 'FGS' || GV_SS_MATCH_IDS.has(String(r.matchId))) return '';
+const GV_RECORD_MIN_MATCHES = 25;
+const GV_RECORD_MARKETS = { 'AGS': 'exact', 'SOT 1+': 'exact', 'Cards': 'exact', 'Assist': 'exact',
+  'FGS': 'upper', 'Header Goal': 'upper', 'OTB Goal': 'upper' };
+// → null (not judged) or { chance, fair, pass, upper }
+function gvRecordCheck(r){
+  const kind = GV_RECORD_MARKETS[r.mkt];
+  if (!kind || !r.playerStats || r.odds == null || GV_SS_MATCH_IDS.has(String(r.matchId))) return null;
   const m = String(r.playerStats).match(/\((\d+) in (\d+)\)/) || String(r.playerStats).match(/^(0) \S+ in (\d+) matches/);
-  if (!m) return '';
+  if (!m) return null;
   const n = +m[1], games = +m[2];
-  if (games < GV_RECORD_MIN_MATCHES) return '';
-  const rec = 1 - Math.exp(-(n + 1) / (games + 10));
-  const implied = 1 / Number(r.nextBest);
-  const ratio = implied / rec;
-  if (!(ratio >= GV_RECORD_RATIO)) return '';
-  return `<div style="font-weight:400;font-size:11px;color:var(--red);margin-top:1px" title="Next best ${Number(r.nextBest).toFixed(2)} implies ${(implied * 100).toFixed(1)}%; the player's record gives about ${(rec * 100).toFixed(1)}% per match. Shown when the gap is ${GV_RECORD_RATIO}x or more.">⚠ next best ${(implied * 100).toFixed(0)}% vs record ${(rec * 100).toFixed(1)}% (${ratio.toFixed(1)}×)</div>`;
+  if (games < GV_RECORD_MIN_MATCHES) return null;
+  const chance = 1 - Math.exp(-(n + 1) / (games + 10));
+  const fair = 1 / chance;
+  return { chance, fair, pass: Number(r.odds) >= fair, upper: kind === 'upper' };
 }
+function gvRecordNote(r){
+  const c = gvRecordCheck(r);
+  if (!c || c.pass) return '';
+  const what = c.upper ? 'any goal' : 'per match';
+  return `<div style="font-weight:400;font-size:11px;color:var(--red);margin-top:1px" title="The player's record gives about ${(c.chance * 100).toFixed(1)}% (${what}), a fair price of ${c.fair.toFixed(2)}. Grosvenor's ${Number(r.odds).toFixed(2)} is below that.${c.upper ? ' Based on all goals, so the real fair price is even longer.' : ''}">⚠ below record: fair ${c.fair.toFixed(2)}${c.upper ? '+' : ''} (${(c.chance * 100).toFixed(1)}% ${what}) vs Grosvenor ${Number(r.odds).toFixed(2)}</div>`;
+}
+// "Hide below record" (2026-10-30): on by default; Discord always leaves these out.
+let GV_HIDE_RECORD = true;
+try { GV_HIDE_RECORD = localStorage.getItem('gvHideRecord') !== '0'; } catch(e) {}
+function setGvHideRecord(on){
+  GV_HIDE_RECORD = !!on;
+  try { localStorage.setItem('gvHideRecord', on ? '1' : '0'); } catch(e) {}
+  renderBaGrosvenor();
+}
+function gvBelowRecord(r){ const c = gvRecordCheck(r); return !!(c && !c.pass); }
 // 2026-10-07 (user): next-best >= 50% above the 3rd best price (Oddschecker's next bookmaker after
 // it) is flagged as a possible outlier. It's still the next best the % is measured against.
 function gvOutlierBadge(r){
@@ -18542,9 +18563,15 @@ function renderBaGrosvenor(){
   // "Start time" keeps each match's rows together (2026-10-12, user-requested): kickoff, then
   // match name, then % within the match — so same-kickoff matches don't interleave.
   const notRemoved = r => (!r.lineupConfirmed || !GV_REMOVED.has(baPlacedKey(r.match, r.mkt, r.sel)))
-    && !(GV_HIDE_SHORT && r.odds != null && Number(r.odds) < GV_HIDE_SHORT_ODDS);
+    && !(GV_HIDE_SHORT && r.odds != null && Number(r.odds) < GV_HIDE_SHORT_ODDS)
+    && !(GV_HIDE_RECORD && gvBelowRecord(r));
   const hideCb = document.getElementById('gv-hide-short-toggle');
   if (hideCb) hideCb.checked = GV_HIDE_SHORT;
+  const recCb = document.getElementById('gv-hide-record-toggle');
+  if (recCb) recCb.checked = GV_HIDE_RECORD;
+  const belowN = BA_GROSVENOR_ROWS.filter(r => !!r.lineupConfirmed === wantConfirmed && !gvKickoffPassed(r.d, r.t) && gvBelowRecord(r)).length;
+  const recLbl = document.getElementById('gv-hide-record-n');
+  if (recLbl) recLbl.textContent = belowN ? ` (${belowN})` : '';
   renderGvRemoved();
   const rows = BA_GROSVENOR_ROWS.filter(r => !!r.lineupConfirmed === wantConfirmed && notRemoved(r) && !gvKickoffPassed(r.d, r.t)).sort((x, y) => sortMode === 'time'
     ? ((baTimeSortKey(x) - baTimeSortKey(y)) || String(x.match || '').localeCompare(String(y.match || '')) || ((y.pct ?? 0) - (x.pct ?? 0)))

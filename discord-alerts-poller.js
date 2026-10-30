@@ -185,6 +185,29 @@ const OTW_THRESHOLD_PCT = 3.0;
 const EP_MIN_EV = 10;
 const OUTLIERS_ALL_MARKETS = new Set(['AGS', 'First scorer', 'Cards', 'SOT', 'Assist', 'Shots 1+', 'Shots 2+', 'Shots 3+']);
 
+// Grosvenor "below player record" (2026-10-30) — same rule as index.html gvRecordCheck: Grosvenor's
+// price must be at least the fair price from the player's FotMob record (smoothed (n+1)/(matches+10),
+// Poisson 1+, 25+ matches). AGS / SOT 1+ / Cards / Assist judged directly; FGS / Header / OTB off
+// the all-goals record (an upper bound, so only clear fails drop). Super-sub matches aren't judged.
+const GV_RECORD_MIN_MATCHES = 25;
+const GV_RECORD_MARKETS = { 'AGS': 'exact', 'SOT 1+': 'exact', 'Cards': 'exact', 'Assist': 'exact',
+  'FGS': 'upper', 'Header Goal': 'upper', 'OTB Goal': 'upper' };
+function gvBelowRecord(r, ssMatchIds) {
+  if (!GV_RECORD_MARKETS[r.mkt] || !r.playerStats || r.odds == null || ssMatchIds.has(String(r.matchId))) return false;
+  const m = String(r.playerStats).match(/\((\d+) in (\d+)\)/) || String(r.playerStats).match(/^(0) \S+ in (\d+) matches/);
+  if (!m) return false;
+  const n = +m[1], games = +m[2];
+  if (games < GV_RECORD_MIN_MATCHES) return false;
+  return Number(r.odds) < 1 / (1 - Math.exp(-(n + 1) / (games + 10)));
+}
+let gvBetLog;
+function gvSsMatchIds() {
+  try {
+    if (gvBetLog === undefined) gvBetLog = require('./corner-model/grosvenorBetLog');
+    return new Set(gvBetLog && gvBetLog.getSsMatchIds ? gvBetLog.getSsMatchIds() : []);
+  } catch (e) { gvBetLog = null; return new Set(); }
+}
+
 // Each builder returns the tab's shown bets as
 //   { match, market, selection, bk, odds, fair, ev, t, extra }  (extra = optional text bit)
 // Per-user filtering (placed ticks, removed bets) happens later in perUserFilter.
@@ -276,7 +299,8 @@ const BUILDERS = {
   },
   async grosvenor() {
     const d = await getJson('/api/grosvenor-best');
-    return ((d && (d.bets || d.rows)) || []).filter(r => r.lineupConfirmed && !kickoffPassed(r.d, r.t))
+    const ss = gvSsMatchIds();
+    return ((d && (d.bets || d.rows)) || []).filter(r => r.lineupConfirmed && !kickoffPassed(r.d, r.t) && !gvBelowRecord(r, ss))
       .map(r => ({ match: r.match, market: r.mkt, selection: r.sel, bk: 'Grosvenor', odds: num(r.odds),
         ev: num(r.pct), evLabel: 'above next', t: r.t, d: r.d, matchId: r.matchId,
         extra: r.nextBest != null ? `next best ${Number(r.nextBest).toFixed(2)}${r.nextBook ? ' at ' + bookName(r.nextBook) : ''}` : null,
