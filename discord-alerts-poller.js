@@ -71,12 +71,16 @@ function londonOffsetMs(ts) {
   }).formatToParts(new Date(ts)).reduce((o, x) => (o[x.type] = x.value, o), {});
   return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute) - Math.floor(ts / 60000) * 60000;
 }
-function kickoffPassed(d, t) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(d || '')) || !/^\d{1,2}:\d{2}$/.test(String(t || ''))) return false;
+function kickoffTs(d, t) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(d || '')) || !/^\d{1,2}:\d{2}$/.test(String(t || ''))) return null;
   const [Y, M, D] = d.split('-').map(Number);
   const [h, m] = String(t).split(':').map(Number);
   const guess = Date.UTC(Y, M - 1, D, h, m);
-  return guess - londonOffsetMs(guess) <= Date.now();
+  return guess - londonOffsetMs(guess);
+}
+function kickoffPassed(d, t) {
+  const ts = kickoffTs(d, t);
+  return ts != null && ts <= Date.now();
 }
 
 // ---- bookmaker filter (index.html baResolveBook / baBookEnabled) ----
@@ -189,7 +193,7 @@ const BUILDERS = {
     let bets = (await betsFrom(NORMAL_EV_ROUTES)).filter(b => !/\b(header|headed|otb)\b/i.test(String(b.mkt || '')));
     bets = mergeDuplicates(bets);
     return bets.filter(b => (!b.source || b.source === 'bfex') && !kickoffPassed(b.d, b.t) && ctx.bookOk(b.bk))
-      .map(b => ({ match: b.match, market: b.mkt, selection: b.sel, bk: bookName(b.bk), odds: num(b.odds), fair: num(b.fair), ev: num(b.ev), t: b.t }));
+      .map(b => ({ match: b.match, market: b.mkt, selection: b.sel, bk: bookName(b.bk), odds: num(b.odds), fair: num(b.fair), ev: num(b.ev), t: b.t, d: b.d, matchId: b.matchId }));
   },
   async 'calc-ev'(ctx) {
     const out = [];
@@ -208,13 +212,13 @@ const BUILDERS = {
       if (!(odds > 0)) continue;
       const ev = (odds / fair - 1) * 100;
       if (ev < calcEvMinPct(b.mkt)) continue;
-      out.push({ match: b.match, market: b.mkt, selection: b.sel, bk: bookName(bk), odds, fair, ev, t: b.t });
+      out.push({ match: b.match, market: b.mkt, selection: b.sel, bk: bookName(bk), odds, fair, ev, t: b.t, d: b.d, matchId: b.matchId });
     }
     return out;
   },
   async watch(ctx) {
     const rows = db.prepare(
-      `SELECT match, kickoff, kickoff_date AS kickoffDate, market, selection, bookie, odds, oc_bb_blend_fair AS blend
+      `SELECT match, match_id AS matchId, kickoff, kickoff_date AS kickoffDate, market, selection, bookie, odds, oc_bb_blend_fair AS blend
          FROM ones_to_watch WHERE state != 'removed'`
     ).all();
     const out = [];
@@ -224,7 +228,7 @@ const BUILDERS = {
       if (fair == null || !(fair > 0) || !(odds > 0)) continue;
       const ev = (odds / fair - 1) * 100;
       if (ev < OTW_THRESHOLD_PCT) continue;
-      out.push({ match: r.match, market: r.market, selection: r.selection, bk: bookName(r.bookie), odds, fair, ev, t: r.kickoff });
+      out.push({ match: r.match, market: r.market, selection: r.selection, bk: bookName(r.bookie), odds, fair, ev, t: r.kickoff, d: r.kickoffDate, matchId: r.matchId });
     }
     return out;
   },
@@ -239,7 +243,7 @@ const BUILDERS = {
       const fair = num(r.fair), odds = num(pick.odds);
       const ev = fair && odds ? (odds / fair - 1) * 100 : null;
       if (ev == null || ev < EP_MIN_EV) continue;
-      out.push({ match: r.match, market: r.mkt, selection: r.sel, bk: bookName(pick.bk), odds, fair, ev, t: r.t,
+      out.push({ match: r.match, market: r.mkt, selection: r.sel, bk: bookName(pick.bk), odds, fair, ev, t: r.t, d: r.d, matchId: r.matchId,
         extra: r.lineup === 'confirmed' ? 'lineup confirmed' : 'predicted XI' });
     }
     return out;
@@ -266,7 +270,7 @@ const BUILDERS = {
     return ((d && d.rows) || []).filter(r => r.lineupConfirmed && OUTLIERS_ALL_MARKETS.has(r.market)
         && ctx.bookOk(r.topBook) && !kickoffPassed(r.kickoffDate, r.kickoff))
       .map(r => ({ match: r.match, market: r.market, selection: r.selection, bk: bookName(r.topBook), odds: num(r.topPrice),
-        ev: num(r.pctAboveNext), evLabel: 'above next', t: r.kickoff,
+        ev: num(r.pctAboveNext), evLabel: 'above next', t: r.kickoff, d: r.kickoffDate, matchId: r.matchId,
         extra: r.nextPrice != null ? `next best ${Number(r.nextPrice).toFixed(2)}${r.nextBook ? ' at ' + bookName(r.nextBook) : ''}` : null,
         removedKey: 'outliers | ' + betKey({ match: r.match, market: r.market, selection: r.selection }) }));
   },
@@ -274,7 +278,7 @@ const BUILDERS = {
     const d = await getJson('/api/grosvenor-best');
     return ((d && (d.bets || d.rows)) || []).filter(r => r.lineupConfirmed && !kickoffPassed(r.d, r.t))
       .map(r => ({ match: r.match, market: r.mkt, selection: r.sel, bk: 'Grosvenor', odds: num(r.odds),
-        ev: num(r.pct), evLabel: 'above next', t: r.t,
+        ev: num(r.pct), evLabel: 'above next', t: r.t, d: r.d, matchId: r.matchId,
         extra: r.nextBest != null ? `next best ${Number(r.nextBest).toFixed(2)}${r.nextBook ? ' at ' + bookName(r.nextBook) : ''}` : null,
         removedKey: betKey({ match: r.match, market: r.mkt, selection: r.sel }) }));
   },
@@ -402,6 +406,47 @@ async function sendTest(url, username) {
   }] });
 }
 
+// ---- "Confirmed lineups only" (per webhook, 2026-10-30) ----
+// When it's on, a bet only posts if it belongs to one football match (FotMob matchId on the row)
+// whose lineups FotMob says are confirmed — same check as the header bell's Lineups Confirmed
+// (netlify/functions/lineups.js). Tabs with no lineups (horses, darts, F1, NFL, arbs, Errors,
+// OC Coverage) and rows without a single match (accas, bookie boost pages) are left out.
+// Only matches kicking off within LINEUP_LOOKAHEAD_MS are asked about (lineups land ~1h before);
+// a confirmed match stays confirmed, an unconfirmed one is re-asked at most every 2 minutes.
+const LINEUP_EDGES = new Set(['oc-ev', 'calc-ev', 'watch', 'early', 'outliers', 'grosvenor']);
+const LINEUP_LOOKAHEAD_MS = 3 * 3600 * 1000;
+const LINEUP_RECHECK_MS = 2 * 60 * 1000;
+const lineupState = new Map(); // matchId -> { confirmed, checkedAt }
+let lineupsHandler = null;
+async function confirmedMatchIds(rows) {
+  if (!lineupsHandler) lineupsHandler = require('./netlify/functions/lineups').handler;
+  const now = Date.now();
+  const ids = new Set();
+  for (const b of rows) {
+    if (!b || b.matchId == null || b.matchId === '') continue;
+    const ko = kickoffTs(b.d, b.t);
+    if (ko == null || ko - now > LINEUP_LOOKAHEAD_MS) continue;
+    ids.add(String(b.matchId));
+  }
+  const toCheck = [...ids].filter(id => {
+    const s = lineupState.get(id);
+    return !s || (!s.confirmed && now - s.checkedAt >= LINEUP_RECHECK_MS);
+  });
+  for (let i = 0; i < toCheck.length; i += 4) {
+    await Promise.all(toCheck.slice(i, i + 4).map(async id => {
+      let confirmed = false;
+      try {
+        const r = await lineupsHandler({ httpMethod: 'GET', queryStringParameters: { matchId: id } });
+        const lu = JSON.parse(r.body);
+        confirmed = !!(lu && lu.ok && lu.confirmed);
+      } catch (e) {}
+      lineupState.set(id, { confirmed, checkedAt: Date.now() });
+    }));
+  }
+  for (const [id, s] of lineupState) if (now - s.checkedAt > 24 * 3600 * 1000) lineupState.delete(id);
+  return new Set([...ids].filter(id => lineupState.get(id) && lineupState.get(id).confirmed));
+}
+
 // ---- main tick ----
 function prefsFor(username) {
   const row = db.prepare(`SELECT prefs FROM user_bet_alert_discord WHERE username = ?`).get(username);
@@ -413,8 +458,8 @@ async function tick() {
   if (running) return;
   running = true;
   try {
-    const users = db.prepare(`SELECT username FROM user_discord_webhook WHERE status = 'ok'`).all()
-      .map(u => ({ username: u.username, prefs: prefsFor(u.username) }))
+    const users = db.prepare(`SELECT username, confirmed_only FROM user_discord_webhook WHERE status = 'ok'`).all()
+      .map(u => ({ username: u.username, prefs: prefsFor(u.username), confirmedOnly: !!u.confirmed_only }))
       .filter(u => Object.keys(DISCORD_EDGES).some(e => u.prefs[e] === true));
     const today = londonDay();
     if (users.length) {
@@ -424,6 +469,12 @@ async function tick() {
       await Promise.all([...wanted].map(async e => {
         try { feeds[e] = await BUILDERS[e](ctx); } catch (err) { console.error(`[discord] ${e} build failed:`, err.message); feeds[e] = null; }
       }));
+      let confirmedIds = new Set();
+      if (users.some(u => u.confirmedOnly)) {
+        try {
+          confirmedIds = await confirmedMatchIds([...LINEUP_EDGES].flatMap(e => Array.isArray(feeds[e]) ? feeds[e] : []));
+        } catch (err) { console.error('[discord] lineup check failed:', err.message); }
+      }
 
       const getSent = db.prepare(`SELECT odds, ev FROM discord_sent WHERE username = ? AND edge = ? AND bet_key = ?`);
       const putSent = db.prepare(
@@ -442,9 +493,12 @@ async function tick() {
         db.transaction(() => {
           for (const edge of Object.keys(DISCORD_EDGES)) {
             if (u.prefs[edge] !== true || !Array.isArray(feeds[edge])) continue;   // null = feed failed this tick, skip
+            if (u.confirmedOnly && !LINEUP_EDGES.has(edge)) continue;
             const seeding = !isSeeded.get(u.username, edge);
             for (const b of feeds[edge]) {
               if (!b || (!b.match && !b.selection)) continue;
+              // Not recorded as sent either, so it still posts as new the moment its lineup lands.
+              if (u.confirmedOnly && !(b.matchId != null && confirmedIds.has(String(b.matchId)))) continue;
               const bk = betKey(b);
               if (placed.has(bk) || (b.removedKey && removed.has(b.removedKey))) continue;
               const key = `${bk} | ${norm(b.bk)}${b.keyExtra ? ' | ' + norm(b.keyExtra) : ''}`;

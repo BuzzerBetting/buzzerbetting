@@ -843,6 +843,8 @@ CREATE TABLE IF NOT EXISTS discord_seeded (
   PRIMARY KEY (username, edge)
 );
 `);
+// "Confirmed lineups only" switch on the Discord webhook (2026-10-30) — see discord-alerts-poller.js.
+try { db.exec(`ALTER TABLE user_discord_webhook ADD COLUMN confirmed_only INTEGER NOT NULL DEFAULT 0`); } catch (e) { /* already exists */ }
 
 
 module.exports = db;

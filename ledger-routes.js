@@ -4517,15 +4517,15 @@ router.post('/bet-alert-sound', (req, res) => {
 // The webhook URL is write-only from the browser: GET only ever returns a masked copy.
 const discordAlerts = require('./discord-alerts-poller');
 function discordHookRow(username) {
-  return db.prepare(`SELECT url, status, last_error, last_sent_at, updated_at FROM user_discord_webhook WHERE username = ?`).get(username);
+  return db.prepare(`SELECT url, status, last_error, last_sent_at, updated_at, confirmed_only FROM user_discord_webhook WHERE username = ?`).get(username);
 }
-// GET /api/ledger/discord-webhook → { ok, configured, masked, status, lastError, lastSentAt }
+// GET /api/ledger/discord-webhook → { ok, configured, masked, status, lastError, lastSentAt, confirmedOnly }
 router.get('/discord-webhook', (req, res) => {
   if (!req.username) return res.status(400).json({ ok: false, error: 'no session' });
   const r = discordHookRow(req.username);
   if (!r) return res.json({ ok: true, configured: false });
   res.json({ ok: true, configured: true, masked: discordAlerts.maskWebhook(r.url), status: r.status,
-             lastError: r.last_error || null, lastSentAt: r.last_sent_at || null });
+             lastError: r.last_error || null, lastSentAt: r.last_sent_at || null, confirmedOnly: !!r.confirmed_only });
 });
 // POST /api/ledger/discord-webhook  body: { url } — saves (and re-arms a dead one); url '' removes it.
 // A fresh save re-seeds every tab silently, so it doesn't dump what's already listed.
@@ -4543,7 +4543,19 @@ router.post('/discord-webhook', (req, res) => {
      ON CONFLICT(username) DO UPDATE SET url = excluded.url, status = 'ok', last_error = NULL, updated_at = excluded.updated_at`
   ).run(req.username, url, new Date().toISOString());
   db.prepare(`DELETE FROM discord_seeded WHERE username = ?`).run(req.username);
-  res.json({ ok: true, configured: true, masked: discordAlerts.maskWebhook(url), status: 'ok' });
+  const saved = discordHookRow(req.username);
+  res.json({ ok: true, configured: true, masked: discordAlerts.maskWebhook(url), status: 'ok', confirmedOnly: !!(saved && saved.confirmed_only) });
+});
+// POST /api/ledger/discord-webhook/options  body: { confirmedOnly } — the 'Confirmed lineups only'
+// switch. Flipping it either way re-seeds every tab silently: switching it off would otherwise
+// post every predicted-XI bet currently listed at once.
+router.post('/discord-webhook/options', (req, res) => {
+  if (!req.username) return res.status(400).json({ ok: false, error: 'no session' });
+  if (!discordHookRow(req.username)) return res.status(400).json({ ok: false, error: 'Save a webhook first.' });
+  const on = !!(req.body && req.body.confirmedOnly);
+  db.prepare(`UPDATE user_discord_webhook SET confirmed_only = ?, updated_at = ? WHERE username = ?`).run(on ? 1 : 0, new Date().toISOString(), req.username);
+  db.prepare(`DELETE FROM discord_seeded WHERE username = ?`).run(req.username);
+  res.json({ ok: true, confirmedOnly: on });
 });
 // POST /api/ledger/discord-webhook/test  body: { url? } — tests the pasted URL, or the saved one.
 // A 401/403/404 on the saved URL marks it dead, same as the poller does.

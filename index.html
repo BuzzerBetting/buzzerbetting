@@ -297,6 +297,10 @@ tr.ba-placed > td{background:var(--green-bg) !important}
             <button onclick="discordSave(false)" style="background:var(--brand);border:.5px solid var(--brand);border-radius:6px;padding:5px 12px;cursor:pointer;color:#fff;font-size:12px;font-family:inherit">Save</button>
             <button id="discord-remove" onclick="discordSave(true)" style="display:none;margin-left:auto;background:none;border:.5px solid var(--border);border-radius:6px;padding:5px 9px;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit">Remove</button>
           </div>
+          <label id="discord-confirmed-row" style="display:none;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--text2);cursor:pointer;user-select:none" title="Only post football bets whose match has confirmed lineups (FotMob). Horses, darts, F1, NFL, arbs, Errors, OC Coverage, accas and bookie boost pages stop posting.">
+            <span>Confirmed lineups only</span>
+            <input type="checkbox" id="discord-confirmed-only" onchange="discordSetConfirmedOnly(this.checked)">
+          </label>
           <div id="discord-msg" style="font-size:11.5px;line-height:1.4;color:var(--text3)"></div>
           <div style="font-size:11px;line-height:1.4;color:var(--text3)">Pick which tabs post with the <i class="ti ti-brand-discord"></i> icon next to each Bet Alerts tab's bell. Sent from the server, so it works with the site closed.</div>
         </div>
@@ -17563,6 +17567,10 @@ function renderDiscordSettings(msg, msgColor){
   }
   if (input) input.placeholder = h.configured ? `Saved: ${h.masked || 'webhook'} — paste a new one to replace` : 'Paste your Discord webhook URL';
   if (rm) rm.style.display = h.configured ? '' : 'none';
+  const coRow = document.getElementById('discord-confirmed-row');
+  if (coRow) coRow.style.display = h.configured ? 'flex' : 'none';
+  const coCb = document.getElementById('discord-confirmed-only');
+  if (coCb) coCb.checked = !!h.confirmedOnly;
   const m = document.getElementById('discord-msg');
   if (m && msg !== undefined) { m.textContent = msg || ''; m.style.color = msgColor || 'var(--text3)'; }
 }
@@ -17579,6 +17587,17 @@ async function discordTest(){
     const d = await ledgerApi('discord-webhook/test', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ url }) });
     if (d && d.ok) renderDiscordSettings('Test message sent — check your Discord channel.' + (url ? ' Hit Save to keep this webhook.' : ''), 'var(--green)');
     else { if (!url) await loadDiscordSettings(); renderDiscordSettings((d && d.error) || 'Test failed.', 'var(--red)'); }
+  } catch(e) { renderDiscordSettings('Could not reach the server — try again.', 'var(--red)'); }
+}
+// "Confirmed lineups only" (2026-10-30): football bets whose match has confirmed lineups, nothing else.
+async function discordSetConfirmedOnly(on){
+  try {
+    const d = await ledgerApi('discord-webhook/options', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ confirmedOnly: !!on }) });
+    if (d && d.ok) {
+      BA_DISCORD_HOOK = Object.assign({}, BA_DISCORD_HOOK, { confirmedOnly: d.confirmedOnly });
+      renderDiscordSettings(on ? 'Only football bets with confirmed lineups will post now (anything already listed is skipped).'
+        : 'All bets on your Discord tabs will post again (anything already listed is skipped).', 'var(--green)');
+    } else { renderDiscordSettings((d && d.error) || 'Could not save.', 'var(--red)'); }
   } catch(e) { renderDiscordSettings('Could not reach the server — try again.', 'var(--red)'); }
 }
 async function discordSave(remove){
