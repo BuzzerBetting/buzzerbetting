@@ -808,43 +808,76 @@ CREATE TABLE IF NOT EXISTS user_bet_alert_sound (
 );
 `);
 
-// Discord bet alerts (2026-10-27) — see discord-alerts-poller.js. Per-user webhook (never sent back
-// to the browser), per-tab on/off, and what has already been posted so a bet posts once.
+// Discord bet alerts (2026-10-27) — see discord-alerts-poller.js. Each user can save up to two
+// webhooks (slot 1 / slot 2, 2026-10-30), each with its own tabs and 'Confirmed lineups only'
+// switch. The URL is never sent back to the browser; discord_hook_sent / discord_hook_seeded
+// remember what each webhook has already posted so a bet posts once.
 db.exec(`
-CREATE TABLE IF NOT EXISTS user_discord_webhook (
-  username     TEXT PRIMARY KEY,
-  url          TEXT NOT NULL,
-  status       TEXT NOT NULL DEFAULT 'ok',   -- 'ok' | 'dead' (Discord said 401/403/404)
-  last_error   TEXT,
-  last_sent_at TEXT,
-  updated_at   TEXT
+CREATE TABLE IF NOT EXISTS discord_hooks (
+  username       TEXT NOT NULL,
+  slot           INTEGER NOT NULL,             -- 1 | 2
+  url            TEXT NOT NULL,
+  status         TEXT NOT NULL DEFAULT 'ok',   -- 'ok' | 'dead' (Discord said 401/403/404)
+  last_error     TEXT,
+  last_sent_at   TEXT,
+  updated_at     TEXT,
+  confirmed_only INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (username, slot)
 );
--- Per-user Discord on/off per tab — { edgeKey: bool }, missing key = off.
-CREATE TABLE IF NOT EXISTS user_bet_alert_discord (
-  username   TEXT PRIMARY KEY,
+-- Per webhook on/off per tab — { edgeKey: bool }, missing key = off.
+CREATE TABLE IF NOT EXISTS discord_hook_tabs (
+  username   TEXT NOT NULL,
+  slot       INTEGER NOT NULL,
   prefs      TEXT NOT NULL,
-  updated_at TEXT
+  updated_at TEXT,
+  PRIMARY KEY (username, slot)
 );
--- What's already been posted (or silently seeded) per user, so a bet posts once.
-CREATE TABLE IF NOT EXISTS discord_sent (
+CREATE TABLE IF NOT EXISTS discord_hook_sent (
   username TEXT NOT NULL,
+  slot     INTEGER NOT NULL,
   edge     TEXT NOT NULL,
   bet_key  TEXT NOT NULL,
   odds     REAL,
   ev       REAL,
   sent_at  TEXT NOT NULL DEFAULT (datetime('now')),
   seen_day TEXT NOT NULL,
-  PRIMARY KEY (username, edge, bet_key)
+  PRIMARY KEY (username, slot, edge, bet_key)
 );
--- A (user, tab) row here means its first look has happened; missing = next look seeds silently.
-CREATE TABLE IF NOT EXISTS discord_seeded (
+-- A (user, slot, tab) row here means its first look has happened; missing = next look seeds silently.
+CREATE TABLE IF NOT EXISTS discord_hook_seeded (
   username TEXT NOT NULL,
+  slot     INTEGER NOT NULL,
   edge     TEXT NOT NULL,
-  PRIMARY KEY (username, edge)
+  PRIMARY KEY (username, slot, edge)
 );
 `);
-// "Confirmed lineups only" switch on the Discord webhook (2026-10-30) — see discord-alerts-poller.js.
-try { db.exec(`ALTER TABLE user_discord_webhook ADD COLUMN confirmed_only INTEGER NOT NULL DEFAULT 0`); } catch (e) { /* already exists */ }
+// One-off move of the single-webhook tables (2026-10-27 → 10-30) into slot 1. The old tables are
+// renamed *_pre_slots rather than dropped, so this only ever runs once.
+{
+  const has = t => !!db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`).get(t);
+  if (has('user_discord_webhook')) {
+    db.transaction(() => {
+      const cols = db.prepare(`PRAGMA table_info(user_discord_webhook)`).all().map(c => c.name);
+      const co = cols.includes('confirmed_only') ? 'confirmed_only' : '0';
+      db.exec(`INSERT OR IGNORE INTO discord_hooks (username, slot, url, status, last_error, last_sent_at, updated_at, confirmed_only)
+               SELECT username, 1, url, status, last_error, last_sent_at, updated_at, ${co} FROM user_discord_webhook`);
+      db.exec(`ALTER TABLE user_discord_webhook RENAME TO user_discord_webhook_pre_slots`);
+      if (has('user_bet_alert_discord')) {
+        db.exec(`INSERT OR IGNORE INTO discord_hook_tabs (username, slot, prefs, updated_at) SELECT username, 1, prefs, updated_at FROM user_bet_alert_discord`);
+        db.exec(`ALTER TABLE user_bet_alert_discord RENAME TO user_bet_alert_discord_pre_slots`);
+      }
+      if (has('discord_sent')) {
+        db.exec(`INSERT OR IGNORE INTO discord_hook_sent (username, slot, edge, bet_key, odds, ev, sent_at, seen_day)
+                 SELECT username, 1, edge, bet_key, odds, ev, sent_at, seen_day FROM discord_sent`);
+        db.exec(`ALTER TABLE discord_sent RENAME TO discord_sent_pre_slots`);
+      }
+      if (has('discord_seeded')) {
+        db.exec(`INSERT OR IGNORE INTO discord_hook_seeded (username, slot, edge) SELECT username, 1, edge FROM discord_seeded`);
+        db.exec(`ALTER TABLE discord_seeded RENAME TO discord_seeded_pre_slots`);
+      }
+    })();
+  }
+}
 
 
 module.exports = db;

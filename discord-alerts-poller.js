@@ -6,7 +6,7 @@
 // render applies), then for every user who has saved a Discord webhook and switched that tab
 // on, post any bet that wasn't there before.
 //
-// Per user, per tab:
+// Per webhook (a user can save two — slot 1 / slot 2, each with its own tabs), per tab:
 //   - first look after the tab is switched on (or a webhook is saved) seeds silently, so turning
 //     it on doesn't dump everything already listed;
 //   - a bet posts once (key: tab + match + market + selection + bookmaker) and only re-posts if
@@ -35,7 +35,7 @@ const TICK_MS = 60000;
 const FIRST_RUN_DELAY_MS = 20000;
 const MAX_MSGS_PER_MIN = 4;
 const EMBEDS_PER_MSG = 10;
-const MAX_QUEUE = 300;               // per user; oldest dropped past this
+const MAX_QUEUE = 300;               // per webhook; oldest dropped past this
 const ODDS_MOVE = 0.02;              // re-post when odds move 2%+ ...
 const EV_MOVE_PTS = 2;               // ... or EV moves 2+ points
 const PLACED_LOOKBACK = '-3 days';   // same as ledger-routes BET_PLACED_LOOKBACK
@@ -358,40 +358,42 @@ async function postWebhook(url, payload) {
 }
 const isDeadStatus = s => s === 401 || s === 403 || s === 404;
 
-function markDead(username, error) {
-  db.prepare(`UPDATE user_discord_webhook SET status = 'dead', last_error = ?, updated_at = ? WHERE username = ?`)
-    .run(error, new Date().toISOString(), username);
-  QUEUES.delete(username);
-  console.warn(`[discord] webhook for ${username} marked dead: ${error}`);
+function markDead(username, slot, error) {
+  db.prepare(`UPDATE discord_hooks SET status = 'dead', last_error = ?, updated_at = ? WHERE username = ? AND slot = ?`)
+    .run(error, new Date().toISOString(), username, slot);
+  QUEUES.delete(qKey(username, slot));
+  console.warn(`[discord] webhook ${slot} for ${username} marked dead: ${error}`);
 }
 
-// username -> { embeds: [], sentTimes: [ms], busy }
+// One queue per webhook (user + slot) -> { username, slot, embeds: [], sentTimes: [ms], busy }
 const QUEUES = new Map();
-function queueFor(username) {
-  if (!QUEUES.has(username)) QUEUES.set(username, { embeds: [], sentTimes: [], busy: false });
-  return QUEUES.get(username);
+const qKey = (username, slot) => `${username}\u0000${slot}`;
+function queueFor(username, slot) {
+  const k = qKey(username, slot);
+  if (!QUEUES.has(k)) QUEUES.set(k, { username, slot, embeds: [], sentTimes: [], busy: false });
+  return QUEUES.get(k);
 }
-async function flush(username) {
-  const q = queueFor(username);
+async function flush(q) {
   if (q.busy || !q.embeds.length) return;
+  const { username, slot } = q;
   q.busy = true;
   try {
     while (q.embeds.length) {
       const now = Date.now();
       q.sentTimes = q.sentTimes.filter(t => now - t < 60000);
       if (q.sentTimes.length >= MAX_MSGS_PER_MIN) break;      // rest waits for the next tick
-      const hook = db.prepare(`SELECT url, status FROM user_discord_webhook WHERE username = ?`).get(username);
+      const hook = db.prepare(`SELECT url, status FROM discord_hooks WHERE username = ? AND slot = ?`).get(username, slot);
       if (!hook || hook.status !== 'ok') { q.embeds = []; break; }
       const batch = q.embeds.slice(0, EMBEDS_PER_MSG);
       const r = await postWebhook(hook.url, { embeds: batch });
       q.sentTimes.push(Date.now());
       if (r.ok) {
         q.embeds.splice(0, batch.length);
-        db.prepare(`UPDATE user_discord_webhook SET last_sent_at = ?, last_error = NULL WHERE username = ?`).run(new Date().toISOString(), username);
+        db.prepare(`UPDATE discord_hooks SET last_sent_at = ?, last_error = NULL WHERE username = ? AND slot = ?`).run(new Date().toISOString(), username, slot);
       } else if (isDeadStatus(r.status)) {
-        markDead(username, r.error); break;
+        markDead(username, slot, r.error); break;
       } else {
-        db.prepare(`UPDATE user_discord_webhook SET last_error = ? WHERE username = ?`).run(r.error, username);
+        db.prepare(`UPDATE discord_hooks SET last_error = ? WHERE username = ? AND slot = ?`).run(r.error, username, slot);
         break;                                              // transient — try again next tick
       }
       await sleep(1200);
@@ -399,9 +401,10 @@ async function flush(username) {
   } finally { q.busy = false; }
 }
 
-async function sendTest(url, username) {
+async function sendTest(url, username, slot) {
+  const who = username ? ` for ${username}${slot ? ` (webhook ${slot})` : ''}` : '';
   return postWebhook(url, { embeds: [{
-    description: `✅ **BuzzerBetting test message** — Discord alerts are connected${username ? ` for ${username}` : ''}. New bets on the tabs you switch on will post here.`,
+    description: `✅ **BuzzerBetting test message** — Discord alerts are connected${who}. New bets on the tabs you switch on for this webhook will post here.`,
     color: 0x16a34a, timestamp: new Date().toISOString(),
   }] });
 }
@@ -448,8 +451,8 @@ async function confirmedMatchIds(rows) {
 }
 
 // ---- main tick ----
-function prefsFor(username) {
-  const row = db.prepare(`SELECT prefs FROM user_bet_alert_discord WHERE username = ?`).get(username);
+function prefsFor(username, slot) {
+  const row = db.prepare(`SELECT prefs FROM discord_hook_tabs WHERE username = ? AND slot = ?`).get(username, slot);
   try { return (row && JSON.parse(row.prefs)) || {}; } catch (e) { return {}; }
 }
 
@@ -458,51 +461,56 @@ async function tick() {
   if (running) return;
   running = true;
   try {
-    const users = db.prepare(`SELECT username, confirmed_only FROM user_discord_webhook WHERE status = 'ok'`).all()
-      .map(u => ({ username: u.username, prefs: prefsFor(u.username), confirmedOnly: !!u.confirmed_only }))
-      .filter(u => Object.keys(DISCORD_EDGES).some(e => u.prefs[e] === true));
+    // One entry per working webhook — a user with two webhooks is handled as two separate posters.
+    const hooks = db.prepare(`SELECT username, slot, confirmed_only FROM discord_hooks WHERE status = 'ok'`).all()
+      .map(h => ({ username: h.username, slot: h.slot, prefs: prefsFor(h.username, h.slot), confirmedOnly: !!h.confirmed_only }))
+      .filter(h => Object.keys(DISCORD_EDGES).some(e => h.prefs[e] === true));
     const today = londonDay();
-    if (users.length) {
-      const wanted = new Set(users.flatMap(u => Object.keys(DISCORD_EDGES).filter(e => u.prefs[e] === true)));
+    if (hooks.length) {
+      const wanted = new Set(hooks.flatMap(h => Object.keys(DISCORD_EDGES).filter(e => h.prefs[e] === true)));
       const ctx = { bookOk: makeBookFilter() };
       const feeds = {};
       await Promise.all([...wanted].map(async e => {
         try { feeds[e] = await BUILDERS[e](ctx); } catch (err) { console.error(`[discord] ${e} build failed:`, err.message); feeds[e] = null; }
       }));
       let confirmedIds = new Set();
-      if (users.some(u => u.confirmedOnly)) {
+      if (hooks.some(h => h.confirmedOnly)) {
         try {
           confirmedIds = await confirmedMatchIds([...LINEUP_EDGES].flatMap(e => Array.isArray(feeds[e]) ? feeds[e] : []));
         } catch (err) { console.error('[discord] lineup check failed:', err.message); }
       }
 
-      const getSent = db.prepare(`SELECT odds, ev FROM discord_sent WHERE username = ? AND edge = ? AND bet_key = ?`);
+      const getSent = db.prepare(`SELECT odds, ev FROM discord_hook_sent WHERE username = ? AND slot = ? AND edge = ? AND bet_key = ?`);
       const putSent = db.prepare(
-        `INSERT INTO discord_sent (username, edge, bet_key, odds, ev, seen_day) VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(username, edge, bet_key) DO UPDATE SET odds = excluded.odds, ev = excluded.ev, sent_at = datetime('now'), seen_day = excluded.seen_day`);
-      const touchSent = db.prepare(`UPDATE discord_sent SET seen_day = ? WHERE username = ? AND edge = ? AND bet_key = ?`);
-      const isSeeded = db.prepare(`SELECT 1 FROM discord_seeded WHERE username = ? AND edge = ?`);
-      const markSeeded = db.prepare(`INSERT OR IGNORE INTO discord_seeded (username, edge) VALUES (?, ?)`);
+        `INSERT INTO discord_hook_sent (username, slot, edge, bet_key, odds, ev, seen_day) VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(username, slot, edge, bet_key) DO UPDATE SET odds = excluded.odds, ev = excluded.ev, sent_at = datetime('now'), seen_day = excluded.seen_day`);
+      const touchSent = db.prepare(`UPDATE discord_hook_sent SET seen_day = ? WHERE username = ? AND slot = ? AND edge = ? AND bet_key = ?`);
+      const isSeeded = db.prepare(`SELECT 1 FROM discord_hook_seeded WHERE username = ? AND slot = ? AND edge = ?`);
+      const markSeeded = db.prepare(`INSERT OR IGNORE INTO discord_hook_seeded (username, slot, edge) VALUES (?, ?, ?)`);
 
-      for (const u of users) {
-        const placed = new Set(db.prepare(`SELECT bet_key FROM bet_alert_placed WHERE username = ? AND placed_at >= datetime('now', ?)`)
-          .all(u.username, PLACED_LOOKBACK).map(r => r.bet_key));
-        const removed = new Set(db.prepare(`SELECT bet_key FROM bet_alert_removed WHERE username = ? AND removed_at >= datetime('now', ?)`)
-          .all(u.username, PLACED_LOOKBACK).map(r => r.bet_key));
+      const ticks = new Map(); // username -> { placed, removed } — shared by both of a user's webhooks
+      for (const h of hooks) {
+        if (!ticks.has(h.username)) ticks.set(h.username, {
+          placed: new Set(db.prepare(`SELECT bet_key FROM bet_alert_placed WHERE username = ? AND placed_at >= datetime('now', ?)`)
+            .all(h.username, PLACED_LOOKBACK).map(r => r.bet_key)),
+          removed: new Set(db.prepare(`SELECT bet_key FROM bet_alert_removed WHERE username = ? AND removed_at >= datetime('now', ?)`)
+            .all(h.username, PLACED_LOOKBACK).map(r => r.bet_key)),
+        });
+        const { placed, removed } = ticks.get(h.username);
         const embeds = [];
         db.transaction(() => {
           for (const edge of Object.keys(DISCORD_EDGES)) {
-            if (u.prefs[edge] !== true || !Array.isArray(feeds[edge])) continue;   // null = feed failed this tick, skip
-            if (u.confirmedOnly && !LINEUP_EDGES.has(edge)) continue;
-            const seeding = !isSeeded.get(u.username, edge);
+            if (h.prefs[edge] !== true || !Array.isArray(feeds[edge])) continue;   // null = feed failed this tick, skip
+            if (h.confirmedOnly && !LINEUP_EDGES.has(edge)) continue;
+            const seeding = !isSeeded.get(h.username, h.slot, edge);
             for (const b of feeds[edge]) {
               if (!b || (!b.match && !b.selection)) continue;
               // Not recorded as sent either, so it still posts as new the moment its lineup lands.
-              if (u.confirmedOnly && !(b.matchId != null && confirmedIds.has(String(b.matchId)))) continue;
+              if (h.confirmedOnly && !(b.matchId != null && confirmedIds.has(String(b.matchId)))) continue;
               const bk = betKey(b);
               if (placed.has(bk) || (b.removedKey && removed.has(b.removedKey))) continue;
               const key = `${bk} | ${norm(b.bk)}${b.keyExtra ? ' | ' + norm(b.keyExtra) : ''}`;
-              const prev = getSent.get(u.username, edge, key);
+              const prev = getSent.get(h.username, h.slot, edge, key);
               let post = false, wasPrev = null;
               if (!prev) post = true;
               else {
@@ -511,26 +519,26 @@ async function tick() {
                 if (oddsMoved || evMoved) { post = true; wasPrev = prev; }
               }
               if (post) {
-                putSent.run(u.username, edge, key, b.odds, b.ev, today);
+                putSent.run(h.username, h.slot, edge, key, b.odds, b.ev, today);
                 if (!seeding) embeds.push({ description: betLine(DISCORD_EDGES[edge], b, wasPrev), color: EDGE_COLOR[edge] });
               } else {
-                touchSent.run(today, u.username, edge, key);
+                touchSent.run(today, h.username, h.slot, edge, key);
               }
             }
-            if (seeding) markSeeded.run(u.username, edge);
+            if (seeding) markSeeded.run(h.username, h.slot, edge);
           }
         })();
         if (embeds.length) {
-          const q = queueFor(u.username);
+          const q = queueFor(h.username, h.slot);
           q.embeds.push(...embeds);
           if (q.embeds.length > MAX_QUEUE) q.embeds.splice(0, q.embeds.length - MAX_QUEUE);
-          console.log(`[discord] ${u.username}: queued ${embeds.length} new bet${embeds.length === 1 ? '' : 's'}`);
+          console.log(`[discord] ${h.username} (webhook ${h.slot}): queued ${embeds.length} new bet${embeds.length === 1 ? '' : 's'}`);
         }
       }
     }
     // Daily clear: forget anything that hasn't been on its feed since before London midnight.
-    db.prepare(`DELETE FROM discord_sent WHERE seen_day < ?`).run(today);
-    for (const username of QUEUES.keys()) flush(username).catch(err => console.error('[discord] flush failed:', err.message));
+    db.prepare(`DELETE FROM discord_hook_sent WHERE seen_day < ?`).run(today);
+    for (const q of QUEUES.values()) flush(q).catch(err => console.error('[discord] flush failed:', err.message));
   } catch (err) {
     console.error('[discord] tick failed:', err && err.message);
   } finally { running = false; }

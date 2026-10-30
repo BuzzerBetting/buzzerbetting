@@ -4513,92 +4513,116 @@ router.post('/bet-alert-sound', (req, res) => {
   res.json({ ok: true });
 });
 
-// ---- Discord bet alerts (per user, 2026-10-27) — sending lives in discord-alerts-poller.js ----
+/// ---- Discord bet alerts (per user, 2026-10-27) — sending lives in discord-alerts-poller.js ----
 // The webhook URL is write-only from the browser: GET only ever returns a masked copy.
+// Each user can save two webhooks (slot 1 / slot 2, 2026-10-30), each with its own tabs and
+// 'Confirmed lineups only' switch. Every endpoint takes an optional slot (body or ?slot=),
+// default 1, so the single-webhook setup behaves exactly as before.
 const discordAlerts = require('./discord-alerts-poller');
-function discordHookRow(username) {
-  return db.prepare(`SELECT url, status, last_error, last_sent_at, updated_at, confirmed_only FROM user_discord_webhook WHERE username = ?`).get(username);
+const DISCORD_SLOTS = [1, 2];
+function discordSlot(req) {
+  const v = Number((req.body && req.body.slot) || (req.query && req.query.slot) || 1);
+  return DISCORD_SLOTS.includes(v) ? v : null;
 }
-// GET /api/ledger/discord-webhook → { ok, configured, masked, status, lastError, lastSentAt, confirmedOnly }
+function discordHookRow(username, slot) {
+  return db.prepare(`SELECT url, status, last_error, last_sent_at, updated_at, confirmed_only FROM discord_hooks WHERE username = ? AND slot = ?`).get(username, slot);
+}
+function discordHookJson(r, slot) {
+  if (!r) return { slot, configured: false };
+  return { slot, configured: true, masked: discordAlerts.maskWebhook(r.url), status: r.status,
+           lastError: r.last_error || null, lastSentAt: r.last_sent_at || null, confirmedOnly: !!r.confirmed_only };
+}
+function discordTabPrefs(username, slot) {
+  const row = db.prepare(`SELECT prefs FROM discord_hook_tabs WHERE username = ? AND slot = ?`).get(username, slot);
+  try { return (row && JSON.parse(row.prefs)) || {}; } catch (e) { return {}; }
+}
+const DISCORD_BAD_URL = 'That isn\'t a Discord webhook URL — it should start https://discord.com/api/webhooks/';
+// GET /api/ledger/discord-webhook → { ok, ...slot 1 (configured, masked, status, lastError, lastSentAt,
+// confirmedOnly), hooks: [slot 1, slot 2] }
 router.get('/discord-webhook', (req, res) => {
   if (!req.username) return res.status(400).json({ ok: false, error: 'no session' });
-  const r = discordHookRow(req.username);
-  if (!r) return res.json({ ok: true, configured: false });
-  res.json({ ok: true, configured: true, masked: discordAlerts.maskWebhook(r.url), status: r.status,
-             lastError: r.last_error || null, lastSentAt: r.last_sent_at || null, confirmedOnly: !!r.confirmed_only });
+  const hooks = DISCORD_SLOTS.map(s => discordHookJson(discordHookRow(req.username, s), s));
+  res.json(Object.assign({ ok: true }, hooks[0], { hooks }));
 });
-// POST /api/ledger/discord-webhook  body: { url } — saves (and re-arms a dead one); url '' removes it.
-// A fresh save re-seeds every tab silently, so it doesn't dump what's already listed.
+// POST /api/ledger/discord-webhook  body: { url, slot? } — saves (and re-arms a dead one); url '' removes it.
+// A fresh save re-seeds that webhook's tabs silently, so it doesn't dump what's already listed.
 router.post('/discord-webhook', (req, res) => {
   if (!req.username) return res.status(400).json({ ok: false, error: 'no session' });
+  const slot = discordSlot(req);
+  if (!slot) return res.status(400).json({ ok: false, error: 'bad slot' });
   const url = String((req.body && req.body.url) || '').trim();
   if (!url) {
-    db.prepare(`DELETE FROM user_discord_webhook WHERE username = ?`).run(req.username);
-    db.prepare(`DELETE FROM discord_seeded WHERE username = ?`).run(req.username);
-    return res.json({ ok: true, configured: false });
+    db.prepare(`DELETE FROM discord_hooks WHERE username = ? AND slot = ?`).run(req.username, slot);
+    db.prepare(`DELETE FROM discord_hook_seeded WHERE username = ? AND slot = ?`).run(req.username, slot);
+    return res.json(Object.assign({ ok: true }, discordHookJson(null, slot)));
   }
-  if (!discordAlerts.validWebhook(url)) return res.status(400).json({ ok: false, error: 'That isn\'t a Discord webhook URL — it should start https://discord.com/api/webhooks/' });
+  if (!discordAlerts.validWebhook(url)) return res.status(400).json({ ok: false, error: DISCORD_BAD_URL });
   db.prepare(
-    `INSERT INTO user_discord_webhook (username, url, status, last_error, updated_at) VALUES (?, ?, 'ok', NULL, ?)
-     ON CONFLICT(username) DO UPDATE SET url = excluded.url, status = 'ok', last_error = NULL, updated_at = excluded.updated_at`
-  ).run(req.username, url, new Date().toISOString());
-  db.prepare(`DELETE FROM discord_seeded WHERE username = ?`).run(req.username);
-  const saved = discordHookRow(req.username);
-  res.json({ ok: true, configured: true, masked: discordAlerts.maskWebhook(url), status: 'ok', confirmedOnly: !!(saved && saved.confirmed_only) });
+    `INSERT INTO discord_hooks (username, slot, url, status, last_error, updated_at) VALUES (?, ?, ?, 'ok', NULL, ?)
+     ON CONFLICT(username, slot) DO UPDATE SET url = excluded.url, status = 'ok', last_error = NULL, updated_at = excluded.updated_at`
+  ).run(req.username, slot, url, new Date().toISOString());
+  db.prepare(`DELETE FROM discord_hook_seeded WHERE username = ? AND slot = ?`).run(req.username, slot);
+  res.json(Object.assign({ ok: true }, discordHookJson(discordHookRow(req.username, slot), slot)));
 });
-// POST /api/ledger/discord-webhook/options  body: { confirmedOnly } — the 'Confirmed lineups only'
-// switch. Flipping it either way re-seeds every tab silently: switching it off would otherwise
-// post every predicted-XI bet currently listed at once.
+// POST /api/ledger/discord-webhook/options  body: { confirmedOnly, slot? } — that webhook's 'Confirmed
+// lineups only' switch. Flipping it either way re-seeds the webhook's tabs silently: switching it
+// off would otherwise post every predicted-XI bet currently listed at once.
 router.post('/discord-webhook/options', (req, res) => {
   if (!req.username) return res.status(400).json({ ok: false, error: 'no session' });
-  if (!discordHookRow(req.username)) return res.status(400).json({ ok: false, error: 'Save a webhook first.' });
+  const slot = discordSlot(req);
+  if (!slot) return res.status(400).json({ ok: false, error: 'bad slot' });
+  if (!discordHookRow(req.username, slot)) return res.status(400).json({ ok: false, error: 'Save a webhook first.' });
   const on = !!(req.body && req.body.confirmedOnly);
-  db.prepare(`UPDATE user_discord_webhook SET confirmed_only = ?, updated_at = ? WHERE username = ?`).run(on ? 1 : 0, new Date().toISOString(), req.username);
-  db.prepare(`DELETE FROM discord_seeded WHERE username = ?`).run(req.username);
-  res.json({ ok: true, confirmedOnly: on });
+  db.prepare(`UPDATE discord_hooks SET confirmed_only = ?, updated_at = ? WHERE username = ? AND slot = ?`).run(on ? 1 : 0, new Date().toISOString(), req.username, slot);
+  db.prepare(`DELETE FROM discord_hook_seeded WHERE username = ? AND slot = ?`).run(req.username, slot);
+  res.json({ ok: true, slot, confirmedOnly: on });
 });
-// POST /api/ledger/discord-webhook/test  body: { url? } — tests the pasted URL, or the saved one.
+// POST /api/ledger/discord-webhook/test  body: { url?, slot? } — tests the pasted URL, or that slot's saved one.
 // A 401/403/404 on the saved URL marks it dead, same as the poller does.
 router.post('/discord-webhook/test', async (req, res) => {
   if (!req.username) return res.status(400).json({ ok: false, error: 'no session' });
+  const slot = discordSlot(req);
+  if (!slot) return res.status(400).json({ ok: false, error: 'bad slot' });
   const pasted = String((req.body && req.body.url) || '').trim();
-  const saved = discordHookRow(req.username);
+  const saved = discordHookRow(req.username, slot);
   const url = pasted || (saved && saved.url);
   if (!url) return res.status(400).json({ ok: false, error: 'Paste a webhook URL first.' });
-  if (!discordAlerts.validWebhook(url)) return res.status(400).json({ ok: false, error: 'That isn\'t a Discord webhook URL — it should start https://discord.com/api/webhooks/' });
-  const r = await discordAlerts.sendTest(url, req.username);
+  if (!discordAlerts.validWebhook(url)) return res.status(400).json({ ok: false, error: DISCORD_BAD_URL });
+  const r = await discordAlerts.sendTest(url, req.username, slot);
   if (saved && saved.url === url) {
-    if (r.ok) db.prepare(`UPDATE user_discord_webhook SET status = 'ok', last_error = NULL, last_sent_at = ? WHERE username = ?`).run(new Date().toISOString(), req.username);
-    else if (discordAlerts.isDeadStatus(r.status)) db.prepare(`UPDATE user_discord_webhook SET status = 'dead', last_error = ? WHERE username = ?`).run(r.error, req.username);
+    if (r.ok) db.prepare(`UPDATE discord_hooks SET status = 'ok', last_error = NULL, last_sent_at = ? WHERE username = ? AND slot = ?`).run(new Date().toISOString(), req.username, slot);
+    else if (discordAlerts.isDeadStatus(r.status)) db.prepare(`UPDATE discord_hooks SET status = 'dead', last_error = ? WHERE username = ? AND slot = ?`).run(r.error, req.username, slot);
   }
   if (r.ok) return res.json({ ok: true });
   const dead = discordAlerts.isDeadStatus(r.status);
   res.json({ ok: false, dead, error: dead ? `Discord says this webhook doesn't exist any more (${r.error}). Make a new one and save it.` : r.error });
 });
-// GET /api/ledger/bet-alert-discord → { ok, prefs: { edgeKey: bool }, edges: [...] } (missing key = off)
+// GET /api/ledger/bet-alert-discord → { ok, prefs: slot 1 { edgeKey: bool }, prefsBySlot: { 1: {...}, 2: {...} }, edges }
+// (missing key = off)
 router.get('/bet-alert-discord', (req, res) => {
   if (!req.username) return res.status(400).json({ ok: false, error: 'no session' });
-  const row = db.prepare(`SELECT prefs FROM user_bet_alert_discord WHERE username = ?`).get(req.username);
-  let prefs = {};
-  if (row) { try { prefs = JSON.parse(row.prefs) || {}; } catch (e) { prefs = {}; } }
-  res.json({ ok: true, prefs, edges: Object.keys(discordAlerts.DISCORD_EDGES) });
+  const prefsBySlot = {};
+  for (const s of DISCORD_SLOTS) prefsBySlot[s] = discordTabPrefs(req.username, s);
+  res.json({ ok: true, prefs: prefsBySlot[1], prefsBySlot, edges: Object.keys(discordAlerts.DISCORD_EDGES) });
 });
-// POST /api/ledger/bet-alert-discord  body: { prefs: {...} } — a tab switched on re-seeds silently.
+// POST /api/ledger/bet-alert-discord  body: { prefs: {...}, slot? } — a tab switched on re-seeds silently.
 router.post('/bet-alert-discord', (req, res) => {
   if (!req.username) return res.status(400).json({ ok: false, error: 'no session' });
+  const slot = discordSlot(req);
+  if (!slot) return res.status(400).json({ ok: false, error: 'bad slot' });
   const prefs = (req.body && typeof req.body.prefs === 'object' && req.body.prefs) || {};
   const clean = {};
   for (const k of Object.keys(discordAlerts.DISCORD_EDGES)) if (k in prefs) clean[k] = prefs[k] === true;
   db.transaction(() => {
     db.prepare(
-      `INSERT INTO user_bet_alert_discord (username, prefs, updated_at) VALUES (?, ?, ?)
-       ON CONFLICT(username) DO UPDATE SET prefs = excluded.prefs, updated_at = excluded.updated_at`
-    ).run(req.username, JSON.stringify(clean), new Date().toISOString());
+      `INSERT INTO discord_hook_tabs (username, slot, prefs, updated_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT(username, slot) DO UPDATE SET prefs = excluded.prefs, updated_at = excluded.updated_at`
+    ).run(req.username, slot, JSON.stringify(clean), new Date().toISOString());
     for (const [k, on] of Object.entries(clean)) {
-      if (!on) db.prepare(`DELETE FROM discord_seeded WHERE username = ? AND edge = ?`).run(req.username, k);
+      if (!on) db.prepare(`DELETE FROM discord_hook_seeded WHERE username = ? AND slot = ? AND edge = ?`).run(req.username, slot, k);
     }
   })();
-  res.json({ ok: true, prefs: clean });
+  res.json({ ok: true, slot, prefs: clean });
 });
 
 // ---- OC Coverage ignores (shared, 12h) ----

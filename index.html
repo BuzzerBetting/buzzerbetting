@@ -286,23 +286,48 @@ tr.ba-placed > td{background:var(--green-bg) !important}
           </label>
         </div>
         <div id="notif-discord" style="padding:10px 14px;border-bottom:0.5px solid var(--border);display:flex;flex-direction:column;gap:7px">
-          <div style="display:flex;align-items:center;justify-content:space-between;font-size:12.5px;color:var(--text2)">
-            <span><i class="ti ti-brand-discord" style="color:#5865F2;margin-right:4px"></i>Discord notifications</span>
-            <span id="discord-status" style="font-size:11.5px"></span>
+          <div style="font-size:12.5px;color:var(--text2)"><i class="ti ti-brand-discord" style="color:#5865F2;margin-right:4px"></i>Discord notifications</div>
+          <!-- Two webhook slots (2026-10-30): same controls, ids suffixed -1 / -2. Slot 2 stays hidden behind "Add a second webhook" until used. -->
+          <div id="discord-slot-1" style="display:flex;flex-direction:column;gap:7px">
+            <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--text2)">
+              <span id="discord-title-1" style="font-weight:600">Webhook</span>
+              <span id="discord-status-1" style="font-size:11.5px"></span>
+            </div>
+            <div id="discord-warn-1" style="display:none;font-size:11.5px;line-height:1.4;color:var(--red);background:var(--red-bg);border-radius:6px;padding:6px 8px"></div>
+            <input id="discord-url-1" type="text" autocomplete="off" spellcheck="false" placeholder="Paste your Discord webhook URL" style="width:100%;box-sizing:border-box;padding:6px 8px;font-size:12px;border:.5px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-family:inherit">
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button onclick="discordTest(1)" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:5px 9px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit">Send test message</button>
+              <button onclick="discordSave(1,false)" style="background:var(--brand);border:.5px solid var(--brand);border-radius:6px;padding:5px 12px;cursor:pointer;color:#fff;font-size:12px;font-family:inherit">Save</button>
+              <button id="discord-remove-1" onclick="discordSave(1,true)" style="display:none;margin-left:auto;background:none;border:.5px solid var(--border);border-radius:6px;padding:5px 9px;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit">Remove</button>
+            </div>
+            <label id="discord-confirmed-row-1" style="display:none;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--text2);cursor:pointer;user-select:none" title="Only post football bets whose match has confirmed lineups (FotMob). Horses, darts, F1, NFL, arbs, Errors, OC Coverage, accas and bookie boost pages stop posting to this webhook.">
+              <span>Confirmed lineups only</span>
+              <input type="checkbox" id="discord-confirmed-only-1" onchange="discordSetConfirmedOnly(1,this.checked)">
+            </label>
+            <div id="discord-tabs-1" style="display:none;font-size:11.5px;line-height:1.4;color:var(--text3)"></div>
+            <div id="discord-msg-1" style="font-size:11.5px;line-height:1.4;color:var(--text3)"></div>
           </div>
-          <div id="discord-warn" style="display:none;font-size:11.5px;line-height:1.4;color:var(--red);background:var(--red-bg);border-radius:6px;padding:6px 8px"></div>
-          <input id="discord-url" type="text" autocomplete="off" spellcheck="false" placeholder="Paste your Discord webhook URL" style="width:100%;box-sizing:border-box;padding:6px 8px;font-size:12px;border:.5px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-family:inherit">
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button onclick="discordTest()" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:5px 9px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit">Send test message</button>
-            <button onclick="discordSave(false)" style="background:var(--brand);border:.5px solid var(--brand);border-radius:6px;padding:5px 12px;cursor:pointer;color:#fff;font-size:12px;font-family:inherit">Save</button>
-            <button id="discord-remove" onclick="discordSave(true)" style="display:none;margin-left:auto;background:none;border:.5px solid var(--border);border-radius:6px;padding:5px 9px;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit">Remove</button>
+          <button id="discord-add-2" onclick="discordShowSlot2()" style="display:none;align-self:flex-start;background:none;border:.5px dashed var(--border);border-radius:6px;padding:5px 9px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit"><i class="ti ti-plus"></i> Add a second webhook</button>
+          <div id="discord-slot-2" style="display:none;flex-direction:column;gap:7px;padding-top:8px;border-top:.5px dashed var(--border)">
+            <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--text2)">
+              <span style="font-weight:600">Webhook 2</span>
+              <span id="discord-status-2" style="font-size:11.5px"></span>
+            </div>
+            <div id="discord-warn-2" style="display:none;font-size:11.5px;line-height:1.4;color:var(--red);background:var(--red-bg);border-radius:6px;padding:6px 8px"></div>
+            <input id="discord-url-2" type="text" autocomplete="off" spellcheck="false" placeholder="Paste a second Discord webhook URL" style="width:100%;box-sizing:border-box;padding:6px 8px;font-size:12px;border:.5px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-family:inherit">
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button onclick="discordTest(2)" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:5px 9px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit">Send test message</button>
+              <button onclick="discordSave(2,false)" style="background:var(--brand);border:.5px solid var(--brand);border-radius:6px;padding:5px 12px;cursor:pointer;color:#fff;font-size:12px;font-family:inherit">Save</button>
+              <button id="discord-remove-2" onclick="discordSave(2,true)" style="display:none;margin-left:auto;background:none;border:.5px solid var(--border);border-radius:6px;padding:5px 9px;cursor:pointer;color:var(--text3);font-size:12px;font-family:inherit">Remove</button>
+            </div>
+            <label id="discord-confirmed-row-2" style="display:none;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--text2);cursor:pointer;user-select:none" title="Only post football bets whose match has confirmed lineups (FotMob). Horses, darts, F1, NFL, arbs, Errors, OC Coverage, accas and bookie boost pages stop posting to this webhook.">
+              <span>Confirmed lineups only</span>
+              <input type="checkbox" id="discord-confirmed-only-2" onchange="discordSetConfirmedOnly(2,this.checked)">
+            </label>
+            <div id="discord-tabs-2" style="display:none;font-size:11.5px;line-height:1.4;color:var(--text3)"></div>
+            <div id="discord-msg-2" style="font-size:11.5px;line-height:1.4;color:var(--text3)"></div>
           </div>
-          <label id="discord-confirmed-row" style="display:none;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--text2);cursor:pointer;user-select:none" title="Only post football bets whose match has confirmed lineups (FotMob). Horses, darts, F1, NFL, arbs, Errors, OC Coverage, accas and bookie boost pages stop posting.">
-            <span>Confirmed lineups only</span>
-            <input type="checkbox" id="discord-confirmed-only" onchange="discordSetConfirmedOnly(this.checked)">
-          </label>
-          <div id="discord-msg" style="font-size:11.5px;line-height:1.4;color:var(--text3)"></div>
-          <div style="font-size:11px;line-height:1.4;color:var(--text3)">Pick which tabs post with the <i class="ti ti-brand-discord"></i> icon next to each Bet Alerts tab's bell. Sent from the server, so it works with the site closed.</div>
+          <div id="discord-help" style="font-size:11px;line-height:1.4;color:var(--text3)">Pick which tabs post with the <i class="ti ti-brand-discord"></i> icon next to each Bet Alerts tab's bell. Sent from the server, so it works with the site closed.</div>
         </div>
         <div style="padding:6px 6px 8px">
           <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);padding:6px 10px 8px">Last 24 hours</div>
@@ -17512,52 +17537,80 @@ document.addEventListener('click', () => {
 
 // ---- Discord bet alerts (2026-10-27, Dan's spec) ----
 // Sending is all server-side (discord-alerts-poller.js on the DO box, every 60s, browser open or
-// not). Here: the per-tab Discord icon next to each tab's bell (user_bet_alert_discord, missing =
-// off) and the webhook box in the bell's Notifications panel. The webhook URL is never read back
+// not). Here: the per-tab Discord icon next to each tab's bell (discord_hook_tabs, missing =
+// off) and the webhook boxes in the bell's Notifications panel. The webhook URL is never read back
 // — the server only returns a masked copy. DDHH / Corners have no icon (nothing server-side to
 // price them from).
+// Two webhooks per user (2026-10-30): slot 1 / slot 2, each with its own tabs and 'Confirmed lineups
+// only' switch. With one webhook saved the icon is a plain on/off for it, as before; with both saved
+// a click cycles off → 1 → 2 → 1+2 and a small badge shows where the tab posts.
 const BA_DISCORD_EDGES = new Set(['oc-ev', 'calc-ev', 'watch', 'early', 'f1-ew', 'arbs', 'dnf', 'nfl-td', 'errors', 'unmatched', 'outliers', 'grosvenor']);
-let BA_DISCORD_PREFS = {};
-let BA_DISCORD_HOOK = null; // { configured, masked, status, lastError, lastSentAt } once loaded
-function baDiscordOn(key){ return BA_DISCORD_PREFS[key] === true; }
+let BA_DISCORD_PREFS = { 1: {}, 2: {} };   // slot -> { edgeKey: bool }
+let BA_DISCORD_HOOKS = { 1: null, 2: null }; // slot -> { configured, masked, status, lastError, lastSentAt, confirmedOnly } once loaded
+let BA_DISCORD_SHOW_SLOT2 = false;
+function baDiscordSlots(){ return [1, 2].filter(s => BA_DISCORD_HOOKS[s] && BA_DISCORD_HOOKS[s].configured); }
+function baDiscordOn(key, slot){ return !!(BA_DISCORD_PREFS[slot] && BA_DISCORD_PREFS[slot][key] === true); }
 function baDiscordIconHtml(key){
   if (!BA_DISCORD_EDGES.has(key)) return '';
-  const on = baDiscordOn(key);
-  const dead = BA_DISCORD_HOOK && BA_DISCORD_HOOK.status === 'dead';
-  const noHook = !BA_DISCORD_HOOK || !BA_DISCORD_HOOK.configured;
-  const title = noHook ? 'Discord alerts — add your webhook in the Notifications panel (bell, top right) first'
+  const slots = baDiscordSlots();
+  const onSlots = slots.filter(s => baDiscordOn(key, s));
+  const on = onSlots.length > 0;
+  const dead = onSlots.some(s => BA_DISCORD_HOOKS[s].status === 'dead');
+  const both = slots.length === 2;
+  const where = onSlots.map(s => `webhook ${s}`).join(' and ');
+  const title = !slots.length ? 'Discord alerts — add your webhook in the Notifications panel (bell, top right) first'
     : dead ? 'Discord webhook stopped working — fix it in the Notifications panel'
+    : both ? (on ? `Posting new bets on this tab to ${where} — click to change (off → 1 → 2 → 1+2)` : 'Not posting this tab to Discord — click to post to webhook 1 (click again for 2, then both)')
     : on ? 'Posting new bets on this tab to Discord — click to stop' : 'Not posting this tab to Discord — click to turn on';
   const color = on ? (dead ? 'var(--red)' : '#5865F2') : 'var(--text3)';
-  return ` <i class="ti ti-brand-discord" onclick="event.stopPropagation();baToggleDiscord('${key}')" title="${title}" style="font-size:13px;margin-left:2px;color:${color};opacity:${on ? 1 : .45}"></i>`;
+  const badge = both && on ? `<sup style="font-size:9px;font-weight:700;margin-left:1px">${onSlots.join('+')}</sup>` : '';
+  return ` <span onclick="event.stopPropagation();baToggleDiscord('${key}')" title="${title}" style="cursor:pointer;color:${color};opacity:${on ? 1 : .45}"><i class="ti ti-brand-discord" style="font-size:13px;margin-left:2px"></i>${badge}</span>`;
+}
+function baApplyDiscordHooks(h){
+  if (!h || !h.ok) return;
+  const hooks = Array.isArray(h.hooks) ? h.hooks : [Object.assign({ slot: 1 }, h)];
+  for (const x of hooks) if (x && (x.slot === 1 || x.slot === 2)) BA_DISCORD_HOOKS[x.slot] = x;
 }
 async function baLoadDiscordPrefs(){
   try {
     const [p, h] = await Promise.all([ledgerApi('bet-alert-discord'), ledgerApi('discord-webhook')]);
-    if (p && p.ok) BA_DISCORD_PREFS = p.prefs || {};
-    if (h && h.ok) BA_DISCORD_HOOK = h;
+    if (p && p.ok) BA_DISCORD_PREFS = { 1: (p.prefsBySlot && p.prefsBySlot[1]) || p.prefs || {}, 2: (p.prefsBySlot && p.prefsBySlot[2]) || {} };
+    baApplyDiscordHooks(h);
   } catch(e) {}
   renderBaTabs();
 }
+async function baSaveDiscordPrefs(slot){
+  await ledgerApi('bet-alert-discord', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ slot, prefs: BA_DISCORD_PREFS[slot] }) });
+}
 async function baToggleDiscord(key){
-  if (!BA_DISCORD_HOOK || !BA_DISCORD_HOOK.configured) {
+  const slots = baDiscordSlots();
+  if (!slots.length) {
     showToast('Add your Discord webhook first — bell icon (top right) → Discord notifications.', { duration: 7000 });
     toggleNotifPanel();
     return;
   }
-  BA_DISCORD_PREFS = Object.assign({}, BA_DISCORD_PREFS, { [key]: !baDiscordOn(key) });
+  // Work out the new on-set: one webhook → flip it; two → off → 1 → 2 → 1+2 → off.
+  const cur = slots.filter(s => baDiscordOn(key, s));
+  let next;
+  if (slots.length === 1) next = cur.length ? [] : [slots[0]];
+  else {
+    const state = cur.join('+');
+    next = state === '' ? [1] : state === '1' ? [2] : state === '2' ? [1, 2] : [];
+  }
+  const changed = slots.filter(s => cur.includes(s) !== next.includes(s));
+  for (const s of changed) BA_DISCORD_PREFS[s] = Object.assign({}, BA_DISCORD_PREFS[s], { [key]: next.includes(s) });
   renderBaTabs();
+  renderDiscordSettings();
   try {
-    await ledgerApi('bet-alert-discord', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prefs: BA_DISCORD_PREFS }) });
-    if (baDiscordOn(key)) showToast(`${baLabel(key)}: new bets will post to Discord (anything already listed is skipped).`, { duration: 6000 });
+    await Promise.all(changed.map(s => baSaveDiscordPrefs(s)));
+    if (next.length) showToast(`${baLabel(key)}: new bets will post to ${slots.length === 2 ? next.map(s => 'webhook ' + s).join(' and ') : 'Discord'} (anything already listed is skipped).`, { duration: 6000 });
+    else if (slots.length === 2) showToast(`${baLabel(key)}: not posting to Discord.`, { duration: 4000 });
   } catch(e) { showToast('Could not save the Discord setting — try again.'); }
 }
-function renderDiscordSettings(msg, msgColor){
-  const h = BA_DISCORD_HOOK || { configured: false };
-  const st = document.getElementById('discord-status');
-  const warn = document.getElementById('discord-warn');
-  const input = document.getElementById('discord-url');
-  const rm = document.getElementById('discord-remove');
+function renderDiscordSlot(slot, msg, msgColor){
+  const h = BA_DISCORD_HOOKS[slot] || { configured: false };
+  const el = id => document.getElementById(`${id}-${slot}`);
+  const st = el('discord-status'), warn = el('discord-warn'), input = el('discord-url'), rm = el('discord-remove');
   if (st) st.innerHTML = !h.configured ? '<span style="color:var(--text3)">Not set up</span>'
     : h.status === 'dead' ? '<span style="color:var(--red);font-weight:600">Stopped</span>'
     : '<span style="color:var(--green);font-weight:600">Connected</span>';
@@ -17565,55 +17618,90 @@ function renderDiscordSettings(msg, msgColor){
     warn.style.display = h.configured && h.status === 'dead' ? 'block' : 'none';
     warn.textContent = `⚠ Discord rejected this webhook (deleted or revoked), so nothing is being sent. Make a new webhook in Discord and save it here.${h.lastError ? ' — ' + h.lastError : ''}`;
   }
-  if (input) input.placeholder = h.configured ? `Saved: ${h.masked || 'webhook'} — paste a new one to replace` : 'Paste your Discord webhook URL';
+  if (input) input.placeholder = h.configured ? `Saved: ${h.masked || 'webhook'} — paste a new one to replace` : (slot === 2 ? 'Paste a second Discord webhook URL' : 'Paste your Discord webhook URL');
   if (rm) rm.style.display = h.configured ? '' : 'none';
-  const coRow = document.getElementById('discord-confirmed-row');
+  const coRow = el('discord-confirmed-row');
   if (coRow) coRow.style.display = h.configured ? 'flex' : 'none';
-  const coCb = document.getElementById('discord-confirmed-only');
+  const coCb = el('discord-confirmed-only');
   if (coCb) coCb.checked = !!h.confirmedOnly;
-  const m = document.getElementById('discord-msg');
+  const tabs = el('discord-tabs');
+  if (tabs) {
+    const on = [...BA_DISCORD_EDGES].filter(k => baDiscordOn(k, slot));
+    tabs.style.display = h.configured ? 'block' : 'none';
+    tabs.textContent = on.length ? `Tabs posting here: ${on.map(k => baLabel(k)).join(', ')}` : 'No tabs posting here yet.';
+  }
+  const m = el('discord-msg');
   if (m && msg !== undefined) { m.textContent = msg || ''; m.style.color = msgColor || 'var(--text3)'; }
 }
+// renderDiscordSettings(slot?, msg?, color?) — redraws both slots; msg goes to the given slot.
+function renderDiscordSettings(slot, msg, msgColor){
+  const h2 = BA_DISCORD_HOOKS[2] && BA_DISCORD_HOOKS[2].configured;
+  const h1 = BA_DISCORD_HOOKS[1] && BA_DISCORD_HOOKS[1].configured;
+  const show2 = h2 || BA_DISCORD_SHOW_SLOT2;
+  const s2 = document.getElementById('discord-slot-2');
+  if (s2) s2.style.display = show2 ? 'flex' : 'none';
+  const add = document.getElementById('discord-add-2');
+  if (add) add.style.display = h1 && !show2 ? '' : 'none';
+  const t1 = document.getElementById('discord-title-1');
+  if (t1) t1.textContent = show2 ? 'Webhook 1' : 'Webhook';
+  const help = document.getElementById('discord-help');
+  if (help) help.innerHTML = h1 && h2
+    ? 'Click the <i class="ti ti-brand-discord"></i> icon next to a Bet Alerts tab\'s bell to cycle where it posts: off → 1 → 2 → both. Sent from the server, so it works with the site closed.'
+    : 'Pick which tabs post with the <i class="ti ti-brand-discord"></i> icon next to each Bet Alerts tab\'s bell. Sent from the server, so it works with the site closed.';
+  for (const s of [1, 2]) renderDiscordSlot(s, s === slot ? msg : undefined, msgColor);
+}
+function discordShowSlot2(){
+  BA_DISCORD_SHOW_SLOT2 = true;
+  renderDiscordSettings(2, 'Each webhook has its own tabs and its own Confirmed lineups only switch.');
+  const i = document.getElementById('discord-url-2'); if (i) i.focus();
+}
 async function loadDiscordSettings(){
-  try { const h = await ledgerApi('discord-webhook'); if (h && h.ok) BA_DISCORD_HOOK = h; } catch(e) {}
+  try {
+    const [h, p] = await Promise.all([ledgerApi('discord-webhook'), ledgerApi('bet-alert-discord')]);
+    baApplyDiscordHooks(h);
+    if (p && p.ok) BA_DISCORD_PREFS = { 1: (p.prefsBySlot && p.prefsBySlot[1]) || p.prefs || {}, 2: (p.prefsBySlot && p.prefsBySlot[2]) || {} };
+  } catch(e) {}
   renderDiscordSettings();
   renderBaTabs();
 }
-async function discordTest(){
-  const input = document.getElementById('discord-url');
+async function discordTest(slot){
+  const input = document.getElementById(`discord-url-${slot}`);
   const url = (input && input.value || '').trim();
-  renderDiscordSettings('Sending…');
+  renderDiscordSettings(slot, 'Sending…');
   try {
-    const d = await ledgerApi('discord-webhook/test', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ url }) });
-    if (d && d.ok) renderDiscordSettings('Test message sent — check your Discord channel.' + (url ? ' Hit Save to keep this webhook.' : ''), 'var(--green)');
-    else { if (!url) await loadDiscordSettings(); renderDiscordSettings((d && d.error) || 'Test failed.', 'var(--red)'); }
-  } catch(e) { renderDiscordSettings('Could not reach the server — try again.', 'var(--red)'); }
+    const d = await ledgerApi('discord-webhook/test', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ slot, url }) });
+    if (d && d.ok) renderDiscordSettings(slot, 'Test message sent — check your Discord channel.' + (url ? ' Hit Save to keep this webhook.' : ''), 'var(--green)');
+    else { if (!url) await loadDiscordSettings(); renderDiscordSettings(slot, (d && d.error) || 'Test failed.', 'var(--red)'); }
+  } catch(e) { renderDiscordSettings(slot, 'Could not reach the server — try again.', 'var(--red)'); }
 }
-// "Confirmed lineups only" (2026-10-30): football bets whose match has confirmed lineups, nothing else.
-async function discordSetConfirmedOnly(on){
+// "Confirmed lineups only" (2026-10-30, per webhook): football bets whose match has confirmed lineups, nothing else.
+async function discordSetConfirmedOnly(slot, on){
   try {
-    const d = await ledgerApi('discord-webhook/options', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ confirmedOnly: !!on }) });
+    const d = await ledgerApi('discord-webhook/options', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ slot, confirmedOnly: !!on }) });
     if (d && d.ok) {
-      BA_DISCORD_HOOK = Object.assign({}, BA_DISCORD_HOOK, { confirmedOnly: d.confirmedOnly });
-      renderDiscordSettings(on ? 'Only football bets with confirmed lineups will post now (anything already listed is skipped).'
-        : 'All bets on your Discord tabs will post again (anything already listed is skipped).', 'var(--green)');
-    } else { renderDiscordSettings((d && d.error) || 'Could not save.', 'var(--red)'); }
-  } catch(e) { renderDiscordSettings('Could not reach the server — try again.', 'var(--red)'); }
+      BA_DISCORD_HOOKS[slot] = Object.assign({}, BA_DISCORD_HOOKS[slot], { confirmedOnly: d.confirmedOnly });
+      renderDiscordSettings(slot, on ? 'Only football bets with confirmed lineups will post to this webhook now (anything already listed is skipped).'
+        : 'All bets on this webhook\'s tabs will post again (anything already listed is skipped).', 'var(--green)');
+    } else { renderDiscordSettings(slot, (d && d.error) || 'Could not save.', 'var(--red)'); }
+  } catch(e) { renderDiscordSettings(slot, 'Could not reach the server — try again.', 'var(--red)'); }
 }
-async function discordSave(remove){
-  const input = document.getElementById('discord-url');
+async function discordSave(slot, remove){
+  const input = document.getElementById(`discord-url-${slot}`);
   const url = remove ? '' : (input && input.value || '').trim();
-  if (!remove && !url) { renderDiscordSettings('Paste a webhook URL first.', 'var(--red)'); return; }
-  if (remove && !confirm('Remove your Discord webhook? Nothing will post to Discord until you add one again.')) return;
+  if (!remove && !url) { renderDiscordSettings(slot, 'Paste a webhook URL first.', 'var(--red)'); return; }
+  if (remove && !confirm(`Remove ${baDiscordSlots().length > 1 ? 'webhook ' + slot : 'your Discord webhook'}? Nothing will post to it until you add one again.`)) return;
   try {
-    const d = await ledgerApi('discord-webhook', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ url }) });
+    const d = await ledgerApi('discord-webhook', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ slot, url }) });
     if (d && d.ok) {
       if (input) input.value = '';
-      BA_DISCORD_HOOK = d;
-      renderDiscordSettings(remove ? 'Webhook removed.' : 'Saved. Turn tabs on with the Discord icon next to each Bet Alerts tab.', 'var(--green)');
+      BA_DISCORD_HOOKS[slot] = d;
+      if (remove && slot === 2) BA_DISCORD_SHOW_SLOT2 = false;
+      renderDiscordSettings(slot, remove ? 'Webhook removed.'
+        : baDiscordSlots().length === 2 ? 'Saved. Click a tab\'s Discord icon to cycle it: off → 1 → 2 → both.'
+        : 'Saved. Turn tabs on with the Discord icon next to each Bet Alerts tab.', 'var(--green)');
       renderBaTabs();
-    } else renderDiscordSettings((d && d.error) || 'Could not save.', 'var(--red)');
-  } catch(e) { renderDiscordSettings('Could not reach the server — try again.', 'var(--red)'); }
+    } else renderDiscordSettings(slot, (d && d.error) || 'Could not save.', 'var(--red)');
+  } catch(e) { renderDiscordSettings(slot, 'Could not reach the server — try again.', 'var(--red)'); }
 }
 
 // OC Coverage tab (2026-09-17) — purely informational (no alert sound, unlike Errors above):
