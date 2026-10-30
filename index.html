@@ -13989,10 +13989,10 @@ let MATCHES_LEAGUES = null; // last-loaded fixtures, kept so the sort toggle can
 let MATCH_PREDICTIONS = {};        // matchId -> { home:{lineupConfirmed,cornerTakers,penTaker,...}, away:{...} }
 let MATCH_PRED_DATE = null;        // the fixture date the current MATCH_PREDICTIONS belong to
 let MATCH_PRED_INTERVAL = null;
-// Corner taker / corner threat (target) predictions switched off 2026-10-10 (edge gone) — kept,
+// Corner taker / corner threat (target) predictions switched off 2026-10-10 (edge gone), back on 2026-10-30 (user) — kept,
 // not deleted: true brings back the corner toggles here, the Corner bet stats panel and the Bet
 // Alerts Corners tab. Must match CORNER_PREDICTIONS_ENABLED in ledger-routes.js.
-const CORNER_PREDICTIONS_ENABLED = false;
+const CORNER_PREDICTIONS_ENABLED = true;
 function predCornersOn(){ return CORNER_PREDICTIONS_ENABLED && localStorage.getItem('bb_pred_corners') === '1'; }
 function predPensOn(){ return localStorage.getItem('bb_pred_pens') === '1'; }
 function predBetStatsOn(){ return CORNER_PREDICTIONS_ENABLED && localStorage.getItem('bb_pred_bet_stats') === '1'; }

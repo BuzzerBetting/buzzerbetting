@@ -3012,13 +3012,13 @@ router.get('/notifications', (req, res) => {
 // names) plus, once a side's XI is confirmed, predicted corner taker(s) and penalty taker
 // from the corner-model. corner-model/ is deployed separately to the DO box (like oc-scraper)
 // so its absence is non-fatal — the route still returns lineup status.
-// Corner taker / corner threat (target) predictions switched off 2026-10-10 — the edge has gone
+// Corner taker / corner threat (target) predictions switched off 2026-10-10, back on 2026-10-30 (user) — the edge had gone
 // and predictForTeam + its prediction log/settlement were dead weight on every match-predictions
 // poll. Everything is left in place: flip this back to true to bring the Today's Matches corner
 // columns, the Corner bet stats panel and the Bet Alerts Corners tab back (index.html has the
 // matching CORNER_PREDICTIONS_ENABLED). Pen-taker prediction is unaffected — it still uses
 // cornerModel.predictPenTaker below.
-const CORNER_PREDICTIONS_ENABLED = false;
+const CORNER_PREDICTIONS_ENABLED = true;
 const cornerModel = (() => {
   try { return require('./corner-model/predict'); }
   catch (e) { console.error('[match-predictions] corner-model not loaded:', e.message); return null; }
