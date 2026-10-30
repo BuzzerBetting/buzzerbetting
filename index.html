@@ -307,10 +307,9 @@ tr.ba-placed > td{background:var(--green-bg) !important}
             <div id="discord-tabs-1" style="display:none;font-size:11.5px;line-height:1.4;color:var(--text3)"></div>
             <div id="discord-msg-1" style="font-size:11.5px;line-height:1.4;color:var(--text3)"></div>
           </div>
-          <button id="discord-add-2" onclick="discordShowSlot2()" style="display:none;align-self:flex-start;background:none;border:.5px dashed var(--border);border-radius:6px;padding:5px 9px;cursor:pointer;color:var(--text2);font-size:12px;font-family:inherit"><i class="ti ti-plus"></i> Add a second webhook</button>
           <div id="discord-slot-2" style="display:none;flex-direction:column;gap:7px;padding-top:8px;border-top:.5px dashed var(--border)">
             <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--text2)">
-              <span style="font-weight:600">Webhook 2</span>
+              <span style="font-weight:600">Webhook 2 <span style="font-weight:400;color:var(--text3)">(optional — a second channel)</span></span>
               <span id="discord-status-2" style="font-size:11.5px"></span>
             </div>
             <div id="discord-warn-2" style="display:none;font-size:11.5px;line-height:1.4;color:var(--red);background:var(--red-bg);border-radius:6px;padding:6px 8px"></div>
@@ -17547,7 +17546,6 @@ document.addEventListener('click', () => {
 const BA_DISCORD_EDGES = new Set(['oc-ev', 'calc-ev', 'watch', 'early', 'f1-ew', 'arbs', 'dnf', 'nfl-td', 'errors', 'unmatched', 'outliers', 'grosvenor']);
 let BA_DISCORD_PREFS = { 1: {}, 2: {} };   // slot -> { edgeKey: bool }
 let BA_DISCORD_HOOKS = { 1: null, 2: null }; // slot -> { configured, masked, status, lastError, lastSentAt, confirmedOnly } once loaded
-let BA_DISCORD_SHOW_SLOT2 = false;
 function baDiscordSlots(){ return [1, 2].filter(s => BA_DISCORD_HOOKS[s] && BA_DISCORD_HOOKS[s].configured); }
 function baDiscordOn(key, slot){ return !!(BA_DISCORD_PREFS[slot] && BA_DISCORD_PREFS[slot][key] === true); }
 function baDiscordIconHtml(key){
@@ -17637,11 +17635,10 @@ function renderDiscordSlot(slot, msg, msgColor){
 function renderDiscordSettings(slot, msg, msgColor){
   const h2 = BA_DISCORD_HOOKS[2] && BA_DISCORD_HOOKS[2].configured;
   const h1 = BA_DISCORD_HOOKS[1] && BA_DISCORD_HOOKS[1].configured;
-  const show2 = h2 || BA_DISCORD_SHOW_SLOT2;
+  // Webhook 2's box is always shown once webhook 1 is saved (a hidden "Add" step got missed).
+  const show2 = h1 || h2;
   const s2 = document.getElementById('discord-slot-2');
   if (s2) s2.style.display = show2 ? 'flex' : 'none';
-  const add = document.getElementById('discord-add-2');
-  if (add) add.style.display = h1 && !show2 ? '' : 'none';
   const t1 = document.getElementById('discord-title-1');
   if (t1) t1.textContent = show2 ? 'Webhook 1' : 'Webhook';
   const help = document.getElementById('discord-help');
@@ -17649,11 +17646,6 @@ function renderDiscordSettings(slot, msg, msgColor){
     ? 'Click the <i class="ti ti-brand-discord"></i> icon next to a Bet Alerts tab\'s bell to cycle where it posts: off → 1 → 2 → both. Sent from the server, so it works with the site closed.'
     : 'Pick which tabs post with the <i class="ti ti-brand-discord"></i> icon next to each Bet Alerts tab\'s bell. Sent from the server, so it works with the site closed.';
   for (const s of [1, 2]) renderDiscordSlot(s, s === slot ? msg : undefined, msgColor);
-}
-function discordShowSlot2(){
-  BA_DISCORD_SHOW_SLOT2 = true;
-  renderDiscordSettings(2, 'Each webhook has its own tabs and its own Confirmed lineups only switch.');
-  const i = document.getElementById('discord-url-2'); if (i) i.focus();
 }
 async function loadDiscordSettings(){
   try {
@@ -17695,7 +17687,6 @@ async function discordSave(slot, remove){
     if (d && d.ok) {
       if (input) input.value = '';
       BA_DISCORD_HOOKS[slot] = d;
-      if (remove && slot === 2) BA_DISCORD_SHOW_SLOT2 = false;
       renderDiscordSettings(slot, remove ? 'Webhook removed.'
         : baDiscordSlots().length === 2 ? 'Saved. Click a tab\'s Discord icon to cycle it: off → 1 → 2 → both.'
         : 'Saved. Turn tabs on with the Discord icon next to each Bet Alerts tab.', 'var(--green)');
