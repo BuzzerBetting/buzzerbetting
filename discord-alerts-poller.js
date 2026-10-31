@@ -188,27 +188,33 @@ const OUTLIERS_ALL_MARKETS = new Set(['AGS', 'First scorer', 'Cards', 'SOT', 'As
 // Grosvenor "below player record" (2026-10-30) — same rule as index.html gvRecordCheck: Grosvenor's
 // price must be at least the fair price from the player's FotMob record (smoothed (n+1)/(matches+10),
 // Poisson 1+, 25+ matches). AGS / SOT 1+ / Cards / Assist judged directly; FGS / Header / OTB off
-// the all-goals record (an upper bound, so only clear fails drop). Shots 1+/2+ off plain shots per
-// game, Poisson N+ (2026-10-31). Super-sub matches aren't judged.
+// the all-goals record (an upper bound, so only clear fails drop). Shots N+ off shots per minute ×
+// expected minutes, Poisson N+ (2026-10-31). Super-sub matches aren't judged.
 const GV_RECORD_MIN_MATCHES = 25;
 const GV_RECORD_MARKETS = { 'AGS': 'exact', 'SOT 1+': 'exact', 'Cards': 'exact', 'Assist': 'exact',
-  'FGS': 'upper', 'Header Goal': 'upper', 'OTB Goal': 'upper', 'Shots 1+': 'shots', 'Shots 2+': 'shots' };
-// Shots 1+/2+ (2026-10-31, user): plain shots per game (no smoothing — the 0.1/match prior is far
-// too low for shots), Poisson N+. Backtest on settled bets: kept 216 at +11% vs cut 1,238 at -10%.
-const GV_SHOTS_LINE = { 'Shots 1+': 1, 'Shots 2+': 2 };
+  'FGS': 'upper', 'Header Goal': 'upper', 'OTB Goal': 'upper', 'Shots 1+': 'shots', 'Shots 2+': 'shots', 'Shots 3+': 'shots' };
+// Shots N+ (2026-10-31, user): shots per minute over the record (no smoothing — the 0.1/match prior
+// is far too low for shots) × expected minutes as a starter (r.expMin, avg of last 10 starts; 75 if
+// unknown), Poisson N+. Backtest (bet match removed): kept 480 at +4.6% vs cut 974 at -12.5%.
+const GV_SHOTS_LINE = { 'Shots 1+': 1, 'Shots 2+': 2, 'Shots 3+': 3 };
+const GV_SHOTS_RE = /\((\d+) in (\d+) mins, (\d+) apps\)/;
 function gvPoissonAtLeast(lam, k){ let p = 0, t = Math.exp(-lam); for (let i = 0; i < k; i++) { p += t; t *= lam / (i + 1); } return 1 - p; }
 // Team weighting: rate × teamXgRatio^pow (Early Prices team-xG ratio), clamped 0.4–2.0; Cards unweighted.
-const GV_TEAM_POW = { 'AGS': 1, 'FGS': 1, 'Header Goal': 1, 'OTB Goal': 1, 'Assist': 1, 'SOT 1+': 0.6, 'Shots 1+': 0.45, 'Shots 2+': 0.45 };
+const GV_TEAM_POW = { 'AGS': 1, 'FGS': 1, 'Header Goal': 1, 'OTB Goal': 1, 'Assist': 1, 'SOT 1+': 0.6, 'Shots 1+': 0.45, 'Shots 2+': 0.45, 'Shots 3+': 0.45 };
 function gvBelowRecord(r, ssMatchIds) {
   if (!GV_RECORD_MARKETS[r.mkt] || !r.playerStats || r.odds == null || ssMatchIds.has(String(r.matchId))) return false;
+  const pow = GV_TEAM_POW[r.mkt], x = Number(r.teamXgRatio);
+  const mult = pow && x > 0 ? Math.max(0.4, Math.min(2, Math.pow(x, pow))) : 1;
+  if (GV_RECORD_MARKETS[r.mkt] === 'shots') {
+    const s = String(r.playerStats).match(GV_SHOTS_RE);
+    if (!s || +s[3] < GV_RECORD_MIN_MATCHES || !(+s[2] > 0)) return false;
+    return Number(r.odds) < 1 / gvPoissonAtLeast(+s[1] / +s[2] * (Number(r.expMin) || 75) * mult, GV_SHOTS_LINE[r.mkt]);
+  }
   const m = String(r.playerStats).match(/\((\d+) in (\d+)\)/) || String(r.playerStats).match(/^(0) \S+ in (\d+) matches/);
   if (!m) return false;
   const n = +m[1], games = +m[2];
   if (games < GV_RECORD_MIN_MATCHES) return false;
-  const pow = GV_TEAM_POW[r.mkt], x = Number(r.teamXgRatio);
-  const mult = pow && x > 0 ? Math.max(0.4, Math.min(2, Math.pow(x, pow))) : 1;
-  const chance = GV_RECORD_MARKETS[r.mkt] === 'shots' ? gvPoissonAtLeast(n / games * mult, GV_SHOTS_LINE[r.mkt])
-    : 1 - Math.exp(-(n + 1) / (games + 10) * mult);
+  const chance = 1 - Math.exp(-(n + 1) / (games + 10) * mult);
   return Number(r.odds) < 1 / chance;
 }
 let gvBetLog;
