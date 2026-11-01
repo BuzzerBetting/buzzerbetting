@@ -16979,7 +16979,8 @@ function baUpdateMenuTag(){
   // and Outliers are flagged prices (market-integrity / model-free "one book way above the
   // rest"), not bets priced against a fair, so they're left out as well.
   // Early Prices is a paper-trade model (2026-10-24) — kept out of the value count for now.
-  const NOT_VALUE = new Set(['corners', 'unmatched', 'errors', 'outliers', 'grosvenor', 'early']);
+  // Ones to Watch ('watch') left out too (2026-11-01, user request).
+  const NOT_VALUE = new Set(['corners', 'unmatched', 'errors', 'outliers', 'grosvenor', 'early', 'watch']);
   const corners = BA_COUNTS['corners'] || 0;
   const value = BA_EDGES.reduce((s, e) => s + (NOT_VALUE.has(e.key) ? 0 : (BA_COUNTS[e.key] || 0)), 0);
   el.textContent = (value || corners) ? `${value} value · ${corners} corner` : '—';
