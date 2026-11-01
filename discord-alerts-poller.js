@@ -252,7 +252,8 @@ const BUILDERS = {
       if (!(odds > 0)) continue;
       const ev = (odds / fair - 1) * 100;
       if (ev < calcEvMinPct(b.mkt)) continue;
-      out.push({ match: b.match, market: b.mkt, selection: b.sel, bk: bookName(bk), odds, fair, ev, t: b.t, d: b.d, matchId: b.matchId });
+      out.push({ match: b.match, market: b.mkt, selection: b.sel, bk: bookName(bk), odds, fair, ev, t: b.t, d: b.d, matchId: b.matchId,
+        removedKey: 'calc-ev | ' + betKey({ match: b.match, market: b.mkt, selection: b.sel }) });
     }
     return out;
   },
