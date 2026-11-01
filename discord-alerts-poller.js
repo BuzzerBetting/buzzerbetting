@@ -317,7 +317,7 @@ const BUILDERS = {
   async grosvenor() {
     const d = await getJson('/api/grosvenor-best');
     const ss = gvSsMatchIds();
-    return ((d && (d.bets || d.rows)) || []).filter(r => r.lineupConfirmed && !kickoffPassed(r.d, r.t) && !gvBelowRecord(r, ss))
+    return ((d && (d.bets || d.rows)) || []).filter(r => r.mkt !== 'Header Goal' && r.mkt !== 'OTB Goal' && r.lineupConfirmed && !kickoffPassed(r.d, r.t) && !gvBelowRecord(r, ss))
       .map(r => ({ match: r.match, market: r.mkt, selection: r.sel, bk: 'Grosvenor', odds: num(r.odds),
         ev: num(r.pct), evLabel: 'above next', t: r.t, d: r.d, matchId: r.matchId,
         extra: r.nextBest != null ? `next best ${Number(r.nextBest).toFixed(2)}${r.nextBook ? ' at ' + bookName(r.nextBook) : ''}` : null,

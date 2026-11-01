@@ -17997,6 +17997,9 @@ function copyBaOutlierBet(idx, btn){
 // the next-best price first — see oc_scraper_service.py's _grosvenor_best_rows.
 let BA_GROSVENOR_ROWS = [];
 let BA_GROSVENOR_RENDERED = [];
+// Header Goal / OTB Goal never belong on the Grosvenor tab (user, 2026-11-01) — the scraper no
+// longer emits them; this guard keeps any stray row out.
+const GV_TAB_EXCLUDED_MKTS = new Set(['Header Goal', 'OTB Goal']);
 async function loadBaGrosvenor(){
   // A failed fetch (e.g. the DO box busy mid-scrape and the Netlify proxy timing out) keeps the
   // last good rows rather than blanking the tab to 0 (2026-10-02, user-reported).
@@ -18004,7 +18007,7 @@ async function loadBaGrosvenor(){
   try {
     const r = await fetch('/.netlify/functions/oc-grosvenor-best');
     const d = await r.json();
-    if (d && d.ok && Array.isArray(d.bets)) rows = d.bets;
+    if (d && d.ok && Array.isArray(d.bets)) rows = d.bets.filter(b => !GV_TAB_EXCLUDED_MKTS.has(b.mkt));
   } catch(e) {}
   if (rows === null) rows = BA_GROSVENOR_ROWS || [];
   BA_GROSVENOR_ROWS = rows;
