@@ -14501,7 +14501,7 @@ function predSideBlock(side, align, opts){
     }
     let threat;
     if(Array.isArray(side.cornerThreatTargets) && side.cornerThreatTargets.length){
-      // name (fair 1st-half header odds) [headed goals from corners, this season + last — orange]
+      // name (fair 1st-half header odds) [headed goals from corners, this season only — orange]
       threat = side.cornerThreatTargets.map(t=>{
         const odds = t.odds!=null ? ` (${Number(t.odds).toFixed(2)})` : '';
         const g = t.cornerHeaderGoals>0 ? ` <span style="color:var(--amber)">[${t.cornerHeaderGoals}]</span>` : '';
