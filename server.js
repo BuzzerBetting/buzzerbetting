@@ -11,6 +11,49 @@ app.use((req, res, next) => {
   next();
 });
 
+// Bet Alerts "Checked" column fallback (2026-11-02). The main feeds (oc-ev, calc-ev, boosts, early
+// prices, outliers, grosvenor) stamp each row's own checkedAt in the scraper. Every other +EV feed
+// is a side scan: userscript books read a boosts table that is replaced in full on each scrape,
+// so the table's newest scraped_at IS every row's price time; live-API scans (William Hill,
+// Paddy horses, Fairplay, Grosvenor boosts, F1/DNF/NFL) fetch in the same run, so the
+// file's `updated` is. Only fills rows that don't already carry a checkedAt.
+const CHECKED_SELF_STAMPED = new Set([
+  '/api/oc-ev', '/api/oc-calc-ev', '/api/oc-boost-ev', '/api/oc-boost-calc-ev',
+  '/api/early-prices', '/api/oc-outliers', '/api/grosvenor-best', '/api/oc-unmatched-matches',
+]);
+const USERSCRIPT_BOOST_TABLES = {
+  pricedup: 'pricedup_boosts', starsports: 'starsports_boosts', starsportsbet: 'starsports_boosts',
+  dragonbet: 'dragonbet_boosts', planetsportbet: 'planetsportbet_boosts', bestodds: 'bestodds_boosts',
+  properbet: 'properbet_boosts', sportingbet: 'sportingbet_boosts',
+};
+const latestScrapeCache = {};
+function latestScrape(table) {
+  const c = latestScrapeCache[table];
+  if (c && Date.now() - c.at < 30000) return c.v;
+  let v = null;
+  try { v = require('./ledger-db').prepare(`SELECT MAX(scraped_at) AS latest FROM ${table}`).get().latest || null; } catch (e) { /* table missing */ }
+  latestScrapeCache[table] = { at: Date.now(), v };
+  return v;
+}
+app.use((req, res, next) => {
+  if (req.method !== 'GET' || !req.path.startsWith('/api/') || req.path.startsWith('/api/ledger')
+      || CHECKED_SELF_STAMPED.has(req.path)) return next();
+  const orig = res.json.bind(res);
+  res.json = (body) => {
+    try {
+      if (body && Array.isArray(body.bets)) {
+        for (const b of body.bets) {
+          if (!b || typeof b !== 'object' || b.checkedAt) continue;
+          const table = USERSCRIPT_BOOST_TABLES[String(b.bk || '').toLowerCase().replace(/[^a-z0-9]/g, '')];
+          b.checkedAt = (table ? latestScrape(table) : null) || body.updated || null;
+        }
+      }
+    } catch (e) { /* never break a feed over a display field */ }
+    return orig(body);
+  };
+  next();
+});
+
 // Serve index.html
 app.get('/', (req, res) => res.sendFile(__dirname + '/index.html'));
 

@@ -549,6 +549,13 @@ try { db.exec(`ALTER TABLE withdrawals ADD COLUMN reversed_at TEXT`); } catch (e
 try { db.exec(`ALTER TABLE locked_funds ADD COLUMN status TEXT NOT NULL DEFAULT 'fresh'`); } catch (e) { /* already exists */ }
 try { db.exec(`ALTER TABLE locked_funds ADD COLUMN status_at TEXT`); } catch (e) { /* already exists */ }
 try { db.exec(`ALTER TABLE locked_funds ADD COLUMN status_by TEXT`); } catch (e) { /* already exists */ }
+// bet365_sot_odds freshness (2026-11-02): checked_at = last time the odds-api poller (or a staff
+// save) CONFIRMED this price, refreshed even when unchanged (updated_at only moves on a change);
+// bk_updated_at = Bet365's own market updatedAt as odds-api reports it. Feeds Bet Alerts' Checked column.
+try { db.exec(`ALTER TABLE bet365_sot_odds ADD COLUMN checked_at TEXT`); } catch (e) { /* already exists */ }
+try { db.exec(`ALTER TABLE bet365_sot_odds ADD COLUMN bk_updated_at TEXT`); } catch (e) { /* already exists */ }
+// Ones to Watch Checked column (2026-11-02): when the row's own bookie price was last fetched/confirmed.
+try { db.exec(`ALTER TABLE ones_to_watch ADD COLUMN checked_at TEXT`); } catch (e) { /* already exists */ }
 db.exec(`
 CREATE TABLE IF NOT EXISTS locked_fund_notes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

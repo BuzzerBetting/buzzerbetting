@@ -4735,12 +4735,17 @@ router.get('/bet365-sot-odds', (req, res) => {
     const matchId = String(req.query.matchId || '').trim();
     if (!matchId) return res.status(400).json({ ok: false, error: 'matchId required' });
     const rows = db.prepare(
-      `SELECT market, player, odds, updated_at FROM bet365_sot_odds WHERE match_id = ? ORDER BY market, player`
+      `SELECT market, player, odds, updated_at, checked_at, bk_updated_at FROM bet365_sot_odds WHERE match_id = ? ORDER BY market, player`
     ).all(matchId);
     const byMarket = { OTB_SOT: [], HEADER_SOT: [] };
     let updatedAt = null;
     for (const r of rows) {
-      (byMarket[r.market] = byMarket[r.market] || []).push({ player: r.player, odds: r.odds });
+      // checkedAt = last confirmation of this price (falls back to updated_at for rows written
+      // before the column existed); bkUpdatedAt = Bet365's own market timestamp via odds-api.
+      (byMarket[r.market] = byMarket[r.market] || []).push({
+        player: r.player, odds: r.odds,
+        checkedAt: r.checked_at || r.updated_at, bkUpdatedAt: r.bk_updated_at || null,
+      });
       if (!updatedAt || r.updated_at > updatedAt) updatedAt = r.updated_at;
     }
     res.json({
@@ -4791,10 +4796,10 @@ router.post('/bet365-sot-odds', (req, res) => {
     const tx = db.transaction(() => {
       db.prepare(`DELETE FROM bet365_sot_odds WHERE match_id = ? AND market = ?`).run(mid, market);
       const ins = db.prepare(
-        `INSERT INTO bet365_sot_odds (match_id, market, player, odds, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(match_id, market, player) DO UPDATE SET odds = excluded.odds, updated_at = excluded.updated_at, updated_by = excluded.updated_by`
+        `INSERT INTO bet365_sot_odds (match_id, market, player, odds, updated_at, updated_by, checked_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(match_id, market, player) DO UPDATE SET odds = excluded.odds, updated_at = excluded.updated_at, updated_by = excluded.updated_by, checked_at = excluded.checked_at`
       );
-      for (const p of clean) ins.run(mid, market, p.player, p.odds, now, by);
+      for (const p of clean) ins.run(mid, market, p.player, p.odds, now, by, now);
     });
     tx();
     res.json({ ok: true, saved: clean.length });
@@ -4909,7 +4914,7 @@ router.get('/ones-to-watch', (req, res) => {
   try {
     pruneKickedOffOtw();
     const rows = db.prepare(
-      `SELECT id, match_id AS matchId, match, kickoff, kickoff_date AS kickoffDate, market, selection, fair, base_fair AS baseFair, conf, bookie, odds, ev, source, bfex_lpm AS bfexLpm, bfex_matched AS bfexMatched, bfex_fair AS bfexFair, oc_bb_blend_fair AS ocBbBlendFair, oc_safety_margin_fair AS ocSafetyMarginFair, base_bfex_fair AS baseBfexFair, base_oc_bb_blend_fair AS baseOcBbBlendFair, base_oc_safety_margin_fair AS baseOcSafetyMarginFair, state
+      `SELECT id, match_id AS matchId, match, kickoff, kickoff_date AS kickoffDate, market, selection, fair, base_fair AS baseFair, conf, bookie, odds, ev, source, bfex_lpm AS bfexLpm, bfex_matched AS bfexMatched, bfex_fair AS bfexFair, oc_bb_blend_fair AS ocBbBlendFair, oc_safety_margin_fair AS ocSafetyMarginFair, base_bfex_fair AS baseBfexFair, base_oc_bb_blend_fair AS baseOcBbBlendFair, base_oc_safety_margin_fair AS baseOcSafetyMarginFair, state, checked_at AS checkedAt
          FROM ones_to_watch
         WHERE state != 'removed'
         ORDER BY (state = 'ticked') DESC, ev DESC`
@@ -4934,6 +4939,30 @@ router.get('/ones-to-watch/removed', (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// POST /api/ledger/ones-to-watch/touch  body: { matchId, rows:[{market, selection, checkedAt}] }
+// ones_to_watch_scan.py, hash-unchanged match (2026-11-02): its OC best prices + Bet365 prices are
+// re-confirmed, so move those pending rows' Checked time forward (never backwards). Price untouched.
+router.post('/ones-to-watch/touch', (req, res) => {
+  try {
+    const b = req.body || {};
+    const mid = String(b.matchId || '').trim();
+    if (!mid) return res.status(400).json({ ok: false, error: 'matchId required' });
+    const upd = db.prepare(
+      `UPDATE ones_to_watch SET checked_at = @t
+        WHERE match_id = @mid AND market = @market AND selection = @selection AND state = 'pending'
+          AND (checked_at IS NULL OR checked_at < @t)`
+    );
+    let n = 0;
+    db.transaction(() => {
+      for (const r of (Array.isArray(b.rows) ? b.rows : [])) {
+        if (!r || !r.market || !r.selection || typeof r.checkedAt !== 'string') continue;
+        n += upd.run({ mid, market: String(r.market), selection: String(r.selection), t: r.checkedAt }).changes;
+      }
+    })();
+    res.json({ ok: true, touched: n });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 // POST /api/ledger/ones-to-watch/ingest
 //   body: { matchId, match?, kickoff?, confirmed?:bool, rows:[{market,selection,fair,baseFair,conf,bookie,odds,ev,source,bfexLpm,bfexMatched}] }
 // - confirmed:true  -> delete every row for that match (Calculated +EV takes over).
@@ -4954,8 +4983,8 @@ router.post('/ones-to-watch/ingest', (req, res) => {
     const tx = db.transaction(() => {
       db.prepare(`DELETE FROM ones_to_watch WHERE match_id = ? AND state = 'pending'`).run(mid);
       const ins = db.prepare(
-        `INSERT INTO ones_to_watch (match_id, match, kickoff, kickoff_date, market, selection, fair, base_fair, conf, bookie, odds, ev, source, bfex_lpm, bfex_matched, bfex_fair, oc_bb_blend_fair, oc_safety_margin_fair, base_bfex_fair, base_oc_bb_blend_fair, base_oc_safety_margin_fair, state, created_at, updated_at)
-         VALUES (@match_id, @match, @kickoff, @kickoff_date, @market, @selection, @fair, @base_fair, @conf, @bookie, @odds, @ev, @source, @bfex_lpm, @bfex_matched, @bfex_fair, @oc_bb_blend_fair, @oc_safety_margin_fair, @base_bfex_fair, @base_oc_bb_blend_fair, @base_oc_safety_margin_fair, 'pending', @now, @now)
+        `INSERT INTO ones_to_watch (match_id, match, kickoff, kickoff_date, market, selection, fair, base_fair, conf, bookie, odds, ev, source, bfex_lpm, bfex_matched, bfex_fair, oc_bb_blend_fair, oc_safety_margin_fair, base_bfex_fair, base_oc_bb_blend_fair, base_oc_safety_margin_fair, checked_at, state, created_at, updated_at)
+         VALUES (@match_id, @match, @kickoff, @kickoff_date, @market, @selection, @fair, @base_fair, @conf, @bookie, @odds, @ev, @source, @bfex_lpm, @bfex_matched, @bfex_fair, @oc_bb_blend_fair, @oc_safety_margin_fair, @base_bfex_fair, @base_oc_bb_blend_fair, @base_oc_safety_margin_fair, @checked_at, 'pending', @now, @now)
          ON CONFLICT(match_id, market, selection) DO NOTHING`   // a ticked row already holds this key — keep it
       );
       for (const r of incoming) {
@@ -4982,6 +5011,7 @@ router.post('/ones-to-watch/ingest', (req, res) => {
           base_bfex_fair: r.baseBfexFair != null ? Number(r.baseBfexFair) : null,
           base_oc_bb_blend_fair: r.baseOcBbBlendFair != null ? Number(r.baseOcBbBlendFair) : null,
           base_oc_safety_margin_fair: r.baseOcSafetyMarginFair != null ? Number(r.baseOcSafetyMarginFair) : null,
+          checked_at: typeof r.checkedAt === 'string' ? r.checkedAt : null,
           now,
         });
       }
