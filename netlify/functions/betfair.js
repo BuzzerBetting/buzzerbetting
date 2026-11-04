@@ -165,6 +165,44 @@ exports.handler = async (event) => {
     return [...new Set([alias, name, firstWord].filter(Boolean))];
   }
 
+  // 2026-11-04 (user-reported: Calc +EV "BFEX" fairs blank for whole fixtures): 15 of 39 fixtures
+  // that day were on Betfair but never found — the search only tried the home team's full name and
+  // first word ("Borussia Dortmund"/"Borussia", never "Dortmund"), and the matcher needed whole-name
+  // agreement, so "Sabah FK"/"FC Sabah", "KV Mechelen"/"Yellow-Red Mechelen", "Viktoria Plzeň"/"Plzen",
+  // "Gimnasia LP"/"Gimnasia La Plata", "Union St.Gilloise"/"Union St Gilloise" all missed. Now: every
+  // distinctive word of BOTH teams is also tried as a search, and if no event matches the strict way,
+  // one where BOTH sides share a distinctive word (one-letter typos allowed, "Bialystok"/"Bialystock")
+  // is accepted. Both sides must still match, so one shared club name alone never picks a fixture.
+  const GENERIC_WORDS = new Set(['real', 'club', 'city', 'united', 'sporting', 'athletic', 'atletico',
+    'inter', 'deportivo', 'sport', 'town', 'rovers', 'county', 'borussia', 'dynamo', 'dinamo', 'olympique',
+    'racing', 'union', 'saint', 'santa', 'san', 'esporte', 'clube', 'calcio', 'football', 'futbol', 'association']);
+  function teamWords(name) {
+    return norm(String(name || '').replace(/[^\p{L}\p{N} ]/gu, ' ')).split(' ')
+      .filter(w => w.length >= 4 && !GENERIC_WORDS.has(w));
+  }
+  function nearWord(a, b) {
+    if (a === b) return true;
+    if (Math.min(a.length, b.length) >= 5 && (a.startsWith(b) || b.startsWith(a))) return true;
+    if (Math.abs(a.length - b.length) > 1 || Math.min(a.length, b.length) < 6) return false;
+    // one insertion/deletion/substitution
+    let i = 0, j = 0, edits = 0;
+    while (i < a.length && j < b.length) {
+      if (a[i] === b[j]) { i++; j++; continue; }
+      if (++edits > 1) return false;
+      if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; }
+    }
+    return edits + (a.length - i) + (b.length - j) <= 1;
+  }
+  function looseTeamMatch(a, b) {
+    const wa = teamWords(a), wb = teamWords(b);
+    return wa.some(x => wb.some(y => nearWord(x, y)));
+  }
+  const YOUTH_RE = /\(w\)|\bu\d{2}\b|\breserves?\b|\bii\b| b$/i;
+  function wordQueries(name) {
+    return String(name || '').replace(/[^\p{L}\p{N} ]/gu, ' ').split(/\s+/)
+      .filter(w => w.length >= 4 && !GENERIC_WORDS.has(norm(w)));
+  }
+
   try {
     const session = await getCachedSessionToken(appKey);
 
@@ -184,10 +222,13 @@ exports.handler = async (event) => {
 
     let events = [];
     let match = null;
-    for (const q of searchQueries(home)) {
+    const seen = new Map(); // every event any query returned, for the loose pass below
+    const queries = [...new Set([...searchQueries(home), ...wordQueries(home), ...searchQueries(away), ...wordQueries(away)])];
+    for (const q of queries) {
       events = await bfCall('listEvents', {
         filter: { eventTypeIds: ['1'], textQuery: q }
       }, appKey, session);
+      (events || []).forEach(e => { if (e.event?.id) seen.set(e.event.id, e); });
       match = (events || []).find(e => {
         const name = e.event?.name || '';
         if (/\(w\)/i.test(name)) return false; // exclude women's fixtures — same club names, wrong market
@@ -197,6 +238,19 @@ exports.handler = async (event) => {
                (fuzzyTeamMatch(awayM, parts[0]) && fuzzyTeamMatch(homeM, parts[1]));
       });
       if (match) break;
+    }
+    if (!match) {
+      const youthUs = YOUTH_RE.test(home) || YOUTH_RE.test(away);
+      const loose = [...seen.values()].filter(e => {
+        const name = e.event?.name || '';
+        if (YOUTH_RE.test(name) !== youthUs) return false;
+        const parts = name.split(' v ');
+        if (parts.length !== 2) return false;
+        return (looseTeamMatch(homeM, parts[0]) && looseTeamMatch(awayM, parts[1])) ||
+               (looseTeamMatch(awayM, parts[0]) && looseTeamMatch(homeM, parts[1]));
+      }).sort((a, b) => String(a.event.openDate).localeCompare(String(b.event.openDate)));
+      match = loose[0] || null;
+      if (!match) events = [...seen.values()];
     }
 
     if (!match) return {
