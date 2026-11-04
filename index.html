@@ -16284,7 +16284,8 @@ function findPlayerInOddsList(playerName, list){
 
     const firstA=wa.slice(0,-1);
     const firstB=wb.slice(0,-1);
-    if(!firstA.length||!firstB.length) return true; // single name — last name match is enough
+    // Single name: surname must match exactly (2026-11-04 — fuzzy let "Waldemar Anton" match "Antony").
+    if(!firstA.length||!firstB.length) return lastA===lastB;
     return firstA.some(w=>firstB.some(b=>b===w||pairMatch(w,b)||initialMatch(w,b)));
   })||null;
 }
