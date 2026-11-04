@@ -194,6 +194,8 @@ exports.handler = async (event) => {
     return edits + (a.length - i) + (b.length - j) <= 1;
   }
   function looseTeamMatch(a, b) {
+    const compact = s => norm(s).replace(/ /g, '');
+    if (compact(a) && compact(a) === compact(b)) return true; // "Atlético-MG" / "Atletico MG"
     const wa = teamWords(a), wb = teamWords(b);
     return wa.some(x => wb.some(y => nearWord(x, y)));
   }
@@ -271,7 +273,7 @@ exports.handler = async (event) => {
 
     if (!catalogue?.length) return {
       statusCode: 200, headers: CORS,
-      body: JSON.stringify({ ok: false, error: 'No markets found', eventId })
+      body: JSON.stringify({ ok: false, error: 'No markets found', eventId, eventName: match.event.name, startTime: match.event.openDate })
     };
 
     const marketIds = catalogue.map(m => m.marketId);
@@ -308,7 +310,7 @@ exports.handler = async (event) => {
 
     return {
       statusCode: 200, headers: CORS,
-      body: JSON.stringify({ ok: true, eventId, startTime: match.event.openDate, markets })
+      body: JSON.stringify({ ok: true, eventId, eventName: match.event.name, startTime: match.event.openDate, markets })
     };
 
   } catch (err) {
