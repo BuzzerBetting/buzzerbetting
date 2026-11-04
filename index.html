@@ -10483,7 +10483,7 @@ function renderOddscheckerEV(){
     const pl=baPlacedRow(b.match,b.mkt,b.sel);
     const tr=document.createElement('tr');
     if(pl.placed)tr.className='ba-placed';
-    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${boostIcon}${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:${fairColor};font-weight:500">${fairCell}</td><td class="r tn" style="color:var(--text2)">${lastTraded}</td><td class="r tn" style="color:var(--text2)">${matched}</td><td class="r" style="color:var(--text2);font-size:12px;line-height:1.5">${ocBookieLinesHtml(b)}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td>${baCheckedCell(baCheckedIso(b,b.bk),baBkChangedNote(b,b.bk))}<td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td>${pl.watchTd}<td class="r" style="white-space:nowrap">${betLinkBtn(b.url,b.bk)}<button onclick="copyOddscheckerLine(${i},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button>${kellyRowBtn(`oc-ev|${b.match}|${b.mkt}|${b.sel}|${b.bk}`,b.odds,b.fair)}${pl.btn('oc-ev',i)}</td>`;
+    tr.innerHTML=`<td style="color:var(--text2)">${b.t}</td><td style="font-weight:500">${boostIcon}${b.match}</td><td><span class="badge" style="${mS}">${b.mkt}</span></td><td>${b.sel}</td><td class="r tn" style="color:${fairColor};font-weight:500">${fairCell}</td><td class="r tn" style="color:var(--text2)">${lastTraded}</td><td class="r tn" style="color:var(--text2)">${matched}</td><td class="r" style="color:var(--text2);font-size:12px;line-height:1.5">${ocBookieLinesHtml(b)}</td><td class="r tn" style="font-weight:500">${b.odds.toFixed(2)}</td>${baCheckedCell(baCheckedIso(b,b.bk),baBkChangedNote(b,b.bk))}<td class="r"><span class="badge" style="${eS}">+${b.ev.toFixed(1)}%</span></td>${pl.watchTd}<td class="r" style="white-space:nowrap">${betLinkBtn(b.url,b.bk)}<button onclick="logNormalEvBet(${i})" title="Log this bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-plus"></i> Log</button> <button onclick="copyOddscheckerLine(${i},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1"><i class="ti ti-copy"></i></button>${kellyRowBtn(`oc-ev|${b.match}|${b.mkt}|${b.sel}|${b.bk}`,b.odds,b.fair)}${pl.btn('oc-ev',i)}</td>`;
     sb.appendChild(tr);
   });
   if(!shown.length){
@@ -16075,6 +16075,32 @@ function openOutliersBetForm(source, vals) {
   setVal('bef-fair-odds', vals.fair);
   const oddsInput = document.querySelector('#bet-entry-legs .leg-odds');
   if (oddsInput) oddsInput.value = vals.odds ?? '';
+  if (typeof recalcBetEntryEV === 'function') recalcBetEntryEV();
+  if (typeof updateBetEntryTotal === 'function') updateBetEntryTotal();
+  setTimeout(() => { document.getElementById('bef-Book')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 50);
+}
+// "Log" on a Bet Alerts Normal +EV row (2026-11-04, user-requested) — Buzzer logins file into
+// Buzzer > Value, staff (Rafael) into Assistant > Discord. Neither sheet's columns change: the
+// selection, market and match all go into the one description box as
+// "Selection - Market (Match)", plus bookie, odds and the BFEX fair. Account + stake left blank.
+function logNormalEvBet(i) {
+  const b = ocEvBets[i];
+  if (!b) return;
+  const assistant = CURRENT_USER_ROLE === 'staff' || CURRENT_USERNAME === 'Rafael';
+  showSec('bets-combined');
+  document.getElementById('bets-user-select').value = assistant ? 'assistant' : 'buzzer';
+  onBetsUserChange();
+  document.getElementById('bets-type-select').value = assistant ? 'Discord' : 'Value';
+  onBetsTypeChange();
+  toggleBetsAddForm();
+  const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = (v == null ? '' : v); };
+  setVal('bef-Book', ocBookieName(b.bk) || b.bk);
+  if (typeof refreshLegAccountDropdowns === 'function') refreshLegAccountDropdowns();
+  const desc = `${b.sel} - ${b.mkt}${b.match ? ` (${b.match})` : ''}`;
+  setVal(assistant ? 'bef-Bet' : 'bef-Bet_Description', desc);
+  setVal('bef-fair-odds', b.fair != null ? Number(b.fair).toFixed(2) : '');
+  const oddsInput = document.querySelector('#bet-entry-legs .leg-odds');
+  if (oddsInput) oddsInput.value = b.odds != null ? Number(b.odds).toFixed(2) : '';
   if (typeof recalcBetEntryEV === 'function') recalcBetEntryEV();
   if (typeof updateBetEntryTotal === 'function') updateBetEntryTotal();
   setTimeout(() => { document.getElementById('bef-Book')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 50);
