@@ -723,20 +723,6 @@ CREATE TABLE IF NOT EXISTS starsports_boosts (
 );
 `);
 
-// BestOdds' "Best Boosts" page (bet.bestodds.com/sport-special/BestBoosts) — same platform
-// again (confirmed live 2026-09-29), fed by oc-scraper/bestodds-userscript.js. Same shape.
-db.exec(`
-CREATE TABLE IF NOT EXISTS bestodds_boosts (
-  sport        TEXT,
-  group_title  TEXT NOT NULL,
-  selection    TEXT NOT NULL,
-  odds_frac    TEXT,
-  odds         REAL,
-  scraped_at   TEXT NOT NULL DEFAULT (datetime('now')),
-  PRIMARY KEY (group_title, selection)
-);
-`);
-
 // ProperBet's "Proper Boosts" page (proper.bet/sport-special/ProperBoosts) — same platform,
 // confirmed live 2026-09-29, fed by oc-scraper/properbet-userscript.js. Same shape.
 db.exec(`

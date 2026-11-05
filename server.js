@@ -23,7 +23,7 @@ const CHECKED_SELF_STAMPED = new Set([
 ]);
 const USERSCRIPT_BOOST_TABLES = {
   pricedup: 'pricedup_boosts', starsports: 'starsports_boosts', starsportsbet: 'starsports_boosts',
-  dragonbet: 'dragonbet_boosts', planetsportbet: 'planetsportbet_boosts', bestodds: 'bestodds_boosts',
+  dragonbet: 'dragonbet_boosts', planetsportbet: 'planetsportbet_boosts',
   properbet: 'properbet_boosts', sportingbet: 'sportingbet_boosts',
 };
 const latestScrapeCache = {};
@@ -359,12 +359,11 @@ app.get('/api/williamhill-tennis-acca-ev', (req, res) => {
 // fair odds multiplied together, compared against PlanetSportBet's own boosted price — resolved
 // by (horse name, local time) across every today's race since these rows don't name a track.
 // Merged into the same "Normal +EV" table client-side.
-// GET /api/bestodds-acca-ev, /api/bestodds-horse-ev (2026-09-29) — BestOdds' win-accas and
-// boosted horse doubles, written by oc-scraper's bestodds_acca_ev_scan.py /
-// bestodds_horse_ev_scan.py (clones of the StarSports / PlanetSportBet scans).
+// GET /api/starsports-horse-ev (2026-11-05) — StarSports' boosted horse doubles, written by
+// oc-scraper's starsports_horse_ev_scan.py (clone of the PlanetSportBet scan; replaced the
+// BestOdds feeds when BestOdds closed).
 for (const [route, filename] of Object.entries({
-  '/api/bestodds-acca-ev': 'bestodds_acca_ev_bets.json',
-  '/api/bestodds-horse-ev': 'bestodds_horse_ev_bets.json',
+  '/api/starsports-horse-ev': 'starsports_horse_ev_bets.json',
   '/api/properbet-acca-ev': 'properbet_acca_ev_bets.json',
   '/api/properbet-horse-ev': 'properbet_horse_ev_bets.json',
   '/api/fairplay-boost-ev': 'fairplay_boost_ev_bets.json',
@@ -419,7 +418,6 @@ const FOOTBALL_BOOST_EV_ROUTES = {
   '/api/starsports-football-boost-ev': 'starsports_football_boost_ev_bets.json',
   '/api/planetsportbet-football-boost-ev': 'planetsportbet_football_boost_ev_bets.json',
   '/api/dragonbet-football-boost-ev': 'dragonbet_football_boost_ev_bets.json',
-  '/api/bestodds-football-boost-ev': 'bestodds_football_boost_ev_bets.json',
   '/api/properbet-football-boost-ev': 'properbet_football_boost_ev_bets.json',
   '/api/sportingbet-boost-ev': 'sportingbet_boost_ev_bets.json',
   '/api/betway-boost-ev': 'betway_boost_ev_bets.json',
