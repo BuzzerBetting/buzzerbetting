@@ -2677,7 +2677,7 @@ tr.ba-placed > td{background:var(--green-bg) !important}
     <div id="ol-removed-panel" class="card" style="display:none;padding:12px 14px;margin-bottom:10px"></div>
     <div id="ba-outliers-subtabs" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;width:fit-content;margin-bottom:10px"></div>
     <div id="ba-outliers-markets" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-bottom:10px;font-size:12.5px;color:var(--text2)"></div>
-    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:820px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Top price</th><th class="r">Next best</th><th class="r" title="When these prices were last fetched by our scrapers (hover for details). Green under 15 min, amber under 60 min, red older.">Checked</th><th class="r">% above</th><th class="r">Books</th><th class="ba-watch-col">Placed?</th><th>Detected</th></tr></thead><tbody id="ba-outliers-body"></tbody></table></div></div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:820px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Top price</th><th class="r">Next best</th><th class="r" title="The player's FotMob record (current + previous two seasons) as a fair price, scaled by his team's Betfair-implied xG in this match vs its usual (Cards not scaled). Green = top price is above it. Hover a value for the unadjusted record fair.">Team-adj fair</th><th class="r" title="When these prices were last fetched by our scrapers (hover for details). Green under 15 min, amber under 60 min, red older.">Checked</th><th class="r">% above</th><th class="r">Books</th><th class="ba-watch-col">Placed?</th><th>Detected</th></tr></thead><tbody id="ba-outliers-body"></tbody></table></div></div>
     <div class="note"><i class="ti ti-info-circle"></i> A bookmaker GROUP's own price that's at least 50% above the next-best group in the same market's ladder, with 5+ independent bookie groups quoting it (same-platform books like Star Sports/PricedUp/AKBets count as one) — a raw ladder disagreement, not a fair-odds judgement. A <i class="ti ti-clock-exclamation" style="color:var(--amber)"></i> icon means that specific price hasn't moved in a while (could just mean nothing's changed, or could mean it's not really live) — worth a manual check before backing it either way.</div>
   </div>
 
@@ -17992,6 +17992,27 @@ function renderBaOutliersMarketCheckboxes(){
     <input type="checkbox" ${sel.has(mkt) ? 'checked' : ''} onchange="toggleOutliersMarket('${mkt.replace(/'/g, "\\'")}', this.checked)">${escapeHtml(mkt)}
   </label>`).join('');
 }
+// Team strength (2026-11-05, user-requested): the player's team's Betfair-implied xG in this match
+// vs its usual (oc_outliers_scan.py _attach_team_strength). Red under 0.75x — that slice ran -33%
+// in the outliers backtest; green over 1.25x. Information only, nothing is hidden by it.
+function olTeamLine(r){
+  if (r.teamXg == null) return '';
+  const ratio = r.teamXgRatio;
+  const col = ratio == null ? 'var(--text3)' : (ratio < 0.75 ? 'var(--red)' : (ratio > 1.25 ? 'var(--green)' : 'var(--text3)'));
+  const opp = r.oppXg != null ? ` v ${Number(r.oppXg).toFixed(2)}` : '';
+  const usual = r.teamXgUsual != null ? ` · usual ${Number(r.teamXgUsual).toFixed(2)} (${Number(ratio).toFixed(2)}x)` : ' · no usual on record';
+  return `<div style="font-weight:400;font-size:11.5px;color:${col};margin-top:1px" title="Team xG implied by Betfair match odds for this match (his team v opponent), vs his team's average over its last 20 matches">Team xG ${Number(r.teamXg).toFixed(2)}${opp}${usual}</div>`;
+}
+function olTeamAdjFairCell(r){
+  const f = r.teamAdjFair, rec = r.recordFair;
+  if (f == null && rec == null) return '<td class="r tn" style="color:var(--text3)">—</td>';
+  const shown = f != null ? f : rec;
+  const above = r.topPrice != null && Number(r.topPrice) >= shown;
+  const tip = f != null
+    ? `Record fair ${rec != null ? Number(rec).toFixed(2) : '—'}${r.teamXgRatio != null && r.market !== 'Cards' ? `, x team ${Number(r.teamXgRatio).toFixed(2)}` : ''} → ${Number(f).toFixed(2)}`
+    : 'Record fair only — no team xG ratio for this match';
+  return `<td class="r tn" style="color:${above ? 'var(--green)' : 'var(--red)'}" title="${escapeHtml(tip)}">${Number(shown).toFixed(2)}${f == null ? '<span style="color:var(--text3);font-size:11px"> (rec)</span>' : ''}</td>`;
+}
 function renderBaOutliers(){
   const body = document.getElementById('ba-outliers-body');
   const countEl = document.getElementById('ba-outliers-count');
@@ -18026,7 +18047,7 @@ function renderBaOutliers(){
     const msg = BA_OUTLIERS_ROWS.some(r => !!r.lineupConfirmed === wantConfirmed)
       ? `No ${subLabel} outliers in the selected markets right now.`
       : `No ${subLabel} outliers right now.`;
-    body.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">${msg}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="12" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">${msg}</td></tr>`;
     return;
   }
   const fmtDetected = iso => {
@@ -18039,9 +18060,10 @@ function renderBaOutliers(){
     <td style="font-size:12px;color:var(--text2);white-space:nowrap">${escapeHtml(r.kickoff || '')}</td>
     <td style="font-size:12.5px">${escapeHtml(r.match || '')}</td>
     <td style="font-size:12px;color:var(--text2)">${escapeHtml(r.market || '')}</td>
-    <td style="font-weight:500">${escapeHtml(r.selection || '')}${r.playerStats ? `<div style="font-weight:400;font-size:11.5px;color:var(--text3);margin-top:2px" title="FotMob, current + previous two seasons, all competitions">${escapeHtml(r.playerStats)}</div>` : ''}</td>
+    <td style="font-weight:500">${escapeHtml(r.selection || '')}${r.playerStats ? `<div style="font-weight:400;font-size:11.5px;color:var(--text3);margin-top:2px" title="FotMob, current + previous two seasons, all competitions">${escapeHtml(r.playerStats)}</div>` : ''}${olTeamLine(r)}</td>
     <td class="r tn" style="font-weight:600;color:var(--green)">${r.topPrice != null ? Number(r.topPrice).toFixed(2) : '—'} <span style="color:var(--text3);font-size:11px">(${escapeHtml(ocBookieShort(r.topBook))})</span>${r.topFresh === false ? ' <i class="ti ti-clock-exclamation" title="This price has not moved in a while — worth checking it is still current" style="color:var(--amber)"></i>' : ''}</td>
     <td class="r tn" style="color:var(--text2)">${r.nextPrice != null ? Number(r.nextPrice).toFixed(2) : '—'} <span style="color:var(--text3);font-size:11px">(${escapeHtml(ocBookieShort(r.nextBook))})</span>${r.nextFresh === false ? ' <i class="ti ti-clock-exclamation" title="This price has not moved in a while — worth checking it is still current" style="color:var(--amber)"></i>' : ''}</td>
+    ${olTeamAdjFairCell(r)}
     ${baCheckedCell(r.checkedAt, 'Oddschecker ladder fetch time (both prices come from it)')}
     <td class="r"><span class="badge" style="background:var(--amber-bg);color:var(--amber)">+${r.pctAboveNext != null ? Number(r.pctAboveNext).toFixed(0) : '—'}%</span></td>
     <td class="r tn" style="color:var(--text2)">${r.bookCount ?? '—'}</td>
