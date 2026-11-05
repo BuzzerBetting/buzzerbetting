@@ -18009,7 +18009,7 @@ function olTeamAdjFairCell(r){
   const shown = f != null ? f : rec;
   const above = r.topPrice != null && Number(r.topPrice) >= shown;
   const tip = f != null
-    ? `Record fair ${rec != null ? Number(rec).toFixed(2) : '—'}${r.teamXgRatio != null && r.market !== 'Cards' ? `, x team ${Number(r.teamXgRatio).toFixed(2)}` : ''} → ${Number(f).toFixed(2)}`
+    ? `Record fair ${rec != null ? Number(rec).toFixed(2) : '—'}${r.teamMult != null ? `, x ${Number(r.teamMult).toFixed(2)} for team strength (${Number(r.teamXgRatio).toFixed(2)}x usual xG, half-strength)` : ''} → ${Number(f).toFixed(2)}`
     : 'Record fair only — no team xG ratio for this match';
   return `<td class="r tn" style="color:${above ? 'var(--green)' : 'var(--red)'}" title="${escapeHtml(tip)}">${Number(shown).toFixed(2)}${f == null ? '<span style="color:var(--text3);font-size:11px"> (rec)</span>' : ''}</td>`;
 }
