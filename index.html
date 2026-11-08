@@ -2676,8 +2676,8 @@ tr.ba-placed > td{background:var(--green-bg) !important}
     </div>
     <div id="ol-removed-panel" class="card" style="display:none;padding:12px 14px;margin-bottom:10px"></div>
     <div id="ba-outliers-subtabs" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;width:fit-content;margin-bottom:10px"></div>
-    <div id="ba-outliers-markets" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-bottom:10px;font-size:12.5px;color:var(--text2)"></div>
-    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:820px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Top price</th><th class="r">Next best</th><th class="r" title="The player's FotMob record (current + previous two seasons) as a fair price — per 90 x his expected minutes this match where we have his recent games — scaled by his team's Betfair-implied xG in this match vs its usual (Cards not scaled). Green = top price is above it. Hover a value for the unadjusted record fair.">Team-adj fair</th><th class="r" title="When these prices were last fetched by our scrapers (hover for details). Green under 15 min, amber under 60 min, red older.">Checked</th><th class="r">% above</th><th class="r">Books</th><th class="ba-watch-col">Placed?</th><th>Detected</th></tr></thead><tbody id="ba-outliers-body"></tbody></table></div></div>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px 18px;margin-bottom:10px"><div id="ba-outliers-markets" style="display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--text2)"></div><label title="Only show rows whose price beats the BookieBashing fair (rows with no BB fair are hidden too). Display only: nothing is removed from alerts or Discord." style="display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none;font-size:12.5px;color:var(--text2)"><input type="checkbox" id="bb-only-outliers" onchange="setBaBbOnly('outliers', this.checked)"> +EV vs BB only<span id="bb-only-outliers-n" style="color:var(--text3)"></span></label></div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:820px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Top price</th><th class="r">Next best</th><th class="r" title="The player's FotMob record (current + previous two seasons) as a fair price — per 90 x his expected minutes this match where we have his recent games — scaled by his team's Betfair-implied xG in this match vs its usual (Cards not scaled). Green = top price is above it. Hover a value for the unadjusted record fair.">Team-adj fair</th><th class="r" title="BookieBashing fair odds for this exact line (BB's own maths on every bookmaker's price; lineup-normalised once BB has a confirmed XI). Green = the price beats it, with the EV underneath. Hover for detail.">BB fair</th><th class="r" title="When these prices were last fetched by our scrapers (hover for details). Green under 15 min, amber under 60 min, red older.">Checked</th><th class="r">% above</th><th class="r">Books</th><th class="ba-watch-col">Placed?</th><th>Detected</th></tr></thead><tbody id="ba-outliers-body"></tbody></table></div></div>
     <div class="note"><i class="ti ti-info-circle"></i> A bookmaker GROUP's own price that's at least 50% above the next-best group in the same market's ladder, with 5+ independent bookie groups quoting it (same-platform books like Star Sports/PricedUp/AKBets count as one) — a raw ladder disagreement, not a fair-odds judgement. A <i class="ti ti-clock-exclamation" style="color:var(--amber)"></i> icon means that specific price hasn't moved in a while (could just mean nothing's changed, or could mean it's not really live) — worth a manual check before backing it either way.</div>
   </div>
 
@@ -2701,13 +2701,14 @@ tr.ba-placed > td{background:var(--green-bg) !important}
         <label title="Hide bets where Grosvenor's price is below the fair price from the player's own FotMob record (AGS, SOT 1+, Cards, Assist; FGS/Header/OTB only when even all goals can't justify it). These never post to Discord. Untick to see them with the reason in red." style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;font-size:12.5px;color:var(--text2)">
           <input type="checkbox" id="gv-hide-record-toggle" onchange="setGvHideRecord(this.checked)"> Hide below player record<span id="gv-hide-record-n" style="color:var(--text3)"></span>
         </label>
+        <label title="Only show rows whose price beats the BookieBashing fair (rows with no BB fair are hidden too). Display only: nothing is removed from alerts or Discord." style="display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none;font-size:12.5px;color:var(--text2)"><input type="checkbox" id="bb-only-grosvenor" onchange="setBaBbOnly('grosvenor', this.checked)"> +EV vs BB only<span id="bb-only-grosvenor-n" style="color:var(--text3)"></span></label>
         <button id="gv-removed-btn" onclick="toggleGvRemoved()" title="Bets you've removed from Lineups Confirmed that haven't kicked off yet" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-eye-off"></i> Removed (0)</button>
         <button onclick="baRefreshActive(this)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
       </div>
     </div>
     <div id="gv-removed-panel" class="card" style="display:none;padding:12px 14px;margin-bottom:10px"></div>
     <div id="ba-grosvenor-subtabs" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;width:fit-content;margin-bottom:10px"></div>
-    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Player</th><th class="r">Grosvenor</th><th class="r">Next best</th><th class="r" title="When these prices were last fetched by our scrapers (hover for details). Green under 15 min, amber under 60 min, red older.">Checked</th><th class="r">% above</th><th class="ba-watch-col">Placed?</th><th></th></tr></thead><tbody id="ba-grosvenor-body"></tbody></table></div></div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:760px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Player</th><th class="r">Grosvenor</th><th class="r">Next best</th><th class="r" title="BookieBashing fair odds for this exact line (BB's own maths on every bookmaker's price; lineup-normalised once BB has a confirmed XI). Green = the price beats it, with the EV underneath. Hover for detail.">BB fair</th><th class="r" title="When these prices were last fetched by our scrapers (hover for details). Green under 15 min, amber under 60 min, red older.">Checked</th><th class="r">% above</th><th class="ba-watch-col">Placed?</th><th></th></tr></thead><tbody id="ba-grosvenor-body"></tbody></table></div></div>
     <div id="gv-stats-panel" style="display:none;margin-top:14px"></div>
     <div class="note"><i class="ti ti-info-circle"></i> Grosvenor prices (AGS, First Goalscorer, SOT 1+, Cards, Assist, Header &amp; OTB goal) that are higher than the best price on Oddschecker for the same player, ranked by how far above that next-best price they are. A price comparison only — not priced against a fair. Only matches with a fresh Oddschecker scrape are compared.</div>
   </div>
@@ -2736,8 +2737,9 @@ tr.ba-placed > td{background:var(--green-bg) !important}
       <label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="Only prices at least 25% above the median of the other bookmakers — the model AND the market both say it's wrong"><input id="ep-offcons" type="checkbox" onchange="setEpOffCons(this.checked)"> Off consensus only (25%+)</label>
       <label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="Oddschecker's timestamp for when this bookmaker's price last changed. Unchanged doesn't mean dead — just worth checking."><input id="ep-hidestale" type="checkbox" onchange="setEpHideStale(this.checked)"> Hide prices unchanged 24h+</label>
       <label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="Only show bets that would have landed at least once in the player's last 5 appearances"><input id="ep-hit5" type="checkbox" onchange="setEpHit5(this.checked)"> Landed in last 5</label>
+      <label title="Only show rows whose price beats the BookieBashing fair (rows with no BB fair are hidden too). Display only: nothing is removed from alerts or Discord." style="display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none;font-size:12.5px;color:var(--text2)"><input type="checkbox" id="bb-only-early" onchange="setBaBbOnly('early', this.checked)"> +EV vs BB only<span id="bb-only-early-n" style="color:var(--text3)"></span></label>
     </div>
-    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:980px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Player</th><th title="Oldest to newest, this stat in his last 5 appearances (green = would have landed this line)">Last 5</th><th class="r">Price</th><th class="r" title="When this price's bookmaker ladder was last fetched by our scrapers (hover for details). Green under 15 min, amber under 60 min, red older.">Checked</th><th class="r">Fair</th><th class="r">EV</th><th class="r" title="Best price from any other bookmaker group, and how far it is above the median of the rest (amber = the next best looks overpriced too)">Next best</th><th class="r">Books</th><th class="ba-watch-col">Placed?</th><th></th></tr></thead><tbody id="ba-early-body"></tbody></table></div></div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:980px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Player</th><th title="Oldest to newest, this stat in his last 5 appearances (green = would have landed this line)">Last 5</th><th class="r">Price</th><th class="r" title="When this price's bookmaker ladder was last fetched by our scrapers (hover for details). Green under 15 min, amber under 60 min, red older.">Checked</th><th class="r">Fair</th><th class="r">EV</th><th class="r" title="BookieBashing fair odds for this exact line (BB's own maths on every bookmaker's price; lineup-normalised once BB has a confirmed XI). Green = the price beats it, with the EV underneath. Hover for detail.">BB fair</th><th class="r" title="Best price from any other bookmaker group, and how far it is above the median of the rest (amber = the next best looks overpriced too)">Next best</th><th class="r">Books</th><th class="ba-watch-col">Placed?</th><th></th></tr></thead><tbody id="ba-early-body"></tbody></table></div></div>
     <div class="note"><i class="ti ti-info-circle"></i> Player Shots 1+–5+ and SOT 1+–3+ prices from every Oddschecker bookmaker plus Grosvenor that are 10%+ above a form fair: his shots/SOT per 90 (last 5 appearances weighted heaviest, then the last 5 months, then the year before, pulled toward his position's average) × his usual minutes as a starter × how many shots the opponent concedes and home/away, spread a little wider than Poisson. Weights were set by backtesting 7,000 recent starters priced only on what was known before kickoff (calibrated to within ~5%). "Unchanged" tags are Oddschecker's time since that bookmaker's price last moved. Starters only (FotMob predicted XI until the lineup is confirmed). Nothing is filtered out as a likely palp. Void-if-not-starting rules and super-sub promos aren't accounted for yet. Every price shown is logged at first sight and settled off FotMob — see Results.</div>
   </div>
 
@@ -18009,6 +18011,34 @@ function olTeamLine(r){
   const usual = r.teamXgUsual != null ? ` · usual ${Number(r.teamXgUsual).toFixed(2)} (${Number(ratio).toFixed(2)}x)` : ' · no usual on record';
   return `<div style="font-weight:400;font-size:11.5px;color:${col};margin-top:1px" title="Team xG implied by Betfair match odds for this match (his team v opponent), vs his team's average over its last 20 matches">Team xG ${Number(r.teamXg).toFixed(2)}${opp}${usual}</div>`;
 }
+// BookieBashing fair column (2026-11-08, user-requested) on Early Prices, Outliers and Grosvenor.
+// Scans attach bbFair (+ bbX expected count, bbN bookmakers used, bbStage 1 = pre-lineup per-book
+// devig, 2 = BB's confirmed-XI normalisation, bbSrc label, bbWhy when missing). Display + an opt-in
+// "+EV vs BB only" filter per tab (localStorage); never removes anything from alerts / Discord /
+// badge counts.
+function baBbPrefs(){ try { return JSON.parse(localStorage.getItem('baBbOnly') || '{}') || {}; } catch(e){ return {}; } }
+function baBbOnly(tab){ return !!baBbPrefs()[tab]; }
+function setBaBbOnly(tab, on){
+  const o = baBbPrefs(); o[tab] = !!on;
+  try { localStorage.setItem('baBbOnly', JSON.stringify(o)); } catch(e) {}
+  ({ early: renderBaEarly, outliers: renderBaOutliers, grosvenor: renderBaGrosvenor })[tab]();
+}
+function baBbPlus(r, price){ return !!r && r.bbFair != null && price != null && Number(price) > Number(r.bbFair); }
+// Syncs the checkbox, writes "(n)" = how many candidate rows beat BB, returns the (optionally) filtered list.
+function baBbApply(tab, rows, priceOf){
+  const on = baBbOnly(tab);
+  const cb = document.getElementById('bb-only-' + tab); if (cb) cb.checked = on;
+  const n = rows.filter(r => baBbPlus(r, priceOf(r))).length;
+  const nEl = document.getElementById('bb-only-' + tab + '-n'); if (nEl) nEl.textContent = ` (${n})`;
+  return on ? rows.filter(r => baBbPlus(r, priceOf(r))) : rows;
+}
+function baBbCell(r, price){
+  if (!r || r.bbFair == null) return `<td class="r tn" style="color:var(--text3)" title="${escapeHtml(r && r.bbWhy ? r.bbWhy : 'No BookieBashing fair for this player/line')}">—</td>`;
+  const f = Number(r.bbFair), ev = price != null ? (Number(price) / f - 1) * 100 : null;
+  const plus = ev != null && ev > 0;
+  const tip = `BookieBashing fair ${f.toFixed(2)}${r.bbSrc ? ' (' + r.bbSrc + ')' : ''}${r.bbX != null ? ` · expected ${Number(r.bbX).toFixed(2)}` : ''}${r.bbN != null ? ` · ${r.bbN} bookmakers` : ''}${r.bbStage === 2 ? ' · normalised to BB confirmed XI' : r.bbStage === 1 ? ' · pre-lineup (per-bookmaker devig only)' : ''}`;
+  return `<td class="r tn" style="color:${plus ? 'var(--green)' : 'var(--red)'};white-space:nowrap" title="${escapeHtml(tip)}">${f.toFixed(2)}${ev != null ? `<div style="font-size:11px;font-weight:600">${ev >= 0 ? '+' : ''}${ev.toFixed(1)}%</div>` : ''}</td>`;
+}
 // Expected minutes (2026-11-08, user-requested): the fair is per-90 (sub cameos discounted) x
 // expected minutes this match — mean of his last <=10 starts, or last subs if confirmed on the bench.
 // Amber when he's averaging under 70 as a starter (regularly subbed off) or on the bench.
@@ -18043,8 +18073,7 @@ function renderBaOutliers(){
   // kicked-off matches here rather than trusting the file to be current.
   renderOlRemoved();
   const visibleAnySubtab = BA_OUTLIERS_ROWS.filter(r => marketFilter.has(r.market) && !gvKickoffPassed(r.kickoffDate, r.kickoff) && baBookEnabled(r.topBook) && !olIsRemoved(r));
-  const rows = visibleAnySubtab
-    .filter(r => !!r.lineupConfirmed === wantConfirmed)
+  const rows = baBbApply('outliers', visibleAnySubtab.filter(r => !!r.lineupConfirmed === wantConfirmed), r => r.topPrice)
     .sort((x, y) => getBaSort('outliers') === 'time'
       // Start time keeps each match's rows together, biggest % first within it (same as Grosvenor).
       ? ((baTimeSortKey(x, 'kickoff', 'kickoffDate') - baTimeSortKey(y, 'kickoff', 'kickoffDate'))
@@ -18063,7 +18092,7 @@ function renderBaOutliers(){
     const msg = BA_OUTLIERS_ROWS.some(r => !!r.lineupConfirmed === wantConfirmed)
       ? `No ${subLabel} outliers in the selected markets right now.`
       : `No ${subLabel} outliers right now.`;
-    body.innerHTML = `<tr><td colspan="12" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">${msg}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="13" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">${msg}</td></tr>`;
     return;
   }
   const fmtDetected = iso => {
@@ -18080,6 +18109,7 @@ function renderBaOutliers(){
     <td class="r tn" style="font-weight:600;color:var(--green)">${r.topPrice != null ? Number(r.topPrice).toFixed(2) : '—'} <span style="color:var(--text3);font-size:11px">(${escapeHtml(ocBookieShort(r.topBook))})</span>${r.topFresh === false ? ' <i class="ti ti-clock-exclamation" title="This price has not moved in a while — worth checking it is still current" style="color:var(--amber)"></i>' : ''}</td>
     <td class="r tn" style="color:var(--text2)">${r.nextPrice != null ? Number(r.nextPrice).toFixed(2) : '—'} <span style="color:var(--text3);font-size:11px">(${escapeHtml(ocBookieShort(r.nextBook))})</span>${r.nextFresh === false ? ' <i class="ti ti-clock-exclamation" title="This price has not moved in a while — worth checking it is still current" style="color:var(--amber)"></i>' : ''}</td>
     ${olTeamAdjFairCell(r)}
+    ${baBbCell(r, r.topPrice)}
     ${baCheckedCell(r.checkedAt, 'Oddschecker ladder fetch time (both prices come from it)')}
     <td class="r"><span class="badge" style="background:var(--amber-bg);color:var(--amber)">+${r.pctAboveNext != null ? Number(r.pctAboveNext).toFixed(0) : '—'}%</span></td>
     <td class="r tn" style="color:var(--text2)">${r.bookCount ?? '—'}</td>
@@ -18762,14 +18792,14 @@ function renderBaGrosvenor(){
   const recLbl = document.getElementById('gv-hide-record-n');
   if (recLbl) recLbl.textContent = belowN ? ` (${belowN})` : '';
   renderGvRemoved();
-  const rows = BA_GROSVENOR_ROWS.filter(r => !!r.lineupConfirmed === wantConfirmed && notRemoved(r) && !gvKickoffPassed(r.d, r.t)).sort((x, y) => sortMode === 'time'
+  const rows = baBbApply('grosvenor', BA_GROSVENOR_ROWS.filter(r => !!r.lineupConfirmed === wantConfirmed && notRemoved(r) && !gvKickoffPassed(r.d, r.t)), r => r.odds).sort((x, y) => sortMode === 'time'
     ? ((baTimeSortKey(x) - baTimeSortKey(y)) || String(x.match || '').localeCompare(String(y.match || '')) || ((y.pct ?? 0) - (x.pct ?? 0)))
     : ((y.pct ?? 0) - (x.pct ?? 0)));
   BA_GROSVENOR_RENDERED = rows;
   baSetCount('grosvenor', BA_GROSVENOR_ROWS.filter(r => r.lineupConfirmed && notRemoved(r) && !gvKickoffPassed(r.d, r.t)).length);
   if (countEl) countEl.textContent = `${rows.length} best price${rows.length === 1 ? '' : 's'}`;
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">No ${wantConfirmed ? 'lineups-confirmed' : 'pre-lineup'} Grosvenor prices above the Oddschecker best right now.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">No ${wantConfirmed ? 'lineups-confirmed' : 'pre-lineup'} Grosvenor prices above the Oddschecker best right now.</td></tr>`;
     return;
   }
   body.innerHTML = rows.map((r, idx) => { const pl = baPlacedRow(r.match, r.mkt, r.sel); return `<tr class="${pl.placed ? 'ba-placed' : ''}">
@@ -18779,6 +18809,7 @@ function renderBaGrosvenor(){
     <td style="font-weight:500">${escapeHtml(r.sel || '')}${r.playerStats ? `<div style="font-weight:400;font-size:11.5px;color:var(--text3);margin-top:2px" title="FotMob, current + previous two seasons, all competitions">${escapeHtml(r.playerStats)}</div>` : ''}${gvTeamNote(r)}${gvRecordNote(r)}</td>
     <td class="r tn" style="font-weight:600;color:var(--green)">${r.odds != null ? Number(r.odds).toFixed(2) : '—'}</td>
     <td class="r tn" style="color:var(--text2)">${r.nextBest != null ? Number(r.nextBest).toFixed(2) : '—'} <span style="color:var(--text3);font-size:11px">(${escapeHtml(ocBookieShort(r.nextBook))})</span>${gvOutlierBadge(r)}</td>
+    ${baBbCell(r, r.odds)}
     ${baCheckedCell(r.checkedAt, r.ocCheckedAt ? 'Grosvenor price fetch time. Oddschecker next-best fetched ' + new Date(r.ocCheckedAt).toLocaleString('en-GB') : 'Grosvenor price fetch time')}
     <td class="r"><span class="badge" style="background:var(--green-bg);color:var(--green)">+${r.pct != null ? Number(r.pct).toFixed(1) : '—'}%</span></td>
     ${pl.watchTd}
@@ -18878,7 +18909,7 @@ function renderBaEarly(){
     return `<button onclick="setEarlySubtab('${k}')" style="background:${on ? 'var(--brand)' : 'none'};border:none;padding:7px 14px;font-size:12.5px;font-weight:${on ? '600' : '400'};color:${on ? '#fff' : 'var(--text2)'};cursor:pointer;font-family:inherit;white-space:nowrap">${l} (${n})</button>`;
   }).join('');
   const sortMode = getBaSort('early');
-  const rows = vis.filter(r => BA_EARLY_SUBTAB === 'all' || r.lineup === BA_EARLY_SUBTAB).sort((x, y) => sortMode === 'time'
+  const rows = baBbApply('early', vis.filter(r => BA_EARLY_SUBTAB === 'all' || r.lineup === BA_EARLY_SUBTAB), r => r.showOdds).sort((x, y) => sortMode === 'time'
     ? ((baTimeSortKey(x) - baTimeSortKey(y)) || String(x.match || '').localeCompare(String(y.match || '')) || ((y.showEv ?? 0) - (x.showEv ?? 0)))
     : ((y.showEv ?? 0) - (x.showEv ?? 0)));
   BA_EARLY_RENDERED = rows;
@@ -18888,7 +18919,7 @@ function renderBaEarly(){
   const upEl = document.getElementById('ba-early-updated');
   if (upEl) upEl.textContent = BA_EARLY_UPDATED ? `· updated ${new Date(BA_EARLY_UPDATED).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : '';
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="13" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">No early prices above the form fair with these filters right now.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="14" style="text-align:center;color:var(--text3);padding:28px;font-size:13px">No early prices above the form fair with these filters right now.</td></tr>`;
     return;
   }
   body.innerHTML = rows.map((r, idx) => {
@@ -18908,6 +18939,7 @@ function renderBaEarly(){
     ${baCheckedCell(baCheckedIso(r, r.showBk))}
     <td class="r tn" style="color:var(--text2)">${Number(r.fair).toFixed(2)}</td>
     <td class="r"><span class="badge" style="background:var(--green-bg);color:var(--green)">+${Number(r.showEv).toFixed(1)}%</span></td>
+    ${baBbCell(r, r.showOdds)}
     <td class="r tn" style="color:var(--text2);white-space:nowrap">${nb ? `${Number(nb.odds).toFixed(2)} <span style="color:var(--text3);font-size:11px">(${escapeHtml(ocBookieShort(nb.bk))})</span>` : '—'}${nb && nb.gap != null ? ` <span class="badge" title="Next best vs the median of the remaining books" style="background:${off ? 'var(--amber-bg)' : 'var(--surface2)'};color:${off ? 'var(--amber)' : 'var(--text3)'}">${nb.gap >= 0 ? '+' : ''}${nb.gap.toFixed(0)}%</span>` : ''}</td>
     <td class="r tn" style="color:var(--text2)">${r.nBooks ?? '—'}</td>
     ${pl.watchTd}
