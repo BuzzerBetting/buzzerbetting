@@ -76,7 +76,8 @@ header{background:var(--header);height:62px;display:flex;align-items:center;just
 .card-pad{padding:22px}
 .card-h{padding:13px 20px;border-bottom:0.5px solid var(--border);font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:500}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
-@media(max-width:680px){.kpis{grid-template-columns:repeat(2,1fr)}}
+#profit-kpis{grid-template-columns:repeat(5,1fr)}
+@media(max-width:680px){.kpis,#profit-kpis{grid-template-columns:repeat(2,1fr)}}
 .kpi{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius);padding:16px 18px}
 .kpi-l{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.09em;margin-bottom:7px}
 .kpi-v{font-size:22px;font-weight:500;font-variant-numeric:tabular-nums}
@@ -1812,7 +1813,8 @@ tr.ba-placed > td{background:var(--green-bg) !important}
   <div class="kpis" id="profit-kpis"></div>
   <div id="profit-live-note" style="font-size:11px;color:var(--text3);margin:-8px 0 14px"></div>
   <div class="card"><div class="card-h">Monthly profit — all time</div><div style="padding:20px"><div style="position:relative;width:100%;height:240px"><canvas id="profitChart" role="img" aria-label="Monthly profit chart">Monthly profits since March 2023.</canvas></div></div></div>
-  <div class="card"><div class="card-h">Monthly breakdown</div><div class="scroll"><table class="dt"><thead><tr><th style="width:100px">Month</th><th class="r">Profit</th><th class="r">vs avg</th></tr></thead><tbody id="monthly-tbody"></tbody></table></div></div>
+  <div class="card"><div class="card-h">Yearly totals</div><div class="scroll"><table class="dt"><thead><tr><th style="width:100px">Year</th><th class="r">Profit</th><th class="r">Months</th><th class="r">Avg / month</th><th class="r">vs prev year</th></tr></thead><tbody id="yearly-tbody"></tbody></table></div></div>
+  <div class="card"><div class="card-h">Monthly breakdown</div><div class="scroll"><table class="dt"><thead><tr><th style="width:100px">Month</th><th class="r">Profit</th><th class="r">vs avg</th><th class="r">Year running</th></tr></thead><tbody id="monthly-tbody"></tbody></table></div></div>
 </div>
 
 <!-- TRACKER -->
@@ -10217,15 +10219,24 @@ function renderProfitBreakdown(liveNote){
   // The in-progress month is left out of the average/profitable count so a part-month doesn't drag it down.
   const done=monthly.filter(m=>m[0]!==curLbl);
   avgP=done.reduce((s,m)=>s+m[1],0)/(done.length||1);
+  // Per-year totals plus a running (cumulative) total within each year, keyed by month label.
+  const curYr=now.getFullYear(),years={},running={};
+  monthly.forEach(([m,p])=>{const y=2000+Number(m.split('-')[1]);const Y=years[y]||(years[y]={pl:0,n:0});Y.pl+=p;Y.n++;running[m]=Y.pl;});
+  const ytd=years[curYr];
   const kpi=(l,v,col,sub)=>`<div class="kpi"><div class="kpi-l">${l}</div><div class="kpi-v" style="color:var(--${col})">${v}</div><div class="kpi-s">${sub}</div></div>`;
   document.getElementById('profit-kpis').innerHTML=
     kpi('Total profit',gbp0(total),total>=0?'green':'red',`Since ${profitMonthLong(monthly[0][0])}`)+
+    (ytd?kpi(`${curYr} so far`,gbp0(ytd.pl),ytd.pl>=0?'green':'red',`${ytd.n} month${ytd.n===1?'':'s'} · running total`):kpi(`${curYr} so far`,'—','text3','No months yet'))+
     kpi('Best month',gbp0(best[1]),'amber',profitMonthLong(best[0]))+
     kpi('Monthly average',gbp0(avgP),'blue',`${done.filter(m=>m[1]>0).length} / ${done.length} profitable`)+
     (cur?kpi('Current month',gbp0(cur[1]),cur[1]>=0?'green':'red',`${profitMonthLong(cur[0])} · in progress`):kpi('Current month','—','text3',profitMonthLong(curLbl)));
   document.getElementById('profit-live-note').textContent=liveNote||'';
+  const yb=document.getElementById('yearly-tbody');
+  yb.innerHTML=Object.keys(years).map(Number).sort((a,b)=>b-a).map(y=>{const Y=years[y],prev=years[y-1];
+    const vs=prev&&prev.pl?((Y.pl-prev.pl)/Math.abs(prev.pl)*100):null;
+    return `<tr><td>${y}${y===curYr?' <span style="font-size:10px;color:var(--text3)">in progress</span>':''}</td><td class="r tn" style="color:var(--${Y.pl>=0?'green':'red'})">${gbp2(Y.pl)}</td><td class="r">${Y.n}</td><td class="r tn">${gbp0(Y.pl/Y.n)}</td><td class="r" style="color:var(--${vs==null?'text3':vs>=0?'green':'red'})">${vs==null?'—':(vs>=0?'+':'')+vs.toFixed(1)+'%'}</td></tr>`;}).join('');
   const tb=document.getElementById('monthly-tbody');tb.innerHTML='';
-  [...monthly].reverse().forEach(([m,p])=>{const vs=((p-avgP)/avgP*100),pos=vs>=0;const tr=document.createElement('tr');tr.innerHTML=`<td>${m}${m===curLbl?' <span style="font-size:10px;color:var(--text3)">live</span>':''}</td><td class="r tn" style="color:var(--${p>=0?'green':'red'})">${gbp2(p)}</td><td class="r" style="color:var(--${pos?'green':'red'})">${pos?'+':''}${vs.toFixed(1)}%</td>`;tb.appendChild(tr);});
+  [...monthly].reverse().forEach(([m,p])=>{const vs=((p-avgP)/avgP*100),pos=vs>=0;const tr=document.createElement('tr');tr.innerHTML=`<td>${m}${m===curLbl?' <span style="font-size:10px;color:var(--text3)">live</span>':''}</td><td class="r tn" style="color:var(--${p>=0?'green':'red'})">${gbp2(p)}</td><td class="r" style="color:var(--${pos?'green':'red'})">${pos?'+':''}${vs.toFixed(1)}%</td><td class="r tn" style="color:var(--${running[m]>=0?'green':'red'})">${gbp2(running[m])}</td>`;tb.appendChild(tr);});
   if(profitChartObj){const ds=profitChartObj.data.datasets[0];profitChartObj.data.labels=monthly.map(m=>m[0]);ds.data=monthly.map(m=>m[1]);ds.backgroundColor=profitBarColors();profitChartObj.update();}
 }
 // Every month from PROFIT_LIVE_FROM up to the current one comes from the ledger (a month with
