@@ -233,7 +233,9 @@ const BUILDERS = {
     let bets = (await betsFrom(NORMAL_EV_ROUTES)).filter(b => !/\b(header|headed|otb)\b/i.test(String(b.mkt || '')));
     bets = mergeDuplicates(bets);
     return bets.filter(b => (!b.source || b.source === 'bfex') && !kickoffPassed(b.d, b.t) && ctx.bookOk(b.bk))
-      .map(b => ({ match: b.match, market: b.mkt, selection: b.sel, bk: bookName(b.bk), odds: num(b.odds), fair: num(b.fair), ev: num(b.ev), t: b.t, d: b.d, matchId: b.matchId }));
+      .map(b => ({ match: b.match, market: b.mkt, selection: b.sel, bk: bookName(b.bk), odds: num(b.odds), fair: num(b.fair), ev: num(b.ev), t: b.t, d: b.d, matchId: b.matchId,
+        // 2026-11-14: BFEX under £50 matched, priced off £20+ at the best lay — flag it.
+        extra: b.lowBfex ? `⚠️ low BFEX traded (£${Math.round(num(b.matched) || 0)} matched)` : undefined }));
   },
   async 'calc-ev'(ctx) {
     const out = [];

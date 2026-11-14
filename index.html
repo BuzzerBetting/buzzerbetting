@@ -10489,7 +10489,10 @@ function renderOddscheckerEV(){
     // ever reach here; red/none are filtered out server-side before a bet is even alerted).
     const fairColor=b.conf==='green'?'var(--green)':(b.conf==='yellow'?'var(--amber)':'var(--text2)');
     const lastTraded=(typeof b.lastTraded==='number')?b.lastTraded.toFixed(2):'—';
-    const matched=(typeof b.matched==='number')?`£${b.matched.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}`:'—';
+    const matchedTxt=(typeof b.matched==='number')?`£${b.matched.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}`:'—';
+    // 2026-11-14 (user rule): boosts may post off a BFEX market under £50 matched if £20+ sits at
+    // the best lay — flagged here so the thin market is obvious before betting.
+    const matched=b.lowBfex?`<span style="color:var(--red);font-weight:500" title="Low BFEX traded: under £50 matched, priced off £20+ available at the best lay">⚠ ${matchedTxt} <span style="font-size:10px">LOW</span></span>`:matchedTxt;
     const boostIcon=b.boost?'<span class="boost-icon" title="Oddschecker Price Boost" style="margin-right:6px;vertical-align:middle">B</span>':'';
     const sourceLabel=b.source==='combo'?'OC/BB':(b.source==='bfex'?'BFEX':(b.source||''));
     const fairCell=sourceLabel?`${b.fair.toFixed(2)} <span style="color:var(--text3);font-size:11px">(${sourceLabel})</span>`:b.fair.toFixed(2);
