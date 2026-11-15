@@ -240,9 +240,10 @@ tr.ba-placed > td{background:var(--green-bg) !important}
     <div class="brand-name">Buzzer<em>Betting</em></div>
   </div>
   <div class="hdr-right">
-    <!-- Exchange account for lays (2026-11-15) — per user (strategy-prefs bfexAcct): the Betfair
-         account + commission every lay on the site uses unless stated otherwise (Normal +EV B&L). -->
-    <div id="bfexacct-wrap" style="position:relative;display:flex;align-items:center">
+    <!-- Exchange account for lays (2026-11-15) — Buzzer (admin) users only, per user (strategy-prefs
+         bfexAcct): the Betfair account + commission every lay logged on the site uses unless stated
+         otherwise (Normal +EV B&L). Other roles get the B&L calculator at 2% commission. -->
+    <div id="bfexacct-wrap" style="position:relative;display:none;align-items:center">
       <button id="bfexacct-btn" onclick="toggleBfexAcctPanel(event)" title="Pick the exchange account used for lays" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.55);padding:4px;display:flex;align-items:center;line-height:1">
         <span style="font-size:9.5px;font-weight:800;letter-spacing:.03em;border:1.5px solid currentColor;border-radius:5px;padding:1px 4px">BFEX</span>
       </button>
@@ -3866,6 +3867,8 @@ const NINJA_GOLF_COMMISSION = 0.02;
 // from scratch on every load anyway — no separate pass needed for those.
 function applyRoleRestrictions() {
   setTimeout(syncJordanOnly, 0);
+  const bfw = document.getElementById('bfexacct-wrap');
+  if (bfw) bfw.style.display = nevBuzzer() ? 'flex' : 'none';
   const isStaff = CURRENT_USER_ROLE === 'staff';
   const isCalculator = CURRENT_USER_ROLE === 'calculator';
   const isFreeze = CURRENT_USER_ROLE === 'freeze'; // Freeze tool only — no other Calculations, no Ledger
@@ -4133,7 +4136,11 @@ function loadBfexAcct() {
     .then(() => { syncBfexBtn(); return BFEX_ACCT; });
   return BFEX_ACCT_LOADING;
 }
+// Buzzer users (admin role: Jordan, Kieran) pick an exchange account and log B&L bets; everyone
+// else gets the B&L calculator only, at a 2% default commission (editable in the modal).
+function nevBuzzer() { return CURRENT_USER_ROLE === 'admin'; }
 function bfexComm() {
+  if (!nevBuzzer()) return 0.02;
   const c = parseFloat((BFEX_ACCT || {}).comm);
   return isFinite(c) && c >= 0 && c < 50 ? c / 100 : 0.02;
 }
@@ -10656,14 +10663,13 @@ function nevLayCell(b){
   return `<td class="r tn" style="color:${off ? 'var(--text3)' : 'var(--text)'}" title="${off ? 'Market is in-play / suspended' : 'Best lay on Betfair now'}">${Number(bk.lay).toFixed(2)}<div style="font-size:11px;color:var(--text3)">£${Math.round(bk.laySize || 0).toLocaleString('en-GB')}</div></td>`;
 }
 function nevBlBtn(i, b){
-  if (CURRENT_USER_ROLE === 'staff') return '';
   const k = nevLegKey(b);
   if (!k) return '';
   const bk = NEV_BOOKS[k];
   const lk = bk && bk.lay ? nevLock(100, Number(b.odds), Number(bk.lay), bfexComm()) : null;
   const txt = lk ? `B&amp;L ${lk.profit >= 0 ? '+' : '−'}£${Math.abs(lk.profit).toFixed(2)}` : 'B&amp;L';
   const col = lk ? (lk.profit >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text2)';
-  return `<button onclick="openNevBl(${i})" title="Back &amp; lay: profit locked from a £100 back stake at the current lay (${(bfexComm() * 100).toFixed(1)}% commission). Click to log one." style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:${col};line-height:1;margin-right:4px;font-weight:600">${txt}</button>`;
+  return `<button onclick="openNevBl(${i})" title="Back &amp; lay: profit locked from a £100 back stake at the current lay (${(bfexComm() * 100).toFixed(1)}% commission). Click to ${nevBuzzer() ? 'log one' : 'work out the lay stake'}." style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:${col};line-height:1;margin-right:4px;font-weight:600">${txt}</button>`;
 }
 let NEV_BL = null;
 async function openNevBl(i){
@@ -10682,7 +10688,7 @@ async function openNevBl(i){
   }
   ov.style.display = 'flex';
   ov.innerHTML = '<div class="card" style="width:440px;max-width:100%;padding:18px;color:var(--text3)">Loading…</div>';
-  await Promise.all([ensureLedgerAccounts(), loadBfexAcct()]);
+  if (nevBuzzer()) await Promise.all([ensureLedgerAccounts(), loadBfexAcct()]);
   NEV_BL.comm = +(bfexComm() * 100).toFixed(2);
   renderNevBl();
   try {  // fresh lay price for the modal
@@ -10695,29 +10701,29 @@ function closeNevBl(){ const ov = document.getElementById('nevbl-overlay'); if (
 function renderNevBl(){
   const ov = document.getElementById('nevbl-overlay');
   if (!ov || !NEV_BL) return;
-  const s = NEV_BL, b = s.b, ex = BFEX_ACCT || {};
+  const s = NEV_BL, b = s.b, ex = BFEX_ACCT || {}, buzz = nevBuzzer();
   const lbl = 'display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--text2)';
   ov.innerHTML = `<div class="card" style="width:440px;max-width:100%;padding:18px;background:var(--surface);max-height:90vh;overflow:auto">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:12px">
-      <div><div style="font-size:15px;font-weight:700">Back &amp; Lay</div><div style="font-size:12px;color:var(--text2);margin-top:2px">${escapeHtml(b.sel || '')} — ${escapeHtml(b.mkt || '')}${b.match ? ' (' + escapeHtml(b.match) + ')' : ''}</div></div>
+      <div><div style="font-size:15px;font-weight:700">Back &amp; Lay${buzz ? '' : ' calculator'}</div><div style="font-size:12px;color:var(--text2);margin-top:2px">${escapeHtml(b.sel || '')} — ${escapeHtml(b.mkt || '')}${b.match ? ' (' + escapeHtml(b.match) + ')' : ''}</div></div>
       <button class="add-btn" onclick="closeNevBl()"><i class="ti ti-x"></i></button>
     </div>
     <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:6px">Back — ${escapeHtml(s.bookie)}</div>
-    <label style="${lbl};margin-bottom:10px">Bookie account<select id="nevbl-acc" onchange="NEV_BL.acc=this.value" style="width:100%;box-sizing:border-box;background:var(--surface2);color:var(--text);border:.5px solid var(--border);border-radius:var(--radius);padding:7px 8px;font-size:13px;font-family:inherit">${accountOptionsHtml(s.acc || null, s.bookie)}</select></label>
+    ${buzz ? '' : '<div style="display:none">'}<label style="${lbl};margin-bottom:10px">Bookie account<select id="nevbl-acc" onchange="NEV_BL.acc=this.value" style="width:100%;box-sizing:border-box;background:var(--surface2);color:var(--text);border:.5px solid var(--border);border-radius:var(--radius);padding:7px 8px;font-size:13px;font-family:inherit">${accountOptionsHtml(s.acc || null, s.bookie)}</select></label>${buzz ? '' : '</div>'}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
       <label style="${lbl}">Back stake (£)<input id="nevbl-stake" type="number" step="0.01" min="0" value="${s.stake}" oninput="NEV_BL.stake=parseFloat(this.value);nevBlCalc()" style="width:100%;box-sizing:border-box;background:var(--surface2);color:var(--text);border:.5px solid var(--border);border-radius:var(--radius);padding:7px 8px;font-size:13px;font-family:inherit"></label>
       <label style="${lbl}">Back odds<input id="nevbl-odds" type="number" step="0.01" min="1.01" value="${s.odds}" oninput="NEV_BL.odds=parseFloat(this.value);nevBlCalc()" style="width:100%;box-sizing:border-box;background:var(--surface2);color:var(--text);border:.5px solid var(--border);border-radius:var(--radius);padding:7px 8px;font-size:13px;font-family:inherit"></label>
     </div>
-    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:6px">Lay — ${ex.id ? escapeHtml(ex.label) : '<span style="color:var(--red);text-transform:none;letter-spacing:0">no exchange account selected</span>'} <a href="javascript:void(0)" onclick="toggleBfexAcctPanel(event)" style="text-transform:none;letter-spacing:0;margin-left:4px">change</a></div>
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:6px">Lay — ${!buzz ? 'Betfair Exchange' : ex.id ? escapeHtml(ex.label) + ' <a href="javascript:void(0)" onclick="toggleBfexAcctPanel(event)" style="text-transform:none;letter-spacing:0;margin-left:4px">change</a>' : '<span style="color:var(--red);text-transform:none;letter-spacing:0">no exchange account selected</span> <a href="javascript:void(0)" onclick="toggleBfexAcctPanel(event)" style="text-transform:none;letter-spacing:0;margin-left:4px">pick one</a>'}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px">
       <label style="${lbl}">Lay odds<input id="nevbl-lay" type="number" step="0.01" min="1.01" value="${s.lay}" oninput="NEV_BL.lay=parseFloat(this.value);NEV_BL.layTouched=true;nevBlCalc()" style="width:100%;box-sizing:border-box;background:var(--surface2);color:var(--text);border:.5px solid var(--border);border-radius:var(--radius);padding:7px 8px;font-size:13px;font-family:inherit"></label>
       <label style="${lbl}">Commission %<input id="nevbl-comm" type="number" step="0.1" min="0" max="50" value="${s.comm}" oninput="NEV_BL.comm=parseFloat(this.value);nevBlCalc()" style="width:100%;box-sizing:border-box;background:var(--surface2);color:var(--text);border:.5px solid var(--border);border-radius:var(--radius);padding:7px 8px;font-size:13px;font-family:inherit"></label>
     </div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:12px">${s.laySize != null ? `£${Math.round(s.laySize).toLocaleString('en-GB')} available at the best lay` : 'Live lay price from Betfair'}</div>
     <div id="nevbl-out" class="card" style="padding:10px 12px;background:var(--surface2);margin-bottom:12px"></div>
-    <div id="nevbl-msg" style="font-size:12.5px;min-height:16px;margin-bottom:8px"></div>
+    ${buzz ? `<div id="nevbl-msg" style="font-size:12.5px;min-height:16px;margin-bottom:8px"></div>
     <button id="nevbl-log" onclick="submitNevBl()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:11px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;width:100%">Log bet</button>
-    <div style="font-size:11px;color:var(--text3);margin-top:8px">Logs to Buzzer &gt; Back &amp; Lay (not Value).</div>
+    <div style="font-size:11px;color:var(--text3);margin-top:8px">Logs to Buzzer &gt; Back &amp; Lay (not Value).</div>` : ''}
   </div>`;
   nevBlCalc();
 }
@@ -10730,14 +10736,14 @@ function nevBlCalc(){
   const money = v => (v >= 0 ? '+£' : '−£') + Math.abs(v).toFixed(2);
   const row = (l, v, col) => `<div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0"><span style="color:var(--text2)">${l}</span><strong style="${col ? 'color:' + col : ''}">${v}</strong></div>`;
   out.innerHTML = lk
-    ? row('Lay stake', '£' + lk.layStake.toFixed(2)) + row('Liability', '£' + lk.liability.toFixed(2))
+    ? row('Lay', '£' + lk.layStake.toFixed(2) + ' at ' + Number(s.lay).toFixed(2)) + row('Liability', '£' + lk.liability.toFixed(2))
       + row('Locked profit', money(lk.profit), lk.profit >= 0 ? 'var(--green)' : 'var(--red)')
       + (lk100 ? `<div style="font-size:11px;color:var(--text3);margin-top:4px">From a £100 back stake: ${money(lk100.profit)} · same result whether the selection wins or loses</div>` : '')
     : '<div style="font-size:12.5px;color:var(--text3)">Enter a back stake, back odds and lay odds.</div>';
 }
 async function submitNevBl(){
   const s = NEV_BL, msg = document.getElementById('nevbl-msg'), btn = document.getElementById('nevbl-log');
-  if (!s) return;
+  if (!s || !nevBuzzer()) return;
   const ex = BFEX_ACCT || {};
   const accId = (document.getElementById('nevbl-acc') || {}).value || s.acc;
   const stake = parseFloat(s.stake), odds = parseFloat(s.odds), lay = parseFloat(s.lay), c = (parseFloat(s.comm) || 0) / 100;
