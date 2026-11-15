@@ -3357,16 +3357,21 @@ function freezeRoleBlocks(name){
   }
   return false;
 }
-function goHome(){stopBetAlerts();if(CURRENT_USER_ROLE==='freeze'){showSec('freeze');return;}document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
+function goHome(){stopBetAlerts();BA_RETURN_TAB=null;if(CURRENT_USER_ROLE==='freeze'){showSec('freeze');return;}document.getElementById('view-home').style.display='';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');window.scrollTo({top:0,behavior:'smooth'});}
+// Return-to-Bet-Alerts (2026-11-15, user): a Log button on any Bet Alerts tab opens the bet form here;
+// once that bet saves (afterBetLogged), land back on the same Bet Alerts tab instead of the bet page.
+// Any other navigation clears it, so a later unrelated bet never bounces there.
+let BA_RETURN_TAB = null;
 function showSec(name){
   if(freezeRoleBlocks(name))return;
+  if(name==='bets-combined'){const bav=document.getElementById('view-bet-alerts');BA_RETURN_TAB=(bav&&bav.style.display==='block')?BA_ACTIVE:null;}else BA_RETURN_TAB=null;
   // Oddschecker +EV / Calculated +EV / DDHH now live as tabs inside the Bet Alerts page —
   // any legacy showSec() call for them redirects there rather than to a standalone .sec.
   if(name==='oddschecker'||name==='calculated'||name==='ddhh'){openBetAlerts({oddschecker:'oc-ev',calculated:'calc-ev',ddhh:'ddhh'}[name]);return;}
   stopBetAlerts();
   document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+name).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='profit'){setTimeout(buildChart,60);loadLiveProfit();}if(name==='tracker')initConnections();if(name==='matches')initMatches();if(name==='freeze')initFreeze();if(name==='bbbettracker')initBbTracker();if(name==='today')initToday();if(name==='bets-combined')initBetsPage();if(name==='monthly')initMonthly();if(name==='monthlyprofit')initMonthlyProfit();if(name==='assistantmonthly')initAssistantMonthly();if(name==='todo')initTodo();if(name==='payments')initPaymentsPage();stopOddscheckerEVRefresh();}
 const TOP_SEC_MAP={bets:'bets-menu',calc:'calc-menu',ledger:'ledger',bettracking:'bettracking',stats:'stats-menu',betalerts:'bet-alerts'};
-function showTopSec(name){if(freezeRoleBlocks(name))return;document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='stats')renderStatsMenu();if(name==='calc')loadOddscheckerEV();stopOddscheckerEVRefresh();if(name==='betalerts')initBetAlerts();else stopBetAlerts();}
+function showTopSec(name){if(freezeRoleBlocks(name))return;BA_RETURN_TAB=null;document.getElementById('view-home').style.display='none';document.querySelectorAll('.sec').forEach(s=>s.style.display='none');document.getElementById('view-'+TOP_SEC_MAP[name]).style.display='block';window.scrollTo({top:0,behavior:'smooth'});if(name==='stats')renderStatsMenu();if(name==='calc')loadOddscheckerEV();stopOddscheckerEVRefresh();if(name==='betalerts')initBetAlerts();else stopBetAlerts();}
 // Jump straight to a specific Bet Alerts tab (used by the Calculations menu shortcuts and the
 // cross-links in the tab notes).
 function openBetAlerts(tabKey){showTopSec('betalerts');if(tabKey)baTab(tabKey);}
@@ -9072,6 +9077,10 @@ function afterBetLogged() {
   document.getElementById('bets-add-form-wrap').style.display = 'none';
   document.getElementById('bets-add-chevron').className = 'ti ti-chevron-down';
   if (btDetailType) loadBetTrackingDetail();
+  // Logged from a Bet Alerts tab -> straight back to that tab (BA_RETURN_TAB, set in showSec).
+  const backTo = BA_RETURN_TAB;
+  const betsView = document.getElementById('view-bets-combined');
+  if (backTo && betsView && betsView.style.display === 'block') { BA_RETURN_TAB = null; openBetAlerts(backTo); }
 }
 
 async function openBetTrackingDetail(betType, label) {
