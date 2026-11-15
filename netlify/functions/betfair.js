@@ -295,6 +295,8 @@ exports.handler = async (event) => {
         const name = runnerMeta?.runnerName ?? `Runner ${runner.selectionId}`;
         players.push({
           name,
+          // 2026-11-15: Betfair ids, so a Normal +EV row can show its live lay price / be laid off.
+          marketId: book.marketId, selectionId: runner.selectionId, handicap: Number(runner.handicap || 0),
           totalMatched: runner.totalMatched ?? 0,
           lastPriceTraded: runner.lastPriceTraded ?? null,
           back: (runner.ex?.availableToBack ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),

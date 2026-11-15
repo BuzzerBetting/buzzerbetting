@@ -3339,10 +3339,10 @@ const normalEvLog = (() => {
 })();
 const nevRange = q => (['today', 'yesterday'].includes(q) ? q : 'overall');
 
-// GET /api/ledger/normal-ev-bets/stats?range=overall|today|yesterday&staking=flat|kelly|towin
+// GET /api/ledger/normal-ev-bets/stats?range=overall|today|yesterday&staking=flat|kelly|towin&basis=place|sp|lock&comm=0.02
 router.get('/normal-ev-bets/stats', (req, res) => {
   if (!normalEvLog) return res.json({ ok: true, overall: {}, byMarket: [], byBookie: [] });
-  try { res.json({ ok: true, ...normalEvLog.getStats(nevRange(req.query.range), req.query.staking) }); }
+  try { res.json({ ok: true, ...normalEvLog.getStats(nevRange(req.query.range), req.query.staking, req.query.basis, parseFloat(req.query.comm) || 0) }); }
   catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
@@ -4414,6 +4414,42 @@ const BET_PLACED_WATCH = { Jordan: 'Rafael', Dezpic: 'Russ', Kieran: 'Chester' }
 
 // GET /api/ledger/bet-alert-placed → { ok, mine:[...], also:{ <watched user>:[...] } }
 // `also` is only filled for a user listed in BET_PLACED_WATCH, and only with their pair.
+// GET /api/ledger/bet-alert-bfex-book?legs=marketId:selectionId:handicap,... (2026-11-15) — live best
+// back/lay (+ size) for Normal +EV single bets: the Lay column, the B&L button's locked profit and
+// its modal's lay stake. Cached 15s per leg set; at most 120 legs. Every role (Bet Alerts route).
+const BFEX_BOOK_CACHE = new Map();
+router.get('/bet-alert-bfex-book', async (req, res) => {
+  try {
+    const legs = String(req.query.legs || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 120)
+      .map(s => { const [m, sel, h] = s.split(':'); return { key: s, marketId: m, selectionId: Number(sel), handicap: Number(h || 0) }; })
+      .filter(l => /^1\.\d+$/.test(l.marketId) && Number.isFinite(l.selectionId));
+    if (!legs.length) return res.json({ ok: true, books: {} });
+    const ck = legs.map(l => l.key).sort().join(',');
+    const hit = BFEX_BOOK_CACHE.get(ck);
+    if (hit && Date.now() - hit.at < 15000) return res.json({ ok: true, books: hit.books, cached: true });
+    const bf = require('./netlify/functions/betfair-horses');
+    const appKey = process.env.BFEX_APP_KEY;
+    const session = await bf.getCachedSessionToken(appKey);
+    const ids = [...new Set(legs.map(l => l.marketId))];
+    const byMarket = new Map();
+    for (let i = 0; i < ids.length; i += 40) {
+      for (const b of (await bf.bfCall('listMarketBook', { marketIds: ids.slice(i, i + 40), priceProjection: { priceData: ['EX_BEST_OFFERS'] } }, appKey, session)) || []) byMarket.set(b.marketId, b);
+    }
+    const books = {};
+    for (const l of legs) {
+      const b = byMarket.get(l.marketId);
+      const rn = b && (b.runners || []).find(x => x.selectionId === l.selectionId && Number(x.handicap || 0) === l.handicap);
+      if (!b || !rn) { books[l.key] = null; continue; }
+      const back = (rn.ex && rn.ex.availableToBack || [])[0], lay = (rn.ex && rn.ex.availableToLay || [])[0];
+      books[l.key] = { status: b.status, inplay: !!b.inplay, runnerStatus: rn.status,
+        back: back ? back.price : null, backSize: back ? back.size : null, lay: lay ? lay.price : null, laySize: lay ? lay.size : null };
+    }
+    BFEX_BOOK_CACHE.set(ck, { at: Date.now(), books });
+    if (BFEX_BOOK_CACHE.size > 200) BFEX_BOOK_CACHE.delete(BFEX_BOOK_CACHE.keys().next().value);
+    res.json({ ok: true, books });
+  } catch (err) { res.json({ ok: false, error: err.message }); }
+});
+
 router.get('/bet-alert-placed', (req, res) => {
   try {
     if (!req.username) return res.status(400).json({ ok: false, error: 'no session' });

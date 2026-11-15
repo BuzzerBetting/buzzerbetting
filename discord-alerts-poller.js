@@ -505,6 +505,7 @@ function prefsFor(username, slot) {
   try { return (row && JSON.parse(row.prefs)) || {}; } catch (e) { return {}; }
 }
 
+const NEV_STAFF_NO_PU_SINGLES = new Set(['Rafael', 'Russ', 'Chester']);
 let running = false;
 async function tick() {
   if (running) return;
@@ -558,6 +559,8 @@ async function tick() {
               if (h.confirmedOnly && !(b.matchId != null && confirmedIds.has(String(b.matchId)))) continue;
               const bk = betKey(b);
               if (placed.has(bk) || (b.removedKey && removed.has(b.removedKey))) continue;
+              // 2026-11-15 (user): VAs never get PricedUp horse singles (index.html nevStaffHidden).
+              if (edge === 'oc-ev' && NEV_STAFF_NO_PU_SINGLES.has(h.username) && b.market === 'Horse Win' && /pricedup/i.test(String(b.bk || ''))) continue;
               const key = `${bk} | ${norm(b.bk)}${b.keyExtra ? ' | ' + norm(b.keyExtra) : ''}`;
               const prev = getSent.get(h.username, h.slot, edge, key);
               let post = false, wasPrev = null;
