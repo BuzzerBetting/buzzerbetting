@@ -314,7 +314,8 @@ const BUILDERS = {
     return ((d && d.rows) || []).filter(r => r.lineupConfirmed && OUTLIERS_ALL_MARKETS.has(r.market)
         && ctx.bookOk(r.topBook) && !kickoffPassed(r.kickoffDate, r.kickoff))
       .map(r => ({ match: r.match, market: r.market, selection: r.selection, bk: bookName(r.topBook), odds: num(r.topPrice),
-        ev: num(r.pctAboveNext), evLabel: 'above next', t: r.kickoff, d: r.kickoffDate, matchId: r.matchId,
+        // 2026-11-15: 'bb' trigger rows = best price 15%+ above BB's fair (next-best gap under 50%)
+        ev: num(r.trigger === 'bb' ? r.pctAboveBb : r.pctAboveNext), evLabel: r.trigger === 'bb' ? 'above BB fair' : 'above next', t: r.kickoff, d: r.kickoffDate, matchId: r.matchId,
         extra: r.nextPrice != null ? `next best ${Number(r.nextPrice).toFixed(2)}${r.nextBook ? ' at ' + bookName(r.nextBook) : ''}` : null,
         removedKey: 'outliers | ' + betKey({ match: r.match, market: r.market, selection: r.selection }) }));
   },

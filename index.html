@@ -18129,7 +18129,7 @@ function renderBaOutliers(){
     ${olTeamAdjFairCell(r)}
     ${baBbCell(r, r.topPrice)}
     ${baCheckedCell(r.checkedAt, 'Oddschecker ladder fetch time (both prices come from it)')}
-    <td class="r"><span class="badge" style="background:var(--amber-bg);color:var(--amber)">+${r.pctAboveNext != null ? Number(r.pctAboveNext).toFixed(0) : '—'}%</span></td>
+    <td class="r">${olPctCell(r)}</td>
     <td class="r tn" style="color:var(--text2)">${r.bookCount ?? '—'}</td>
     ${pl.watchTd}
     <td style="font-size:11.5px;color:var(--text3);white-space:nowrap">${betLinkBtn(r.url, r.topBook)}<button onclick="logOutlierBet(${idx})" title="Log this bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1;margin-right:6px"><i class="ti ti-plus"></i> Log</button><button onclick="copyBaOutlierBet(${idx},this)" title="Copy bet" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text2);line-height:1;margin-right:6px"><i class="ti ti-copy"></i></button>${fmtDetected(r.detectedAt)}${pl.btn('outliers', idx)}${wantConfirmed ? `<button onclick="olRemoveBet(${idx})" title="Remove for me until kickoff (not for anyone else)" style="background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--red);line-height:1;margin-left:4px"><i class="ti ti-x"></i></button>` : ''}</td>
@@ -18184,12 +18184,21 @@ function renderOlRemoved(){
 }
 // Outliers have no fair/EV, so the shared 8-line format carries the next-best price in the
 // Fair Odds line and "% above next best" in the EV line, same stand-in the placed ticks use.
+// 2026-11-15 (user): rows can also come in on the "vs BB" trigger — best price 15%+ above BB's
+// fair even though the next-best gap is under 50% (trigger === 'bb'). Badge shows which.
+function olPctCell(r){
+  if (r.trigger === 'bb') {
+    return `<span class="badge" style="background:var(--blue-bg,#e8f0fe);color:var(--blue,#2563eb)" title="Best price is ${Number(r.pctAboveBb).toFixed(0)}% above BookieBashing's fair (next-best gap under the usual 50%)">+${Number(r.pctAboveBb).toFixed(0)}% vs BB</span><div style="font-size:10.5px;color:var(--text3);margin-top:2px">+${r.pctAboveNext != null ? Number(r.pctAboveNext).toFixed(0) : '—'}% vs next</div>`;
+  }
+  return `<span class="badge" style="background:var(--amber-bg);color:var(--amber)">+${r.pctAboveNext != null ? Number(r.pctAboveNext).toFixed(0) : '—'}%</span>`;
+}
 function copyBaOutlierBet(idx, btn){
   const r = BA_OUTLIERS_RENDERED[idx];
   if (!r) return;
   const odds = r.topPrice != null ? Number(r.topPrice).toFixed(2) : '—';
   const next = r.nextPrice != null ? `${Number(r.nextPrice).toFixed(2)} (next best)` : '—';
-  const pct = r.pctAboveNext != null ? `+${Number(r.pctAboveNext).toFixed(0)}% above next best` : '—';
+  const pct = r.trigger === 'bb' && r.pctAboveBb != null ? `+${Number(r.pctAboveBb).toFixed(0)}% above BB fair (${Number(r.bbFair).toFixed(2)})`
+    : (r.pctAboveNext != null ? `+${Number(r.pctAboveNext).toFixed(0)}% above next best` : '—');
   const text = baCopyBetText(r.kickoff ?? '', r.match ?? '', r.market ?? '', r.selection ?? '', odds, next, pct, ocBookieName(r.topBook) || r.topBook || '');
   baCopyBet(text, btn);
 }
