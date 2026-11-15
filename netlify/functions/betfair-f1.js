@@ -231,6 +231,8 @@ async function buildF1(appKey, session) {
       // backSize/lay/laySize (2026-10-01): raw best-level sizes so f1_scan.py/dnf_scan.py can
       // apply their own arb liquidity rules (£10 to lay for Yes arbs, £10 on the back for No/DNF).
       out[k].push({
+        // marketId/selectionId (2026-11-15): settle + closing-fair capture in the Normal +EV results log.
+        marketId: mkt.marketId, selectionId: r.selectionId,
         name: nameById[r.selectionId] || String(r.selectionId), fair, back: backOk ? b : null,
         backSize: Math.round(bSize * 100) / 100, lay: l > 1 ? l : null, laySize: Math.round(lSize * 100) / 100,
         traded: Math.round(runnerTraded * 100) / 100, ltp: ltp > 1 ? ltp : null,
