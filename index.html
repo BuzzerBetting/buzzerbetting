@@ -10490,9 +10490,9 @@ function renderOddscheckerEV(){
     const fairColor=b.conf==='green'?'var(--green)':(b.conf==='yellow'?'var(--amber)':'var(--text2)');
     const lastTraded=(typeof b.lastTraded==='number')?b.lastTraded.toFixed(2):'—';
     const matchedTxt=(typeof b.matched==='number')?`£${b.matched.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}`:'—';
-    // 2026-11-14 (user rule): boosts may post off a BFEX market under the matched gate (£200 since 11-15) if £20+ sits at
-    // the best lay — flagged here so the thin market is obvious before betting.
-    const matched=b.lowBfex?`<span style="color:var(--red);font-weight:500" title="Low BFEX traded: under £200 matched, priced off £20+ available at the best lay">⚠ ${matchedTxt} <span style="font-size:10px">LOW</span></span>`:matchedTxt;
+    // 2026-11-15 (user rule): a BFEX market that fails the £200 matched / traded-prices checks is
+    // priced off its lay price when £100+ is available there — flagged so it's obvious before betting.
+    const matched=b.lowBfex?`<span style="color:var(--red);font-weight:500" title="Thin BFEX market: failed the £200 matched / traded-prices checks, so the fair is the lay price with £100+ available">⚠ ${matchedTxt} <span style="font-size:10px">LAY</span></span>`:matchedTxt;
     const boostIcon=b.boost?'<span class="boost-icon" title="Oddschecker Price Boost" style="margin-right:6px;vertical-align:middle">B</span>':'';
     const sourceLabel=b.source==='combo'?'OC/BB':(b.source==='bfex'?'BFEX':(b.source||''));
     const fairCell=sourceLabel?`${b.fair.toFixed(2)} <span style="color:var(--text3);font-size:11px">(${sourceLabel})</span>`:b.fair.toFixed(2);

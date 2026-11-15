@@ -234,8 +234,8 @@ const BUILDERS = {
     bets = mergeDuplicates(bets);
     return bets.filter(b => (!b.source || b.source === 'bfex') && !kickoffPassed(b.d, b.t) && ctx.bookOk(b.bk))
       .map(b => ({ match: b.match, market: b.mkt, selection: b.sel, bk: bookName(b.bk), odds: num(b.odds), fair: num(b.fair), ev: num(b.ev), t: b.t, d: b.d, matchId: b.matchId,
-        // 2026-11-14: BFEX under £50 matched, priced off £20+ at the best lay — flag it.
-        extra: b.lowBfex ? `⚠️ low BFEX traded (£${Math.round(num(b.matched) || 0)} matched)` : undefined }));
+        // 2026-11-15: thin BFEX market, fair is the lay price with £100+ available — flag it.
+        extra: b.lowBfex ? `⚠️ fair = BFEX lay price (thin market, £${Math.round(num(b.matched) || 0)} matched)` : undefined }));
   },
   async 'calc-ev'(ctx) {
     const out = [];
