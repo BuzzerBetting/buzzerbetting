@@ -230,7 +230,8 @@ function gvSsMatchIds() {
 // Per-user filtering (placed ticks, removed bets) happens later in perUserFilter.
 const BUILDERS = {
   async 'oc-ev'(ctx) {
-    let bets = (await betsFrom(NORMAL_EV_ROUTES)).filter(b => !/\b(header|headed|otb)\b/i.test(String(b.mkt || '')));
+    let bets = (await betsFrom(NORMAL_EV_ROUTES)).filter(b => !/\b(header|headed|otb)\b/i.test(String(b.mkt || ''))
+      && !(b.hideAt && Date.parse(b.hideAt) <= Date.now()));  // 2026-11-15: hideAt = when the bookmaker pulls it (PricedUp horses: off - 10 min)
     bets = mergeDuplicates(bets);
     return bets.filter(b => (!b.source || b.source === 'bfex') && !kickoffPassed(b.d, b.t) && ctx.bookOk(b.bk))
       .map(b => ({ match: b.match, market: b.mkt, selection: b.sel, bk: bookName(b.bk), odds: num(b.odds), fair: num(b.fair), ev: num(b.ev), t: b.t, d: b.d, matchId: b.matchId,

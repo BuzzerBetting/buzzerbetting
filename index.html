@@ -10475,7 +10475,7 @@ function renderOddscheckerEV(){
   // true for everything until the filter has loaded.
   // 2026-10-24 (user): Normal +EV is BFEX-priced only. Backstop for any feed that tags a
   // non-BFEX fair (e.g. 'combo' OC/BB); untagged rows stay, so nothing is hidden by accident.
-  const shown=ocEvBets.map((b,i)=>({b,i})).filter(({b})=>(!b.source||b.source==='bfex')&&!gvKickoffPassed(b.d,b.t)&&((typeof baBookEnabled!=='function')||baBookEnabled(b.bk)));
+  const shown=ocEvBets.map((b,i)=>({b,i})).filter(({b})=>(!b.source||b.source==='bfex')&&!gvKickoffPassed(b.d,b.t)&&!nevHideAtPassed(b)&&((typeof baBookEnabled!=='function')||baBookEnabled(b.bk)));
   const ocSortMode=getBaSort('oc-ev');
   shown.sort((x,y)=>ocSortMode==='time'?(baTimeSortKey(x.b)-baTimeSortKey(y.b)):(y.b.ev-x.b.ev));
   const countEl=document.getElementById('oc-ev-smeta-count');
@@ -10530,6 +10530,10 @@ function renderOddscheckerEV(){
 // Keeps the highest-EV bookmaker as the row shown, folds the rest into an odds ladder
 // (bookmaker name -> price) the same bookieLinesHtmlGeneric/ocBookieLinesHtml already renders
 // for merged boost rows, so every bookmaker still offering +EV on it surfaces.
+// 2026-11-15 (user): a row's hideAt (UTC ISO) is when the bookmaker pulls it — PricedUp horse
+// boosts go exactly 10 min before the off. Dropped before the merge on load (so another book's
+// copy of the same double survives) and again at render, so it vanishes between scans too.
+function nevHideAtPassed(b){ const t=b&&b.hideAt?Date.parse(b.hideAt):NaN; return !isNaN(t)&&t<=Date.now(); }
 function mergeHorseDoubleDuplicates(bets){
   const groups=new Map();
   const out=[];
@@ -10583,7 +10587,7 @@ async function loadOddscheckerEV(){
     });
     // Header / OTB (goal or SOT) are calculated markets — Calculated +EV only, never Normal +EV,
     // whichever feed they come in on, boosts included (2026-10-03, user-specified).
-    ocEvBets=ocEvBets.filter(b=>!/\b(header|headed|otb)\b/i.test(String(b.mkt||'')));
+    ocEvBets=ocEvBets.filter(b=>!/\b(header|headed|otb)\b/i.test(String(b.mkt||''))&&!nevHideAtPassed(b));
     ocEvBets=mergeHorseDoubleDuplicates(ocEvBets);
     ocEvLastUpdated=d.updated||ocEvLastUpdated;
     const countEl=document.getElementById('oc-ev-smeta-count');
