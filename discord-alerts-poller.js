@@ -311,7 +311,10 @@ const BUILDERS = {
   },
   async outliers(ctx) {
     const d = await getJson('/api/oc-outliers');
+    // 2026-11-15: never post a row priced below the player's record fair (index.html olBelowRecord).
+    const olFair = r => r.teamAdjFair != null ? num(r.teamAdjFair) : (r.recordFair != null ? num(r.recordFair) : null);
     return ((d && d.rows) || []).filter(r => r.lineupConfirmed && OUTLIERS_ALL_MARKETS.has(r.market)
+        && !(olFair(r) != null && num(r.topPrice) < olFair(r))
         && ctx.bookOk(r.topBook) && !kickoffPassed(r.kickoffDate, r.kickoff))
       .map(r => ({ match: r.match, market: r.market, selection: r.selection, bk: bookName(r.topBook), odds: num(r.topPrice),
         // 2026-11-15: 'bb' trigger rows = best price 15%+ above BB's fair (next-best gap under 50%)
