@@ -145,6 +145,7 @@ async function buildNflTd(appKey, session) {
         const { b, bSize, l, lSize, ltp, fair } = runnerFair(r);
         runners.push({
           name: nameById[r.selectionId] || String(r.selectionId),
+          selectionId: r.selectionId, // 2026-11-15: closing-price capture in the Normal +EV results log
           fair, ltp: ltp > 1 ? ltp : null,
           back: b > 1 ? b : null, backSize: Math.round(bSize * 100) / 100,
           lay: l > 1 ? l : null, laySize: Math.round(lSize * 100) / 100,
