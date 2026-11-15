@@ -227,6 +227,12 @@ function isPlausiblePrematchKickoff(openDateIso) {
   return delta > 0 && delta <= MAX_FUTURE_KICKOFF_MS;
 }
 
+// Betfair's per-price traded volume for a runner (EX_TRADED), dust under 50p dropped — same
+// shape as betfair.js's player-market `traded` ladder.
+function tradedLadder(rb) {
+  return (rb?.ex?.tradedVolume ?? []).filter(p => p.size >= 0.5).map(p => ({ price: p.price, size: Math.round(p.size * 100) / 100 }));
+}
+
 async function findTeamWin(team, appKey, session) {
   // Alias-resolved form (e.g. "Manchester United" -> "Man Utd") — used for every fuzzy-match
   // check below, not just the search query. Betfair's own event/runner names use the
@@ -303,6 +309,8 @@ async function findTeamWin(team, appKey, session) {
       lastPriceTraded: runnerBook?.lastPriceTraded ?? null,
       back: (runnerBook?.ex?.availableToBack ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
       lay: (runnerBook?.ex?.availableToLay ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
+      // 2026-11-15: traded ladder, so bfex_fair can require money traded at 5+ different prices.
+      tradedLadder: tradedLadder(runnerBook),
     },
   };
 }
@@ -394,6 +402,8 @@ async function findPlayerWin(player, appKey, session, opts = {}) {
       lastPriceTraded: runnerBook?.lastPriceTraded ?? null,
       back: (runnerBook?.ex?.availableToBack ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
       lay: (runnerBook?.ex?.availableToLay ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
+      // 2026-11-15: traded ladder, so bfex_fair can require money traded at 5+ different prices.
+      tradedLadder: tradedLadder(runnerBook),
     },
   };
 }
@@ -446,7 +456,7 @@ async function findEventMarketRunner(eventId, eventName, marketNameTest, runnerT
 
   const books = await bfCall('listMarketBook', {
     marketIds: [market.marketId],
-    priceProjection: { priceData: ['EX_BEST_OFFERS'] },
+    priceProjection: { priceData: ['EX_BEST_OFFERS', 'EX_TRADED'] },
   }, appKey, session);
   const runnerBook = (books[0]?.runners || []).find(r => r.selectionId === runnerMeta.selectionId);
 
@@ -461,6 +471,8 @@ async function findEventMarketRunner(eventId, eventName, marketNameTest, runnerT
       lastPriceTraded: runnerBook?.lastPriceTraded ?? null,
       back: (runnerBook?.ex?.availableToBack ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
       lay: (runnerBook?.ex?.availableToLay ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
+      // 2026-11-15: traded ladder, so bfex_fair can require money traded at 5+ different prices.
+      tradedLadder: tradedLadder(runnerBook),
     },
   };
 }
@@ -518,6 +530,8 @@ async function findDartsMarketRunner(player, marketName, runnerName, line, appKe
       lastPriceTraded: rb?.lastPriceTraded ?? null,
       back: (rb?.ex?.availableToBack ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
       lay: (rb?.ex?.availableToLay ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
+      // 2026-11-15: traded ladder, so bfex_fair can require money traded at 5+ different prices.
+      tradedLadder: tradedLadder(rb),
     },
   };
 }

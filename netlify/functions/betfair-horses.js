@@ -164,6 +164,8 @@ async function getRace(marketId, appKey, session) {
         lastPriceTraded: r.lastPriceTraded ?? null,
         back: (r.ex?.availableToBack ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
         lay: (r.ex?.availableToLay ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
+        // 2026-11-15: traded ladder, so bfex_fair can require money traded at 5+ different prices.
+        tradedLadder: (r.ex?.tradedVolume ?? []).filter(p => p.size >= 0.5).map(p => ({ price: p.price, size: Math.round(p.size * 100) / 100 })),
       };
     })
     .sort((a, b) => (a.cloth ?? 99) - (b.cloth ?? 99));
