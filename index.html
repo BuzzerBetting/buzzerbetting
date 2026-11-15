@@ -18292,6 +18292,12 @@ function nevPl(r, mode){
   const st = nevStakeFor(r, mode);
   return r.result === 'won' ? st * (r.odds - 1) : r.result === 'lost' ? -st : (r.result === 'void' ? 0 : null);
 }
+// "Display EV at SP" (2026-11-15, user-requested): the closing fair normalEvLog.js captures for every
+// bet with Betfair legs — Betfair SP for horse legs, the last traded price before the off for other
+// legs (football/darts/tennis markets have no SP). Accas/doubles multiply their legs.
+function nevSpOn(){ try { return localStorage.getItem('bb_nev_sp') === '1'; } catch(e) { return false; } }
+function setNevSp(on){ try { localStorage.setItem('bb_nev_sp', on ? '1' : '0'); } catch(e) {} renderNevStats(); }
+function nevCloseLabel(src){ return src === 'bsp' ? 'SP' : src === 'ltp' ? 'close' : src === 'mixed' ? 'SP/close' : ''; }
 function nevStakingLabel(){ return (NEV_STAKINGS.find(([k]) => k === NEV_STAKING) || NEV_STAKINGS[0])[1]; }
 function setNevStaking(v){ NEV_STAKING = v; try { localStorage.setItem('bb_nev_staking', v); } catch(e) {} loadNevStats(); }
 function nevStatsOn(){ try { return localStorage.getItem('bb_nev_stats') === '1'; } catch(e) { return false; } }
@@ -18385,8 +18391,35 @@ async function showNevSettled(field, idx, all){
     ${rows.length ? `<div style="overflow-x:auto"><table class="dt" style="min-width:680px"><thead><tr><th>Settled</th><th>Match</th><th>Selection</th><th class="r">Odds</th><th class="r">Fair</th><th class="r">Stake</th><th>Result</th><th class="r">P/L</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>`
       : `<div style="color:var(--text3);font-size:13px;padding:8px 0">${NEV_SETTLED_ALL ? 'No settled bets' : 'No winners'} ${win.none}.</div>`}`;
 }
+function nevSpTiles(o, tile, roiFmt, plCol){
+  const col = v => v == null ? '' : plCol(v);
+  return tile('Bets with SP', o.closeBets || 0)
+    + tile('Avg EV posted', o.closeBets ? roiFmt(o.avgEvClosed) : '—')
+    + tile('Avg EV at SP', o.closeBets ? roiFmt(o.avgCloseEv) : '—', col(o.avgCloseEv))
+    + tile('Exp. ROI at SP', roiFmt(o.expRoiClose), col(o.expRoiClose))
+    + tile('ROI (SP bets)', roiFmt(o.roiClose), col(o.roiClose));
+}
+function nevSpStatCells(m, pctFmt, roiFmt, plCol){
+  const col = v => v == null ? 'var(--text3)' : plCol(v);
+  return '<td class="r tn" style="color:var(--text2)">' + (m.closeBets || 0) + '</td>'
+    + '<td class="r tn" style="color:var(--text2)">' + (m.closeBets ? pctFmt(m.avgEvClosed) : '—') + '</td>'
+    + '<td class="r tn" style="color:' + col(m.avgCloseEv) + '">' + (m.closeBets ? roiFmt(m.avgCloseEv) : '—') + '</td>'
+    + '<td class="r tn" style="color:' + col(m.expRoiClose) + '">' + roiFmt(m.expRoiClose) + '</td>';
+}
+function nevSpCells(r){
+  if (r.closeFair == null) {
+    const why = r.closeSrc === 'void' ? 'a leg was a non-runner / voided'
+      : r.closeSrc === 'none' ? 'no pre-off price was captured (logged before tracking started, or after the off)'
+      : r.hasLegs ? 'waiting for the off' : 'no Betfair legs (player markets settle from FotMob)';
+    return '<td class="r tn" style="color:var(--text3)" title="' + escapeHtml(why) + '">' + (r.hasLegs && !r.closeSrc ? '…' : '—') + '</td><td class="r tn" style="color:var(--text3)">—</td>';
+  }
+  const ev = Number(r.closeEv);
+  return '<td class="r tn" style="color:var(--text2)">' + Number(r.closeFair).toFixed(2) + ' <span style="color:var(--text3);font-size:10.5px">' + nevCloseLabel(r.closeSrc) + '</span></td>'
+    + '<td class="r tn" style="color:' + (ev >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (ev >= 0 ? '+' : '') + ev.toFixed(1) + '%</td>';
+}
 function renderNevStats(){
   const d = NEV_LAST || {}, o = d.overall || {};
+  const sp = nevSpOn();
   const panel = document.getElementById('nev-stats-panel');
   if (!panel) return;
   const pctFmt = n => n == null ? '—' : Number(n).toFixed(1) + '%';
@@ -18398,7 +18431,7 @@ function renderNevStats(){
   const rangeTabs = [['overall', 'Overall'], ['yesterday', 'Yesterday'], ['today', 'Today']].map(([k, l]) => btn(NEV_RANGE === k, `setNevRange('${k}')`, l)).join('');
   const table = (title, head, list, field) => `
     <div style="font-size:12.5px;font-weight:600;margin:4px 0 6px">${title}</div>
-    <div style="overflow-x:auto;margin-bottom:14px"><table class="dt" style="min-width:860px"><thead><tr><th>${head}</th><th class="r">Bets</th><th class="r">Settled</th><th class="r">Won</th><th class="r">Win%</th><th class="r">Avg odds</th><th class="r">Avg EV</th><th class="r">Expected</th><th class="r">Staked</th><th class="r">P/L</th><th class="r">ROI</th><th class="r">Exp. ROI</th><th class="r">Need result</th></tr></thead><tbody>${
+    <div style="overflow-x:auto;margin-bottom:14px"><table class="dt" style="min-width:860px"><thead><tr><th>${head}</th><th class="r">Bets</th><th class="r">Settled</th><th class="r">Won</th><th class="r">Win%</th><th class="r">Avg odds</th><th class="r">Avg EV</th><th class="r">Expected</th><th class="r">Staked</th><th class="r">P/L</th><th class="r">ROI</th><th class="r">Exp. ROI</th>${sp ? '<th class="r" title="Bets with a Betfair SP / closing price captured">SP bets</th><th class="r" title="Average EV at the posted fair, on the bets that have an SP / closing price">EV posted</th><th class="r" title="Average EV against the Betfair SP (horses) or last pre-off traded price (other markets)">EV at SP</th><th class="r" title="Expected ROI at the SP / closing fair, on settled bets that have one">Exp. ROI at SP</th>' : ''}<th class="r">Need result</th></tr></thead><tbody>${
       (list || []).length ? list.map((m, i) => `<tr onclick="showNevSettled('${field}', ${i})" style="cursor:pointer" title="Click to see this row's settled bets for the selected day (Overall: last 24 hours)">
         <td style="font-size:12.5px">${escapeHtml(m.key || '—')}</td>
         <td class="r tn">${m.bets}</td><td class="r tn">${m.settled}</td><td class="r tn">${m.wins}</td>
@@ -18410,8 +18443,9 @@ function renderNevStats(){
         <td class="r tn" style="color:${plCol(m.pl)}">${plFmt(m.pl)}</td>
         <td class="r tn" style="color:${plCol(m.pl)}">${roiFmt(m.roi)}</td>
         <td class="r tn" style="color:var(--text2)">${roiFmt(m.expRoi)}</td>
+        ${sp ? nevSpStatCells(m, pctFmt, roiFmt, plCol) : ''}
         <td class="r tn" style="color:${m.needsManual ? 'var(--amber)' : 'var(--text3)'}">${m.needsManual || 0}</td></tr>`).join('')
-      : '<tr><td colspan="13" style="text-align:center;color:var(--text3);padding:14px">No bets logged yet</td></tr>'
+      : '<tr><td colspan="' + (sp ? 17 : 13) + '" style="text-align:center;color:var(--text3);padding:14px">No bets logged yet</td></tr>'
     }</tbody></table></div>`;
   const resBadge = r => {
     if (r.result === 'won') return '<span class="badge" style="background:var(--green-bg);color:var(--green)">Won</span>';
@@ -18432,6 +18466,7 @@ function renderNevStats(){
       <td class="r tn" style="font-weight:600">${r.odds != null ? Number(r.odds).toFixed(2) : '—'}</td>
       <td class="r tn" style="color:var(--text2)">${r.fair != null ? Number(r.fair).toFixed(2) : '—'}</td>
       <td class="r tn">${r.ev != null ? '+' + Number(r.ev).toFixed(1) + '%' : '—'}</td>
+      ${sp ? nevSpCells(r) : ''}
       <td class="r tn" style="color:var(--text2)">£${nevStakeFor(r, NEV_STAKING).toFixed(2)}</td>
       <td>${resBadge(r)}</td>
       <td class="r tn" style="color:${pl == null ? 'var(--text3)' : plCol(pl)}">${pl == null ? '—' : plFmt(pl)}</td>
@@ -18461,7 +18496,7 @@ function renderNevStats(){
     <div class="card" style="padding:16px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
         <strong style="font-size:14px">Normal +EV — bet results</strong>
-        <span style="font-size:11px;color:var(--text3)">Every bet posted on this tab · ${escapeHtml(nevStakingLabel())} staking · paper results, not the placed ledgers</span>
+        <span style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><label title="Compare each bet's posted EV with its EV at Betfair SP (horses) or the last traded price before the off (other Betfair-priced markets). Bets without Betfair legs (player markets) have no SP." style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;font-size:12.5px;color:var(--text2)"><input type="checkbox" ${sp ? 'checked' : ''} onchange="setNevSp(this.checked)"> Display EV at SP</label><span style="font-size:11px;color:var(--text3)">Every bet posted on this tab · ${escapeHtml(nevStakingLabel())} staking · paper results, not the placed ledgers</span></span>
       </div>
       <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">${rangeTabs}</div>
       <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center"><span style="font-size:12px;color:var(--text3);margin-right:4px">Staking</span>${stakingTabs}</div>
@@ -18477,12 +18512,13 @@ function renderNevStats(){
         ${tile('Avg stake', o.avgStake == null ? '—' : '£' + Number(o.avgStake).toFixed(2))}
         ${tile('Expected (EV)', plFmt(o.evGbp))}
         ${tile('Needs result', o.needsManual || 0, (o.needsManual || 0) ? 'var(--amber)' : '')}
+        ${sp ? nevSpTiles(o, tile, roiFmt, plCol) : ''}
       </div>
       ${table('By market', 'Market', d.byMarket, 'market')}
       ${table('By bookmaker', 'Bookmaker', d.byBookie, 'bookie')}
       <div style="display:flex;gap:6px;margin:4px 0 8px;flex-wrap:wrap;align-items:center"><span style="font-size:12.5px;font-weight:600;margin-right:6px">Bets</span>${listTabs}</div>
-      <div style="overflow-x:auto;max-height:520px;overflow-y:auto"><table class="dt" style="min-width:1050px"><thead><tr><th>Date</th><th>Match</th><th>Market</th><th>Selection</th><th>Bookie</th><th class="r">Odds</th><th class="r">Fair</th><th class="r">EV</th><th class="r">Stake</th><th>Result</th><th class="r">P/L</th><th></th></tr></thead><tbody>${
-        listRows || '<tr><td colspan="12" style="text-align:center;color:var(--text3);padding:14px">Nothing here</td></tr>'
+      <div style="overflow-x:auto;max-height:520px;overflow-y:auto"><table class="dt" style="min-width:1050px"><thead><tr><th>Date</th><th>Match</th><th>Market</th><th>Selection</th><th>Bookie</th><th class="r">Odds</th><th class="r">Fair</th><th class="r">EV</th>${sp ? '<th class="r" title="Betfair SP (horses) or last traded price before the off (other markets); doubles/accas multiply the legs">SP fair</th><th class="r">EV at SP</th>' : ''}<th class="r">Stake</th><th>Result</th><th class="r">P/L</th><th></th></tr></thead><tbody>${
+        listRows || '<tr><td colspan="' + (sp ? 14 : 12) + '" style="text-align:center;color:var(--text3);padding:14px">Nothing here</td></tr>'
       }</tbody></table></div>
       <div style="font-size:11px;color:var(--text3);margin-top:8px">Logged on the server once, at the first price the tab showed (the best-EV bookmaker if several had it). Player bets (AGS, First scorer, Cards, SOT and the 2+/3+ lines, boosts included) settle automatically from FotMob after full time; a player who never came on is a void. Anything priced off Betfair (horses, win accas, tennis, darts, Win to Nil / BTTS / Correct Score / HT-FT style boosts) settles from the Betfair result. Non-runners, voided legs, players that can't be found and anything with no automatic result after 3 days go to "Needs result". "Expected" is the EV the price implied when it was posted, at the selected staking; "Exp. ROI" is that as a % of what was staked on the settled bets, to set the actual ROI against. Staking: £50 flat on every bet; full Kelly sizes each bet off a fixed £2,000 bank (2000 × edge ÷ (odds − 1), not compounded — bets with no fair price stake £0); "£300 to win" stakes 300 ÷ (odds − 1) so every winner returns £300 profit. ROI = P/L ÷ total staked on settled bets. Overall/Yesterday/Today go by the day it was first posted.</div>
     </div>`;
