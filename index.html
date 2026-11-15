@@ -2678,9 +2678,9 @@ tr.ba-placed > td{background:var(--green-bg) !important}
     </div>
     <div id="ol-removed-panel" class="card" style="display:none;padding:12px 14px;margin-bottom:10px"></div>
     <div id="ba-outliers-subtabs" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;width:fit-content;margin-bottom:10px"></div>
-    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px 18px;margin-bottom:10px"><div id="ba-outliers-markets" style="display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--text2)"></div><label title="Only show rows whose price beats the BookieBashing fair (rows with no BB fair are hidden too). Display only: nothing is removed from alerts or Discord." style="display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none;font-size:12.5px;color:var(--text2)"><input type="checkbox" id="bb-only-outliers" onchange="setBaBbOnly('outliers', this.checked)"> +EV vs BB only<span id="bb-only-outliers-n" style="color:var(--text3)"></span></label></div>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px 18px;margin-bottom:10px"><div id="ba-outliers-triggers" style="display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--text2);padding-right:14px;border-right:.5px solid var(--border)"></div><div id="ba-outliers-markets" style="display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--text2)"></div><label title="Only show rows whose price beats the BookieBashing fair (rows with no BB fair are hidden too). Display only: nothing is removed from alerts or Discord." style="display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none;font-size:12.5px;color:var(--text2)"><input type="checkbox" id="bb-only-outliers" onchange="setBaBbOnly('outliers', this.checked)"> +EV vs BB only<span id="bb-only-outliers-n" style="color:var(--text3)"></span></label></div>
     <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:820px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Selection</th><th class="r">Top price</th><th class="r">Next best</th><th class="r" title="The player's FotMob record (current + previous two seasons) as a fair price — per 90 x his expected minutes this match where we have his recent games — scaled by his team's Betfair-implied xG in this match vs its usual (Cards not scaled). Green = top price is above it. Hover a value for the unadjusted record fair.">Team-adj fair</th><th class="r" title="BookieBashing fair odds for this exact line (BB's own maths on every bookmaker's price; lineup-normalised once BB has a confirmed XI). Green = the price beats it, with the EV underneath. Hover for detail.">BB fair</th><th class="r" title="When these prices were last fetched by our scrapers (hover for details). Green under 15 min, amber under 60 min, red older.">Checked</th><th class="r">% above</th><th class="r">Books</th><th class="ba-watch-col">Placed?</th><th>Detected</th></tr></thead><tbody id="ba-outliers-body"></tbody></table></div></div>
-    <div class="note"><i class="ti ti-info-circle"></i> A bookmaker GROUP's own price that's at least 50% above the next-best group in the same market's ladder, with 5+ independent bookie groups quoting it (same-platform books like Star Sports/PricedUp/AKBets count as one) — a raw ladder disagreement, not a fair-odds judgement. A <i class="ti ti-clock-exclamation" style="color:var(--amber)"></i> icon means that specific price hasn't moved in a while (could just mean nothing's changed, or could mean it's not really live) — worth a manual check before backing it either way.</div>
+    <div class="note"><i class="ti ti-info-circle"></i> A bookmaker GROUP's own price that's at least 50% above the next-best group in the same market's ladder, with 5+ independent bookie groups quoting it (same-platform books like Star Sports/PricedUp/AKBets count as one) — a raw ladder disagreement, not a fair-odds judgement. Also listed (blue "vs BB" badge): any price 15%+ above the BookieBashing fair, whatever the gap to the next-best group. The two tickboxes on the left filter by which rule a row came in on. A <i class="ti ti-clock-exclamation" style="color:var(--amber)"></i> icon means that specific price hasn't moved in a while (could just mean nothing's changed, or could mean it's not really live) — worth a manual check before backing it either way.</div>
   </div>
 
   <!-- Grosvenor (2026-09-30): Grosvenor's own player prices (Kambi API, grosvenor_props.py) that
@@ -17970,7 +17970,8 @@ function renderBaOutliersSubtabs(){
   // sub-tab badges were counting every market regardless of the tickboxes, so they didn't
   // match the "N outliers" count once a market got unticked). Both now agree always.
   const marketFilter = getOutliersMarketFilter();
-  const visible = BA_OUTLIERS_ROWS.filter(r => marketFilter.has(r.market) && !gvKickoffPassed(r.kickoffDate, r.kickoff) && baBookEnabled(r.topBook) && !olIsRemoved(r));
+  const triggerFilter = getOutliersTriggerFilter();
+  const visible = BA_OUTLIERS_ROWS.filter(r => marketFilter.has(r.market) && triggerFilter.has(olTrigger(r)) && !gvKickoffPassed(r.kickoffDate, r.kickoff) && baBookEnabled(r.topBook) && !olIsRemoved(r));
   const confirmedN = visible.filter(r => r.lineupConfirmed).length;
   const preN = visible.length - confirmedN;
   const tabs = [
@@ -17990,6 +17991,29 @@ const OUTLIERS_ALL_MARKETS = ['AGS', 'First scorer', 'Cards', 'SOT', 'Assist', '
 // Markets that existed before 'bb_outliers_markets_seen' was tracked — a saved selection from
 // back then only speaks for these, so anything newer still defaults to on.
 const OUTLIERS_ORIGINAL_MARKETS = ['AGS', 'First scorer', 'Cards', 'SOT', 'Assist', 'Header', 'OTB'];
+// Trigger filter (2026-11-15, user-requested): which rule a row came in on — 'gap' (50%+ above the
+// next-best group) or 'bb' (15%+ above BB's fair). Rows from before the BB trigger have no
+// trigger field and count as 'gap'. Both on by default; per browser, display only.
+const OUTLIERS_TRIGGERS = [{ key: 'gap', label: '50%+ vs next' }, { key: 'bb', label: 'BB +15%' }];
+function olTrigger(r){ return r.trigger === 'bb' ? 'bb' : 'gap'; }
+function getOutliersTriggerFilter(){
+  try { const raw = localStorage.getItem('bb_outliers_triggers'); return new Set(raw ? JSON.parse(raw) : OUTLIERS_TRIGGERS.map(t => t.key)); }
+  catch(e) { return new Set(OUTLIERS_TRIGGERS.map(t => t.key)); }
+}
+function toggleOutliersTrigger(key, checked){
+  const cur = getOutliersTriggerFilter();
+  if (checked) cur.add(key); else cur.delete(key);
+  try { localStorage.setItem('bb_outliers_triggers', JSON.stringify([...cur])); } catch(e) {}
+  renderBaOutliers();
+}
+function renderBaOutliersTriggerCheckboxes(){
+  const el = document.getElementById('ba-outliers-triggers');
+  if (!el) return;
+  const sel = getOutliersTriggerFilter();
+  el.innerHTML = OUTLIERS_TRIGGERS.map(t => `<label style="display:flex;align-items:center;gap:5px;cursor:pointer" title="${t.key === 'bb' ? 'Rows listed because the best price is 15%+ above the BookieBashing fair' : 'Rows listed because the best price is 50%+ above the next-best bookie group'}">
+    <input type="checkbox" ${sel.has(t.key) ? 'checked' : ''} onchange="toggleOutliersTrigger('${t.key}', this.checked)">${escapeHtml(t.label)}
+  </label>`).join('');
+}
 function getOutliersMarketFilter(){
   try {
     const raw = localStorage.getItem('bb_outliers_markets');
@@ -18084,13 +18108,15 @@ function renderBaOutliers(){
   syncBaSortToggle('outliers');
   renderBaOutliersSubtabs();
   renderBaOutliersMarketCheckboxes();
+  renderBaOutliersTriggerCheckboxes();
   const marketFilter = getOutliersMarketFilter();
+  const triggerFilter = getOutliersTriggerFilter();
   const wantConfirmed = BA_OUTLIERS_SUBTAB === 'confirmed';
   // 2026-10-24, user-reported (Tigre outliers still up after kickoff): the outliers file only
   // refreshes when the pipeline finishes, which can be 30+ min after midnight, so drop
   // kicked-off matches here rather than trusting the file to be current.
   renderOlRemoved();
-  const visibleAnySubtab = BA_OUTLIERS_ROWS.filter(r => marketFilter.has(r.market) && !gvKickoffPassed(r.kickoffDate, r.kickoff) && baBookEnabled(r.topBook) && !olIsRemoved(r));
+  const visibleAnySubtab = BA_OUTLIERS_ROWS.filter(r => marketFilter.has(r.market) && triggerFilter.has(olTrigger(r)) && !gvKickoffPassed(r.kickoffDate, r.kickoff) && baBookEnabled(r.topBook) && !olIsRemoved(r));
   const rows = baBbApply('outliers', visibleAnySubtab.filter(r => !!r.lineupConfirmed === wantConfirmed), r => r.topPrice)
     .sort((x, y) => getBaSort('outliers') === 'time'
       // Start time keeps each match's rows together, biggest % first within it (same as Grosvenor).
