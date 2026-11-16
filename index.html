@@ -267,6 +267,7 @@ tr.ba-placed > td{background:var(--green-bg) !important}
           <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">Recommended stake</div>
           <div id="kelly-stake" style="font-size:22px;font-weight:600;color:var(--text);margin-top:2px">—</div>
           <div id="kelly-detail" style="font-size:11.5px;color:var(--text3);margin-top:2px"></div>
+          <div id="kelly-evgbp" style="font-size:12.5px;font-weight:600;color:var(--green);margin-top:6px"></div>
         </div>
       </div>
     </div>
@@ -4256,6 +4257,7 @@ function calcKelly(persist) {
     });
   }
   const out = document.getElementById('kelly-stake'), det = document.getElementById('kelly-detail');
+  document.getElementById('kelly-evgbp').textContent = '';
   if (!(bank > 0) || !(frac > 0) || !(odds > 1) || !(fair > 1)) {
     out.textContent = '—'; out.style.color = 'var(--text)'; det.textContent = '';
     return;
@@ -4270,6 +4272,8 @@ function calcKelly(persist) {
   const stake = bank * frac * kelly;
   out.textContent = '£' + stake.toFixed(2); out.style.color = 'var(--green)';
   det.textContent = `EV +${evPct.toFixed(1)}% · ${(frac * kelly * 100).toFixed(2)}% of bankroll`;
+  // Expected profit if the full recommended stake goes on: stake x (odds/fair - 1).
+  document.getElementById('kelly-evgbp').textContent = `EV +£${(stake * evPct / 100).toFixed(2)} if full stake placed`;
 }
 
 // ---- Per-row Kelly button (2026-10-03) — Normal +EV, Arbs, DNFs, NFL TDs ----
