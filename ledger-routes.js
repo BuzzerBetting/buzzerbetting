@@ -5471,6 +5471,47 @@ async function oddsApiGet(p, params) {
   if (!r.ok) throw new Error(`odds-api ${p} HTTP ${r.status}: ${buf.toString('utf8').slice(0, 200)}`);
   return JSON.parse(buf.toString('utf8'));
 }
+// Live darts boosts Bet365's pages can price (same shapes as oc-scraper/oc/darts_props.py), from
+// every darts boost feed: Ladbrokes (scan cache file), SportingBet, and the page-scraped books.
+// -> [{book, event, selection, kind: 'match'|'player', tab: 'Extra'}]
+const b365Norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
+const B365_N = String.raw`(?:(\d+)\s*(?:or\s+more|\+)|an?y?)`;
+const B365_SHAPES = [   // [regex, kind, Bet365 tab]
+  [new RegExp(String.raw`^${B365_N}\s+100\s*\+\s+checkouts?\s+(?:in|is)\s+the\s+match$`, 'i'), 'match', 'Extra'],
+  [new RegExp(String.raw`^(.+?)\s+to\s+hit\s+${B365_N}\s+100\s*\+\s+checkouts?(?:\s+in\s+(?:the|his)\s+match)?$`, 'i'), 'player', 'Extra'],
+  [new RegExp(String.raw`^${B365_N}\s+bull\s+finish(?:es)?\s+in\s+the\s+match$`, 'i'), 'match', 'Extra'],
+  [new RegExp(String.raw`^(.+?)\s+to\s+hit\s+${B365_N}\s+bull\s+finish(?:es)?(?:\s+in\s+(?:the|his)\s+match)?$`, 'i'), 'player', 'Extra'],
+];
+const DARTS_TITLE_RE = /darts|world grand prix|world matchplay|grand slam of darts|players championship|world series/i;
+function liveBet365DartsBoosts() {
+  const raw = [];
+  try {   // Ladbrokes: no table, its scan caches the SiteServer pull
+    const c = JSON.parse(fs.readFileSync(path.join(__dirname, 'oc-scraper', 'data', 'ladbrokes_boosts_cache.json'), 'utf8'));
+    if (c && Date.now() / 1000 - (c.at || 0) < 3 * 3600) {
+      for (const r of c.rows || []) if (/darts/i.test(r.category || '')) raw.push({ book: 'Ladbrokes', event: r.eventName || '', selection: r.name || '' });
+    }
+  } catch (_) {}
+  try {
+    const sb = db.prepare(`SELECT market, selection, scraped_at FROM sportingbet_boosts WHERE lower(sport) = 'darts'`).all();
+    for (const r of sb) if (Date.now() - Date.parse(r.scraped_at) < 75 * 60000) raw.push({ book: 'SportingBet', event: r.market || '', selection: r.selection || '' });
+  } catch (_) {}
+  for (const [table, book] of [['pricedup_boosts', 'PricedUp'], ['starsports_boosts', 'Star Sports'], ['dragonbet_boosts', 'DragonBet'],
+                               ['planetsportbet_boosts', 'Planet Sport Bet'], ['properbet_boosts', 'ProperBet']]) {
+    try {
+      for (const r of freshBoostRows(table, 120).rows) {
+        if (/darts/i.test(r.sport || '') || DARTS_TITLE_RE.test(r.group_title || '')) raw.push({ book, event: r.group_title || '', selection: r.selection || '' });
+      }
+    } catch (_) {}
+  }
+  const out = [];
+  for (const b of raw) {
+    const sel = b.selection.replace(/\|?\s*\(\s*was\b[^)]*\)\s*$/i, '').replace(/^[\s|]+|[\s|]+$/g, '');
+    const hit = B365_SHAPES.find(([re]) => re.test(sel));
+    if (hit) out.push({ ...b, selection: sel, kind: hit[1], tab: hit[2] });
+  }
+  return out;
+}
+
 router.get('/bet365-props/targets', async (req, res) => {
   try {
     if (!process.env.ODDS_API_IO_KEY) return res.status(500).json({ ok: false, error: 'ODDS_API_IO_KEY not set' });
@@ -5481,10 +5522,28 @@ router.get('/bet365-props/targets', async (req, res) => {
       _b365Targets.at = Date.now();
     }
     const now = Date.now();
-    const soon = _b365Targets.events.filter(e => {
+    const flipName = n => String(n || '').split(',').map(s => s.trim()).reverse().join(' ');
+    let soon = _b365Targets.events.filter(e => {
       const t = Date.parse(e.date);
       return t > now + 5 * 60000 && t < now + hours * 3600000;
     });
+    // ?boosts=1 (2026-11-16, user): only matches with a live darts boost Bet365 can price, so the
+    // userscript loads Bet365 on demand instead of sweeping the whole card on a loop.
+    const boostsMode = req.query.boosts === '1';
+    const boostsByEvent = new Map();
+    if (boostsMode) {
+      const boosts = liveBet365DartsBoosts();
+      for (const e of soon) {
+        const sur = [e.home, e.away].map(n => b365Norm(flipName(n)).split(' ').pop()).filter(Boolean);
+        const hits = boosts.filter(b => {
+          const toks = new Set(b365Norm(`${b.event} ${b.selection}`).split(' '));
+          // match boosts name both players; player boosts may only name one of them
+          return b.kind === 'match' ? sur.every(s => toks.has(s)) : sur.some(s => toks.has(s));
+        });
+        if (hits.length) boostsByEvent.set(String(e.id), hits);
+      }
+      soon = soon.filter(e => boostsByEvent.has(String(e.id)));
+    }
     const missing = soon.map(e => String(e.id)).filter(id => !_b365Targets.urls.has(id));
     for (let i = 0; i < missing.length; i += 10) {
       const chunk = await oddsApiGet('odds/multi', { eventIds: missing.slice(i, i + 10).join(','), bookmakers: 'Bet365' });
@@ -5494,10 +5553,14 @@ router.get('/bet365-props/targets', async (req, res) => {
       }
     }
     const flip = n => String(n || '').split(',').map(s => s.trim()).reverse().join(' ');   // "Dobey, Chris" -> "Chris Dobey"
-    const targets = soon.filter(e => _b365Targets.urls.has(String(e.id))).map(e => ({
-      names: [flip(e.home), flip(e.away)], start: e.date, league: e.league && e.league.name,
-      url: _b365Targets.urls.get(String(e.id)).replace(/\/I\d+\/(P\d+\/)?$/, '/I4/'),
-    })).sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
+    const targets = soon.filter(e => _b365Targets.urls.has(String(e.id))).map(e => {
+      const hits = boostsByEvent.get(String(e.id));
+      return {
+        names: [flip(e.home), flip(e.away)], start: e.date, league: e.league && e.league.name,
+        url: _b365Targets.urls.get(String(e.id)).replace(/\/I\d+\/(P\d+\/)?$/, '/I4/'),
+        ...(hits ? { tabs: [...new Set(hits.map(b => b.tab))], boosts: hits.map(b => `${b.book}: ${b.selection}`) } : {}),
+      };
+    }).sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
     res.json({ ok: true, targets, hours });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
