@@ -151,7 +151,7 @@ const NORMAL_EV_ROUTES = [
   '/api/fairplay-boost-ev', '/api/planetsportbet-horse-ev', '/api/williamhill-horse-ev',
   '/api/pricedup-football-boost-ev', '/api/starsports-football-boost-ev',
   '/api/planetsportbet-football-boost-ev', '/api/dragonbet-football-boost-ev',
-  '/api/sportingbet-boost-ev', '/api/betway-boost-ev', '/api/grosvenor-boost-ev',
+  '/api/sportingbet-boost-ev', '/api/betway-boost-ev', '/api/grosvenor-boost-ev', '/api/ladbrokes-boost-ev',
 ];
 async function betsFrom(paths) {
   const res = await Promise.all(paths.map(getJson));

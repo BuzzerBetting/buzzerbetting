@@ -421,6 +421,7 @@ const FOOTBALL_BOOST_EV_ROUTES = {
   '/api/properbet-football-boost-ev': 'properbet_football_boost_ev_bets.json',
   '/api/sportingbet-boost-ev': 'sportingbet_boost_ev_bets.json',
   '/api/betway-boost-ev': 'betway_boost_ev_bets.json',
+  '/api/ladbrokes-boost-ev': 'ladbrokes_boost_ev_bets.json', // Ladbrokes Price Boosts + Any X To Win (2026-11-16)
   '/api/grosvenor-boost-ev': 'grosvenor_boost_ev_bets.json',
   // Not +EV rows: Grosvenor prices above the Oddschecker best (Bet Alerts "Grosvenor" tab),
   // written by oc_scraper_service.py — same {ok, updated, bets} file shape, so it rides along here.

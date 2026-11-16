@@ -607,7 +607,7 @@ async function runAction(action, params, appKey, session) {
     return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, ...result }) };
   }
 
-  const BOOST_ACTIONS = ['win-to-nil', 'draw', 'over25', 'btts', 'correct-score', 'ht-ft', 'win-and-btts', 'half-time', 'goals-line', 'team-goals-line'];
+  const BOOST_ACTIONS = ['win-to-nil', 'draw', 'over25', 'btts', 'correct-score', 'ht-ft', 'win-and-btts', 'half-time', 'goals-line', 'team-goals-line', 'win-and-goals'];
   if (BOOST_ACTIONS.includes(action)) {
     const { home, away, team, homeScore, awayScore, ht, ft, line, side } = params;
     if (!home || !away) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'home and away required' }) };
@@ -669,6 +669,16 @@ async function runAction(action, params, appKey, session) {
       if (!team) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team required' }) };
       marketNameTest = n => n.trim().toLowerCase() === 'half time';
       runnerTest = n => !/draw/i.test(n) && fuzzyTeamMatch(team, n);
+    } else if (action === 'win-and-goals') {
+      // "<Team> To Win and 4+ Goals" (Ladbrokes boosts, 2026-11-16): Betfair's "Match Odds and
+      // Over/Under <line> Goals" market, runner "<Team>/Over <line> Goals". Betfair lists 2.5 and 3.5.
+      if (!team || !/^\d+\.5$/.test(String(line || ''))) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team and line (e.g. 3.5) required' }) };
+      const sd = /^under$/i.test(String(side || '')) ? 'under' : 'over';
+      marketNameTest = n => n.trim().toLowerCase() === `match odds and over/under ${line} goals`;
+      runnerTest = n => {
+        const sides = splitSlashRunner(n);
+        return !!sides && fuzzyTeamMatch(team, sides[0]) && sides[1].trim().toLowerCase().startsWith(sd);
+      };
     } else if (action === 'win-and-btts') {
       if (!team) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team required' }) };
       marketNameTest = n => n.trim().toLowerCase() === 'match odds and both teams to score';
