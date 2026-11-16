@@ -243,7 +243,7 @@ const BUILDERS = {
         // 2026-11-16: this price + the other side of the source line locks a profit.
         if (b.dutch) notes.push(`🔒 DUTCH +${num(b.dutch.lockPct)}% vs ${b.dutch.bk} ${b.dutch.sel} @ ${num(b.dutch.odds)}`);
         return { match: b.match, market: b.mkt, selection: b.sel, bk: bookName(b.bk), odds: num(b.odds), fair: num(b.fair), ev: num(b.ev), t: b.t, d: b.d, matchId: b.matchId,
-          extra: notes.length ? notes.join('\n') : undefined };
+          extra: notes.length ? notes.join(' · ') : undefined };
       });
   },
   async 'calc-ev'(ctx) {
