@@ -5456,6 +5456,52 @@ router.get('/bet365-props', (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// GET /api/ledger/bet365-props/targets?hours=8 — upcoming Bet365 darts matches with a direct link
+// onto the match's Extra tab (/I4/), for the userscript's auto-cycle. Bet365 ignores the script's
+// synthetic clicks on its list page (2026-11-16), but loading a match URL works, and the Extra tab
+// opens with the checkout/bull markets already expanded. Links come from odds-api.io (the same
+// ODDS_API_IO_KEY as bet365-poller): /events for the darts card, /odds/multi for each event's urls.
+const _b365Targets = { at: 0, events: [], urls: new Map() };
+async function oddsApiGet(p, params) {
+  const zlib = require('zlib');
+  const qs = new URLSearchParams({ ...params, apiKey: process.env.ODDS_API_IO_KEY || '' });
+  const r = await fetch(`https://api.odds-api.io/v3/${p}?${qs}`, { headers: { Accept: 'application/json' } });
+  let buf = Buffer.from(await r.arrayBuffer());
+  if (buf[0] === 0x1f && buf[1] === 0x8b) buf = zlib.gunzipSync(buf);   // gzipped without a header
+  if (!r.ok) throw new Error(`odds-api ${p} HTTP ${r.status}: ${buf.toString('utf8').slice(0, 200)}`);
+  return JSON.parse(buf.toString('utf8'));
+}
+router.get('/bet365-props/targets', async (req, res) => {
+  try {
+    if (!process.env.ODDS_API_IO_KEY) return res.status(500).json({ ok: false, error: 'ODDS_API_IO_KEY not set' });
+    const hours = Math.max(1, Math.min(48, Number(req.query.hours) || 8));
+    if (Date.now() - _b365Targets.at > 10 * 60000) {
+      const evs = await oddsApiGet('events', { sport: 'darts', bookmaker: 'Bet365', status: 'pending', limit: '200' });
+      _b365Targets.events = Array.isArray(evs) ? evs : [];
+      _b365Targets.at = Date.now();
+    }
+    const now = Date.now();
+    const soon = _b365Targets.events.filter(e => {
+      const t = Date.parse(e.date);
+      return t > now + 5 * 60000 && t < now + hours * 3600000;
+    });
+    const missing = soon.map(e => String(e.id)).filter(id => !_b365Targets.urls.has(id));
+    for (let i = 0; i < missing.length; i += 10) {
+      const chunk = await oddsApiGet('odds/multi', { eventIds: missing.slice(i, i + 10).join(','), bookmakers: 'Bet365' });
+      for (const ev of Array.isArray(chunk) ? chunk : []) {
+        const u = ev && ev.urls && ev.urls.Bet365;
+        if (u) _b365Targets.urls.set(String(ev.id), u);
+      }
+    }
+    const flip = n => String(n || '').split(',').map(s => s.trim()).reverse().join(' ');   // "Dobey, Chris" -> "Chris Dobey"
+    const targets = soon.filter(e => _b365Targets.urls.has(String(e.id))).map(e => ({
+      names: [flip(e.home), flip(e.away)], start: e.date, league: e.league && e.league.name,
+      url: _b365Targets.urls.get(String(e.id)).replace(/\/I\d+\/(P\d+\/)?$/, '/I4/'),
+    })).sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
+    res.json({ ok: true, targets, hours });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 // POST /api/ledger/bet365-props/ingest
 //   body: { event, sport?, competition?, kickoff?, url?, rows: [{market, player?, selection, odds}] }
 // The page only shows one tab's markets at a time, so this replaces just the markets in the post
