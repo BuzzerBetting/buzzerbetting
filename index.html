@@ -18677,8 +18677,8 @@ function renderNevStats(){
         <td class="r tn">${pctFmt(m.avgEvBasis ?? m.avgEv)}</td>
         <td class="r tn" style="color:var(--text2)">${plFmt(m.evGbp)}</td>
         <td class="r tn" style="color:var(--text2)">£${Number(m.staked || 0).toFixed(0)}</td>
-        <td class="r tn" style="color:${plCol(m.pl)}">${plFmt(m.pl)}</td>
-        <td class="r tn" style="color:${plCol(m.pl)}">${roiFmt(m.roi)}</td>
+        <td class="r tn" style="color:${plCol(m.pl)}"${bs === 'lock' ? ' title="P/L locked by laying at the recorded lay price. Below: what backing alone (no lay) actually returned on these bets."' : ''}>${plFmt(m.pl)}${bs === 'lock' ? `<div style="font-size:10.5px;color:var(--text3);font-weight:400">back only ${plFmt(m.backPl)}</div>` : ''}</td>
+        <td class="r tn" style="color:${plCol(m.pl)}">${roiFmt(m.roi)}${bs === 'lock' ? `<div style="font-size:10.5px;color:var(--text3);font-weight:400">back only ${roiFmt(m.backRoi)}</div>` : ''}</td>
         <td class="r tn" style="color:var(--text2)">${roiFmt(m.expRoi)}</td>
         ${bs !== 'place' ? `<td class="r tn" style="color:var(--text2)">${m.basisBets || 0}</td>` : ''}
         <td class="r tn" style="color:${m.needsManual ? 'var(--amber)' : 'var(--text3)'}">${m.needsManual || 0}</td></tr>`).join('')
