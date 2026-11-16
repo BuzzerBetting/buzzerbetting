@@ -234,12 +234,14 @@ const BUILDERS = {
       && !(b.hideAt && Date.parse(b.hideAt) <= Date.now()));  // 2026-11-15: hideAt = when the bookmaker pulls it (PricedUp horses: off - 10 min)
     bets = mergeDuplicates(bets);
     // 'wh' = darts N+ checkout boosts off William Hill's checkout lines (user exception, 2026-11-16).
-    return bets.filter(b => (!b.source || b.source === 'bfex' || b.source === 'wh') && !kickoffPassed(b.d, b.t) && ctx.bookOk(b.bk))
+    // 'b365' = darts 100+ checkout / bull finish counts off Bet365's ladders (bet365-userscript, 2026-11-16).
+    return bets.filter(b => (!b.source || b.source === 'bfex' || b.source === 'wh' || b.source === 'b365') && !kickoffPassed(b.d, b.t) && ctx.bookOk(b.bk))
       .map(b => {
         const notes = [];
         // 2026-11-15: thin BFEX market, fair is the lay price with £100+ available — flag it.
         if (b.lowBfex) notes.push(`⚠️ fair = BFEX lay price (thin market, £${Math.round(num(b.matched) || 0)} matched)`);
         if (b.source === 'wh' && b.whLine) notes.push(`fair = William Hill O/U ${b.whLine.line} (${num(b.whLine.over)}/${num(b.whLine.under)}), Shin de-vig`);
+        if (b.source === 'b365' && b.b365Line) notes.push(`fair = Bet365 ${b.b365Line.player ? b.b365Line.player + ' ' : ''}${b.b365Line.market} ${b.b365Line.rung} @ ${num(b.b365Line.odds)}, power de-vig off 0/1+ (${num(b.b365Line.zero)}/${num(b.b365Line.one)})`);
         // 2026-11-16: this price + the other side of the source line locks a profit.
         if (b.dutch) notes.push(`🔒 DUTCH +${num(b.dutch.lockPct)}% vs ${b.dutch.bk} ${b.dutch.sel} @ ${num(b.dutch.odds)}`);
         return { match: b.match, market: b.mkt, selection: b.sel, bk: bookName(b.bk), odds: num(b.odds), fair: num(b.fair), ev: num(b.ev), t: b.t, d: b.d, matchId: b.matchId,

@@ -757,6 +757,29 @@ CREATE TABLE IF NOT EXISTS sportingbet_boosts (
 );
 `);
 
+// Bet365 match-page markets (2026-11-16), fed by oc-scraper/bet365-userscript.js. The userscript is
+// passive: it reads whatever markets are expanded on a Bet365 match page the user has open
+// (odds-api.io only carries Bet365 darts ML/handicap/total legs, no checkout or bull markets).
+// One row per price: player = the row/column entity (player name, or a line like "105.5"),
+// '' when the market has none; selection = the outcome label ("2+", "Yes", "Over", a player name).
+// Each ingest replaces the markets it carries for that event, so a pulled price disappears.
+db.exec(`
+CREATE TABLE IF NOT EXISTS bet365_props (
+  event        TEXT NOT NULL,        -- 'Chris Dobey vs Martin Schindler'
+  sport        TEXT,                 -- 'darts' | 'football' | other
+  competition  TEXT,
+  kickoff      TEXT,                 -- as shown, e.g. '17 Nov 20:10'
+  market       TEXT NOT NULL,        -- 'Total 100+ Checkouts In Match'
+  player       TEXT NOT NULL DEFAULT '',
+  selection    TEXT NOT NULL,
+  odds         REAL,
+  url          TEXT,
+  scraped_at   TEXT NOT NULL,
+  PRIMARY KEY (event, market, player, selection)
+);
+CREATE INDEX IF NOT EXISTS idx_bet365_props_sport ON bet365_props(sport, scraped_at);
+`);
+
 // Same shape/reasoning as starsports_boosts above — DragonBet's "DragonBoosts" page
 // (dragonbet.co.uk/sport-special/DragonBoosts) and PlanetSportBet's "Rocket Boosts" page
 // (planetsportbet.com/sport-special/RocketBoosts) both confirmed live 2026-09-15 to run the

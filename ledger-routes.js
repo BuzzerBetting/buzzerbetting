@@ -5440,6 +5440,59 @@ router.post('/sportingbet-boosts/ingest', (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// ================== BET365 MATCH-PAGE MARKETS (passive userscript, 2026-11-16) ==================
+// GET /api/ledger/bet365-props?sport=darts&maxAgeMin=240 — rows scraped within maxAgeMin
+// (default 240). The userscript only posts while the user has a Bet365 match page open, so the
+// age gate is what stops a price read hours ago from being treated as current.
+router.get('/bet365-props', (req, res) => {
+  try {
+    const maxAge = Math.max(1, Math.min(1440, Number(req.query.maxAgeMin) || 240));
+    const since = new Date(Date.now() - maxAge * 60000).toISOString();
+    const sport = String(req.query.sport || '').trim().toLowerCase();
+    const rows = sport
+      ? db.prepare(`SELECT * FROM bet365_props WHERE sport = ? AND scraped_at >= ? ORDER BY event, market, player, selection`).all(sport, since)
+      : db.prepare(`SELECT * FROM bet365_props WHERE scraped_at >= ? ORDER BY event, market, player, selection`).all(since);
+    res.json({ ok: true, rows, maxAgeMin: maxAge });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ledger/bet365-props/ingest
+//   body: { event, sport?, competition?, kickoff?, url?, rows: [{market, player?, selection, odds}] }
+// The page only shows one tab's markets at a time, so this replaces just the markets in the post
+// (for that event): upsert every row, then delete that event+market's rows this post didn't touch.
+router.post('/bet365-props/ingest', (req, res) => {
+  try {
+    const b = req.body || {};
+    const event = String(b.event || '').trim();
+    if (!event) return res.status(400).json({ ok: false, error: 'event required' });
+    const incoming = (Array.isArray(b.rows) ? b.rows : []).filter(r => r && r.market && r.selection && Number(r.odds) > 1);
+    const now = new Date().toISOString();
+    const ins = db.prepare(`
+      INSERT INTO bet365_props (event, sport, competition, kickoff, market, player, selection, odds, url, scraped_at)
+      VALUES (@event, @sport, @competition, @kickoff, @market, @player, @selection, @odds, @url, @now)
+      ON CONFLICT(event, market, player, selection) DO UPDATE SET
+        sport = excluded.sport, competition = excluded.competition, kickoff = excluded.kickoff,
+        odds = excluded.odds, url = excluded.url, scraped_at = excluded.scraped_at
+    `);
+    const del = db.prepare(`DELETE FROM bet365_props WHERE event = ? AND market = ? AND scraped_at != ?`);
+    let upserted = 0, removed = 0;
+    const markets = new Set();
+    db.transaction(() => {
+      for (const r of incoming) {
+        ins.run({
+          event, sport: b.sport ? String(b.sport).toLowerCase() : null, competition: b.competition || null,
+          kickoff: b.kickoff || null, market: String(r.market).trim(), player: String(r.player || '').trim(),
+          selection: String(r.selection).trim(), odds: Number(r.odds), url: b.url || null, now,
+        });
+        markets.add(String(r.market).trim());
+        upserted++;
+      }
+      for (const m of markets) removed += del.run(event, m, now).changes;
+    })();
+    res.json({ ok: true, upserted, removed, markets: markets.size });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 // ================== DRAGONBET / PLANETSPORTBET BOOSTS (raw scraped odds) ==================
 // Both confirmed live 2026-09-15 to run the exact same underlying platform as PricedUp/
 // StarSports (see ledger-db.js table comment) — same upsert-then-delete-stale ingest shape,
