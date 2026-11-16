@@ -10441,7 +10441,7 @@ function baTimeSortKey(bet,timeField,dateField){
   const dateStr=bet&&bet[dateField||'d'];
   let dayNum=null;
   if(dateStr){
-    const d=new Date(dateStr+'T00:00:00');
+    const d=new Date(String(dateStr).slice(0,10)+'T00:00:00Z');
     if(!isNaN(d.getTime()))dayNum=Math.floor(d.getTime()/86400000);
   }
   // No usable date on this row (e.g. betfair-horses.js's 12h race window bets, or a row a feed
@@ -10455,9 +10455,10 @@ function baTimeSortKey(bet,timeField,dateField){
   // ahead of every dated 18:00 kickoff regardless of actual time, not just tied with same-clock
   // rows. Scaling the fallback by day too keeps it correctly ordered against dated rows instead.
   if(dayNum==null){
-    const now=new Date();
-    dayNum=Math.floor(now.getTime()/86400000);
-    const nowMins=now.getHours()*60+now.getMinutes();
+    // UK clock, not the viewer's (feed times are UK; see ukWallTs).
+    const ukNow=new Date(Date.now()+ukOffsetMs(Date.now()));
+    dayNum=Math.floor(ukNow.getTime()/86400000);
+    const nowMins=ukNow.getUTCHours()*60+ukNow.getUTCMinutes();
     if(mins<nowMins-60)dayNum+=1;
   }
   return dayNum*1440+mins;
@@ -19030,19 +19031,33 @@ function setGvHideShort(on){
   try { localStorage.setItem('gvHideShort', on ? '1' : '0'); } catch(e) {}
   renderBaGrosvenor();
 }
+// Feed kickoffs are UK wall-clock date + "HH:MM" with no zone. 2026-11-16: parsing them as browser
+// local time hid every row 2h before kickoff for Dezpic (Cyprus, UTC+2), so read them as
+// Europe/London whatever the viewer's timezone.
+const UK_TZ_FMT = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hourCycle: 'h23',
+  year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+function ukOffsetMs(ts){
+  const p = {}; UK_TZ_FMT.formatToParts(new Date(ts)).forEach(x => { p[x.type] = x.value; });
+  return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second) - Math.floor(ts / 1000) * 1000;
+}
+function ukWallTs(d, t){
+  const dm = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || '')), tm = /^(\d{1,2}):(\d{2})$/.exec(String(t || ''));
+  if (!dm || !tm) return null;
+  const guess = Date.UTC(+dm[1], +dm[2] - 1, +dm[3], +tm[1], +tm[2]);
+  let ts = guess - ukOffsetMs(guess);
+  ts = guess - ukOffsetMs(ts); // second pass settles the BST changeover hours
+  return isNaN(ts) ? null : ts;
+}
 function gvKickoffPassed(d, t){
-  if (!d || !/^\d{1,2}:\d{2}$/.test(String(t || ''))) return false;
-  const k = new Date(`${d}T${String(t).padStart(5, '0')}:00`);
-  return !isNaN(k.getTime()) && k.getTime() <= Date.now();
+  const k = ukWallTs(d, t);
+  return k != null && k <= Date.now();
 }
 // 2026-10-24 (user): every row shows only until its kickoff. Each tab's render already drops
 // kicked-off rows; this clock re-renders the open tab from the data it already has (no fetch,
 // no re-scan) whenever a loaded row's kickoff time has ticked past since the last check.
 let BA_KO_LAST = Date.now();
 function baKickoffTs(d, t){
-  if (!d || !/^\d{1,2}:\d{2}$/.test(String(t || ''))) return null;
-  const k = new Date(`${d}T${String(t).padStart(5, '0')}:00`).getTime();
-  return isNaN(k) ? null : k;
+  return ukWallTs(d, t);
 }
 function baKickoffClock(){
   const last = BA_KO_LAST, now = Date.now();
