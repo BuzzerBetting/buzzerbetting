@@ -5481,10 +5481,10 @@ async function oddsApiGet(p, params) {
 const b365Norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
 const B365_N = String.raw`(?:(\d+)\s*(?:or\s+more|\+)|an?y?)`;
 const B365_SHAPES = [   // [regex, kind, Bet365 tab]
-  [new RegExp(String.raw`^${B365_N}\s+100\s*\+\s+checkouts?\s+(?:in|is)\s+the\s+match$`, 'i'), 'match', 'Extra'],
-  [new RegExp(String.raw`^(.+?)\s+to\s+hit\s+${B365_N}\s+100\s*\+\s+checkouts?(?:\s+in\s+(?:the|his)\s+match)?$`, 'i'), 'player', 'Extra'],
-  [new RegExp(String.raw`^${B365_N}\s+bull\s+finish(?:es)?\s+in\s+the\s+match$`, 'i'), 'match', 'Extra'],
-  [new RegExp(String.raw`^(.+?)\s+to\s+hit\s+${B365_N}\s+bull\s+finish(?:es)?(?:\s+in\s+(?:the|his)\s+match)?$`, 'i'), 'player', 'Extra'],
+  [new RegExp(String.raw`^${B365_N}\s+100\s*\+\s+checkouts?(?:\s+(?:in|is)\s+the\s+match)?$`, 'i'), 'match', 'Extra'],
+  [new RegExp(String.raw`^([^&\d+]+?)\s+(?:to\s+hit\s+)?${B365_N}\s+100\s*\+\s+checkouts?(?:\s+in\s+(?:the|his)\s+match)?$`, 'i'), 'player', 'Extra'],
+  [new RegExp(String.raw`^${B365_N}\s+bull\s+finish(?:es)?(?:\s+in\s+the\s+match)?$`, 'i'), 'match', 'Extra'],
+  [new RegExp(String.raw`^([^&\d+]+?)\s+(?:to\s+hit\s+)?${B365_N}\s+bull\s+finish(?:es)?(?:\s+in\s+(?:the|his)\s+match)?$`, 'i'), 'player', 'Extra'],
 ];
 // Betfred's Checkout tab (match highest-checkout ladder + one line per player) serves highest-checkout
 // boosts: "<Player> To Hit a 130+ Checkout" (also WH-priced) and "A 120+ Checkout In The Match".
@@ -5502,6 +5502,10 @@ function liveBet365DartsBoosts(shapes = B365_SHAPES) {
     }
   } catch (_) {}
   try {
+    try {   // William Hill (2026-11-17): oc/wh_darts_boosts.py caches WH's open search API pull
+      const w = JSON.parse(fs.readFileSync(path.join(__dirname, 'oc-scraper', 'data', 'wh_darts_boosts_cache.json'), 'utf8'));
+      if (w && Date.now() / 1000 - (w.at || 0) < 3 * 3600) for (const x of w.rows || []) raw.push({ book: 'William Hill', event: x.event || '', selection: x.selection || '' });
+    } catch (_) {}
     const sb = db.prepare(`SELECT market, selection, scraped_at FROM sportingbet_boosts WHERE lower(sport) = 'darts'`).all();
     for (const r of sb) if (Date.now() - Date.parse(r.scraped_at) < 75 * 60000) raw.push({ book: 'SportingBet', event: r.market || '', selection: r.selection || '' });
   } catch (_) {}
