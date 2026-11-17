@@ -346,6 +346,19 @@ app.get('/api/darts-bfex-ev', (req, res) => {
   }
 });
 
+// GET /api/celeb-bfex-ev (2026-11-17) — I'm A Celebrity Winner/Top 3/Top Male/Top Female bookmaker
+// prices (Oddschecker) vs the BFEX fair, written by oc-scraper's celeb_bfex_value_scan.py.
+const CELEB_BFEX_EV_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'celeb_bfex_ev_bets.json');
+app.get('/api/celeb-bfex-ev', (req, res) => {
+  if (!fs.existsSync(CELEB_BFEX_EV_PATH)) return res.json({ ok: true, updated: null, bets: [] });
+  try {
+    const payload = JSON.parse(fs.readFileSync(CELEB_BFEX_EV_PATH, 'utf8'));
+    res.json({ ok: true, updated: payload.updated || null, bets: payload.bets || [] });
+  } catch (e) {
+    res.json({ ok: false, error: 'Failed reading celeb_bfex_ev_bets.json: ' + e.message });
+  }
+});
+
 // GET /api/darts-boost-ev — darts boosted doubles/trebles from the Tampermonkey-fed books,
 // written by oc-scraper's darts_boost_ev_scan.py. Merged into "Normal +EV" client-side.
 const DARTS_BOOST_EV_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'darts_boost_ev_bets.json');

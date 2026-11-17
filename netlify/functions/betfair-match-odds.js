@@ -616,7 +616,51 @@ async function fetchDartsCard(hours, appKey, session) {
   return Object.values(events);
 }
 
+// action=tv-card&q=Celebrity (2026-11-17) — a Special Bets TV event (I'm A Celebrity ...) with
+// every market (Winner, Top 3, Top Male, Top Female) and each runner in the darts-card shape, for
+// oc-scraper's celeb_bfex_value_scan.py. Event is matched by name, not start time (outright
+// markets open weeks before the final).
+async function fetchTvCard(q, appKey, session) {
+  const evs = await bfCall('listEvents', { filter: { textQuery: q } }, appKey, session);
+  const out = [];
+  for (const e of evs || []) {
+    const cat = await bfCall('listMarketCatalogue', {
+      filter: { eventIds: [e.event.id] }, maxResults: 100,
+      marketProjection: ['RUNNER_DESCRIPTION', 'MARKET_START_TIME', 'MARKET_DESCRIPTION'],
+    }, appKey, session);
+    const books = {};
+    for (let i = 0; i < (cat || []).length; i += 8) {
+      const bk = await bfCall('listMarketBook', { marketIds: cat.slice(i, i + 8).map(m => m.marketId), priceProjection: { priceData: ['EX_BEST_OFFERS', 'EX_TRADED'] } }, appKey, session);
+      for (const b of bk || []) books[b.marketId] = b;
+    }
+    const markets = [];
+    for (const m of cat || []) {
+      const b = books[m.marketId];
+      if (!b || b.status !== 'OPEN') continue;
+      markets.push({
+        marketId: m.marketId, marketName: m.marketName, marketType: m.description && m.description.marketType, totalMatched: b.totalMatched || 0,
+        runners: (m.runners || []).map(r => {
+          const rb = (b.runners || []).find(x => x.selectionId === r.selectionId) || {};
+          return {
+            name: r.runnerName, marketId: m.marketId, selectionId: r.selectionId, handicap: Number(r.handicap || 0),
+            status: rb.status, totalMatched: rb.totalMatched ?? 0, lastPriceTraded: rb.lastPriceTraded ?? null,
+            back: (rb.ex?.availableToBack ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
+            lay: (rb.ex?.availableToLay ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
+            tradedLadder: tradedLadder(rb),
+          };
+        }),
+      });
+    }
+    out.push({ eventId: e.event.id, name: e.event.name, start: e.event.openDate, markets });
+  }
+  return out;
+}
+
 async function runAction(action, params, appKey, session) {
+  if (action === 'tv-card') {
+    const events = await fetchTvCard(String(params.q || 'Celebrity'), appKey, session);
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, count: events.length, events }) };
+  }
   if (action === 'darts-card') {
     const hours = Math.max(1, Math.min(72, parseFloat(params.hours) || 24));
     const events = await fetchDartsCard(hours, appKey, session);
