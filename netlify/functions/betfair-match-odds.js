@@ -585,11 +585,11 @@ async function fetchDartsCard(hours, appKey, session) {
   const cat = await bfCall('listMarketCatalogue', {
     filter: { eventTypeIds: [PLAYER_SPORT_EVENT_TYPE.darts],
               marketStartTime: { from: new Date(now).toISOString(), to: new Date(now + hours * 3600e3).toISOString() } },
-    marketProjection: ['EVENT', 'RUNNER_DESCRIPTION', 'MARKET_START_TIME', 'MARKET_DESCRIPTION'], maxResults: 1000,
+    marketProjection: ['EVENT', 'RUNNER_DESCRIPTION', 'MARKET_START_TIME', 'MARKET_DESCRIPTION'], maxResults: 100,   // weight 2/market, cap 200
   }, appKey, session);
   const books = {};
-  for (let i = 0; i < (cat || []).length; i += 20) {
-    const ids = cat.slice(i, i + 20).map(m => m.marketId);
+  for (let i = 0; i < (cat || []).length; i += 8) {   // EX_BEST_OFFERS(5)+EX_TRADED(17)=22/market, cap 200
+    const ids = cat.slice(i, i + 8).map(m => m.marketId);
     const bk = await bfCall('listMarketBook', { marketIds: ids, priceProjection: { priceData: ['EX_BEST_OFFERS', 'EX_TRADED'] } }, appKey, session);
     for (const b of bk || []) books[b.marketId] = b;
   }
