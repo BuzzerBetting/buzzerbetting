@@ -10602,7 +10602,7 @@ function renderOddscheckerEV(){
     // priced off its lay price when £100+ is available there — flagged so it's obvious before betting.
     const matched=b.lowBfex?`<span style="color:var(--red);font-weight:500" title="Thin BFEX market: failed the £200 matched / traded-prices checks, so the fair is the lay price with £100+ available">⚠ ${matchedTxt} <span style="font-size:10px">LAY</span></span>`:matchedTxt;
     const boostIcon=b.boost?'<span class="boost-icon" title="Oddschecker Price Boost" style="margin-right:6px;vertical-align:middle">B</span>':'';
-    const sourceLabel=b.source==='combo'?'OC/BB':(b.source==='bfex'?'BFEX':(b.source==='wh'?'WH':(b.source==='b365'?'B365':(b.source||''))));
+    const sourceLabel=b.source==='combo'?'OC/BB':(b.source==='bfex'?'BFEX':(b.source==='wh'?'WH':(b.source==='b365'?'B365':(b.source==='bb'?'BB':(b.source||'')))));
     const bl=b.b365Line;
     const whTip=b.whLine?` title="William Hill O/U ${b.whLine.line}: Over ${Number(b.whLine.over).toFixed(2)} / Under ${Number(b.whLine.under).toFixed(2)} (${b.whLine.margin}% margin), Shin de-vigged"`
       :(bl?` title="${escapeHtml(`Bet365 ${bl.player?bl.player+' ':''}${bl.market}: ${bl.rung} @ ${Number(bl.odds).toFixed(2)}. Margin from the 0 / 1+ pair (${Number(bl.zero).toFixed(2)} / ${Number(bl.one).toFixed(2)}, ${bl.margin}%), power de-vig k=${bl.k}. Read ${bl.scrapedAt?new Date(bl.scrapedAt).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):''}`)}"`:'');
@@ -10831,7 +10831,7 @@ async function loadOddscheckerEV(){
     const SECONDARY_EV_FEEDS=[
       'oc-boost-ev','oc-pricedup-horse-ev','oc-pricedup-acca-ev','oc-paddypower-horse-ev',
       'oc-starsports-acca-ev','oc-dragonbet-acca-ev','oc-planetsportbet-acca-ev',
-      'oc-williamhill-acca-ev','oc-williamhill-tennis-acca-ev','oc-darts-boost-ev','oc-darts-bfex-ev','oc-celeb-bfex-ev',
+      'oc-williamhill-acca-ev','oc-williamhill-tennis-acca-ev','oc-darts-boost-ev','oc-darts-bfex-ev','oc-celeb-bfex-ev','oc-darts-bb-ev',
       'oc-starsports-horse-ev',
       'oc-properbet-acca-ev','oc-properbet-horse-ev','oc-properbet-football-boost-ev',
       'oc-fairplay-boost-ev',

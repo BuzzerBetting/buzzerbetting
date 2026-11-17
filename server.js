@@ -359,6 +359,20 @@ app.get('/api/celeb-bfex-ev', (req, res) => {
   }
 });
 
+// GET /api/darts-bb-ev (2026-11-17) — darts boosts / bet-builder prices (Paddy Power WhatOddsPaddy + Boosts, Betfred
+// Price Boosts) vs BookieBashing's (independent-product) fair, written by oc-scraper's darts_bb_fair_scan.py.
+// source 'bb' rows: BB-only, staff verify. Not posted to Discord (poller only takes bfex/wh/b365 sources).
+const DARTS_BB_EV_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'darts_bb_ev_bets.json');
+app.get('/api/darts-bb-ev', (req, res) => {
+  if (!fs.existsSync(DARTS_BB_EV_PATH)) return res.json({ ok: true, updated: null, bets: [] });
+  try {
+    const payload = JSON.parse(fs.readFileSync(DARTS_BB_EV_PATH, 'utf8'));
+    res.json({ ok: true, updated: payload.updated || null, bets: payload.bets || [] });
+  } catch (e) {
+    res.json({ ok: false, error: 'Failed reading darts_bb_ev_bets.json: ' + e.message });
+  }
+});
+
 // GET /api/darts-boost-ev — darts boosted doubles/trebles from the Tampermonkey-fed books,
 // written by oc-scraper's darts_boost_ev_scan.py. Merged into "Normal +EV" client-side.
 const DARTS_BOOST_EV_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'darts_boost_ev_bets.json');
