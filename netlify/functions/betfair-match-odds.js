@@ -576,7 +576,52 @@ async function fetchCard(hours, appKey, session) {
   return Object.values(events).filter(e => e.matchOdds);
 }
 
+// action=darts-card[&hours=24] (2026-11-17) — every darts match starting in the next `hours` with
+// ALL its markets (Match Odds, Correct Score, Handicap, Total 180s, Most 180s, player averages)
+// and each runner in the same shape findDartsMarketRunner returns, so oc-scraper's
+// darts_bfex_value_scan.py can price any bookmaker darts price off BFEX in one call.
+async function fetchDartsCard(hours, appKey, session) {
+  const now = Date.now();
+  const cat = await bfCall('listMarketCatalogue', {
+    filter: { eventTypeIds: [PLAYER_SPORT_EVENT_TYPE.darts],
+              marketStartTime: { from: new Date(now).toISOString(), to: new Date(now + hours * 3600e3).toISOString() } },
+    marketProjection: ['EVENT', 'RUNNER_DESCRIPTION', 'MARKET_START_TIME', 'MARKET_DESCRIPTION'], maxResults: 1000,
+  }, appKey, session);
+  const books = {};
+  for (let i = 0; i < (cat || []).length; i += 20) {
+    const ids = cat.slice(i, i + 20).map(m => m.marketId);
+    const bk = await bfCall('listMarketBook', { marketIds: ids, priceProjection: { priceData: ['EX_BEST_OFFERS', 'EX_TRADED'] } }, appKey, session);
+    for (const b of bk || []) books[b.marketId] = b;
+  }
+  const events = {};
+  for (const m of cat || []) {
+    const b = books[m.marketId];
+    if (!b || b.status !== 'OPEN' || b.inplay || !m.event) continue;
+    const ev = events[m.event.id] || (events[m.event.id] = { eventId: m.event.id, name: m.event.name, start: m.marketStartTime, markets: [] });
+    ev.markets.push({
+      marketId: m.marketId, marketName: m.marketName, marketType: m.description && m.description.marketType,
+      totalMatched: b.totalMatched || 0,
+      runners: (m.runners || []).map(r => {
+        const rb = (b.runners || []).find(x => x.selectionId === r.selectionId && Number(x.handicap || 0) === Number(r.handicap || 0)) || {};
+        return {
+          name: r.runnerName, marketId: m.marketId, selectionId: r.selectionId, handicap: Number(r.handicap || 0),
+          status: rb.status, totalMatched: rb.totalMatched ?? 0, lastPriceTraded: rb.lastPriceTraded ?? null,
+          back: (rb.ex?.availableToBack ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
+          lay: (rb.ex?.availableToLay ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
+          tradedLadder: tradedLadder(rb),
+        };
+      }),
+    });
+  }
+  return Object.values(events);
+}
+
 async function runAction(action, params, appKey, session) {
+  if (action === 'darts-card') {
+    const hours = Math.max(1, Math.min(72, parseFloat(params.hours) || 24));
+    const events = await fetchDartsCard(hours, appKey, session);
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, count: events.length, events }) };
+  }
   if (action === 'card') {
     const hours = Math.max(1, Math.min(72, parseFloat(params.hours) || 36));
     const events = await fetchCard(hours, appKey, session);

@@ -332,6 +332,20 @@ app.get('/api/williamhill-acca-ev', (req, res) => {
 // action=player-win) multiplied together, compared against William Hill's own boosted price.
 // Merged into the same "Normal +EV" table client-side.
 const WILLIAMHILL_TENNIS_ACCA_EV_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'williamhill_tennis_acca_ev_bets.json');
+// GET /api/darts-bfex-ev (2026-11-17) — darts bookmaker prices (Oddschecker) vs the BFEX fair on
+// every market Betfair trades (match odds, correct score, handicap, total/most 180s), written by
+// oc-scraper's darts_bfex_value_scan.py. Merged into "Normal +EV" client-side.
+const DARTS_BFEX_EV_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'darts_bfex_ev_bets.json');
+app.get('/api/darts-bfex-ev', (req, res) => {
+  if (!fs.existsSync(DARTS_BFEX_EV_PATH)) return res.json({ ok: true, updated: null, bets: [] });
+  try {
+    const payload = JSON.parse(fs.readFileSync(DARTS_BFEX_EV_PATH, 'utf8'));
+    res.json({ ok: true, updated: payload.updated || null, bets: payload.bets || [] });
+  } catch (e) {
+    res.json({ ok: false, error: 'Failed reading darts_bfex_ev_bets.json: ' + e.message });
+  }
+});
+
 // GET /api/darts-boost-ev — darts boosted doubles/trebles from the Tampermonkey-fed books,
 // written by oc-scraper's darts_boost_ev_scan.py. Merged into "Normal +EV" client-side.
 const DARTS_BOOST_EV_PATH = require('path').join(__dirname, 'oc-scraper', 'data', 'darts_boost_ev_bets.json');
