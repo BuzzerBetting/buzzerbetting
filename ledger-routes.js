@@ -5553,7 +5553,9 @@ router.get('/bet365-props/targets', async (req, res) => {
         });
         if (hits.length) boostsByEvent.set(String(e.id), hits);
       }
-      soon = soon.filter(e => boostsByEvent.has(String(e.id)));
+      // Bet365 (2026-11-17, user): every upcoming darts match is also read on its 180s tab (Total/Player/Most
+      // 180s ladders for the x180s model), boosted or not; only Betfred stays boost-only.
+      if (bookQ === 'betfred') soon = soon.filter(e => boostsByEvent.has(String(e.id)));
     }
     const flipB = n => String(n || '').split(',').map(s => s.trim()).reverse().join(' ');
     if (bookQ === 'betfred') {
@@ -5582,7 +5584,8 @@ router.get('/bet365-props/targets', async (req, res) => {
       return {
         names: [flip(e.home), flip(e.away)], start: e.date, league: e.league && e.league.name,
         url: _b365Targets.urls.get(String(e.id)).replace(/\/I\d+\/(P\d+\/)?$/, '/I4/'),
-        ...(hits ? { tabs: [...new Set(hits.map(b => b.tab))], boosts: hits.map(b => `${b.book}: ${b.selection}`) } : {}),
+        tabs: [...new Set([...(hits || []).map(b => b.tab), '180s'])],
+        ...(hits ? { boosts: hits.map(b => `${b.book}: ${b.selection}`) } : {}),
       };
     }).sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
     res.json({ ok: true, targets, hours });
