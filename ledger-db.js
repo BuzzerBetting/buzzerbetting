@@ -819,6 +819,27 @@ CREATE TABLE IF NOT EXISTS bb_darts_props (
 );
 CREATE INDEX IF NOT EXISTS idx_bb_darts_props_sport ON bb_darts_props(sport, scraped_at);
 `);
+// Paddy Power darts (2026-11-17): the "#WhatOddsPaddy - Featured" card (X to win & N+ 180s, both players N+ 180s,
+// win + 180s + checkout combos — priced WITH correlation) and the "Boosts" card, scraped server-side from the
+// open PP GraphQL by oc-scraper/scripts/paddypower_darts_scan.py. event = 'A vs B'; market = card name;
+// selection = runner text; was_odds = the previous price (boost cards).
+db.exec(`
+CREATE TABLE IF NOT EXISTS pp_darts_props (
+  event        TEXT NOT NULL,
+  sport        TEXT,
+  competition  TEXT,
+  kickoff      TEXT,
+  market       TEXT NOT NULL,
+  player       TEXT NOT NULL DEFAULT '',
+  selection    TEXT NOT NULL,
+  odds         REAL,
+  url          TEXT,
+  scraped_at   TEXT NOT NULL,
+  was_odds     REAL,
+  PRIMARY KEY (event, market, player, selection)
+);
+CREATE INDEX IF NOT EXISTS idx_pp_darts_props_sport ON pp_darts_props(sport, scraped_at);
+`);
 // Betfred Price Boosts carry a pre-boost "was" price (2026-11-17).
 try { db.exec(`ALTER TABLE betfred_props ADD COLUMN was_odds REAL`); } catch (_) { /* already there */ }
 

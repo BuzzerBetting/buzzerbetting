@@ -5447,7 +5447,7 @@ router.post('/sportingbet-boosts/ingest', (req, res) => {
 // Same routes serve Betfred (2026-11-17): GET /betfred-props, POST /betfred-props/ingest, table
 // betfred_props, fed by oc-scraper/betfred-userscript.js (Akamai blocks the server; see
 // [[betfred-darts-checkout]]).
-const PROPS_TABLES = { bet365: 'bet365_props', betfred: 'betfred_props', bbdarts: 'bb_darts_props' };
+const PROPS_TABLES = { bet365: 'bet365_props', betfred: 'betfred_props', bbdarts: 'bb_darts_props', ppdarts: 'pp_darts_props' };
 for (const [book, table] of Object.entries(PROPS_TABLES)) router.get(`/${book}-props`, (req, res) => {
   try {
     const maxAge = Math.max(1, Math.min(1440, Number(req.query.maxAgeMin) || 240));
@@ -5603,7 +5603,7 @@ for (const [book, table] of Object.entries(PROPS_TABLES)) router.post(`/${book}-
     if (!event) return res.status(400).json({ ok: false, error: 'event required' });
     const incoming = (Array.isArray(b.rows) ? b.rows : []).filter(r => r && r.market && r.selection && Number(r.odds) > 1);
     const now = new Date().toISOString();
-    const hasWas = table === 'betfred_props';   // Betfred Price Boosts carry a "was" price
+    const hasWas = table === 'betfred_props' || table === 'pp_darts_props';   // Betfred Price Boosts carry a "was" price
     const ins = db.prepare(`
       INSERT INTO ${table} (event, sport, competition, kickoff, market, player, selection, odds, url, scraped_at${hasWas ? ', was_odds' : ''})
       VALUES (@event, @sport, @competition, @kickoff, @market, @player, @selection, @odds, @url, @now${hasWas ? ', @was' : ''})
