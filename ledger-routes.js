@@ -5600,12 +5600,13 @@ for (const [book, table] of Object.entries(PROPS_TABLES)) router.post(`/${book}-
     if (!event) return res.status(400).json({ ok: false, error: 'event required' });
     const incoming = (Array.isArray(b.rows) ? b.rows : []).filter(r => r && r.market && r.selection && Number(r.odds) > 1);
     const now = new Date().toISOString();
+    const hasWas = table === 'betfred_props';   // Betfred Price Boosts carry a "was" price
     const ins = db.prepare(`
-      INSERT INTO ${table} (event, sport, competition, kickoff, market, player, selection, odds, url, scraped_at)
-      VALUES (@event, @sport, @competition, @kickoff, @market, @player, @selection, @odds, @url, @now)
+      INSERT INTO ${table} (event, sport, competition, kickoff, market, player, selection, odds, url, scraped_at${hasWas ? ', was_odds' : ''})
+      VALUES (@event, @sport, @competition, @kickoff, @market, @player, @selection, @odds, @url, @now${hasWas ? ', @was' : ''})
       ON CONFLICT(event, market, player, selection) DO UPDATE SET
         sport = excluded.sport, competition = excluded.competition, kickoff = excluded.kickoff,
-        odds = excluded.odds, url = excluded.url, scraped_at = excluded.scraped_at
+        odds = excluded.odds, url = excluded.url, scraped_at = excluded.scraped_at${hasWas ? ', was_odds = excluded.was_odds' : ''}
     `);
     const del = db.prepare(`DELETE FROM ${table} WHERE event = ? AND market = ? AND scraped_at != ?`);
     let upserted = 0, removed = 0;
@@ -5616,6 +5617,7 @@ for (const [book, table] of Object.entries(PROPS_TABLES)) router.post(`/${book}-
           event, sport: b.sport ? String(b.sport).toLowerCase() : null, competition: b.competition || null,
           kickoff: b.kickoff || null, market: String(r.market).trim(), player: String(r.player || '').trim(),
           selection: String(r.selection).trim(), odds: Number(r.odds), url: b.url || null, now,
+          ...(hasWas ? { was: Number(r.was) > 1 ? Number(r.was) : null } : {}),
         });
         markets.add(String(r.market).trim());
         upserted++;

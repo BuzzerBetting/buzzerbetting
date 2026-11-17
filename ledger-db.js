@@ -799,6 +799,8 @@ CREATE TABLE IF NOT EXISTS betfred_props (
 );
 CREATE INDEX IF NOT EXISTS idx_betfred_props_sport ON betfred_props(sport, scraped_at);
 `);
+// Betfred Price Boosts carry a pre-boost "was" price (2026-11-17).
+try { db.exec(`ALTER TABLE betfred_props ADD COLUMN was_odds REAL`); } catch (_) { /* already there */ }
 
 // Same shape/reasoning as starsports_boosts above — DragonBet's "DragonBoosts" page
 // (dragonbet.co.uk/sport-special/DragonBoosts) and PlanetSportBet's "Rocket Boosts" page
