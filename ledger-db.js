@@ -780,6 +780,26 @@ CREATE TABLE IF NOT EXISTS bet365_props (
 CREATE INDEX IF NOT EXISTS idx_bet365_props_sport ON bet365_props(sport, scraped_at);
 `);
 
+// Betfred match-page markets (2026-11-17), same shape as bet365_props, fed by
+// oc-scraper/betfred-userscript.js (Betfred's Akamai blocks the server). Darts Checkout tab:
+// "Highest Checkout Score (100.5)" Over/Under ladder, "Highest <Player> Checkout 90.5" per player.
+db.exec(`
+CREATE TABLE IF NOT EXISTS betfred_props (
+  event        TEXT NOT NULL,
+  sport        TEXT,
+  competition  TEXT,
+  kickoff      TEXT,
+  market       TEXT NOT NULL,
+  player       TEXT NOT NULL DEFAULT '',
+  selection    TEXT NOT NULL,
+  odds         REAL,
+  url          TEXT,
+  scraped_at   TEXT NOT NULL,
+  PRIMARY KEY (event, market, player, selection)
+);
+CREATE INDEX IF NOT EXISTS idx_betfred_props_sport ON betfred_props(sport, scraped_at);
+`);
+
 // Same shape/reasoning as starsports_boosts above — DragonBet's "DragonBoosts" page
 // (dragonbet.co.uk/sport-special/DragonBoosts) and PlanetSportBet's "Rocket Boosts" page
 // (planetsportbet.com/sport-special/RocketBoosts) both confirmed live 2026-09-15 to run the

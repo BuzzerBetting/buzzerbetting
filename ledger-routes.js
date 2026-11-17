@@ -5444,14 +5444,18 @@ router.post('/sportingbet-boosts/ingest', (req, res) => {
 // GET /api/ledger/bet365-props?sport=darts&maxAgeMin=240 — rows scraped within maxAgeMin
 // (default 240). The userscript only posts while the user has a Bet365 match page open, so the
 // age gate is what stops a price read hours ago from being treated as current.
-router.get('/bet365-props', (req, res) => {
+// Same routes serve Betfred (2026-11-17): GET /betfred-props, POST /betfred-props/ingest, table
+// betfred_props, fed by oc-scraper/betfred-userscript.js (Akamai blocks the server; see
+// [[betfred-darts-checkout]]).
+const PROPS_TABLES = { bet365: 'bet365_props', betfred: 'betfred_props' };
+for (const [book, table] of Object.entries(PROPS_TABLES)) router.get(`/${book}-props`, (req, res) => {
   try {
     const maxAge = Math.max(1, Math.min(1440, Number(req.query.maxAgeMin) || 240));
     const since = new Date(Date.now() - maxAge * 60000).toISOString();
     const sport = String(req.query.sport || '').trim().toLowerCase();
     const rows = sport
-      ? db.prepare(`SELECT * FROM bet365_props WHERE sport = ? AND scraped_at >= ? ORDER BY event, market, player, selection`).all(sport, since)
-      : db.prepare(`SELECT * FROM bet365_props WHERE scraped_at >= ? ORDER BY event, market, player, selection`).all(since);
+      ? db.prepare(`SELECT * FROM ${table} WHERE sport = ? AND scraped_at >= ? ORDER BY event, market, player, selection`).all(sport, since)
+      : db.prepare(`SELECT * FROM ${table} WHERE scraped_at >= ? ORDER BY event, market, player, selection`).all(since);
     res.json({ ok: true, rows, maxAgeMin: maxAge });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
@@ -5482,8 +5486,14 @@ const B365_SHAPES = [   // [regex, kind, Bet365 tab]
   [new RegExp(String.raw`^${B365_N}\s+bull\s+finish(?:es)?\s+in\s+the\s+match$`, 'i'), 'match', 'Extra'],
   [new RegExp(String.raw`^(.+?)\s+to\s+hit\s+${B365_N}\s+bull\s+finish(?:es)?(?:\s+in\s+(?:the|his)\s+match)?$`, 'i'), 'player', 'Extra'],
 ];
+// Betfred's Checkout tab (match highest-checkout ladder + one line per player) serves highest-checkout
+// boosts: "<Player> To Hit a 130+ Checkout" (also WH-priced) and "A 120+ Checkout In The Match".
+const BETFRED_SHAPES = [
+  [/^(.+?)\s+to\s+hit\s+an?\s+(\d{2,3})\s*\+\s+checkout(?:\s+in\s+(?:the|his)\s+match)?$/i, 'player', 'checkout'],
+  [/^(?:an?y?\s+)?(\d{2,3})\s*\+\s+checkout\s+in\s+the\s+match$/i, 'match', 'checkout'],
+];
 const DARTS_TITLE_RE = /darts|world grand prix|world matchplay|grand slam of darts|players championship|world series/i;
-function liveBet365DartsBoosts() {
+function liveBet365DartsBoosts(shapes = B365_SHAPES) {
   const raw = [];
   try {   // Ladbrokes: no table, its scan caches the SiteServer pull
     const c = JSON.parse(fs.readFileSync(path.join(__dirname, 'oc-scraper', 'data', 'ladbrokes_boosts_cache.json'), 'utf8'));
@@ -5506,7 +5516,7 @@ function liveBet365DartsBoosts() {
   const out = [];
   for (const b of raw) {
     const sel = b.selection.replace(/\|?\s*\(\s*was\b[^)]*\)\s*$/i, '').replace(/^[\s|]+|[\s|]+$/g, '');
-    const hit = B365_SHAPES.find(([re]) => re.test(sel));
+    const hit = shapes.find(([re]) => re.test(sel));
     if (hit) out.push({ ...b, selection: sel, kind: hit[1], tab: hit[2] });
   }
   return out;
@@ -5530,9 +5540,10 @@ router.get('/bet365-props/targets', async (req, res) => {
     // ?boosts=1 (2026-11-16, user): only matches with a live darts boost Bet365 can price, so the
     // userscript loads Bet365 on demand instead of sweeping the whole card on a loop.
     const boostsMode = req.query.boosts === '1';
+    const bookQ = req.query.book === 'betfred' ? 'betfred' : 'bet365';   // betfred: no Bet365 links needed
     const boostsByEvent = new Map();
     if (boostsMode) {
-      const boosts = liveBet365DartsBoosts();
+      const boosts = liveBet365DartsBoosts(bookQ === 'betfred' ? BETFRED_SHAPES : B365_SHAPES);
       for (const e of soon) {
         const sur = [e.home, e.away].map(n => b365Norm(flipName(n)).split(' ').pop()).filter(Boolean);
         const hits = boosts.filter(b => {
@@ -5543,6 +5554,19 @@ router.get('/bet365-props/targets', async (req, res) => {
         if (hits.length) boostsByEvent.set(String(e.id), hits);
       }
       soon = soon.filter(e => boostsByEvent.has(String(e.id)));
+    }
+    const flipB = n => String(n || '').split(',').map(s => s.trim()).reverse().join(' ');
+    if (bookQ === 'betfred') {
+      // The Betfred userscript finds the event id itself from Betfred's competition page, so it
+      // only needs names, start and the competition name (odds-api league minus "International - ",
+      // year and ", Group X" -> "Grand Slam of Darts").
+      const targets = soon.map(e => {
+        const hits = boostsByEvent.get(String(e.id));
+        const comp = String((e.league && e.league.name) || '').replace(/^[^-]*-\s*/, '').replace(/\s+\d{4}\b.*$/, '').replace(/,.*$/, '').trim();
+        return { names: [flipB(e.home), flipB(e.away)], start: e.date, league: e.league && e.league.name, competition: comp,
+          ...(hits ? { tabs: [...new Set(hits.map(b => b.tab))], boosts: hits.map(b => `${b.book}: ${b.selection}`) } : {}) };
+      }).sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
+      return res.json({ ok: true, targets, hours });
     }
     const missing = soon.map(e => String(e.id)).filter(id => !_b365Targets.urls.has(id));
     for (let i = 0; i < missing.length; i += 10) {
@@ -5569,7 +5593,7 @@ router.get('/bet365-props/targets', async (req, res) => {
 //   body: { event, sport?, competition?, kickoff?, url?, rows: [{market, player?, selection, odds}] }
 // The page only shows one tab's markets at a time, so this replaces just the markets in the post
 // (for that event): upsert every row, then delete that event+market's rows this post didn't touch.
-router.post('/bet365-props/ingest', (req, res) => {
+for (const [book, table] of Object.entries(PROPS_TABLES)) router.post(`/${book}-props/ingest`, (req, res) => {
   try {
     const b = req.body || {};
     const event = String(b.event || '').trim();
@@ -5577,13 +5601,13 @@ router.post('/bet365-props/ingest', (req, res) => {
     const incoming = (Array.isArray(b.rows) ? b.rows : []).filter(r => r && r.market && r.selection && Number(r.odds) > 1);
     const now = new Date().toISOString();
     const ins = db.prepare(`
-      INSERT INTO bet365_props (event, sport, competition, kickoff, market, player, selection, odds, url, scraped_at)
+      INSERT INTO ${table} (event, sport, competition, kickoff, market, player, selection, odds, url, scraped_at)
       VALUES (@event, @sport, @competition, @kickoff, @market, @player, @selection, @odds, @url, @now)
       ON CONFLICT(event, market, player, selection) DO UPDATE SET
         sport = excluded.sport, competition = excluded.competition, kickoff = excluded.kickoff,
         odds = excluded.odds, url = excluded.url, scraped_at = excluded.scraped_at
     `);
-    const del = db.prepare(`DELETE FROM bet365_props WHERE event = ? AND market = ? AND scraped_at != ?`);
+    const del = db.prepare(`DELETE FROM ${table} WHERE event = ? AND market = ? AND scraped_at != ?`);
     let upserted = 0, removed = 0;
     const markets = new Set();
     db.transaction(() => {
