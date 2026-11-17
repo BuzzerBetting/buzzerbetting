@@ -799,6 +799,26 @@ CREATE TABLE IF NOT EXISTS betfred_props (
 );
 CREATE INDEX IF NOT EXISTS idx_betfred_props_sport ON betfred_props(sport, scraped_at);
 `);
+// BookieBashing darts detail-page rows (2026-11-17), fed by oc-scraper/bookiebashing-userscript.js:
+// BB's own "X to win and over 180s" fairs (worked out in the page, not in its feed), handicap ladders etc.
+// event = BB market id ('1.265608683', joins to darts/list id); market = row label with the player
+// and line stripped; player = the player in the row; selection = 'Over <line>' / 'Value'; odds = BB fair.
+db.exec(`
+CREATE TABLE IF NOT EXISTS bb_darts_props (
+  event        TEXT NOT NULL,
+  sport        TEXT,
+  competition  TEXT,
+  kickoff      TEXT,
+  market       TEXT NOT NULL,
+  player       TEXT NOT NULL DEFAULT '',
+  selection    TEXT NOT NULL,
+  odds         REAL,
+  url          TEXT,
+  scraped_at   TEXT NOT NULL,
+  PRIMARY KEY (event, market, player, selection)
+);
+CREATE INDEX IF NOT EXISTS idx_bb_darts_props_sport ON bb_darts_props(sport, scraped_at);
+`);
 // Betfred Price Boosts carry a pre-boost "was" price (2026-11-17).
 try { db.exec(`ALTER TABLE betfred_props ADD COLUMN was_odds REAL`); } catch (_) { /* already there */ }
 

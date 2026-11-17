@@ -5447,7 +5447,7 @@ router.post('/sportingbet-boosts/ingest', (req, res) => {
 // Same routes serve Betfred (2026-11-17): GET /betfred-props, POST /betfred-props/ingest, table
 // betfred_props, fed by oc-scraper/betfred-userscript.js (Akamai blocks the server; see
 // [[betfred-darts-checkout]]).
-const PROPS_TABLES = { bet365: 'bet365_props', betfred: 'betfred_props' };
+const PROPS_TABLES = { bet365: 'bet365_props', betfred: 'betfred_props', bbdarts: 'bb_darts_props' };
 for (const [book, table] of Object.entries(PROPS_TABLES)) router.get(`/${book}-props`, (req, res) => {
   try {
     const maxAge = Math.max(1, Math.min(1440, Number(req.query.maxAgeMin) || 240));
