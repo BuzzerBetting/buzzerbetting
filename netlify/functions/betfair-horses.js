@@ -111,9 +111,9 @@ function splitClothName(runnerName) {
   return m ? { cloth: parseInt(m[1], 10), name: m[2] } : { cloth: null, name: runnerName };
 }
 
-async function listRaces(appKey, session) {
-  const now = new Date();
-  const to = new Date(now.getTime() + 12 * 60 * 60 * 1000); // next 12 hours — a PricedUp double's
+async function listRaces(appKey, session, lookbackH = 0) {
+  const now = new Date(Date.now() - lookbackH * 3600 * 1000);
+  const to = new Date(Date.now() + 12 * 60 * 60 * 1000); // next 12 hours — a PricedUp double's
   // two legs can be hours apart (e.g. 14:00 and 19:00), unlike the 6h window betfair-dogs.js
   // uses for its own single-race picker use case.
   const catalogue = await bfCall('listMarketCatalogue', {
@@ -195,9 +195,9 @@ async function getCachedSessionToken(appKey) {
   return token;
 }
 
-async function runAction(action, marketId, appKey, session) {
+async function runAction(action, marketId, appKey, session, lookbackH = 0) {
   if (action === 'races') {
-    const races = await listRaces(appKey, session);
+    const races = await listRaces(appKey, session, lookbackH);
     return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, races }) };
   }
   if (action === 'race') {
@@ -217,17 +217,18 @@ exports.handler = async (event) => {
     body: JSON.stringify({ ok: false, error: 'BFEX_APP_KEY not set' })
   };
 
-  const { action, marketId } = event.queryStringParameters || {};
+  const { action, marketId, lookbackH } = event.queryStringParameters || {};
+  const lb = Math.min(12, Math.max(0, Number(lookbackH) || 0));
 
   try {
     const session = await getCachedSessionToken(appKey);
     try {
-      return await runAction(action, marketId, appKey, session);
+      return await runAction(action, marketId, appKey, session, lb);
     } catch (err) {
       if (err.message === 'SESSION_EXPIRED') {
         cachedSession = null;
         const freshSession = await getCachedSessionToken(appKey);
-        return await runAction(action, marketId, appKey, freshSession);
+        return await runAction(action, marketId, appKey, freshSession, lb);
       }
       throw err;
     }
