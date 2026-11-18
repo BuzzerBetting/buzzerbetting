@@ -135,13 +135,41 @@ async function listRaces(appKey, session, lookbackH = 0) {
   }));
 }
 
-async function getRace(marketId, appKey, session) {
+// 2026-11-18: Betfair drops names/jockeys from the catalogue once a market settles, but "jockey N+ winners today" markets
+// need the RESULT of races already run. So every race seen pre-off is cached to disk (venue, start, runners' name/jockey/
+// trainer); a settled race is then resolved from listMarketBook statuses (WINNER/LOSER) + this cache.
+const _fs = require('fs');
+const _path = require('path');
+const META_FILE = _path.join(__dirname, '..', '..', 'data', 'horse_meta_cache.json');
+let _meta = null;
+function metaLoad() {
+  if (_meta) return _meta;
+  try { _meta = JSON.parse(_fs.readFileSync(META_FILE, 'utf8')); } catch (_) { _meta = {}; }
+  return _meta;
+}
+function metaSave() {
+  try {
+    const m = metaLoad(), cutoff = Date.now() - 36 * 3600 * 1000;
+    for (const k of Object.keys(m)) if (Date.parse(m[k].startTime || 0) < cutoff) delete m[k];
+    _fs.mkdirSync(_path.dirname(META_FILE), { recursive: true });
+    _fs.writeFileSync(META_FILE, JSON.stringify(m));
+  } catch (_) { /* read-only fs (netlify) — cache is best-effort */ }
+}
+function metaRemember(marketId, venue, startTime, runners) {
+  const m = metaLoad();
+  m[marketId] = { venue, startTime, runners: Object.fromEntries(runners.map(r => [r.selectionId, { name: r.name, cloth: r.cloth, jockey: r.jockey, trainer: r.trainer }])) };
+  metaSave();
+}
+
+async function getRace(marketId, appKey, session, settled = false) {
   const catalogue = await bfCall('listMarketCatalogue', {
     filter: { marketIds: [marketId] },
     marketProjection: ['RUNNER_DESCRIPTION', 'RUNNER_METADATA', 'EVENT', 'MARKET_START_TIME'],
     maxResults: 1,
   }, appKey, session);
-  const meta = catalogue?.[0];
+  let meta = catalogue?.[0];
+  const cached = metaLoad()[marketId];
+  if (!meta && settled && cached) meta = { event: { venue: cached.venue }, marketStartTime: cached.startTime, runners: null };
   if (!meta) throw new Error('Market not found');
 
   const books = await bfCall('listMarketBook', {
@@ -152,17 +180,19 @@ async function getRace(marketId, appKey, session) {
   if (!book) throw new Error('No prices available for this market');
 
   const runners = (book.runners || [])
-    .filter(r => r.status === 'ACTIVE')
+    .filter(r => settled || r.status === 'ACTIVE')
     .map(r => {
       const runnerMeta = meta.runners?.find(rm => rm.selectionId === r.selectionId);
-      const { cloth, name } = splitClothName(runnerMeta?.runnerName);
+      const cr = cached?.runners?.[r.selectionId];
+      const { cloth, name } = runnerMeta ? splitClothName(runnerMeta.runnerName) : { cloth: cr?.cloth ?? null, name: cr?.name };
       return {
         selectionId: r.selectionId,
+        status: r.status,
         cloth,
         name: name || `Runner ${r.selectionId}`,
         // 2026-11-18: Betfair runner metadata (RUNNER_DESCRIPTION) — jockey/trainer for jockey-winner-count markets
-        jockey: runnerMeta?.metadata?.JOCKEY_NAME || null,
-        trainer: runnerMeta?.metadata?.TRAINER_NAME || null,
+        jockey: runnerMeta ? (runnerMeta.metadata?.JOCKEY_NAME || null) : (cr?.jockey || null),
+        trainer: runnerMeta ? (runnerMeta.metadata?.TRAINER_NAME || null) : (cr?.trainer || null),
         totalMatched: r.totalMatched ?? 0,
         lastPriceTraded: r.lastPriceTraded ?? null,
         back: (r.ex?.availableToBack ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
@@ -173,12 +203,15 @@ async function getRace(marketId, appKey, session) {
     })
     .sort((a, b) => (a.cloth ?? 99) - (b.cloth ?? 99));
 
-  return {
+  const out = {
     marketId,
     venue: meta.event?.venue || meta.event?.name || 'Unknown',
     startTime: meta.marketStartTime,
+    marketStatus: book.status,
     runners,
   };
+  if (meta.runners && book.status !== 'CLOSED') metaRemember(marketId, out.venue, out.startTime, runners);
+  return out;
 }
 
 // Same reasoning/shape as betfair-dogs.js's cached session — this runs long-lived on the DO
@@ -197,12 +230,25 @@ async function getCachedSessionToken(appKey) {
 
 async function runAction(action, marketId, appKey, session, lookbackH = 0) {
   if (action === 'races') {
-    const races = await listRaces(appKey, session, lookbackH);
+    let races = await listRaces(appKey, session, lookbackH);
+    if (lookbackH > 0) { // races already settled vanish from the catalogue: add cached ones inside the window
+      const have = new Set(races.map(r => r.marketId)), from = Date.now() - lookbackH * 3600 * 1000;
+      for (const [id, v] of Object.entries(metaLoad())) {
+        const t = Date.parse(v.startTime || 0);
+        if (!have.has(id) && t >= from && t <= Date.now() + 12 * 3600 * 1000) races.push({ marketId: id, venue: v.venue, startTime: v.startTime });
+      }
+      races.sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime));
+    }
     return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, races }) };
   }
   if (action === 'race') {
     if (!marketId) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'marketId required' }) };
     const race = await getRace(marketId, appKey, session);
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, race }) };
+  }
+  if (action === 'race_settled') {
+    if (!marketId) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'marketId required' }) };
+    const race = await getRace(marketId, appKey, session, true);
     return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, race }) };
   }
   return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'action must be "races" or "race"' }) };
