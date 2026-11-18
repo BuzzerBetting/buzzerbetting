@@ -702,6 +702,23 @@ CREATE TABLE IF NOT EXISTS pricedup_boosts (
 );
 `);
 
+// Sky Bet horse-racing boosted doubles (skybet.com/horse-racing/s-7), read straight off the
+// rendered page by oc-scraper/skybet-userscript.js (2026-11-18) instead of via BookieBashing's
+// tracker. selection = the runner line ("A (14:08 Hexham) & B (15:38 Hexham) both to win"),
+// odds_frac = the boosted price, was_frac = the struck-through pre-boost price.
+db.exec(`
+CREATE TABLE IF NOT EXISTS skybet_boosts (
+  sport        TEXT,
+  group_title  TEXT NOT NULL,
+  selection    TEXT NOT NULL,
+  odds_frac    TEXT,
+  odds         REAL,
+  was_frac     TEXT,
+  scraped_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (group_title, selection)
+);
+`);
+
 // Same shape/reasoning as pricedup_boosts above — StarSports' "Star Boosts" page
 // (starsports.bet/sport-special/StarBoosts) turned out to run the exact same underlying
 // platform as PricedUp (confirmed live 2026-09-15: identical emotion CSS class names —

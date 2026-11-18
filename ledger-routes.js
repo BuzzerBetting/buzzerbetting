@@ -5269,6 +5269,45 @@ router.post('/pricedup-boosts/ingest', (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// ================== SKY BET BOOSTS (raw scraped odds, 2026-11-18) ==================
+// Fed by oc-scraper/skybet-userscript.js reading skybet.com/horse-racing/s-7 directly. Same
+// upsert-then-delete-stale contract as pricedup-boosts/ingest (absence from a successful scrape
+// = boost pulled); skybet_horse_ev_scan.py prefers these rows over the BB-tracker copy.
+router.get('/skybet-boosts', (req, res) => {
+  try {
+    const { rows, stale, ageMin } = freshBoostRows('skybet_boosts', 12); // userscript reloads every ~3-4 min
+    res.json({ ok: true, rows, stale, staleMinutes: stale ? ageMin : undefined });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
+router.post('/skybet-boosts/ingest', (req, res) => {
+  try {
+    const incoming = Array.isArray((req.body || {}).rows) ? req.body.rows : [];
+    const now = new Date().toISOString();
+    const ins = db.prepare(`
+      INSERT INTO skybet_boosts (sport, group_title, selection, odds_frac, odds, was_frac, scraped_at)
+      VALUES (@sport, @group_title, @selection, @odds_frac, @odds, @was_frac, @now)
+      ON CONFLICT(group_title, selection) DO UPDATE SET
+        sport = excluded.sport, odds_frac = excluded.odds_frac, odds = excluded.odds,
+        was_frac = excluded.was_frac, scraped_at = excluded.scraped_at
+    `);
+    let upserted = 0, removed = 0;
+    db.transaction(() => {
+      for (const r of incoming) {
+        if (!r || !r.groupTitle || !r.selection) continue;
+        ins.run({
+          sport: r.sport || null, group_title: String(r.groupTitle), selection: String(r.selection),
+          odds_frac: r.oddsFrac || null, odds: r.odds != null ? Number(r.odds) : null, was_frac: r.wasFrac || null, now,
+        });
+        upserted++;
+      }
+      if (upserted > 0) removed = db.prepare(`DELETE FROM skybet_boosts WHERE scraped_at != ?`).run(now).changes;
+      else if (req.body && req.body.clear === true) removed = db.prepare(`DELETE FROM skybet_boosts`).run().changes; // page rendered, Sky has no boosts
+    })();
+    res.json({ ok: true, upserted, removed });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 // ================== STARSPORTS BOOSTS (raw scraped odds) ==================
 // Fed by its own Tampermonkey userscript (oc-scraper/starsports-userscript.js) — StarSports'
 // "Star Boosts" page (starsports.bet/sport-special/StarBoosts) runs the exact same underlying
