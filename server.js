@@ -407,6 +407,7 @@ for (const [route, filename] of Object.entries({
   '/api/starsports-horse-ev': 'starsports_horse_ev_bets.json',
   '/api/properbet-acca-ev': 'properbet_acca_ev_bets.json',
   '/api/properbet-horse-ev': 'properbet_horse_ev_bets.json',
+  '/api/skybet-horse-ev': 'skybet_horse_ev_bets.json',
   '/api/fairplay-boost-ev': 'fairplay_boost_ev_bets.json',
 })) {
   const filePath = require('path').join(__dirname, 'oc-scraper', 'data', filename);

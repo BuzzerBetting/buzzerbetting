@@ -146,7 +146,7 @@ const NORMAL_EV_ROUTES = [
   '/api/oc-ev', '/api/oc-boost-ev', '/api/pricedup-horse-ev', '/api/pricedup-acca-ev', '/api/paddypower-horse-ev',
   '/api/starsports-acca-ev', '/api/dragonbet-acca-ev', '/api/planetsportbet-acca-ev',
   '/api/williamhill-acca-ev', '/api/williamhill-tennis-acca-ev', '/api/darts-boost-ev', '/api/darts-bfex-ev', '/api/celeb-bfex-ev',
-  '/api/starsports-horse-ev',
+  '/api/starsports-horse-ev', '/api/skybet-horse-ev',
   '/api/properbet-acca-ev', '/api/properbet-horse-ev', '/api/properbet-football-boost-ev',
   '/api/fairplay-boost-ev', '/api/planetsportbet-horse-ev', '/api/williamhill-horse-ev',
   '/api/pricedup-football-boost-ev', '/api/starsports-football-boost-ev',
