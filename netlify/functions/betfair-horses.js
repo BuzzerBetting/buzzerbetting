@@ -138,7 +138,7 @@ async function listRaces(appKey, session) {
 async function getRace(marketId, appKey, session) {
   const catalogue = await bfCall('listMarketCatalogue', {
     filter: { marketIds: [marketId] },
-    marketProjection: ['RUNNER_DESCRIPTION', 'EVENT', 'MARKET_START_TIME'],
+    marketProjection: ['RUNNER_DESCRIPTION', 'RUNNER_METADATA', 'EVENT', 'MARKET_START_TIME'],
     maxResults: 1,
   }, appKey, session);
   const meta = catalogue?.[0];
