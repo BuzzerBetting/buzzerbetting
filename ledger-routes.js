@@ -5690,6 +5690,12 @@ for (const [book, table] of Object.entries(PROPS_TABLES)) router.post(`/${book}-
         upserted++;
       }
       for (const m of markets) removed += del.run(event, m, now).changes;
+      // 2026-11-18: body.clear = ["<market>", ...] -> wipe that event+market even when this post carries no rows for it
+      // (Betfred horse carousel loaded fine and is EMPTY: the old boosts are gone from the site, don't let them linger).
+      for (const m of (Array.isArray(b.clear) ? b.clear : [])) {
+        const mk = String(m).trim();
+        if (mk && !markets.has(mk)) removed += db.prepare(`DELETE FROM ${table} WHERE event = ? AND market = ?`).run(event, mk).changes;
+      }
     })();
     res.json({ ok: true, upserted, removed, markets: markets.size });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
