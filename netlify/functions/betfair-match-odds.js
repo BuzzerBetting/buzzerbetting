@@ -423,7 +423,10 @@ async function findEventByHomeAway(home, away, appKey, session) {
     const events = await bfCall('listEvents', { filter: { eventTypeIds: [FOOTBALL_EVENT_TYPE_ID], textQuery: q } }, appKey, session);
     candidates = (events || []).filter(e => {
       const name = e.event?.name || '';
-      if (/\(w\)/i.test(name)) return false;
+      // Women's fixtures are only matched when the caller itself names a "(W)" side (Sky/Betfair write
+      // "Chelsea (W) v Paris St-G (W)"); an unmarked request still never lands on a women's event, and a (W)
+      // request never lands on a men's one. 2026-11-18.
+      if (/\(w\)/i.test(name) !== (/\(w\)/i.test(home) || /\(w\)/i.test(away))) return false;
       if (!reserveOk(name, home, away)) return false;
       if (!isPlausiblePrematchKickoff(e.event?.openDate)) return false; // already kicked off, or implausibly far out
       const parts = name.split(' v ');
