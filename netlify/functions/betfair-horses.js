@@ -160,6 +160,9 @@ async function getRace(marketId, appKey, session) {
         selectionId: r.selectionId,
         cloth,
         name: name || `Runner ${r.selectionId}`,
+        // 2026-11-18: Betfair runner metadata (RUNNER_DESCRIPTION) — jockey/trainer for jockey-winner-count markets
+        jockey: runnerMeta?.metadata?.JOCKEY_NAME || null,
+        trainer: runnerMeta?.metadata?.TRAINER_NAME || null,
         totalMatched: r.totalMatched ?? 0,
         lastPriceTraded: r.lastPriceTraded ?? null,
         back: (r.ex?.availableToBack ?? []).slice(0, 3).map(p => ({ price: p.price, size: p.size })),
