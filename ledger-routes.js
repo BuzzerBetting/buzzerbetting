@@ -5273,10 +5273,20 @@ router.post('/pricedup-boosts/ingest', (req, res) => {
 // Fed by oc-scraper/skybet-userscript.js reading skybet.com/horse-racing/s-7 directly. Same
 // upsert-then-delete-stale contract as pricedup-boosts/ingest (absence from a successful scrape
 // = boost pulled); skybet_horse_ev_scan.py prefers these rows over the BB-tracker copy.
+// 2026-11-18: one table, several Sky pages (Horse Racing doubles, Football accas) — freshness and the
+// delete-what-this-scrape-didn't-touch step are scoped PER SPORT so one userscript can't wipe or keep-alive another's rows.
 router.get('/skybet-boosts', (req, res) => {
   try {
-    const { rows, stale, ageMin } = freshBoostRows('skybet_boosts', 12); // userscript reloads every ~3-4 min
-    res.json({ ok: true, rows, stale, staleMinutes: stale ? ageMin : undefined });
+    const sport = req.query.sport ? String(req.query.sport) : null;
+    const maxAgeMin = sport === 'Football' ? 20 : 12; // horse tab reloads ~3-4 min, football ~5 min
+    const where = sport ? 'WHERE sport = ?' : '';
+    const args = sport ? [sport] : [];
+    const latest = (db.prepare(`SELECT MAX(scraped_at) AS latest FROM skybet_boosts ${where}`).get(...args) || {}).latest;
+    if (!latest) return res.json({ ok: true, rows: [], stale: false });
+    const ageMin = (Date.now() - new Date(latest).getTime()) / 60000;
+    if (ageMin > maxAgeMin) return res.json({ ok: true, rows: [], stale: true, staleMinutes: Math.round(ageMin) });
+    const rows = db.prepare(`SELECT * FROM skybet_boosts ${where} ORDER BY sport, group_title, selection`).all(...args);
+    res.json({ ok: true, rows, stale: false, scrapedAt: latest });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
@@ -5292,6 +5302,7 @@ router.post('/skybet-boosts/ingest', (req, res) => {
         was_frac = excluded.was_frac, scraped_at = excluded.scraped_at
     `);
     let upserted = 0, removed = 0;
+    const sports = new Set();
     db.transaction(() => {
       for (const r of incoming) {
         if (!r || !r.groupTitle || !r.selection) continue;
@@ -5299,10 +5310,20 @@ router.post('/skybet-boosts/ingest', (req, res) => {
           sport: r.sport || null, group_title: String(r.groupTitle), selection: String(r.selection),
           odds_frac: r.oddsFrac || null, odds: r.odds != null ? Number(r.odds) : null, was_frac: r.wasFrac || null, now,
         });
+        sports.add(r.sport || null);
         upserted++;
       }
-      if (upserted > 0) removed = db.prepare(`DELETE FROM skybet_boosts WHERE scraped_at != ?`).run(now).changes;
-      else if (req.body && req.body.clear === true) removed = db.prepare(`DELETE FROM skybet_boosts`).run().changes; // page rendered, Sky has no boosts
+      if (upserted > 0) {
+        // only retire untouched rows of the sport(s) this scrape covered
+        for (const sp of sports) {
+          removed += (sp === null
+            ? db.prepare(`DELETE FROM skybet_boosts WHERE scraped_at != ? AND sport IS NULL`).run(now)
+            : db.prepare(`DELETE FROM skybet_boosts WHERE scraped_at != ? AND sport = ?`).run(now, sp)).changes;
+        }
+      } else if (req.body && req.body.clear === true) {
+        const sp = req.body.sport ? String(req.body.sport) : null;
+        removed = (sp ? db.prepare(`DELETE FROM skybet_boosts WHERE sport = ?`).run(sp) : db.prepare(`DELETE FROM skybet_boosts`).run()).changes;
+      }
     })();
     res.json({ ok: true, upserted, removed });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
