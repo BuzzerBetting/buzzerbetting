@@ -19000,6 +19000,17 @@ function gvTeamNote(r){
   const up = c.mult > 1;
   return `<div style="font-weight:400;font-size:11px;color:var(--text3);margin-top:1px" title="Betfair match odds put ${escapeHtml(r.match || 'the team')}'s side at ${Number(r.teamXg).toFixed(2)} xG for this match; the player's team usually has ${Number(r.teamXgUsual).toFixed(2)} in his appearances. His record rate is scaled by ×${c.mult.toFixed(2)}.">Team xG ${Number(r.teamXg).toFixed(2)} vs usual ${Number(r.teamXgUsual).toFixed(2)} → ${up ? 'more' : 'less'} chance (×${c.mult.toFixed(2)}) · record fair ${c.fair.toFixed(2)}${c.upper ? '+' : ''}</div>`;
 }
+// Last 5 games (2026-11-20, user-requested): the player's stat in each of his last 5 appearances
+// (oldest -> newest), green where it reached the bet's line. Shown on Lineups Confirmed and
+// pre-lineup rows alike. Display only. Goals/assists/cards = FotMob, shots/SOT = our match DB.
+function gvLast5(r){
+  const seq = r.last5;
+  if (!Array.isArray(seq) || !seq.length) return '';
+  const line = Number(r.last5Line) || 1;
+  const hits = seq.filter(v => v >= line).length;
+  const dots = seq.map(v => `<span style="display:inline-block;min-width:15px;text-align:center;padding:0 3px;margin-right:2px;border-radius:4px;font-weight:600;background:${v >= line ? 'var(--green-bg)' : 'var(--surface2)'};color:${v >= line ? 'var(--green)' : 'var(--text3)'}">${v}</span>`).join('');
+  return `<div style="font-weight:400;font-size:11px;color:var(--text3);margin-top:3px;display:flex;align-items:center;gap:4px" title="Last ${seq.length} appearances, oldest to newest: ${escapeHtml(seq.join(', '))}. Green = reached ${line}+. Goals/assists/cards from FotMob, shots/SOT from our match database."><span>Last ${seq.length}:</span>${dots}<span style="font-weight:600;color:${hits ? 'var(--green)' : 'var(--text3)'}">${hits}/${seq.length}</span></div>`;
+}
 function gvRecordNote(r){
   const c = gvRecordCheck(r);
   if (!c || c.pass) return '';
@@ -19163,7 +19174,7 @@ function renderBaGrosvenor(){
     <td style="font-size:12px;color:var(--text2);white-space:nowrap">${escapeHtml(r.t || '')}</td>
     <td style="font-size:12.5px">${escapeHtml(r.match || '')}</td>
     <td style="font-size:12px;color:var(--text2)">${escapeHtml(r.mkt || '')}</td>
-    <td style="font-weight:500">${escapeHtml(r.sel || '')}${r.playerStats ? `<div style="font-weight:400;font-size:11.5px;color:var(--text3);margin-top:2px" title="FotMob, current + previous two seasons, all competitions">${escapeHtml(r.playerStats)}</div>` : ''}${gvTeamNote(r)}${gvRecordNote(r)}</td>
+    <td style="font-weight:500">${escapeHtml(r.sel || '')}${r.playerStats ? `<div style="font-weight:400;font-size:11.5px;color:var(--text3);margin-top:2px" title="FotMob, current + previous two seasons, all competitions">${escapeHtml(r.playerStats)}</div>` : ''}${gvLast5(r)}${gvTeamNote(r)}${gvRecordNote(r)}</td>
     <td class="r tn" style="font-weight:600;color:var(--green)">${r.odds != null ? Number(r.odds).toFixed(2) : '—'}</td>
     <td class="r tn" style="color:var(--text2)">${r.nextBest != null ? Number(r.nextBest).toFixed(2) : '—'} <span style="color:var(--text3);font-size:11px">(${escapeHtml(ocBookieShort(r.nextBook))})</span>${gvOutlierBadge(r)}</td>
     ${baBbCell(r, r.odds)}
