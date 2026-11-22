@@ -16158,7 +16158,7 @@ let cevStatsActive = 0;
 const cevStatsQueue = [];
 function cevStatsFromStore(pid) {
   try {
-    const o = JSON.parse(localStorage.getItem('cevStats:' + pid) || 'null');
+    const o = JSON.parse(localStorage.getItem('cevStats2:' + pid) || 'null');
     if (o && Date.now() - o.t < CEV_STATS_TTL) return o;
   } catch (e) {}
   return null;
@@ -16174,11 +16174,11 @@ function cevStatsGet(pid) {
       try {
         const r = await fetch('/.netlify/functions/player-stats?playerId=' + encodeURIComponent(pid) + '&matchType=club');
         const d = await r.json();
-        const s = d && d.ok && d.timeframes ? d.timeframes.lastSeason : null;
+        const s = d && d.ok && d.timeframes && d.timeframes.lastSeason ? { both: d.timeframes.lastSeason, cur: d.timeframes.currentSeasonAll || {} } : null;
         if (s) {
           const o = { t: Date.now(), s };
           cevStatsMem[pid] = o;
-          try { localStorage.setItem('cevStats:' + pid, JSON.stringify(o)); } catch (e) {}
+          try { localStorage.setItem('cevStats2:' + pid, JSON.stringify(o)); } catch (e) {}
           resolve(s);
         } else { delete cevStatsMem[pid]; resolve(null); }
       } catch (e) { delete cevStatsMem[pid]; resolve(null); }
@@ -16195,14 +16195,16 @@ function cevStatsPump() {
     job().finally(() => { cevStatsActive--; cevStatsPump(); });
   }
 }
-function cevStatsText(market, s) {
+function cevStatsText(market, st) {
+  const s = (st && st.both) || {};
+  const cl = k => { const c = Number(((st && st.cur) || {})[k]) || 0; return `${c}/${Math.max(0, (Number(s[k]) || 0) - c)}`; }; // this season / last season
   const f2 = n => (Number(n) || 0).toFixed(2);
   const xg = (k) => `xG ${f2(s[k])}/${f2(s.xG)}`;
   switch (market) {
     case 'Header': return `Headed shots ${s.headers} · Headed SOT ${s.headedSot} · Header goals ${s.headedGoals} · ${xg('headedXG')}`;
-    case 'Headed SOT': return `Headed SOT ${s.headedSot} · Headed shots ${s.headers}`;
+    case 'Headed SOT': return `Headed SOT ${cl('headedSot')} · Headed shots ${cl('headers')} (this/last season)`;
     case 'OTB': return `OTB goals ${s.otbGoals} · OTB SOT ${s.otbSot} · OTB shots ${s.otbShots} · ${xg('otbXG')}`;
-    case 'OTB SOT': return `OTB SOT ${s.otbSot} · OTB shots ${s.otbShots}`;
+    case 'OTB SOT': return `OTB SOT ${cl('otbSot')} · OTB shots ${cl('otbShots')} (this/last season)`;
     case 'Left Foot Goal': return xg('leftFootXG');
     case 'Right Foot Goal': return xg('rightFootXG');
     default: return '';
@@ -16356,7 +16358,7 @@ function renderEVResults(bets) {
       <td style="font-size:12px;color:var(--text3);white-space:nowrap">${bet.t ?? ''}</td>
       <td style="font-size:12px;color:var(--text3);white-space:nowrap">${boostIcon}${bet.match ?? ''}</td>
       <td style="font-size:12px;color:var(--text2)">${bet.market}</td>
-      <td style="font-weight:500">${bet.player}${(bet.playerId && !bet.noCalc && cevStatsText(bet.market, {}) !== '') ? `<div class="cev-stats" data-pid="${escapeHtml(String(bet.playerId))}" data-market="${escapeHtml(bet.market)}" style="font-weight:400;font-size:11px;color:var(--text3);white-space:nowrap;min-height:14px"></div>` : ''}</td>
+      <td style="font-weight:500">${bet.player}${(bet.playerId && !bet.noCalc && cevStatsText(bet.market, null) !== '') ? `<div class="cev-stats" data-pid="${escapeHtml(String(bet.playerId))}" data-market="${escapeHtml(bet.market)}" style="font-weight:400;font-size:11px;color:var(--text3);white-space:nowrap;min-height:14px"></div>` : ''}</td>
       <td class="r tn" style="color:var(--text2)">${baseFairCell}</td>
       <td class="r tn" style="color:var(--text2)">${bfexMatchedLabel}</td>
       <td class="r tn" style="font-weight:500"${bet.noCalcReason ? ` title="${escapeHtml(bet.noCalcReason)}"` : ''}>${fairLabel}</td>
