@@ -16147,6 +16147,79 @@ function calcEvMinPct(market) {
   return 5.0;
 }
 
+// ---- Calculated +EV: underlying FotMob counts under the player name (2026-11-22, user-requested) ----
+// Counts are this season + last season, every club/competition (player-stats `lastSeason` timeframe,
+// seasons 0-1). Fetched lazily per player after the table renders, cached in memory + localStorage
+// (6h), max 3 in flight since each player-stats call fans out to ~44 FotMob requests.
+// xG shows as "method xG / total xG". 6 Yard Box has no xG split yet, so it shows nothing.
+const CEV_STATS_TTL = 6 * 3600 * 1000;
+const cevStatsMem = {};      // pid -> {t, s} or Promise
+let cevStatsActive = 0;
+const cevStatsQueue = [];
+function cevStatsFromStore(pid) {
+  try {
+    const o = JSON.parse(localStorage.getItem('cevStats:' + pid) || 'null');
+    if (o && Date.now() - o.t < CEV_STATS_TTL) return o;
+  } catch (e) {}
+  return null;
+}
+function cevStatsGet(pid) {
+  const m = cevStatsMem[pid];
+  if (m && m.s) return Promise.resolve(m.s);
+  if (m && m.p) return m.p;
+  const stored = cevStatsFromStore(pid);
+  if (stored) { cevStatsMem[pid] = stored; return Promise.resolve(stored.s); }
+  const p = new Promise(resolve => {
+    cevStatsQueue.push(async () => {
+      try {
+        const r = await fetch('/.netlify/functions/player-stats?playerId=' + encodeURIComponent(pid) + '&matchType=club');
+        const d = await r.json();
+        const s = d && d.ok && d.timeframes ? d.timeframes.lastSeason : null;
+        if (s) {
+          const o = { t: Date.now(), s };
+          cevStatsMem[pid] = o;
+          try { localStorage.setItem('cevStats:' + pid, JSON.stringify(o)); } catch (e) {}
+          resolve(s);
+        } else { delete cevStatsMem[pid]; resolve(null); }
+      } catch (e) { delete cevStatsMem[pid]; resolve(null); }
+    });
+  });
+  cevStatsMem[pid] = { p };
+  cevStatsPump();
+  return p;
+}
+function cevStatsPump() {
+  while (cevStatsActive < 3 && cevStatsQueue.length) {
+    const job = cevStatsQueue.shift();
+    cevStatsActive++;
+    job().finally(() => { cevStatsActive--; cevStatsPump(); });
+  }
+}
+function cevStatsText(market, s) {
+  const f2 = n => (Number(n) || 0).toFixed(2);
+  const xg = (k) => `xG ${f2(s[k])}/${f2(s.xG)}`;
+  switch (market) {
+    case 'Header': return `Headed shots ${s.headers} · Headed SOT ${s.headedSot} · Header goals ${s.headedGoals} · ${xg('headedXG')}`;
+    case 'Headed SOT': return `Headed SOT ${s.headedSot} · Headed shots ${s.headers}`;
+    case 'OTB': return `OTB goals ${s.otbGoals} · OTB SOT ${s.otbSot} · OTB shots ${s.otbShots} · ${xg('otbXG')}`;
+    case 'OTB SOT': return `OTB SOT ${s.otbSot} · OTB shots ${s.otbShots}`;
+    case 'Left Foot Goal': return xg('leftFootXG');
+    case 'Right Foot Goal': return xg('rightFootXG');
+    default: return '';
+  }
+}
+function cevFillStats() {
+  document.querySelectorAll('#cev-tbody .cev-stats[data-pid]').forEach(el => {
+    if (el.dataset.done) return;
+    el.dataset.done = '1';
+    const market = el.dataset.market;
+    cevStatsGet(el.dataset.pid).then(s => {
+      el.textContent = s ? cevStatsText(market, s) : '';
+      if (s) el.title = 'This season + last season, all clubs and competitions (FotMob shotmap)';
+    });
+  });
+}
+
 // ---- Calculated +EV: per-user Remove + "Removed (n)" (2026-11-01, user-requested) ----
 // Same bet_alert_removed store as Outliers/Grosvenor, edge 'calc-ev' (key carries the edge, so
 // removing here never hides the same bet on another tab). Hidden until kickoff, this user only;
@@ -16283,7 +16356,7 @@ function renderEVResults(bets) {
       <td style="font-size:12px;color:var(--text3);white-space:nowrap">${bet.t ?? ''}</td>
       <td style="font-size:12px;color:var(--text3);white-space:nowrap">${boostIcon}${bet.match ?? ''}</td>
       <td style="font-size:12px;color:var(--text2)">${bet.market}</td>
-      <td style="font-weight:500">${bet.player}</td>
+      <td style="font-weight:500">${bet.player}${(bet.playerId && !bet.noCalc && cevStatsText(bet.market, {}) !== '') ? `<div class="cev-stats" data-pid="${escapeHtml(String(bet.playerId))}" data-market="${escapeHtml(bet.market)}" style="font-weight:400;font-size:11px;color:var(--text3);white-space:nowrap;min-height:14px"></div>` : ''}</td>
       <td class="r tn" style="color:var(--text2)">${baseFairCell}</td>
       <td class="r tn" style="color:var(--text2)">${bfexMatchedLabel}</td>
       <td class="r tn" style="font-weight:500"${bet.noCalcReason ? ` title="${escapeHtml(bet.noCalcReason)}"` : ''}>${fairLabel}</td>
@@ -16297,6 +16370,7 @@ function renderEVResults(bets) {
   });
 
   resultsEl.style.display = '';
+  cevFillStats();
 }
 
 // "Log bet" on a Calculated +EV row — jumps straight to Ledger > Bets > Buzzer > Goal SOT
