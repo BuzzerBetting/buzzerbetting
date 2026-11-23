@@ -2683,9 +2683,11 @@ tr.ba-placed > td{background:var(--green-bg) !important}
         <button onclick="setBaSort('outliers','time')" data-sort="time" style="background:none;border:none;border-left:0.5px solid var(--border);padding:7px 12px;font-size:12.5px;color:var(--text2);cursor:pointer;font-family:inherit">Start time</button>
       </div>
       <button id="ol-removed-btn" onclick="toggleOlRemoved()" title="Bets you've removed from Lineups Confirmed that haven't kicked off yet" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-eye-off"></i> Removed (0)</button>
+      <button onclick="toggleOlStats()" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-chart-bar"></i> Bet stats</button>
       <button onclick="baRefreshActive(this)" style="display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--text2);border:.5px solid var(--border);border-radius:var(--radius);padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-refresh"></i> Refresh</button>
       </div>
     </div>
+    <div id="ol-stats-panel" style="display:none;margin-bottom:10px"></div>
     <div id="ol-removed-panel" class="card" style="display:none;padding:12px 14px;margin-bottom:10px"></div>
     <div id="ba-outliers-subtabs" style="display:flex;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;width:fit-content;margin-bottom:10px"></div>
     <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px 18px;margin-bottom:10px"><div id="ba-outliers-triggers" style="display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--text2);padding-right:14px;border-right:.5px solid var(--border)"></div><div id="ba-outliers-markets" style="display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--text2)"></div><label title="Only show rows whose price beats the BookieBashing fair (rows with no BB fair are hidden too). Display only: nothing is removed from alerts or Discord." style="display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none;font-size:12.5px;color:var(--text2)"><input type="checkbox" id="bb-only-outliers" onchange="setBaBbOnly('outliers', this.checked)"> +EV vs BB only<span id="bb-only-outliers-n" style="color:var(--text3)"></span></label></div>
@@ -18456,6 +18458,7 @@ function renderBaOutliers(){
   const body = document.getElementById('ba-outliers-body');
   const countEl = document.getElementById('ba-outliers-count');
   if (!body) return;
+  { const sp = document.getElementById('ol-stats-panel'); if (sp && OL_STATS_OPEN && !sp.innerHTML) syncOlStats(); }
   syncBaSortToggle('outliers');
   renderBaOutliersSubtabs();
   renderBaOutliersMarketCheckboxes();
@@ -18836,6 +18839,108 @@ function renderNevStats(){
         listRows || '<tr><td colspan="12" style="text-align:center;color:var(--text3);padding:14px">Nothing here</td></tr>'
       }</tbody></table></div>
       <div style="font-size:11px;color:var(--text3);margin-top:8px">Logged on the server once, at the first price the tab showed (the best-EV bookmaker if several had it). Player bets (AGS, First scorer, Cards, SOT and the 2+/3+ lines, boosts included) settle automatically from FotMob after full time; a player who never came on is a void. Anything priced off Betfair (horses, win accas, tennis, darts, Win to Nil / BTTS / Correct Score / HT-FT style boosts) settles from the Betfair result. Non-runners, voided legs, players that can't be found and anything with no automatic result after 3 days go to "Needs result". "Expected" is the EV the price implied when it was posted, at the selected staking; "Exp. ROI" is that as a % of what was staked on the settled bets, to set the actual ROI against. Staking: £50 flat on every bet; full Kelly sizes each bet off a fixed £2,000 bank (2000 × edge ÷ (odds − 1), not compounded — bets with no fair price stake £0); "£300 to win" stakes 300 ÷ (odds − 1) so every winner returns £300 profit. ROI = P/L ÷ total staked on settled bets. Overall/Yesterday/Today go by the day it was first posted.</div>
+    </div>`;
+}
+// ---- Outliers bet stats (2026-11-23, user-requested) ----
+// Paper log of every posted Outlier (£50 flat, first-seen price), graded from FotMob — see
+// corner-model/outlierBetLog.js. Super sub counts on shot markets for Bet365 (any league) and for
+// other bookmakers only in the ticked leagues (big European competitions by default).
+let OL_STATS_RANGE = 'overall', OL_STATS_OPEN = false, OL_SS_OPEN = false, OL_LAST_STATS = null, OL_SS_LEAGUES = [];
+try { OL_STATS_RANGE = localStorage.getItem('bb_ol_stats_range') || 'overall'; OL_STATS_OPEN = localStorage.getItem('bb_ol_stats') === '1'; } catch(e) {}
+function toggleOlStats(){
+  OL_STATS_OPEN = !OL_STATS_OPEN;
+  try { localStorage.setItem('bb_ol_stats', OL_STATS_OPEN ? '1' : '0'); } catch(e) {}
+  syncOlStats();
+}
+function syncOlStats(){
+  const panel = document.getElementById('ol-stats-panel');
+  if (!panel) return;
+  panel.style.display = OL_STATS_OPEN ? '' : 'none';
+  if (OL_STATS_OPEN) loadOlStats();
+}
+function setOlStatsRange(r){ OL_STATS_RANGE = r; try { localStorage.setItem('bb_ol_stats_range', r); } catch(e) {} loadOlStats(); }
+async function loadOlStats(){
+  const panel = document.getElementById('ol-stats-panel');
+  if (!panel) return;
+  if (!panel.innerHTML) panel.innerHTML = `<div class="card" style="padding:20px;text-align:center;color:var(--text3);font-size:13px"><i class="ti ti-loader"></i> Loading bet stats…</div>`;
+  try {
+    const [d, l] = await Promise.all([ledgerApi(`outlier-bets/stats?range=${OL_STATS_RANGE}`), ledgerApi('outlier-bets/ss-leagues')]);
+    if (l && l.ok) OL_SS_LEAGUES = l.leagues || [];
+    if (!d || !d.ok) { panel.innerHTML = `<div class="card" style="padding:16px;color:var(--text3);font-size:13px">Bet stats not available.</div>`; return; }
+    renderOlStats(d);
+  } catch (e) { panel.innerHTML = `<div class="card" style="padding:16px;color:var(--text3);font-size:13px">Failed to load bet stats.</div>`; }
+}
+async function setOlSsLeague(leagueId, enabled){
+  try {
+    const d = await ledgerApi('outlier-bets/ss-leagues', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ leagueId, enabled }) });
+    if (!d || !d.ok) { alert((d && d.error) || 'Could not save.'); return; }
+  } catch(e) { alert('Network error saving.'); return; }
+  loadOlStats();
+}
+function toggleOlSsLeagues(){ OL_SS_OPEN = !OL_SS_OPEN; if (OL_LAST_STATS) renderOlStats(OL_LAST_STATS); }
+async function showOlWinners(market){
+  const overlay = document.getElementById('calc-ev-winners-modal-overlay');
+  const title = document.getElementById('calc-ev-winners-title');
+  const body = document.getElementById('calc-ev-winners-body');
+  const win = betStatsWinnersWindow(OL_STATS_RANGE);
+  if (title) title.textContent = `Outliers ${market || 'all markets'} — winners, ${win.label}`;
+  if (body) body.innerHTML = `<div style="text-align:center;color:var(--text3);padding:16px"><i class="ti ti-loader"></i> Loading…</div>`;
+  if (overlay) overlay.style.display = 'flex';
+  let d;
+  try { d = await ledgerApi(`outlier-bets/winners?market=${encodeURIComponent(market || '')}&${win.q}`); } catch (e) { d = null; }
+  if (!d || !d.ok) { if (body) body.innerHTML = `<div style="color:var(--text3);font-size:13px">Failed to load winners.</div>`; return; }
+  const rows = d.rows || [];
+  if (!rows.length) { body.innerHTML = `<div style="color:var(--text3);font-size:13px;padding:8px 0">No winners ${win.none}.</div>`; return; }
+  body.innerHTML = `<div style="font-size:11px;color:var(--text3);margin-bottom:8px">${rows.length} winner${rows.length === 1 ? '' : 's'}, most recent first · £50 flat stake</div>
+    <div style="overflow-x:auto"><table class="dt" style="min-width:640px"><thead><tr><th>Match</th><th>Market</th><th>Player</th><th class="r">Odds</th><th class="r">Book</th><th class="r">P/L</th></tr></thead><tbody>${rows.map(r => {
+      const viaSub = r.won !== 1;
+      return `<tr><td style="font-size:12.5px">${escapeHtml(r.match || '')}${r.league_name ? `<div style="font-size:11px;color:var(--text3)">${escapeHtml(r.league_name)}</div>` : ''}</td>
+      <td style="font-size:12.5px">${escapeHtml(r.market)}</td>
+      <td style="font-size:12.5px;font-weight:500">${escapeHtml(r.selection || '')}${viaSub ? `<div style="font-size:11px;color:var(--green)">Won via super sub${r.sub_name ? ' → ' + escapeHtml(r.sub_name) : ''}</div>` : ''}</td>
+      <td class="r tn" style="font-weight:600">${Number(r.odds).toFixed(2)}</td><td class="r tn">${escapeHtml(ocBookieShort(r.top_book) || r.top_book || '')}</td>
+      <td class="r tn" style="color:var(--green)">+£${(50 * (r.odds - 1)).toFixed(2)}</td></tr>`; }).join('')}</tbody></table></div>`;
+}
+function renderOlStats(d){
+  OL_LAST_STATS = d;
+  const panel = document.getElementById('ol-stats-panel');
+  if (!panel) return;
+  const o = d.overall || {};
+  const pctFmt = n => n == null ? '—' : Number(n).toFixed(1) + '%';
+  const plFmt = n => ((n || 0) >= 0 ? '+£' : '-£') + Math.abs(n || 0).toFixed(2);
+  const roiFmt = n => n == null ? '—' : (n >= 0 ? '+' : '') + Number(n).toFixed(1) + '%';
+  const plCol = n => (n || 0) >= 0 ? 'var(--green)' : 'var(--red)';
+  const tile = (label, value, color) => `<div class="card" style="padding:10px 12px"><div style="font-size:10.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">${label}</div><div style="font-size:18px;font-weight:700${color ? ';color:' + color : ''}">${value}</div></div>`;
+  const rangeTabs = [['overall', 'Overall'], ['yesterday', 'Yesterday'], ['today', 'Today']].map(([key, label]) => {
+    const active = OL_STATS_RANGE === key;
+    return `<button onclick="setOlStatsRange('${key}')" style="padding:6px 14px;border:.5px solid var(--border);border-radius:var(--radius);background:${active ? 'var(--brand)' : 'var(--surface)'};color:${active ? '#fff' : 'var(--text2)'};font-weight:${active ? 600 : 400};font-size:12.5px;cursor:pointer;font-family:inherit">${label}</button>`;
+  }).join('');
+  const tbl = (title, keyHead, list, keyFn, clickMarket) => `
+    <div style="font-size:12.5px;font-weight:600;margin:4px 0 6px">${title}</div>
+    <div style="overflow-x:auto;margin-bottom:14px"><table class="dt" style="min-width:640px"><thead><tr><th>${keyHead}</th><th class="r">Bets</th><th class="r">Settled</th><th class="r" title="Stake back — player not in the XI and never came on">Void</th><th class="r">Won</th><th class="r">Win%</th><th class="r">Avg odds</th><th class="r">P/L</th><th class="r">ROI</th><th class="r" title="Strict (posted player only, no super sub) P/L and ROI">Strict P/L</th><th class="r" title="Bets that lost strictly but won because of the replacement (super sub)">Sub wins</th></tr></thead><tbody>${
+    (list || []).length ? list.map(m => `<tr ${clickMarket ? `onclick="showOlWinners('${escapeHtml(m.market).replace(/'/g, "\\'")}')" style="cursor:pointer" title="Click for this market's winners"` : ''}>
+      <td style="font-size:12.5px">${keyFn(m)}</td><td class="r tn">${m.bets}</td><td class="r tn">${m.settled}</td><td class="r tn">${m.voids}</td><td class="r tn">${m.wins}</td>
+      <td class="r tn">${pctFmt(m.winPct)}</td><td class="r tn">${m.avgOdds != null ? Number(m.avgOdds).toFixed(2) : '—'}</td>
+      <td class="r tn" style="color:${plCol(m.pl)}">${plFmt(m.pl)}</td><td class="r tn" style="color:${plCol(m.pl)}">${roiFmt(m.roi)}</td>
+      <td class="r tn" style="color:${plCol(m.plStrict)}">${plFmt(m.plStrict)} <span style="color:var(--text3);font-size:11px">${roiFmt(m.roiStrict)}</span></td>
+      <td class="r tn">${m.subRescues}</td></tr>`).join('') : '<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:14px">No bets logged yet</td></tr>'
+    }</tbody></table></div>`;
+  const ssList = OL_SS_OPEN ? `<div class="card" style="padding:10px 14px;margin-bottom:12px"><div style="font-size:11px;color:var(--text3);margin-bottom:6px">Super sub applies to shot markets (Shots N+, SOT) for Bet365 in every league, and for other bookmakers only in the leagues ticked here (big European competitions by default). New leagues appear once a bet from them is logged:</div>${
+    OL_SS_LEAGUES.map(l => `<label style="display:flex;align-items:center;gap:8px;padding:3px 2px;font-size:12.5px;cursor:pointer"><input type="checkbox" ${l.enabled ? 'checked' : ''} onchange="setOlSsLeague('${escapeHtml(String(l.leagueId))}', this.checked)"> <span>${escapeHtml(l.leagueName || ('League ' + l.leagueId))} <span style="color:var(--text3);font-size:11px">${l.bets} bet${l.bets === 1 ? '' : 's'}</span></span></label>`).join('')}</div>` : '';
+  panel.innerHTML = `
+    <div class="card" style="padding:14px 16px">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px">${rangeTabs}
+        <button onclick="toggleOlSsLeagues()" style="padding:6px 12px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text2);font-size:12.5px;cursor:pointer;font-family:inherit"><i class="ti ti-arrows-exchange"></i> Super sub leagues (${OL_SS_LEAGUES.filter(l => l.enabled).length}) <i class="ti ti-chevron-${OL_SS_OPEN ? 'up' : 'down'}"></i></button></div>
+      ${ssList}
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:14px">
+        ${tile('Posted', o.bets || 0)}${tile('Settled', o.settled || 0)}${tile('Won', `${o.wins || 0} <span style="font-size:12px;font-weight:500;color:var(--text3)">${pctFmt(o.winPct)}</span>`)}
+        ${tile('P/L (£50 flat)', plFmt(o.pl), plCol(o.pl))}${tile('ROI', roiFmt(o.roi), plCol(o.pl))}${tile('P/L strict', plFmt(o.plStrict), plCol(o.plStrict))}${tile('Void', o.voids || 0)}
+      </div>
+      ${tbl('By market', 'Market', d.byMarket, m => escapeHtml(m.market), true)}
+      ${tbl('By bookmaker posted', 'Book', d.byBook, m => escapeHtml(ocBookieName(m.book) || m.book || '?'))}
+      ${tbl('By trigger', 'Trigger', d.byTrigger, m => m.trigger === 'bb' ? 'BB +15%' : '50%+ vs next')}
+      ${tbl('Lineups confirmed vs pre-lineup', 'When', d.byLineup, m => m.confirmed ? 'Lineups confirmed' : 'Pre-lineup')}
+      ${tbl('By odds', 'Odds', d.byOdds, m => escapeHtml(m.label))}
+      <div style="font-size:11px;color:var(--text3)">Every row the tab posts is logged once on the server at its first price (the posted bookmaker) and settles automatically from FotMob after full time. Win% / P/L / ROI use the super-sub result where it applies (shot markets: Bet365 anywhere, other books in ticked leagues); Strict is the posted player alone. Void = player never in the XI and never came on. Bench players who come on are graded normally.</div>
     </div>`;
 }
 function gvStatsOn(){ try { return localStorage.getItem('bb_gv_stats') === '1'; } catch(e) { return false; } }

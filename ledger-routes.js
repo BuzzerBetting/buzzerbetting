@@ -3439,6 +3439,53 @@ router.post('/grosvenor-bets/ss-leagues', requireAdmin, (req, res) => {
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// ================== OUTLIERS BET LOG (2026-11-23) ==================
+// Every row the Bet Alerts Outliers tab posts, logged once at first sight and graded from FotMob
+// (strict + super sub where the bookmaker/league runs it) — see corner-model/outlierBetLog.js.
+const outlierBetLog = (() => {
+  try { return require('./corner-model/outlierBetLog'); }
+  catch (e) { console.error('[outlier-bets] outlierBetLog not loaded:', e.message); return null; }
+})();
+
+// POST /api/ledger/outlier-bets/ingest — body: { rows: [<oc_outliers.json rows + selId>] }
+router.post('/outlier-bets/ingest', (req, res) => {
+  if (!outlierBetLog) return res.json({ ok: true, inserted: 0 });
+  try {
+    const rows = Array.isArray(req.body && req.body.rows) ? req.body.rows : [];
+    res.json({ ok: true, ...outlierBetLog.recordBets(rows) });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+router.get('/outlier-bets/stats', async (req, res) => {
+  if (!outlierBetLog) return res.json({ ok: true, overall: {}, byMarket: [] });
+  try {
+    try { await outlierBetLog.settleAll(); } catch (e) { /* try again next read */ }
+    const range = ['today', 'yesterday'].includes(req.query.range) ? req.query.range : 'overall';
+    res.json({ ok: true, ...outlierBetLog.getStats(range) });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+router.get('/outlier-bets/winners', (req, res) => {
+  if (!outlierBetLog) return res.json({ ok: true, rows: [] });
+  const hours = Math.min(Math.max(parseInt(req.query.hours, 10) || 24, 1), 720);
+  try { res.json({ ok: true, rows: outlierBetLog.getWinners(req.query.market || '', hours, req.query.range) }); }
+  catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+router.get('/outlier-bets/ss-leagues', async (req, res) => {
+  if (!outlierBetLog) return res.json({ ok: true, leagues: [] });
+  try {
+    try { await outlierBetLog.backfillLeagues(); } catch (e) { /* partial list is fine */ }
+    res.json({ ok: true, leagues: outlierBetLog.getSsLeagues() });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+router.post('/outlier-bets/ss-leagues', requireAdmin, (req, res) => {
+  if (!outlierBetLog) return res.json({ ok: false, error: 'Outlier bet log not loaded' });
+  try {
+    const { leagueId, enabled } = req.body || {};
+    if (leagueId == null || leagueId === '') return res.status(400).json({ ok: false, error: 'leagueId required' });
+    outlierBetLog.setSsLeague(leagueId, !!enabled);
+    res.json({ ok: true, leagues: outlierBetLog.getSsLeagues() });
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+});
+
 // ================== QUICK BET — parse a placed-bet screenshot ==================
 //
 // POST /api/ledger/parse-betslip  { image: "<base64>", mediaType: "image/png" }
