@@ -10649,7 +10649,7 @@ function renderOddscheckerEV(){
 // 2026-11-15 (user): PricedUp horse singles are hidden from the VAs (they'd back them blind — the
 // edge only holds if laid off straight away). Discord: discord-alerts-poller.js NEV_STAFF_NO_PU_SINGLES.
 const NEV_STAFF_NO_PU_SINGLES = ['Rafael', 'Russ', 'Chester'];
-function nevStaffHidden(b){ return NEV_STAFF_NO_PU_SINGLES.includes(CURRENT_USERNAME) && b && b.mkt === 'Horse Win' && /pricedup/i.test(String(ocBookieName(b.bk) || b.bk || '')); }
+function nevStaffHidden(b){ if(b && CURRENT_USERNAME === 'Rafael' && /celeb/i.test(String(b.mkt || '') + ' ' + String(b.match || ''))) return true; /* 2026-11-23 (user): no I'm A Celeb bets for Rafael */ return NEV_STAFF_NO_PU_SINGLES.includes(CURRENT_USERNAME) && b && b.mkt === 'Horse Win' && /pricedup/i.test(String(ocBookieName(b.bk) || b.bk || '')); }
 // ---- Lay column + Back & Lay (2026-11-15, user) ----
 // Single bets with one Betfair leg (b.legs) get the live best lay (+ £ available) from
 // /bet-alert-bfex-book, and a "B&L" button showing the profit locked by backing £100 at the

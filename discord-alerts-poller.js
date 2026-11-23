@@ -571,6 +571,8 @@ async function tick() {
               if (placed.has(bk) || (b.removedKey && removed.has(b.removedKey))) continue;
               // 2026-11-15 (user): VAs never get PricedUp horse singles (index.html nevStaffHidden).
               if (edge === 'oc-ev' && NEV_STAFF_NO_PU_SINGLES.has(h.username) && b.market === 'Horse Win' && /pricedup/i.test(String(b.bk || ''))) continue;
+              // 2026-11-23 (user): Rafael gets no I'm A Celeb bets (index.html nevStaffHidden).
+              if (edge === 'oc-ev' && h.username === 'Rafael' && /celeb/i.test(String(b.market || '') + ' ' + String(b.match || ''))) continue;
               const key = `${bk} | ${norm(b.bk)}${b.keyExtra ? ' | ' + norm(b.keyExtra) : ''}`;
               const prev = getSent.get(h.username, h.slot, edge, key);
               let post = false, wasPrev = null;
