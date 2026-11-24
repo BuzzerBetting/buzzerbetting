@@ -19429,14 +19429,15 @@ function epNextBest(r){
   const med = tail.length >= 2 ? (tail.length % 2 ? tail[(tail.length - 1) / 2] : (tail[tail.length / 2 - 1] + tail[tail.length / 2]) / 2) : null;
   return { bk: nb.bk, odds: nb.odds, gap: med ? (nb.odds / med - 1) * 100 : null };
 }
+const EP_BB_TRIGGER_PCT = 15; // 2026-11-24: a price 15%+ over BB's fair is listed whatever the form-model EV (matches the server's early_prices_scan.py)
 function epVisible(){
   const minEv = epPref('minEv', 10), offCons = epPref('offCons', false), hideStale = epPref('hideStale', false), hit5 = epPref('hit5', true);
   const mk = new Set(epPref('markets', EP_MARKETS));
   return BA_EARLY_ROWS.map(r => { const p = epPick(r); return p ? Object.assign({}, r, { showBk: p.bk, showOdds: p.odds, showEv: p.ev }) : null; })
+    .map(r => r && Object.assign(r, { bbq: !!(r.bbFair && r.bbFair > 1 && r.showOdds >= r.bbFair * (1 + EP_BB_TRIGGER_PCT / 100)) }))
     .filter(r => r && mk.has(r.mkt) && !gvKickoffPassed(r.d, r.t)
       && !(hideStale && r.showBk === r.bk && r.ageMin != null && r.ageMin >= 1440)
-      && (!hit5 || epHit5(r))
-      && (r.showEv ?? 0) >= minEv
+      && (r.bbq || ((!hit5 || epHit5(r)) && (r.showEv ?? 0) >= minEv))
       && (!offCons || (r.consensus && (r.showOdds / r.consensus - 1) * 100 >= EP_OFFCONS_PCT)));
 }
 function renderBaEarly(){
@@ -19487,7 +19488,7 @@ function renderBaEarly(){
     <td class="r tn" style="font-weight:600;color:var(--green);white-space:nowrap">${Number(r.showOdds).toFixed(2)} <span style="color:var(--text3);font-size:11px;font-weight:400">(${escapeHtml(ocBookieShort(r.showBk))})</span>${epAgeTag(r)}${also.length ? `<div style="font-size:11px;color:var(--text3);font-weight:400">also ${also.map(a => `${escapeHtml(ocBookieShort(a.bk))} ${Number(a.odds).toFixed(2)}`).join(', ')}</div>` : ''}</td>
     ${baCheckedCell(baCheckedIso(r, r.showBk))}
     <td class="r tn" style="color:var(--text2)">${Number(r.fair).toFixed(2)}</td>
-    <td class="r"><span class="badge" style="background:var(--green-bg);color:var(--green)">+${Number(r.showEv).toFixed(1)}%</span></td>
+    <td class="r"><span class="badge" title="vs the form-model fair" style="background:${(r.showEv ?? 0) >= 0 ? 'var(--green-bg)' : 'var(--surface2)'};color:${(r.showEv ?? 0) >= 0 ? 'var(--green)' : 'var(--text3)'}">${(r.showEv ?? 0) >= 0 ? '+' : ''}${Number(r.showEv).toFixed(1)}%</span>${r.bbq ? `<div><span class="badge" title="Price is ${EP_BB_TRIGGER_PCT}%+ above BookieBashing's fair — paper-traded vs BB" style="background:var(--amber-bg);color:var(--amber);margin-top:2px">vs BB +${((r.showOdds / r.bbFair - 1) * 100).toFixed(0)}%</span></div>` : ''}</td>
     ${baBbCell(r, r.showOdds)}
     <td class="r tn" style="color:var(--text2);white-space:nowrap">${nb ? `${Number(nb.odds).toFixed(2)} <span style="color:var(--text3);font-size:11px">(${escapeHtml(ocBookieShort(nb.bk))})</span>` : '—'}${nb && nb.gap != null ? ` <span class="badge" title="Next best vs the median of the remaining books" style="background:${off ? 'var(--amber-bg)' : 'var(--surface2)'};color:${off ? 'var(--amber)' : 'var(--text3)'}">${nb.gap >= 0 ? '+' : ''}${nb.gap.toFixed(0)}%</span>` : ''}</td>
     <td class="r tn" style="color:var(--text2)">${r.nBooks ?? '—'}</td>
@@ -19517,10 +19518,14 @@ function renderEpResults(){
     const d = b.kickoffUtc ? new Date(b.kickoffUtc).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
     return `<tr><td style="font-size:12px;color:var(--text2);white-space:nowrap">${escapeHtml(d)}</td><td style="font-size:12px">${escapeHtml(b.match || '')}</td><td style="font-size:12px">${escapeHtml(b.mkt || '')}</td><td style="font-weight:500">${escapeHtml(b.sel || '')}</td><td style="font-size:12px;color:var(--text3)">${escapeHtml(b.last5 || '')}</td><td class="r tn">${Number(b.odds).toFixed(2)} <span style="color:var(--text3);font-size:11px">(${escapeHtml(ocBookieShort(b.bk))})</span></td><td class="r tn" style="color:var(--text2)">${Number(b.fair).toFixed(2)}</td><td class="r tn">+${Number(b.ev).toFixed(0)}%</td><td class="r tn">${b.actual != null ? b.actual : '—'}</td><td style="color:${c};font-weight:600;text-transform:uppercase;font-size:11.5px">${escapeHtml(b.result || '')}</td></tr>`;
   }).join('');
+  const BB = R.bb;
+  const bbPanel = BB && BB.all && BB.all.bets ? `<div style="font-size:12.5px;font-weight:600;margin:12px 0 6px">Paper bets vs BB fair <span style="font-weight:400;color:var(--text3);font-size:12px">— price 15%+ over BB's fair at first sight (since 24 Nov); Exp. won uses BB's fair</span></div>
+    <div style="overflow-x:auto"><table class="dt" style="min-width:620px">${head}<tbody>${line('All BB-triggered', Object.assign({ dnp: 0 }, BB.all))}${line('BB only (form said no)', Object.assign({ dnp: 0 }, BB.bbOnly))}${Object.entries(BB.byEv || {}).map(([k, a]) => line('BB ' + k, Object.assign({ dnp: 0 }, a))).join('')}</tbody></table></div>` : '<div style="font-size:12px;color:var(--text3);margin-top:12px">Paper bets vs BB fair: none settled yet.</div>';
   el.innerHTML = `<div style="font-size:13px;font-weight:600;margin-bottom:8px">Paper-trade results <span style="font-weight:400;color:var(--text3);font-size:12px">— every price at first sight, 1pt level stakes at that price; DNP (didn't play) excluded</span></div>
     <div style="overflow-x:auto"><table class="dt" style="min-width:620px">${head}<tbody>${line('All', R.all)}${Object.entries(R.byMarket || {}).map(([k, a]) => line(k, a)).join('')}</tbody></table></div>
     <div style="font-size:12.5px;font-weight:600;margin:12px 0 6px">By EV at first sight</div>
     <div style="overflow-x:auto"><table class="dt" style="min-width:620px">${head}<tbody>${Object.entries(R.byEv || {}).map(([k, a]) => line(k, a)).join('')}</tbody></table></div>
+    ${bbPanel}
     <div style="font-size:12.5px;font-weight:600;margin:12px 0 6px">Latest settled</div>
     <div style="overflow-x:auto;max-height:420px;overflow-y:auto"><table class="dt" style="min-width:900px"><thead><tr><th>Kickoff</th><th>Match</th><th>Market</th><th>Player</th><th>Last 5</th><th class="r">Odds</th><th class="r">Fair</th><th class="r">EV</th><th class="r">Actual</th><th>Result</th></tr></thead><tbody>${recent}</tbody></table></div>`;
 }
