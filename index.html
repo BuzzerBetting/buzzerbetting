@@ -16212,7 +16212,53 @@ function cevStatsText(market, st) {
     default: return '';
   }
 }
+// ---- Calculated +EV: last 5 games, did he do THIS bet's method in each (2026-11-24, user-requested) ----
+// player-stats?mode=last5: his last 5 appearances (any club/competition) with per-match method counts.
+const CEV_L5_FIELD = { 'Header': 'hdrGoal', 'Headed SOT': 'hdrSot', 'OTB': 'otbGoal', 'OTB SOT': 'otbSot', 'Left Foot Goal': 'lfGoal', 'Right Foot Goal': 'rfGoal' };
+const CEV_L5_LABEL = { hdrGoal: 'header goal', hdrSot: 'headed SOT', otbGoal: 'outside-the-box goal', otbSot: 'outside-the-box SOT', lfGoal: 'left-foot goal', rfGoal: 'right-foot goal' };
+const cevL5Mem = {};
+function cevL5Get(pid) {
+  if (cevL5Mem[pid]) return cevL5Mem[pid];
+  try {
+    const o = JSON.parse(localStorage.getItem('cevL5:' + pid) || 'null');
+    if (o && Date.now() - o.t < 3 * 3600 * 1000) return (cevL5Mem[pid] = Promise.resolve(o.g));
+  } catch (e) {}
+  const p = new Promise(resolve => {
+    cevStatsQueue.push(async () => {
+      try {
+        const d = await (await fetch('/.netlify/functions/player-stats?mode=last5&playerId=' + encodeURIComponent(pid))).json();
+        if (d && d.ok && d.games) { try { localStorage.setItem('cevL5:' + pid, JSON.stringify({ t: Date.now(), g: d.games })); } catch (e) {} resolve(d.games); }
+        else { delete cevL5Mem[pid]; resolve(null); }
+      } catch (e) { delete cevL5Mem[pid]; resolve(null); }
+    });
+  });
+  cevL5Mem[pid] = p;
+  cevStatsPump();
+  return p;
+}
+function cevL5Html(market, games) {
+  const f = CEV_L5_FIELD[market];
+  if (!f || !games || !games.length) return '';
+  const hits = games.filter(g => g[f] >= 1).length;
+  const dots = games.map(g => {
+    const on = g[f] >= 1;
+    const tip = new Date(g.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) + ' v ' + g.opp + ' · ' + g.mins + "' · " + g[f] + ' ' + CEV_L5_LABEL[f];
+    return '<span title="' + escapeHtml(tip) + '" style="display:inline-block;min-width:15px;text-align:center;padding:0 3px;margin-right:2px;border-radius:4px;font-weight:600;background:' + (on ? 'var(--green-bg)' : 'var(--surface2)') + ';color:' + (on ? 'var(--green)' : 'var(--text3)') + '">' + g[f] + '</span>';
+  }).join('');
+  return '<span>Last ' + games.length + ' (' + CEV_L5_LABEL[f] + '):</span>' + dots + '<span style="font-weight:600;color:' + (hits ? 'var(--green)' : 'var(--text3)') + '">' + hits + '/' + games.length + '</span>';
+}
+function cevFillLast5() {
+  document.querySelectorAll('#cev-tbody .cev-l5[data-pid]').forEach(el => {
+    if (el.dataset.done) return;
+    el.dataset.done = '1';
+    cevL5Get(el.dataset.pid).then(g => {
+      el.innerHTML = g ? cevL5Html(el.dataset.market, g) : '';
+      if (g) el.title = 'Last 5 appearances (any club/competition), oldest to newest. Green = he did it at least once in that game. FotMob shotmap.';
+    });
+  });
+}
 function cevFillStats() {
+  cevFillLast5();
   document.querySelectorAll('#cev-tbody .cev-stats[data-pid]').forEach(el => {
     if (el.dataset.done) return;
     el.dataset.done = '1';
@@ -16360,7 +16406,7 @@ function renderEVResults(bets) {
       <td style="font-size:12px;color:var(--text3);white-space:nowrap">${bet.t ?? ''}</td>
       <td style="font-size:12px;color:var(--text3);white-space:nowrap">${boostIcon}${bet.match ?? ''}</td>
       <td style="font-size:12px;color:var(--text2)">${bet.market}</td>
-      <td style="font-weight:500">${bet.player}${(bet.playerId && !bet.noCalc && cevStatsText(bet.market, null) !== '') ? `<div class="cev-stats" data-pid="${escapeHtml(String(bet.playerId))}" data-market="${escapeHtml(bet.market)}" style="font-weight:400;font-size:11px;color:var(--text3);white-space:nowrap;min-height:14px"></div>` : ''}</td>
+      <td style="font-weight:500">${bet.player}${(bet.playerId && !bet.noCalc && cevStatsText(bet.market, null) !== '') ? `<div class="cev-stats" data-pid="${escapeHtml(String(bet.playerId))}" data-market="${escapeHtml(bet.market)}" style="font-weight:400;font-size:11px;color:var(--text3);white-space:nowrap;min-height:14px"></div>${CEV_L5_FIELD[bet.market] ? `<div class="cev-l5" data-pid="${escapeHtml(String(bet.playerId))}" data-market="${escapeHtml(bet.market)}" style="font-weight:400;font-size:11px;color:var(--text3);white-space:nowrap;display:flex;align-items:center;gap:4px;min-height:15px;margin-top:2px"></div>` : ''}` : ''}</td>
       <td class="r tn" style="color:var(--text2)">${baseFairCell}</td>
       <td class="r tn" style="color:var(--text2)">${bfexMatchedLabel}</td>
       <td class="r tn" style="font-weight:500"${bet.noCalcReason ? ` title="${escapeHtml(bet.noCalcReason)}"` : ''}>${fairLabel}</td>

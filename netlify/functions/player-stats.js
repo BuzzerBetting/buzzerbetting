@@ -22,6 +22,7 @@ exports.handler = async (event) => {
   const { playerId, matchType, mode } = event.queryStringParameters || {};
   if (!playerId) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'playerId required' }) };
   if (mode === 'career') return careerTotals(playerId);
+  if (mode === 'last5') return last5Games(playerId);
 
   const isInternational = matchType === 'international';
 
@@ -222,3 +223,44 @@ function sum(shots) { return shots.reduce((t, s) => t + (s.expectedGoals || 0), 
 // method's xG rests on one or two big chances.
 function top2(shots) { return shots.map(s => s.expectedGoals || 0).sort((a, b) => b - a).slice(0, 2).map(r); }
 function r(n) { return Math.round((n + 1e-9) * 100) / 100; }
+
+
+// Last 5 appearances with per-match method counts (2026-11-24, Calculated +EV "Last 5" line).
+// Appearances come from playerData.recentMatches (so a game with no shots still shows as 0);
+// the method counts come from the player's shotmap (seasons 0 and 1, every club/competition) by matchId.
+async function last5Games(playerId) {
+  try {
+    const seasonIds = [];
+    for (let s = 0; s <= 1; s++) for (let c = 0; c <= 10; c++) seasonIds.push(`${s}-${c}`);
+    const [pd, ...sm] = await Promise.all([
+      fetch(`https://www.fotmob.com/api/data/playerData?id=${playerId}`, { headers: FOTMOB_HEADERS }).then(r => r.ok ? r.json() : null).catch(() => null),
+      ...seasonIds.map(id => fetch(`https://www.fotmob.com/api/data/playerStats?playerId=${playerId}&seasonId=${id}&isFirstSeason=false`, { headers: FOTMOB_HEADERS })
+        .then(r => r.ok ? r.json() : null).catch(() => null)),
+    ]);
+    const recent = ((pd && pd.recentMatches) || [])
+      .filter(m => m.playedInMatch && !m.onBench && (m.minutesPlayed || 0) > 0 && m.matchDate && new Date(m.matchDate.utcTime) < new Date())
+      .sort((a, b) => new Date(b.matchDate.utcTime) - new Date(a.matchDate.utcTime))
+      .slice(0, 5);
+    if (!recent.length) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'No recent appearances' }) };
+    const byMatch = {};
+    for (const d of sm) for (const sh of ((d && d.shotmap) || [])) (byMatch[sh.matchId] = byMatch[sh.matchId] || []).push(sh);
+    const onTgt = sh => (sh.eventType === 'Goal' || sh.eventType === 'AttemptSaved') && !sh.isBlocked;
+    const games = recent.map(m => {
+      const shots = byMatch[m.id] || [];
+      const n = f => shots.filter(f).length;
+      return {
+        matchId: m.id, date: m.matchDate.utcTime, opp: m.opponentTeamName, mins: m.minutesPlayed,
+        goals: m.goals || 0, shots: shots.length, sot: n(onTgt),
+        hdrGoal: n(x => x.shotType === 'Header' && x.eventType === 'Goal'),
+        hdrSot: n(x => x.shotType === 'Header' && onTgt(x)),
+        otbGoal: n(x => x.isFromInsideBox === false && x.eventType === 'Goal'),
+        otbSot: n(x => x.isFromInsideBox === false && onTgt(x)),
+        lfGoal: n(x => x.shotType === 'LeftFoot' && x.eventType === 'Goal'),
+        rfGoal: n(x => x.shotType === 'RightFoot' && x.eventType === 'Goal'),
+      };
+    }).reverse(); // oldest to newest, like the other last-5 displays
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, playerId, games }) };
+  } catch (err) {
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: err.message }) };
+  }
+}
