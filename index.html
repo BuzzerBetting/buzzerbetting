@@ -2658,6 +2658,22 @@ tr.ba-placed > td{background:var(--green-bg) !important}
        trace was a WARNING log line nobody watched (found the Man City v Norwich case, see
        oc_scraper_service._TEAM_ALIASES, only by manually chasing a specific missing bet).
        Informational, not an alert — no sound, unlike Errors above. -->
+  <div id="ba-panel-bbtracker" class="ba-panel" style="display:none">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+      <select id="bba-ev" onchange="renderBaBbTracker()" style="padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text1);font-size:13px;font-family:inherit">
+        <option value="all">All EV</option>
+        <option value="0" selected>+EV only</option>
+        <option value="5">EV ≥ 5%</option>
+        <option value="10">EV ≥ 10%</option>
+      </select>
+      <select id="bba-book" onchange="renderBaBbTracker()" style="padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text1);font-size:13px;font-family:inherit"><option value="">All bookies</option></select>
+      <input id="bba-search" type="search" placeholder="Search event / selection" oninput="renderBaBbTracker()" style="padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text1);font-size:13px;font-family:inherit;min-width:200px">
+      <span id="bba-meta" style="font-size:12px;color:var(--text3)"></span>
+    </div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:860px"><thead><tr><th>KO</th><th>Event</th><th>Selection</th><th>Bookie</th><th class="r">Odds</th><th class="r">Fair</th><th class="r">EV%</th><th>Credit</th><th>Added</th></tr></thead><tbody id="bba-body"></tbody></table></div></div>
+    <div class="note"><i class="ti ti-info-circle"></i> BookieBashing's Bet Tracker, copied as-is: active bets kicking off in the next 18 hours (plus "early" bets) with BB's own odds and fair odds. These are BB's fairs, not ours, and BB's odds can be stale, so treat each row as a lead to check. Sound alerts are off by default on this tab.</div>
+  </div>
+
   <div id="ba-panel-unmatched" class="ba-panel" style="display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
       <div class="smeta" style="margin:0"><span class="pulse"></span><strong id="ba-unmatched-count" style="color:var(--amber);font-weight:500">—</strong></div>
@@ -17347,6 +17363,7 @@ const BA_EDGES = [
   { key: 'unmatched', label: 'OC Coverage',   panel: 'ba-panel-unmatched', priced: false },
   { key: 'outliers', label: 'Outliers',       panel: 'ba-panel-outliers', priced: false },
   { key: 'grosvenor', label: 'Grosvenor',     panel: 'ba-panel-grosvenor', priced: false },
+  { key: 'bbtracker', label: 'BB Tracker',    panel: 'ba-panel-bbtracker', priced: false },
 ].filter(e => e.key !== 'corners' || CORNER_PREDICTIONS_ENABLED);
 let BA_BOOKS = null;             // { canonicalBookie: bool } — null until first load (= all on)
 let BA_ACTIVE = (function(){ try { return localStorage.getItem('bb_betalert_tab') || 'oc-ev'; } catch(e) { return 'oc-ev'; } })();
@@ -17509,7 +17526,7 @@ function baUpdateMenuTag(){
   // rest"), not bets priced against a fair, so they're left out as well.
   // Early Prices is a paper-trade model (2026-10-24) — kept out of the value count for now.
   // Ones to Watch ('watch') left out too (2026-11-01, user request).
-  const NOT_VALUE = new Set(['corners', 'unmatched', 'errors', 'outliers', 'grosvenor', 'early', 'watch']);
+  const NOT_VALUE = new Set(['corners', 'unmatched', 'errors', 'outliers', 'grosvenor', 'early', 'watch', 'bbtracker']);
   const corners = BA_COUNTS['corners'] || 0;
   const value = BA_EDGES.reduce((s, e) => s + (NOT_VALUE.has(e.key) ? 0 : (BA_COUNTS[e.key] || 0)), 0);
   el.textContent = (value || corners) ? `${value} value · ${corners} corner` : '—';
@@ -17646,9 +17663,59 @@ function loadBaEdge(key, isPoll){
     loadBaGrosvenor();
   } else if (key === 'early') {
     loadBaEarly();
+  } else if (key === 'bbtracker') {
+    loadBaBbTracker();
   } else {
     loadBaStubFeed(key);
   }
+}
+
+// ---- BB Tracker tab (2026-11-25): BookieBashing Bet Tracker copy, all roles, sound off by default ----
+let BA_BBT_BETS = [];
+async function loadBaBbTracker(){
+  const meta = document.getElementById('bba-meta');
+  try {
+    const d = await (await fetch('/.netlify/functions/bb-bet-tracker')).json();
+    if (!d || !d.ok) { if (meta) meta.textContent = (d && d.error) || 'Could not load the BB Bet Tracker.'; return; }
+    BA_BBT_BETS = d.bets || [];
+    const sel = document.getElementById('bba-book');
+    if (sel) {
+      const cur = sel.value;
+      const books = [...new Set(BA_BBT_BETS.map(b => b.bookie))].sort();
+      sel.innerHTML = '<option value="">All bookies</option>' + books.map(b => `<option value="${escapeHtml(b)}"${b === cur ? ' selected' : ''}>${escapeHtml(b)}</option>`).join('');
+    }
+    if (meta) meta.textContent = `${BA_BBT_BETS.length} bets on BB · updated ${new Date(d.updated).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
+    renderBaBbTracker();
+  } catch (e) { if (meta) meta.textContent = 'Network error loading the BB Bet Tracker.'; }
+}
+function renderBaBbTracker(){
+  const body = document.getElementById('bba-body');
+  if (!body) return;
+  const evSel = document.getElementById('bba-ev').value;
+  const book = document.getElementById('bba-book').value;
+  const q = (document.getElementById('bba-search').value || '').trim().toLowerCase();
+  const rows = BA_BBT_BETS.filter(b =>
+    (evSel === 'all' || (b.ev != null && b.ev >= Number(evSel) && (Number(evSel) > 0 || b.ev > 0))) &&
+    (!book || b.bookie === book) &&
+    (!q || (b.name || '').toLowerCase().includes(q) || (b.event || '').toLowerCase().includes(q)));
+  const fmtKo = iso => { if (!iso) return ''; const d = new Date(iso); return d.toLocaleDateString('en-GB', { weekday: 'short' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); };
+  body.innerHTML = rows.length ? rows.map(b => {
+    const evCol = b.ev == null ? 'var(--text3)' : b.ev > 0 ? 'var(--green)' : 'var(--red)';
+    const tags = [b.early ? 'Early' : '', b.combo ? 'Combo' : '', b.lay ? 'Lay' : '', b.private ? 'Private' : ''].filter(Boolean)
+      .map(t => `<span class="badge" style="background:var(--surface2);color:var(--text2);margin-left:6px;font-size:10.5px">${t}</span>`).join('');
+    return `<tr>
+      <td style="white-space:nowrap;color:var(--text2);font-size:12px">${fmtKo(b.ko)}</td>
+      <td style="font-size:12.5px">${escapeHtml(b.event || '')}</td>
+      <td style="font-weight:500">${escapeHtml(b.selection || b.name || '')}${tags}</td>
+      <td style="font-size:12px;color:var(--text2)">${escapeHtml(b.bookie || '')}</td>
+      <td class="r tn" style="font-weight:500">${b.odds != null ? b.odds.toFixed(2) : '—'}</td>
+      <td class="r tn">${b.fair != null ? b.fair.toFixed(2) : '—'}</td>
+      <td class="r tn" style="color:${evCol};font-weight:600">${b.ev != null ? (b.ev > 0 ? '+' : '') + b.ev.toFixed(1) + '%' : '—'}</td>
+      <td style="font-size:11.5px;color:var(--text3)">${escapeHtml(b.credit || '')}</td>
+      <td style="font-size:11.5px;color:var(--text3);white-space:nowrap">${escapeHtml(String(b.added || '').slice(5, 16))}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">${BA_BBT_BETS.length ? 'No bets match these filters.' : 'No bets on the BB Bet Tracker right now.'}</td></tr>`;
+  baOnEdgeRendered('bbtracker', rows.map(b => ({ match: b.event, market: '', selection: b.selection || b.name, bk: b.bookie, odds: b.odds, ev: b.ev })));
 }
 
 // ---- Ones to Watch ----
@@ -17960,7 +18027,9 @@ const BA_SOUND_REAPPEAR_MS = 15 * 60 * 1000;
 const BA_SOUND_STEAM_PTS = 10;
 let BA_SOUND_PREFS = {};
 let BA_SOUND_POLL = null;
-function baSoundOn(key){ return BA_SOUND_PREFS[key] !== false; }
+// Tabs that start muted until the user turns the bell on themselves (BB Tracker, 2026-11-25).
+const BA_SOUND_DEFAULT_OFF = new Set(['bbtracker']);
+function baSoundOn(key){ return BA_SOUND_DEFAULT_OFF.has(key) ? BA_SOUND_PREFS[key] === true : BA_SOUND_PREFS[key] !== false; }
 async function baLoadSoundPrefs(){
   try { const d = await ledgerApi('bet-alert-sound'); if (d && d.ok) BA_SOUND_PREFS = d.prefs || {}; } catch(e) {}
   renderBaTabs();
