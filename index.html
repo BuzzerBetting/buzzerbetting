@@ -17350,6 +17350,7 @@ function baBkChangedNote(row, bk){
 
 const BA_EDGES = [
   { key: 'oc-ev',   label: 'Normal +EV', panel: 'view-oddschecker',  priced: true  },
+  { key: 'bbtracker', label: 'BB Tracker',    panel: 'ba-panel-bbtracker', priced: false },
   { key: 'calc-ev', label: 'Calculated +EV',  panel: 'view-calculated',   priced: true  },
   { key: 'watch',   label: 'Ones to Watch',   panel: 'ba-panel-watch',    priced: true  },
   { key: 'early',   label: 'Early Prices',    panel: 'ba-panel-early',    priced: true  },
@@ -17363,7 +17364,6 @@ const BA_EDGES = [
   { key: 'unmatched', label: 'OC Coverage',   panel: 'ba-panel-unmatched', priced: false },
   { key: 'outliers', label: 'Outliers',       panel: 'ba-panel-outliers', priced: false },
   { key: 'grosvenor', label: 'Grosvenor',     panel: 'ba-panel-grosvenor', priced: false },
-  { key: 'bbtracker', label: 'BB Tracker',    panel: 'ba-panel-bbtracker', priced: false },
 ].filter(e => e.key !== 'corners' || CORNER_PREDICTIONS_ENABLED);
 let BA_BOOKS = null;             // { canonicalBookie: bool } — null until first load (= all on)
 let BA_ACTIVE = (function(){ try { return localStorage.getItem('bb_betalert_tab') || 'oc-ev'; } catch(e) { return 'oc-ev'; } })();
