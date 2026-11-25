@@ -86,6 +86,55 @@ async function loadBets(cookies) {
   return { bets, bookCount: Object.keys(books).length };
 }
 
+// ---- Bet Alerts tab extras (2026-11-25) ----
+const BFEX_CHECK_FILE = require('path').join(__dirname, '..', '..', 'oc-scraper', 'data', 'bb_tracker_bfex.json');
+const PU_FRESH_MS = 20 * 60 * 1000;
+const normSel = t => String(t || '').toLowerCase().replace(/[^a-z0-9.]/g, '');
+
+async function fetchPricedUpBoosts() {
+  const key = process.env.LEDGER_API_KEY;
+  if (!key) return null;
+  try {
+    const r = await fetch(`http://localhost:${process.env.PORT || 3000}/api/ledger/pricedup-boosts`, { headers: { 'x-ledger-key': key } });
+    const d = await r.json();
+    return d && d.ok && Array.isArray(d.rows) ? d.rows : null;
+  } catch (e) { return null; }
+}
+
+async function reconcileBets(bets) {
+  const info = { bfexChecked: 0, puRemoved: 0, puAdjusted: 0, puSkipped: null };
+  // 1) BFEX check marker (written by oc-scraper/scripts/bb_tracker_bfex_check.py every pipeline run).
+  let marks = {};
+  try { marks = JSON.parse(require('fs').readFileSync(BFEX_CHECK_FILE, 'utf8')).rows || {}; } catch (e) {}
+  for (const b of bets) {
+    const m = marks[String(b.id)];
+    if (m && m.fair) { b.bfexFair = m.fair; b.bfexMkt = m.mkt || null; b.bfexLow = !!m.lowBfex; info.bfexChecked++; }
+  }
+  // 2) PricedUp: BB's rows can be stale (boost pulled / price moved). Our own scrape of PricedUp is the truth.
+  const rows = await fetchPricedUpBoosts();
+  const newest = rows && rows.length ? Math.max(...rows.map(r => Date.parse(r.scraped_at) || 0)) : 0;
+  if (!rows || !rows.length || Date.now() - newest > PU_FRESH_MS) {
+    info.puSkipped = !rows ? 'PricedUp scrape unavailable' : (!rows.length ? 'no PricedUp boosts scraped' : 'PricedUp scrape is stale');
+    return { bets, info };
+  }
+  const bySel = new Map();
+  for (const r of rows) { const k = normSel(r.selection); if (!bySel.has(k)) bySel.set(k, []); bySel.get(k).push(r); }
+  const out = [];
+  for (const b of bets) {
+    if (b.bookie !== 'PricedUp' || b.lay) { out.push(b); continue; }
+    const cands = bySel.get(normSel(b.selection || b.name));
+    if (!cands) { info.puRemoved++; continue; }                       // boost no longer on PricedUp
+    const live = cands.reduce((best, r) => (!best || Math.abs(r.odds - b.odds) < Math.abs(best.odds - b.odds)) ? r : best, null);
+    const odds = Math.round(Number(live.odds) * 100) / 100;
+    if (Math.abs(odds - b.odds) > 0.005) {
+      if (b.fair) { b.oddsBB = b.odds; b.odds = odds; b.ev = Math.round((odds / b.fair - 1) * 10000) / 100; info.puAdjusted++; }
+    }
+    if (b.fair && b.ev != null && b.ev <= 0) { info.puRemoved++; continue; } // no longer value at our scraped price
+    out.push(b);
+  }
+  return { bets: out, info };
+}
+
 exports.handler = async (event) => {
   if (event && event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
 
@@ -103,8 +152,16 @@ exports.handler = async (event) => {
   const cookies = process.env.BB_COOKIES;
   if (!cookies) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: 'BB_COOKIES not set' }) };
   try {
-    const { bets, bookCount } = await loadBets(cookies);
-    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, updated: new Date().toISOString(), count: bets.length, bookCount, bets }) };
+    let { bets, bookCount } = await loadBets(cookies);
+    // ?reconcile=1 (Bet Alerts → BB Tracker tab only; the Calculations page stays a straight copy):
+    // attach our own BFEX fair marker and reconcile BB's PricedUp rows against the boosts we scrape ourselves.
+    let reconciled = null;
+    const qp = (event && event.queryStringParameters) || {};
+    if (qp.reconcile === '1' || qp.reconcile === 'true') {
+      const r = await reconcileBets(bets);
+      bets = r.bets; reconciled = r.info;
+    }
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, updated: new Date().toISOString(), count: bets.length, bookCount, reconciled, bets }) };
   } catch (e) {
     return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: e.message }) };
   }

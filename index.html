@@ -2670,8 +2670,8 @@ tr.ba-placed > td{background:var(--green-bg) !important}
       <input id="bba-search" type="search" placeholder="Search event / selection" oninput="renderBaBbTracker()" style="padding:7px 10px;border:.5px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text1);font-size:13px;font-family:inherit;min-width:200px">
       <span id="bba-meta" style="font-size:12px;color:var(--text3)"></span>
     </div>
-    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:860px"><thead><tr><th>KO</th><th>Bookie</th><th>Event</th><th>Selection</th><th class="r">Odds</th><th class="r">Fair</th><th class="r">EV%</th><th>Credit</th><th>Added</th></tr></thead><tbody id="bba-body"></tbody></table></div></div>
-    <div class="note"><i class="ti ti-info-circle"></i> BookieBashing's Bet Tracker, copied as-is: active bets kicking off in the next 18 hours (plus "early" bets) with BB's own odds and fair odds. These are BB's fairs, not ours, and BB's odds can be stale, so treat each row as a lead to check. Sound alerts are off by default on this tab.</div>
+    <div class="card"><div style="overflow-x:auto"><table class="dt" style="min-width:860px"><thead><tr><th>KO</th><th>Bookie</th><th class="r">BFEX check</th><th>Event</th><th>Selection</th><th class="r">Odds</th><th class="r">Fair</th><th class="r">EV%</th><th>Credit</th><th>Added</th></tr></thead><tbody id="bba-body"></tbody></table></div></div>
+    <div class="note"><i class="ti ti-info-circle"></i> BookieBashing's Bet Tracker: active bets kicking off in the next 18 hours (plus "early" bets) with BB's own odds and fair odds. Fair = BB's number, not ours. BFEX check (orange) = our own BFEX fair for every line we can price off real Betfair markets (marker only, nothing posts; * = priced off the lay / thin money). PricedUp rows are checked against the boosts we scrape ourselves: pulled or no-longer-value rows are removed, moved prices are updated (†). Sound alerts are off by default on this tab.</div>
   </div>
 
   <div id="ba-panel-unmatched" class="ba-panel" style="display:none">
@@ -17671,20 +17671,25 @@ function loadBaEdge(key, isPoll){
 }
 
 // ---- BB Tracker tab (2026-11-25): BookieBashing Bet Tracker copy, all roles, sound off by default ----
-let BA_BBT_BETS = [];
+let BA_BBT_BETS = [], BA_BBT_INFO = null;
 async function loadBaBbTracker(){
   const meta = document.getElementById('bba-meta');
   try {
-    const d = await (await fetch('/.netlify/functions/bb-bet-tracker')).json();
+    const d = await (await fetch('/.netlify/functions/bb-bet-tracker?reconcile=1')).json();
     if (!d || !d.ok) { if (meta) meta.textContent = (d && d.error) || 'Could not load the BB Bet Tracker.'; return; }
     BA_BBT_BETS = d.bets || [];
+    BA_BBT_INFO = d.reconciled || null;
     const sel = document.getElementById('bba-book');
     if (sel) {
       const cur = sel.value;
       const books = [...new Set(BA_BBT_BETS.map(b => b.bookie))].sort();
       sel.innerHTML = '<option value="">All bookies</option>' + books.map(b => `<option value="${escapeHtml(b)}"${b === cur ? ' selected' : ''}>${escapeHtml(b)}</option>`).join('');
     }
-    if (meta) meta.textContent = `${BA_BBT_BETS.length} bets on BB · updated ${new Date(d.updated).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
+    if (meta) {
+      const i = BA_BBT_INFO;
+      const pu = !i ? '' : i.puSkipped ? ` · PricedUp not checked (${i.puSkipped})` : ` · PricedUp: ${i.puRemoved} removed, ${i.puAdjusted} re-priced`;
+      meta.textContent = `${BA_BBT_BETS.length} bets on BB · updated ${new Date(d.updated).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}${pu}`;
+    }
     renderBaBbTracker();
   } catch (e) { if (meta) meta.textContent = 'Network error loading the BB Bet Tracker.'; }
 }
@@ -17706,15 +17711,16 @@ function renderBaBbTracker(){
     return `<tr>
       <td style="white-space:nowrap;color:var(--text2);font-size:12px">${fmtKo(b.ko)}</td>
       <td style="font-size:12px;color:var(--text2)">${escapeHtml(b.bookie || '')}</td>
+      <td class="r tn" style="font-weight:600;color:#f97316" title="${b.bfexFair != null ? escapeHtml('BFEX fair (' + (b.bfexMkt || '') + ')' + (b.bfexLow ? ' — priced off the lay / thin matched money' : '')) : ''}">${b.bfexFair != null ? b.bfexFair.toFixed(2) + (b.bfexLow ? '*' : '') : ''}</td>
       <td style="font-size:12.5px">${escapeHtml(b.event || '')}</td>
       <td style="font-weight:500">${escapeHtml(b.selection || b.name || '')}${tags}</td>
-      <td class="r tn" style="font-weight:600;color:#3b82f6">${b.odds != null ? b.odds.toFixed(2) : '—'}</td>
+      <td class="r tn" style="font-weight:600;color:#3b82f6"${b.oddsBB != null ? ` title="BB had ${b.oddsBB.toFixed(2)} — updated to our scraped PricedUp price"` : ''}>${b.odds != null ? b.odds.toFixed(2) : '—'}${b.oddsBB != null ? '†' : ''}</td>
       <td class="r tn" style="font-weight:600;color:#ec4899">${b.fair != null ? b.fair.toFixed(2) : '—'}</td>
       <td class="r tn" style="color:${evCol};font-weight:600">${b.ev != null ? (b.ev > 0 ? '+' : '') + b.ev.toFixed(1) + '%' : '—'}</td>
       <td style="font-size:11.5px;color:var(--text3)">${escapeHtml(b.credit || '')}</td>
       <td style="font-size:11.5px;color:var(--text3);white-space:nowrap">${escapeHtml(String(b.added || '').slice(5, 16))}</td>
     </tr>`;
-  }).join('') : `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">${BA_BBT_BETS.length ? 'No bets match these filters.' : 'No bets on the BB Bet Tracker right now.'}</td></tr>`;
+  }).join('') : `<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:24px;font-size:13px">${BA_BBT_BETS.length ? 'No bets match these filters.' : 'No bets on the BB Bet Tracker right now.'}</td></tr>`;
   baOnEdgeRendered('bbtracker', rows.map(b => ({ match: b.event, market: '', selection: b.selection || b.name, bk: b.bookie, odds: b.odds, ev: b.ev })));
 }
 
