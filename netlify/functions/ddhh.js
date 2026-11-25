@@ -6,6 +6,18 @@ const CORS = {
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
 
+  // 2026-11-25: BB login now auto-refreshes on the DO box (bb-auth.js sets BB_AUTH_LOCAL there). Anywhere else
+  // (Netlify) proxy to the box instead of using stale BB_COOKIES/BB_HASH env vars.
+  if (!process.env.BB_AUTH_LOCAL) {
+    try {
+      const qs = event.rawQuery || new URLSearchParams(event.queryStringParameters || {}).toString();
+      const r = await fetch(`http://${process.env.LEDGER_DO_HOST || '178.128.40.248'}:${process.env.LEDGER_DO_PORT || 3000}/api/ddhh${qs ? '?' + qs : ''}`);
+      return { statusCode: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' }, body: await r.text() };
+    } catch (e) {
+      return { statusCode: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: false, error: 'DO server unreachable: ' + e.message }) };
+    }
+  }
+
   const hash    = process.env.BB_HASH;
   const cookies = process.env.BB_COOKIES;
   if (!hash || !cookies) return {

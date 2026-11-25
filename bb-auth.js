@@ -18,6 +18,7 @@ const AUTH_FILE = path.join(__dirname, 'data', 'bb_auth.json');
 const REFRESH_MS = 2 * 3600e3;
 const MIN_GAP_MS = 10 * 60e3;
 
+process.env.BB_AUTH_LOCAL = '1'; // marks this process as the box that owns the BB login
 let lastAttempt = 0, inflight = null, timer = null;
 const state = { ok: null, at: null, error: null };
 
