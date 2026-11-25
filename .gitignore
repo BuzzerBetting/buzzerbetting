@@ -18,3 +18,7 @@ corner-model/
 
 # Local Netlify folder
 .netlify
+
+# BookieBashing login + session (bb-auth.js) — box-only secrets
+data/bb_login.json
+data/bb_auth.json

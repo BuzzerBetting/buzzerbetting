@@ -680,3 +680,7 @@ require('./skybet-bfex-lib').startWarmer();
 
 // Background: resolve freeze-acca fodder results + auto-settle lost accas (every 15 min).
 require('./freeze-acca-poller').start();
+
+// BookieBashing auto-login (2026-11-25): keeps BB_COOKIES / BB_HASH fresh — see bb-auth.js.
+try { require('./bb-auth').startBbAuth(); } catch (e) { console.error('[bb-auth] not started:', e.message); }
+app.get('/api/bb-auth-status', (req, res) => res.json(require('./bb-auth').bbAuthState()));
