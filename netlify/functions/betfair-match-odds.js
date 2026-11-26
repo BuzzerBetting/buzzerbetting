@@ -775,12 +775,10 @@ async function runAction(action, params, appKey, session) {
       // "<Team> To Win Or Draw" (2026-11-26): Betfair's "Double Chance" market, runner "<Team> or Draw".
       if (!team) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team required' }) };
       marketNameTest = n => /^double chance$/i.test(n.trim());
-      runnerTest = n => {
-        const sides = n.split(/s+ors+/i);
-        if (sides.length !== 2) return false;
-        const d = sides.findIndex(x => /^draw$/i.test(x.trim()));
-        return d >= 0 && fuzzyTeamMatch(team, sides[1 - d]);
-      };
+      // Betfair names the runners "Home or Draw" / "Draw or Away" / "Home or Away" (home = first team in the event name).
+      const evHome = String(event.name || '').split(' v ')[0];
+      const isHome = fuzzyTeamMatch(team, evHome);
+      runnerTest = n => isHome ? /^home or draw$/i.test(n.trim()) : /^draw or away$/i.test(n.trim());
     } else if (action === 'win-and-btts') {
       if (!team) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team required' }) };
       marketNameTest = n => n.trim().toLowerCase() === 'match odds and both teams to score';
