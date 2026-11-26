@@ -3618,6 +3618,77 @@ router.post('/parse-betslip', requireAdmin, async (req, res) => {
   }
 });
 
+// ================== BACK & LAY — parse a matched-betting calculator screenshot ==================
+// POST /api/ledger/parse-backlay { image, mediaType }. Reads a calculator screenshot (bookie back
+// side + Betfair lay side) into the fields the Quick-add Back & Lay modal needs. The bookie ACCOUNT is
+// never in the image — the frontend prompts for it. Admin-only.
+const BACKLAY_PROMPT = `You are reading a screenshot of a matched-betting / back-and-lay calculator (bookmaker "Back" panel on the left, Betfair Exchange "Lay" panel on the right).
+Respond with ONLY a JSON object, no prose, no markdown fences, with exactly these keys:
+- "event": the Event line text (e.g. "14:49 Market Rasen"), else null.
+- "selection": the Selection line text, else null.
+- "competition": the Competition line text, else null.
+- "eventDate": the date/time heading at the top if shown (e.g. "26th Nov 14:49"), else null.
+- "betType": the bet-type dropdown text exactly as shown (e.g. "Qualifying Bet", "Free Bet (SNR)", "Free Bet (SR)", "Risk Free Bet", "Simple"), else null. Use the FIRST dropdown (the one about bet/free-bet type), not the "Simple/Advanced" mode one.
+- "bookmaker": the bookmaker named on the back (left) panel logo/button (e.g. "Paddy Power" from "Go to Paddy Power"), else null.
+- "backStake": number from Back Stake, else null.
+- "backOdds": decimal number from Back Odds, else null.
+- "backComm": number from Back Comm. (percent), else 0.
+- "layOdds": decimal number from Lay Odds, else null.
+- "layComm": number from Lay Comm. (percent), else null.
+- "layStake": the lay stake in pounds from the text "Lay £X at odds of Y", else null.
+- "liability": liability in pounds from "Your liability will be £X", else null.
+- "profit": overall profit in pounds from "overall profit ... will be £X" (negative if a loss), else null.
+- "notes": brief note of anything unreadable, else null.
+Read only what is visible. Never guess numbers.`;
+
+router.post('/parse-backlay', requireAdmin, async (req, res) => {
+  try {
+    const client = getAnthropic();
+    if (!client) return res.json({ ok: false, error: 'Screenshot parsing is not configured on the server yet.' });
+    const { image, mediaType } = req.body || {};
+    if (!image || typeof image !== 'string') return res.status(400).json({ ok: false, error: 'image (base64) required' });
+    const data = image.replace(/^data:[^,]+,/, '');
+    const media = /jpe?g/i.test(mediaType || '') ? 'image/jpeg' : /webp/i.test(mediaType || '') ? 'image/webp' : 'image/png';
+    let parsed;
+    try {
+      const msg = await client.messages.create({
+        model: BETSLIP_MODEL, max_tokens: 1024, output_config: { effort: 'low' },
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: media, data } },
+          { type: 'text', text: BACKLAY_PROMPT },
+        ] }],
+      });
+      const text = (msg.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
+      try { parsed = JSON.parse(text); } catch (e) { const m = text.match(/{[sS]*}/); parsed = JSON.parse(m ? m[0] : '{}'); }
+    } catch (e) {
+      console.error('[parse-backlay] model call failed:', e && e.message);
+      return res.json({ ok: false, error: 'Could not read the screenshot — try a clearer crop.' });
+    }
+    const num = v => { const n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.-]/g, '')); return isFinite(n) ? n : null; };
+    const t = String(parsed.betType || '');
+    const out = {
+      event: parsed.event || null, selection: parsed.selection || null, competition: parsed.competition || null,
+      eventDate: parsed.eventDate || null, betType: parsed.betType || null, bookmaker: parsed.bookmaker || null,
+      backStake: num(parsed.backStake), backOdds: num(parsed.backOdds), backComm: num(parsed.backComm) || 0,
+      layOdds: num(parsed.layOdds), layComm: num(parsed.layComm), layStake: num(parsed.layStake),
+      liability: num(parsed.liability), profit: num(parsed.profit),
+      snr: /snr/i.test(t), freeSr: /sr/i.test(t) && !/snr/i.test(t),
+    };
+    const warnings = [];
+    if (!out.backStake) warnings.push('Back stake not detected.');
+    if (!out.backOdds) warnings.push('Back odds not detected.');
+    if (!out.layOdds) warnings.push('Lay odds not detected.');
+    if (!out.bookmaker) warnings.push('Bookmaker not detected — pick it.');
+    if (out.freeSr) warnings.push('Free bet (SR) — the ledger only supports stake-not-returned free bets; check before logging.');
+    if (out.backComm) warnings.push('Back commission is ' + out.backComm + '% — the ledger has no back commission, so it is ignored.');
+    if (parsed.notes) warnings.push(String(parsed.notes));
+    res.json({ ok: true, parsed: out, warnings });
+  } catch (err) {
+    console.error('[parse-backlay]', err && err.message);
+    res.json({ ok: false, error: 'Screenshot read failed: ' + (err && err.message || 'unknown error') });
+  }
+});
+
 // ================== VIPER HORSES — parse a settled-bet screenshot ==================
 //
 // POST /api/ledger/parse-viper  { image: "<base64>", mediaType: "image/png" }

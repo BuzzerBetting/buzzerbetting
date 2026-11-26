@@ -10884,7 +10884,7 @@ function qblLay(s){
 }
 async function openQuickBl(){
   if (!nevBuzzer()) return;
-  QBL = { bookie: '', acc: '', desc: '', snr: false, stake: '', odds: '', lay: '', comm: null, layOverride: 0 };
+  QBL = { parsing: false, warnings: [], bookie: '', acc: '', desc: '', snr: false, stake: '', odds: '', lay: '', comm: null, layOverride: 0 };
   let ov = document.getElementById('qbl-overlay');
   if (!ov) {
     ov = document.createElement('div');
@@ -10899,6 +10899,50 @@ async function openQuickBl(){
   QBL.comm = (BFEX_ACCT && BFEX_ACCT.comm != null) ? BFEX_ACCT.comm : 2;
   renderQuickBl();
 }
+async function qblFile(blob){
+  if (!blob || !QBL) return;
+  QBL.parsing = true; QBL.warnings = []; renderQuickBl();
+  let dataUrl, mediaType = 'image/jpeg';
+  try { dataUrl = await qbDownscale(blob, 1600, 0.85); }
+  catch (e) { dataUrl = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); }); mediaType = blob.type || 'image/png'; }
+  try {
+    const d = await ledgerApi('parse-backlay', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: dataUrl, mediaType }) });
+    if (!QBL) return;
+    QBL.parsing = false;
+    if (!d || !d.ok) { QBL.warnings = [(d && d.error) || 'Could not read the screenshot.']; renderQuickBl(); return; }
+    const p = d.parsed || {};
+    QBL.desc = [p.selection, p.event].filter(Boolean).join(' - ') + (p.competition && p.event && p.competition !== p.event ? ' (' + p.competition + ')' : '');
+    QBL.snr = !!p.snr;
+    if (p.backStake) QBL.stake = String(p.backStake);
+    if (p.backOdds) QBL.odds = String(p.backOdds);
+    if (p.layOdds) QBL.lay = String(p.layOdds);
+    if (p.layComm != null) QBL.comm = p.layComm;
+    QBL.layOverride = 0;
+    const warns = (d.warnings || []).filter(w => !/^Bookmaker not detected/.test(w));
+    if (p.bookmaker) {
+      const norm = normalizeBookieInput(p.bookmaker) || p.bookmaker;
+      const hit = qblBookies().find(b => b === norm) || qblBookies().find(b => b.toLowerCase().replace(/[^a-z0-9]/g, '') === String(p.bookmaker).toLowerCase().replace(/[^a-z0-9]/g, ''));
+      if (hit) { QBL.bookie = hit; QBL.acc = ''; } else warns.push('Bookmaker "' + p.bookmaker + '" not matched to a ledger bookie — pick it.');
+    } else warns.push('Bookmaker not detected — pick it.');
+    warns.push('Now pick the bookie account.');
+    if (p.layStake) { const r = qblLay(QBL); if (r && Math.abs(r.auto - p.layStake) > 0.05) warns.push('Screenshot lay stake £' + p.layStake.toFixed(2) + ' differs from calculated £' + r.auto.toFixed(2) + ' — using the screenshot figure.'), QBL.layOverride = p.layStake; }
+    QBL.warnings = warns;
+    renderQuickBl();
+  } catch (e) { if (QBL) { QBL.parsing = false; QBL.warnings = ['Request failed: ' + (e && e.message || 'unknown')]; renderQuickBl(); } }
+}
+document.addEventListener('paste', e => {
+  const ov = document.getElementById('qbl-overlay');
+  if (!QBL || !ov || ov.style.display === 'none') return;
+  const items = (e.clipboardData && e.clipboardData.items) || [];
+  for (const it of items) { if (it.type && it.type.indexOf('image') === 0) { e.preventDefault(); qblFile(it.getAsFile()); return; } }
+});
+document.addEventListener('dragover', e => { const ov = document.getElementById('qbl-overlay'); if (QBL && ov && ov.style.display !== 'none') e.preventDefault(); });
+document.addEventListener('drop', e => {
+  const ov = document.getElementById('qbl-overlay');
+  if (!QBL || !ov || ov.style.display === 'none') return;
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f && f.type.indexOf('image') === 0) { e.preventDefault(); qblFile(f); }
+});
 function closeQuickBl(){ const ov = document.getElementById('qbl-overlay'); if (ov) ov.style.display = 'none'; QBL = null; }
 function qblBookies(){
   const set = new Set();
@@ -10914,9 +10958,11 @@ function renderQuickBl(){
   const bookieOpts = '<option value="">Select bookie…</option>' + qblBookies().map(b => `<option value="${escapeHtml(b)}" ${b === s.bookie ? 'selected' : ''}>${escapeHtml(b)}</option>`).join('');
   ov.innerHTML = `<div class="card" style="width:440px;max-width:100%;padding:18px;background:var(--surface);max-height:90vh;overflow:auto">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:12px">
-      <div><div style="font-size:15px;font-weight:700">Quick add Back &amp; Lay</div><div style="font-size:12px;color:var(--text2);margin-top:2px">External bet — logs to Buzzer &gt; Back &amp; Lay</div></div>
+      <div><div style="font-size:15px;font-weight:700">Quick add Back &amp; Lay</div><div style="font-size:12px;color:var(--text2);margin-top:2px">External bet — paste a calculator screenshot, then pick the bookie account</div></div>
       <button class="add-btn" onclick="closeQuickBl()"><i class="ti ti-x"></i></button>
     </div>
+    <div id="qbl-drop" tabindex="0" onclick="document.getElementById('qbl-file').click()" style="border:1.5px dashed var(--border);border-radius:var(--radius);padding:14px;text-align:center;font-size:12.5px;color:var(--text2);cursor:pointer;margin-bottom:12px">${s.parsing ? 'Reading screenshot…' : '<i class="ti ti-photo"></i> Paste (Ctrl+V), drop or click to add a calculator screenshot'}<input id="qbl-file" type="file" accept="image/*" style="display:none" onchange="qblFile(this.files&&this.files[0]);this.value=''"></div>
+    <div id="qbl-warn" style="font-size:11.5px;color:var(--amber);margin-bottom:8px">${(s.warnings||[]).map(w=>escapeHtml(w)).join('<br>')}</div>
     <label style="${lbl};margin-bottom:10px">Event / selection<input id="qbl-desc" type="text" value="${escapeHtml(s.desc)}" placeholder="e.g. Jo Lescribaa - 14:49 Market Rasen" oninput="QBL.desc=this.value" style="${inp}"></label>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <label style="${lbl}">Bookie<select id="qbl-bookie" onchange="QBL.bookie=this.value;QBL.acc='';renderQuickBl()" style="${inp}">${bookieOpts}</select></label>
