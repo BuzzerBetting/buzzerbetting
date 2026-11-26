@@ -441,6 +441,28 @@ async function findEventByHomeAway(home, away, appKey, session) {
   return candidates[0].event;
 }
 
+// Single-team event lookup (no opponent) — soonest plausible pre-match fixture, same filters as findTeamWin.
+// Used by double-chance (2026-11-26), where FotMob's fixture list often lacks the match (Hearts v Monaco).
+async function findEventByTeam(team, appKey, session) {
+  const teamM = TEAM_SEARCH_ALIASES[team.toLowerCase().trim()] || team;
+  for (const q of searchQueries(team)) {
+    const events = await bfCall('listEvents', { filter: { eventTypeIds: [FOOTBALL_EVENT_TYPE_ID], textQuery: q } }, appKey, session);
+    const hits = (events || []).filter(e => {
+      const name = e.event?.name || '';
+      if (/(w)/i.test(name)) return false;
+      if (!reserveOk(name, team)) return false;
+      if (!isPlausiblePrematchKickoff(e.event?.openDate)) return false;
+      const parts = name.split(' v ');
+      return parts.length === 2 && (fuzzyTeamMatch(teamM, parts[0]) || fuzzyTeamMatch(teamM, parts[1]));
+    });
+    if (hits.length) {
+      hits.sort((a, b) => new Date(a.event.openDate) - new Date(b.event.openDate));
+      return hits[0].event;
+    }
+  }
+  return null;
+}
+
 // Generic "find one market by name, one runner within it by name" fetch — every one of the six
 // new boost actions is this same shape, just with a different marketNameTest/runnerTest pair.
 // Lists ALL of the event's markets (no marketTypeCodes filter — these boost markets don't all
@@ -702,10 +724,12 @@ async function runAction(action, params, appKey, session) {
   const BOOST_ACTIONS = ['win-to-nil', 'draw', 'over25', 'btts', 'correct-score', 'ht-ft', 'win-and-btts', 'half-time', 'goals-line', 'team-goals-line', 'win-and-goals', 'double-chance'];
   if (BOOST_ACTIONS.includes(action)) {
     const { home, away, team, homeScore, awayScore, ht, ft, line, side } = params;
-    if (!home || !away) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'home and away required' }) };
+    if (action !== 'double-chance' && (!home || !away)) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'home and away required' }) };
 
-    const event = await findEventByHomeAway(home, away, appKey, session);
-    if (!event) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: `event not found: ${home} v ${away}` }) };
+    const event = (action === 'double-chance' && (!home || !away) && team)
+      ? await findEventByTeam(team, appKey, session)
+      : await findEventByHomeAway(home, away, appKey, session);
+    if (!event) return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: false, error: `event not found: ${home || team} v ${away || ''}` }) };
 
     let marketNameTest, runnerTest;
     if (action === 'win-to-nil') {
