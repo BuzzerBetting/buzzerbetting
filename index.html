@@ -10610,8 +10610,26 @@ function nevRidesRow(b, cols){
   if (!NEV_RIDES_OPEN.has(nevRideKey(b))) return null;
   const rides = nevParseRides(b.rides);
   const tr = document.createElement('tr');
-  const rows = rides.length ? rides.map(r => '<tr><td style="padding:3px 14px 3px 0;color:var(--text2)">' + escapeHtml(r.time) + '</td><td style="padding:3px 14px 3px 0;font-weight:500">' + escapeHtml(r.horse) + '</td><td class="r tn" style="padding:3px 14px 3px 0;font-weight:600;color:#f97316">' + r.fair.toFixed(2) + '</td><td class="r tn" style="padding:3px 0;color:var(--text3)">' + (100 / r.fair).toFixed(1) + '% to win</td></tr>').join('')
-    : '<tr><td style="color:var(--text3)">' + escapeHtml(String(b.rides)) + '</td></tr>';
+  // Rides in the same race (same off time) are mutually exclusive: a } joins them and shows the fair for
+  // "this trainer wins the race" = 1 / sum of the horses' win probabilities (that's what the bet's maths uses).
+  const groups = [];
+  rides.forEach(r => { const g = groups.find(x => x.time === r.time); if (g) g.items.push(r); else groups.push({ time: r.time, items: [r] }); });
+  const cell = 'padding:3px 14px 3px 0;';
+  let rows = '';
+  groups.forEach(g => {
+    const multi = g.items.length > 1;
+    const pSum = g.items.reduce((t, r) => t + 1 / r.fair, 0);
+    g.items.forEach((r, i) => {
+      rows += '<tr><td style="' + cell + 'color:var(--text2)">' + escapeHtml(r.time) + '</td>'
+        + '<td style="' + cell + 'font-weight:500">' + escapeHtml(r.horse) + '</td>'
+        + '<td class="r tn" style="' + cell + 'font-weight:600;color:#f97316">' + r.fair.toFixed(2) + '</td>'
+        + '<td class="r tn" style="' + cell + 'color:var(--text3)">' + (100 / r.fair).toFixed(1) + '% to win</td>'
+        + (multi && i === 0 ? '<td rowspan="' + g.items.length + '" style="padding:0 4px;font-size:' + (14 + g.items.length * 14) + 'px;line-height:1;color:var(--text3);font-weight:200;vertical-align:middle">}</td>'
+            + '<td rowspan="' + g.items.length + '" style="padding:0 0 0 6px;vertical-align:middle;white-space:nowrap"><span style="font-weight:600;color:#f97316" class="tn">' + (1 / Math.min(pSum, 0.999)).toFixed(2) + '</span> <span style="color:var(--text3);font-size:11.5px">race fair (' + (Math.min(pSum, 0.999) * 100).toFixed(1) + '%, one of these wins)</span></td>' : '')
+        + '</tr>';
+    });
+  });
+  if (!rides.length) rows = '<tr><td style="color:var(--text3)">' + escapeHtml(String(b.rides)) + '</td></tr>';
   tr.innerHTML = '<td colspan="' + cols + '" style="background:var(--surface2);padding:10px 16px"><div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:6px">BFEX win fair for each ride in this bet (bet fair ' + (b.fair != null ? Number(b.fair).toFixed(2) : '—') + ')</div><table style="border-collapse:collapse;font-size:12.5px">' + rows + '</table></td>';
   return tr;
 }
