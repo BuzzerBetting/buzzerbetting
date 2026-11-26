@@ -10727,7 +10727,16 @@ function nevStaffHidden(b){ if(b && CURRENT_USERNAME === 'Rafael' && /celeb/i.te
 let NEV_BOOKS = {};
 function nevLegKey(b){
   const l = b && Array.isArray(b.legs) && b.legs.length === 1 ? b.legs[0] : null;
-  return l && l.side !== 'no' && l.marketId && l.selectionId != null ? `${l.marketId}:${l.selectionId}:${Number(l.handicap || 0)}` : null;
+  return l && l.marketId && l.selectionId != null ? `${l.marketId}:${l.selectionId}:${Number(l.handicap || 0)}` : null;
+}
+// Inverse legs (side:'no', e.g. "A To Win Or Draw" = B does NOT win): the leg's market is B's win market, so
+// the equivalent LAY price of the bet is the BACK price of B, converted: lay = b/(b-1), size = back size x (b-1).
+function nevAdj(b, bk){
+  const l = b && Array.isArray(b.legs) && b.legs.length === 1 ? b.legs[0] : null;
+  if (!bk || !l || l.side !== 'no') return bk;
+  const p = Number(bk.back), sz = Number(bk.backSize);
+  if (!(p > 1.01)) return Object.assign({}, bk, { lay: null, laySize: null });
+  return Object.assign({}, bk, { lay: +(p / (p - 1)).toFixed(3), laySize: sz > 0 ? sz * (p - 1) : null });
 }
 async function refreshNevBooks(){
   const keys = [...new Set((ocEvBets || []).map(nevLegKey).filter(Boolean))];
@@ -10747,8 +10756,8 @@ function nevLock(stake, back, lay, c){
 function nevLayCell(b){
   const k = nevLegKey(b);
   if (!k) return '<td class="r tn" style="color:var(--text3)">—</td>';
-  const bk = NEV_BOOKS[k];
-  if (bk === undefined) return '<td class="r tn" style="color:var(--text3)">…</td>';
+  const bk = nevAdj(b, NEV_BOOKS[k]);
+  if (NEV_BOOKS[k] === undefined) return '<td class="r tn" style="color:var(--text3)">…</td>';
   if (!bk || !bk.lay) return '<td class="r tn" style="color:var(--text3)" title="No lay price on Betfair right now">—</td>';
   const off = bk.inplay || bk.status !== 'OPEN';
   return `<td class="r tn" style="color:${off ? 'var(--text3)' : 'var(--text)'}" title="${off ? 'Market is in-play / suspended' : 'Best lay on Betfair now'}">${Number(bk.lay).toFixed(2)}<div style="font-size:11px;color:var(--text3)">£${Math.round(bk.laySize || 0).toLocaleString('en-GB')}</div></td>`;
@@ -10756,7 +10765,7 @@ function nevLayCell(b){
 function nevBlBtn(i, b){
   const k = nevLegKey(b);
   if (!k) return '';
-  const bk = NEV_BOOKS[k];
+  const bk = nevAdj(b, NEV_BOOKS[k]);
   const lk = bk && bk.lay ? nevLock(100, Number(b.odds), Number(bk.lay), bfexComm()) : null;
   const txt = lk ? `B&amp;L ${lk.profit >= 0 ? '+' : '−'}£${Math.abs(lk.profit).toFixed(2)}` : 'B&amp;L';
   const col = lk ? (lk.profit >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text2)';
@@ -10768,7 +10777,7 @@ async function openNevBl(i){
   if (!b) return;
   const key = nevLegKey(b);
   const bookie = ocBookieName(b.bk) || b.bk || '';
-  NEV_BL = { b, key, bookie, stake: 100, odds: Number(b.odds), lay: (NEV_BOOKS[key] || {}).lay || '', laySize: (NEV_BOOKS[key] || {}).laySize, comm: null, acc: '' };
+  NEV_BL = { b, key, bookie, stake: 100, odds: Number(b.odds), lay: (nevAdj(b, NEV_BOOKS[key]) || {}).lay || '', laySize: (nevAdj(b, NEV_BOOKS[key]) || {}).laySize, comm: null, acc: '' };
   let ov = document.getElementById('nevbl-overlay');
   if (!ov) {
     ov = document.createElement('div');
@@ -10784,7 +10793,7 @@ async function openNevBl(i){
   renderNevBl();
   try {  // fresh lay price for the modal
     const d = await ledgerApi('bet-alert-bfex-book?legs=' + encodeURIComponent(key));
-    const bk = d && d.ok && d.books && d.books[key];
+    const bk = nevAdj(b, d && d.ok && d.books && d.books[key]);
     if (bk && bk.lay && NEV_BL && NEV_BL.key === key && !NEV_BL.layTouched) { NEV_BL.lay = bk.lay; NEV_BL.laySize = bk.laySize; renderNevBl(); }
   } catch (e) {}
 }
