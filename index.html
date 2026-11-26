@@ -244,6 +244,9 @@ tr.ba-placed > td{background:var(--green-bg) !important}
          bfexAcct): the Betfair account + commission every lay logged on the site uses unless stated
          otherwise (Normal +EV B&L). Other roles get the B&L calculator at 2% commission. -->
     <div id="bfexacct-wrap" style="position:relative;display:none;align-items:center">
+      <button onclick="openQuickBl()" title="Quick add an external back &amp; lay bet" style="background:none;border:none;cursor:pointer;color:#fff;padding:4px 6px;display:flex;align-items:center;line-height:1">
+        <span style="font-size:9.5px;font-weight:800;letter-spacing:.03em;border:1.5px solid currentColor;border-radius:5px;padding:1px 4px">+B&amp;L</span>
+      </button>
       <button id="bfexacct-btn" onclick="toggleBfexAcctPanel(event)" title="Pick the exchange account used for lays" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.55);padding:4px;display:flex;align-items:center;line-height:1">
         <span style="font-size:9.5px;font-weight:800;letter-spacing:.03em;border:1.5px solid currentColor;border-radius:5px;padding:1px 4px">BFEX</span>
       </button>
@@ -10864,6 +10867,121 @@ async function submitNevBl(){
     } else { err((d && d.error) || 'Could not log the bet.'); }
   } catch (e) { err('Network error logging the bet.'); }
   btn.disabled = false; btn.textContent = 'Log bet';
+}
+// Quick add for an external back & lay (matched-betting calculator style): pick bookie + account,
+// type event/selection, back stake/odds, lay odds. Exchange = the user's BFEX account. Lay stake is
+// worked out (equal-profit hedge; SNR free bet uses stake x (back-1)) but can be overridden.
+let QBL = null;
+function qblLay(s){
+  const stake = parseFloat(s.stake), back = parseFloat(s.odds), lay = parseFloat(s.lay), c = (parseFloat(s.comm) || 0) / 100;
+  if (!(stake > 0) || !(back > 1) || !(lay > 1)) return null;
+  const layStake = (s.snr ? stake * (back - 1) : stake * back) / (lay - c);
+  const ls = s.layOverride > 0 ? s.layOverride : layStake;
+  const liability = ls * (lay - 1);
+  const backWin = (s.snr ? stake * (back - 1) : stake * (back - 1)) - liability;      // back wins: bookie profit - lay liability
+  const layWin = ls * (1 - c) - (s.snr ? 0 : stake);                                  // back loses: lay stake less comm, stake lost unless free
+  return { layStake: ls, auto: layStake, liability, backWin, layWin };
+}
+async function openQuickBl(){
+  if (!nevBuzzer()) return;
+  QBL = { bookie: '', acc: '', desc: '', snr: false, stake: '', odds: '', lay: '', comm: null, layOverride: 0 };
+  let ov = document.getElementById('qbl-overlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'qbl-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:220;display:flex;align-items:center;justify-content:center;padding:16px';
+    ov.addEventListener('click', e => { if (e.target === ov) closeQuickBl(); });
+    document.body.appendChild(ov);
+  }
+  ov.style.display = 'flex';
+  ov.innerHTML = '<div class="card" style="width:440px;max-width:100%;padding:18px;color:var(--text3)">Loading…</div>';
+  await Promise.all([ensureLedgerAccounts(), loadBfexAcct()]);
+  QBL.comm = (BFEX_ACCT && BFEX_ACCT.comm != null) ? BFEX_ACCT.comm : 2;
+  renderQuickBl();
+}
+function closeQuickBl(){ const ov = document.getElementById('qbl-overlay'); if (ov) ov.style.display = 'none'; QBL = null; }
+function qblBookies(){
+  const set = new Set();
+  (LEDGER_ACCOUNTS || []).forEach(a => { if (a.bookie && String(a.bookie).toLowerCase() !== 'betfair') set.add(a.bookie); });
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+function renderQuickBl(){
+  const ov = document.getElementById('qbl-overlay');
+  if (!ov || !QBL) return;
+  const s = QBL, ex = BFEX_ACCT || {};
+  const inp = 'width:100%;box-sizing:border-box;background:var(--surface2);color:var(--text);border:.5px solid var(--border);border-radius:var(--radius);padding:7px 8px;font-size:13px;font-family:inherit';
+  const lbl = 'display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--text2)';
+  const bookieOpts = '<option value="">Select bookie…</option>' + qblBookies().map(b => `<option value="${escapeHtml(b)}" ${b === s.bookie ? 'selected' : ''}>${escapeHtml(b)}</option>`).join('');
+  ov.innerHTML = `<div class="card" style="width:440px;max-width:100%;padding:18px;background:var(--surface);max-height:90vh;overflow:auto">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:12px">
+      <div><div style="font-size:15px;font-weight:700">Quick add Back &amp; Lay</div><div style="font-size:12px;color:var(--text2);margin-top:2px">External bet — logs to Buzzer &gt; Back &amp; Lay</div></div>
+      <button class="add-btn" onclick="closeQuickBl()"><i class="ti ti-x"></i></button>
+    </div>
+    <label style="${lbl};margin-bottom:10px">Event / selection<input id="qbl-desc" type="text" value="${escapeHtml(s.desc)}" placeholder="e.g. Jo Lescribaa - 14:49 Market Rasen" oninput="QBL.desc=this.value" style="${inp}"></label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <label style="${lbl}">Bookie<select id="qbl-bookie" onchange="QBL.bookie=this.value;QBL.acc='';renderQuickBl()" style="${inp}">${bookieOpts}</select></label>
+      <label style="${lbl}">Account<select id="qbl-acc" onchange="QBL.acc=this.value" style="${inp}">${s.bookie ? accountOptionsHtml(s.acc || null, s.bookie) : '<option value="">Pick a bookie first</option>'}</select></label>
+    </div>
+    <label style="${lbl};margin-bottom:10px;flex-direction:row;align-items:center;gap:8px"><input type="checkbox" ${s.snr ? 'checked' : ''} onchange="QBL.snr=this.checked;QBL.layOverride=0;qblCalc()"> Free bet (SNR) — stake not returned</label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <label style="${lbl}">Back stake (£)<input id="qbl-stake" type="number" step="0.01" min="0" value="${s.stake}" oninput="QBL.stake=this.value;QBL.layOverride=0;qblCalc()" style="${inp}"></label>
+      <label style="${lbl}">Back odds<input id="qbl-odds" type="number" step="0.01" min="1.01" value="${s.odds}" oninput="QBL.odds=this.value;QBL.layOverride=0;qblCalc()" style="${inp}"></label>
+      <label style="${lbl}">Lay odds<input id="qbl-lay" type="number" step="0.01" min="1.01" value="${s.lay}" oninput="QBL.lay=this.value;QBL.layOverride=0;qblCalc()" style="${inp}"></label>
+      <label style="${lbl}">Lay commission %<input id="qbl-comm" type="number" step="0.1" min="0" max="50" value="${s.comm}" oninput="QBL.comm=this.value;QBL.layOverride=0;qblCalc()" style="${inp}"></label>
+    </div>
+    <div style="font-size:11.5px;margin-bottom:10px;color:var(--text2)">Exchange: ${ex.id ? escapeHtml(ex.label) : '<span style="color:var(--red)">no exchange account selected — use the BFEX button top right</span>'}</div>
+    <div id="qbl-out" class="card" style="padding:10px 12px;background:var(--surface2);margin-bottom:12px"></div>
+    <div id="qbl-msg" style="font-size:12.5px;min-height:16px;margin-bottom:8px"></div>
+    <button id="qbl-log" onclick="submitQuickBl()" style="background:var(--brand);color:#fff;border:none;border-radius:var(--radius);padding:11px 22px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;width:100%">Log bet</button>
+  </div>`;
+  qblCalc();
+}
+function qblCalc(){
+  const out = document.getElementById('qbl-out');
+  if (!out || !QBL) return;
+  const r = qblLay(QBL);
+  const money = v => (v >= 0 ? '+£' : '−£') + Math.abs(v).toFixed(2);
+  const row = (l, v, col) => `<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:2px 0"><span style="color:var(--text2)">${l}</span><strong style="${col ? 'color:' + col : ''}">${v}</strong></div>`;
+  if (!r) { out.innerHTML = '<div style="font-size:12.5px;color:var(--text3)">Enter back stake, back odds and lay odds.</div>'; return; }
+  const lay = parseFloat(QBL.lay);
+  out.innerHTML = row('Lay stake', `£<input type="number" step="0.01" value="${r.layStake.toFixed(2)}" onchange="QBL.layOverride=parseFloat(this.value)||0;qblCalc()" style="width:80px;background:var(--surface);color:var(--text);border:.5px solid var(--border);border-radius:6px;padding:2px 6px;font-size:13px;font-weight:600;text-align:right"> at ${lay.toFixed(2)}`)
+    + row('Liability', '£' + r.liability.toFixed(2))
+    + row('If back wins', money(r.backWin), r.backWin >= 0 ? 'var(--green)' : 'var(--red)')
+    + row('If back loses', money(r.layWin), r.layWin >= 0 ? 'var(--green)' : 'var(--red)');
+}
+async function submitQuickBl(){
+  const s = QBL, msg = document.getElementById('qbl-msg'), btn = document.getElementById('qbl-log');
+  if (!s || !nevBuzzer()) return;
+  const ex = BFEX_ACCT || {};
+  const err = t => { msg.innerHTML = `<span style="color:var(--red)">${t}</span>`; };
+  if (!s.bookie) return err('Select the bookie.');
+  if (!s.acc) return err('Select the bookie account.');
+  if (!ex.id) return err('Pick your exchange account first (BFEX, top right).');
+  const r = qblLay(s);
+  if (!r) return err('Back stake, back odds and lay odds are all needed.');
+  const c = (parseFloat(s.comm) || 0) / 100;
+  if (isNaN(c) || c < 0 || c >= 1) return err('Commission must be between 0 and 100%.');
+  const stake = +parseFloat(s.stake).toFixed(2), odds = parseFloat(s.odds), lay = parseFloat(s.lay), layStake = +r.layStake.toFixed(2);
+  const fields = {
+    'Bookie': normalizeBookieInput(s.bookie) || s.bookie,
+    'Exchange Site': ex.bookie || 'BetFair',
+    'Bet Description': (s.desc || '').trim(),
+    'Back Odds': +odds.toFixed(3), 'Lay Odds': +lay.toFixed(3),
+    'Back Stake': stake, 'Lay Stake': layStake,
+    'Lay Liability': +(layStake * (lay - 1)).toFixed(2), 'Back Free Bet': s.snr ? 'Y' : '',
+  };
+  btn.disabled = true; btn.textContent = 'Logging…'; msg.innerHTML = '';
+  try {
+    const d = await ledgerApi('bets/backlay', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      date: new Date().toISOString(), fields,
+      backLegs: [{ account_id: s.acc, stake, odds, free_bet: !!s.snr }],
+      layLegs: [{ account_id: ex.id, stake: layStake, odds: lay, commission: c }],
+    }) });
+    if (d && d.ok) {
+      msg.innerHTML = `<span style="color:var(--green)"><i class="ti ti-check"></i> Logged — lay £${layStake.toFixed(2)} at ${lay}</span>`;
+      setTimeout(closeQuickBl, 1400);
+    } else { err((d && d.error) || 'Could not log the bet.'); btn.disabled = false; btn.textContent = 'Log bet'; }
+  } catch (e) { err('Network error logging the bet.'); btn.disabled = false; btn.textContent = 'Log bet'; }
 }
 function nevHideAtPassed(b){ const t=b&&b.hideAt?Date.parse(b.hideAt):NaN; return !isNaN(t)&&t<=Date.now(); }
 function mergeHorseDoubleDuplicates(bets){
