@@ -699,7 +699,7 @@ async function runAction(action, params, appKey, session) {
     return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, ...result }) };
   }
 
-  const BOOST_ACTIONS = ['win-to-nil', 'draw', 'over25', 'btts', 'correct-score', 'ht-ft', 'win-and-btts', 'half-time', 'goals-line', 'team-goals-line', 'win-and-goals'];
+  const BOOST_ACTIONS = ['win-to-nil', 'draw', 'over25', 'btts', 'correct-score', 'ht-ft', 'win-and-btts', 'half-time', 'goals-line', 'team-goals-line', 'win-and-goals', 'double-chance'];
   if (BOOST_ACTIONS.includes(action)) {
     const { home, away, team, homeScore, awayScore, ht, ft, line, side } = params;
     if (!home || !away) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'home and away required' }) };
@@ -770,6 +770,16 @@ async function runAction(action, params, appKey, session) {
       runnerTest = n => {
         const sides = splitSlashRunner(n);
         return !!sides && fuzzyTeamMatch(team, sides[0]) && sides[1].trim().toLowerCase().startsWith(sd);
+      };
+    } else if (action === 'double-chance') {
+      // "<Team> To Win Or Draw" (2026-11-26): Betfair's "Double Chance" market, runner "<Team> or Draw".
+      if (!team) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team required' }) };
+      marketNameTest = n => /^double chance$/i.test(n.trim());
+      runnerTest = n => {
+        const sides = n.split(/s+ors+/i);
+        if (sides.length !== 2) return false;
+        const d = sides.findIndex(x => /^draw$/i.test(x.trim()));
+        return d >= 0 && fuzzyTeamMatch(team, sides[1 - d]);
       };
     } else if (action === 'win-and-btts') {
       if (!team) return { statusCode: 400, headers: CORS, body: JSON.stringify({ ok: false, error: 'team required' }) };
