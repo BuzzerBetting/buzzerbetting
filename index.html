@@ -10727,7 +10727,7 @@ function nevStaffHidden(b){ if(b && CURRENT_USERNAME === 'Rafael' && /celeb/i.te
 let NEV_BOOKS = {};
 function nevLegKey(b){
   const l = b && Array.isArray(b.legs) && b.legs.length === 1 ? b.legs[0] : null;
-  return l && l.marketId && l.selectionId != null ? `${l.marketId}:${l.selectionId}:${Number(l.handicap || 0)}` : null;
+  return l && l.side !== 'no' && l.marketId && l.selectionId != null ? `${l.marketId}:${l.selectionId}:${Number(l.handicap || 0)}` : null;
 }
 async function refreshNevBooks(){
   const keys = [...new Set((ocEvBets || []).map(nevLegKey).filter(Boolean))];
