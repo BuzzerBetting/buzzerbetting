@@ -18658,7 +18658,7 @@ function renderBaOutliersSubtabs(){
   // match the "N outliers" count once a market got unticked). Both now agree always.
   const marketFilter = getOutliersMarketFilter();
   const triggerFilter = getOutliersTriggerFilter();
-  const visible = BA_OUTLIERS_ROWS.filter(r => marketFilter.has(r.market) && triggerFilter.has(olTrigger(r)) && !(OL_HIDE_RECORD && olBelowRecord(r)) && !gvKickoffPassed(r.kickoffDate, r.kickoff) && baBookEnabled(r.topBook) && !olIsRemoved(r));
+  const visible = BA_OUTLIERS_ROWS.filter(r => marketFilter.has(r.market) && triggerFilter.has(olTrigger(r)) && !(OL_HIDE_RECORD && olBelowRecord(r)) && !gvKickoffPassed(r.kickoffDate, r.kickoff, OL_KO_GRACE_MIN) && baBookEnabled(r.topBook) && !olIsRemoved(r));
   const confirmedN = visible.filter(r => r.lineupConfirmed).length;
   const preN = visible.length - confirmedN;
   const tabs = [
@@ -18813,7 +18813,7 @@ function renderBaOutliers(){
   // refreshes when the pipeline finishes, which can be 30+ min after midnight, so drop
   // kicked-off matches here rather than trusting the file to be current.
   renderOlRemoved();
-  const visibleAnySubtab = BA_OUTLIERS_ROWS.filter(r => marketFilter.has(r.market) && triggerFilter.has(olTrigger(r)) && !(OL_HIDE_RECORD && olBelowRecord(r)) && !gvKickoffPassed(r.kickoffDate, r.kickoff) && baBookEnabled(r.topBook) && !olIsRemoved(r));
+  const visibleAnySubtab = BA_OUTLIERS_ROWS.filter(r => marketFilter.has(r.market) && triggerFilter.has(olTrigger(r)) && !(OL_HIDE_RECORD && olBelowRecord(r)) && !gvKickoffPassed(r.kickoffDate, r.kickoff, OL_KO_GRACE_MIN) && baBookEnabled(r.topBook) && !olIsRemoved(r));
   const rows = baBbApply('outliers', visibleAnySubtab.filter(r => !!r.lineupConfirmed === wantConfirmed), r => r.topPrice)
     .sort((x, y) => getBaSort('outliers') === 'time'
       // Start time keeps each match's rows together, biggest % first within it (same as Grosvenor).
@@ -18864,7 +18864,7 @@ function renderBaOutliers(){
 let OL_REMOVED = new Map(), OL_REMOVED_OPEN = false;
 function olKey(match, market, selection){ return 'outliers | ' + baPlacedKey(match, market, selection); }
 function olIsRemoved(r){ return !!r.lineupConfirmed && OL_REMOVED.has(olKey(r.match, r.market, r.selection)); }
-function olRemovedLive(){ return [...OL_REMOVED.values()].filter(r => !gvKickoffPassed(r.kickoff_d, r.kickoff_t)); }
+function olRemovedLive(){ return [...OL_REMOVED.values()].filter(r => !gvKickoffPassed(r.kickoff_d, r.kickoff_t, OL_KO_GRACE_MIN)); }
 async function loadOlRemoved(){
   try {
     const d = await ledgerApi('bet-alert-removed?edge=outliers');
@@ -19590,10 +19590,12 @@ function ukWallTs(d, t){
   ts = guess - ukOffsetMs(ts); // second pass settles the BST changeover hours
   return isNaN(ts) ? null : ts;
 }
-function gvKickoffPassed(d, t){
+function gvKickoffPassed(d, t, graceMin){
   const k = ukWallTs(d, t);
-  return k != null && k <= Date.now();
+  return k != null && k + (graceMin || 0) * 60000 <= Date.now();
 }
+// Outliers (2026-11-27, user): rows stay up for 5 min after kickoff - still catchable in-play.
+const OL_KO_GRACE_MIN = 5;
 // 2026-10-24 (user): every row shows only until its kickoff. Each tab's render already drops
 // kicked-off rows; this clock re-renders the open tab from the data it already has (no fetch,
 // no re-scan) whenever a loaded row's kickoff time has ticked past since the last check.
